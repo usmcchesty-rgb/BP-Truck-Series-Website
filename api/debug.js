@@ -11,5 +11,5 @@ export default async function handler(req, res) {
   const html = await fetchHtml(url);
 
   res.setHeader('Content-Type', 'text/plain');
-  res.status(200).send(html.slice(0, 12000));
+  res.status(200).send(html);
 }
