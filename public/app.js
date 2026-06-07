@@ -48,7 +48,7 @@ function renderPodium() {
       (r) =>
         `<article class="podium-card ${r.place === 1 ? "first" : r.place === 3 ? "third" : ""}">
           <div class="rank-badge">${r.place}</div>
-          <img class="driver-img" src="${driverImage(r.driver)}" onerror="this.src='assets/drivers/placeholder.png'"/>
+          <img class="driver-img" src="${driverImage(r.driver)}" onerror="this.onerror=null;this.src='/assets/drivers/placeholder.png'"/>
           <div class="podium-info">
             <h2>${String(r.driver).toUpperCase()}</h2>
             <div class="podium-points">${r.points}<small> PTS</small></div>
