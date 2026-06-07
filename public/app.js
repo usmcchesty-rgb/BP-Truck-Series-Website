@@ -1,21 +1,182 @@
-const $ = s => document.querySelector(s);
-const placeholder = '/assets/drivers/placeholder.svg';
-let standingsCache = [];
-async function api(path){ const r = await fetch(path); if(!r.ok) throw new Error(await r.text()); return r.json(); }
-function imgTag(src, name){ return `<img src="${src||placeholder}" alt="${name}" onerror="this.src='${placeholder}'">`; }
-function card(d,i){
-  const leader = i===0 ? ' leader' : '';
-  return `<article class="driver-card${leader}"><div class="driver-img">${imgTag(d.profile?.photo_url||d.photoUrl,d.driver)}</div><div class="driver-info"><div class="pos">${i===0?'POINTS LEADER':'#'+d.position}</div><div class="name">${d.profile?.truck_number ? '#'+d.profile.truck_number+' ' : ''}${d.driver}</div><div class="meta"><div class="stat"><b>${d.points??'-'}</b><span>Points</span></div><div class="stat"><b>${d.avgFinish??'-'}</b><span>Avg Finish</span></div><div class="stat"><b>${d.races??'-'}</b><span>Races</span></div><div class="stat"><b>${d.behind|| (i===0?'Leader':'-')}</b><span>Behind</span></div></div></div></article>`;
+const PLAYOFF_CUT = 16;
+const $ = (s) => document.querySelector(s);
+let standings = [];
+
+function driverImage(driver) {
+  const slug = String(driver || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+  return `assets/drivers/${slug}.png`;
 }
-function renderPodium(rows){ const el=$('#podium'); if(el) el.innerHTML = rows.slice(0,3).map(card).join(''); }
-function renderCutline(rows, cut=16){ const el=$('#cutline'); if(!el) return; const a=rows[cut-1], b=rows[cut]; el.innerHTML = `${a?`<div class="cut-row safe"><span>#${a.position} ${a.driver}</span><b>${a.points} pts</b></div>`:''}<div style="color:var(--red);text-align:center;margin:8px 0">PLAYOFF CUT LINE</div>${b?`<div class="cut-row out"><span>#${b.position} ${b.driver}</span><b>${b.points} pts</b></div>`:''}`; }
-function renderStandings(rows, cut=16){ const tbody=$('#standingsTable tbody'); if(!tbody) return; tbody.innerHTML = rows.map((d,i)=>`<tr class="${i===cut?'cut-marker':''}"><td>${d.position}</td><td>${d.profile?.truck_number?'#'+d.profile.truck_number+' ':''}${d.driver}</td><td>${d.gainLoss||''}</td><td>${d.points??''}</td><td>${d.behind||''}</td><td>${d.races??''}</td><td>${d.avgFinish??''}</td></tr>`).join(''); }
-function renderDrivers(rows){ const el=$('#driversGrid'); if(!el) return; el.innerHTML = rows.map(d=>card(d, d.position-1)).join(''); }
-async function loadStandings(){ try{ const data=await api('/api/standings'); standingsCache=data.rows||[]; renderPodium(standingsCache); renderCutline(standingsCache, Number(data.settings?.playoffCut||16)); renderStandings(standingsCache, Number(data.settings?.playoffCut||16)); renderDrivers(standingsCache); if($('#lastUpdated')) $('#lastUpdated').textContent='Updated '+new Date(data.updatedAt).toLocaleString(); }catch(e){ console.error(e); if($('#podium')) $('#podium').innerHTML='<div class="panel">Could not load standings yet. Check scrape settings.</div>'; }}
-async function loadSchedule(){ try{ const s=await api('/api/schedule'); const n=s.next; if($('#nextRace')) $('#nextRace').innerHTML=n?`<h2>Next Race</h2><div class="pos">Race ${n.race}</div><div class="name">${n.track}</div><p class="sub">${n.date} • ${n.length}</p>`:'<h2>Next Race</h2><p class="sub">Schedule complete.</p>'; if($('#scheduleSummary')) $('#scheduleSummary').innerHTML=`<h2>Race ${s.completed+1} of ${s.totalPointsRaces}</h2>${n?`<p class="sub">Next: ${n.track} — ${n.date}</p>`:''}`; const tbody=$('#scheduleTable tbody'); if(tbody) tbody.innerHTML=(s.races||[]).map(r=>`<tr><td>${r.race}</td><td>${r.date}</td><td>${r.points}</td><td>${r.track}</td><td>${r.length}</td><td>${r.winner||''}</td></tr>`).join(''); }catch(e){console.error(e)} }
-async function loadAdmin(){ if(!location.pathname.startsWith('/admin')) return; const s=await api('/api/settings'); for(const k of ['seriesName','seasonName','standingsUrl','scheduleUrl','playoffCut']) if($('#'+k)) $('#'+k).value=s[k]||''; }
-async function saveSettings(){ const body={password:$('#pw').value}; for(const k of ['seriesName','seasonName','standingsUrl','scheduleUrl','playoffCut']) body[k]=$('#'+k).value; const r=await fetch('/api/settings',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}); $('#adminMsg').textContent=await r.text(); }
-async function saveDriver(){ const body={password:$('#pw').value}; for(const k of ['driver_name','truck_number','iracing_id','manufacturer','team','photo_url']) body[k]=$('#'+k).value; const r=await fetch('/api/drivers',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}); $('#adminMsg').textContent=await r.text(); }
-window.saveSettings=saveSettings; window.saveDriver=saveDriver;
-if($('#search')) $('#search').addEventListener('input', e=>renderStandings(standingsCache.filter(x=>x.driver.toLowerCase().includes(e.target.value.toLowerCase()))));
-loadStandings(); loadSchedule(); loadAdmin(); setInterval(loadStandings,60000); setInterval(loadSchedule,120000);
+
+function changeClass(v) {
+  const n = Number(v);
+  return n > 0 ? "positive" : n < 0 ? "negative" : "";
+}
+
+function changeText(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return "—";
+  return n > 0 ? `▲ ${n}` : n < 0 ? `▼ ${Math.abs(n)}` : "—";
+}
+
+function head() {
+  return `<tr><th>POS</th><th>DRIVER</th><th>CHANGE</th><th>POINTS</th><th>BEHIND LEADER</th><th>BEHIND NEXT</th><th>RACES</th><th>WINS</th><th>TOP 5s</th><th>TOP 10s</th></tr>`;
+}
+
+function row(r) {
+  return `<tr>
+    <td class="pos">${r.place}</td>
+    <td><span class="num">${r.carNumber || r.place}</span>${r.driver}</td>
+    <td class="${changeClass(r.change)}">${changeText(r.change)}</td>
+    <td class="points">${r.points}</td>
+    <td class="negative">${r.behindLeader}</td>
+    <td class="negative">${r.behindNext}</td>
+    <td>${r.races}</td>
+    <td>${r.wins ?? 0}</td>
+    <td>${r.top5 ?? 0}</td>
+    <td>${r.top10 ?? 0}</td>
+  </tr>`;
+}
+
+function renderPodium() {
+  const order = [standings[1], standings[0], standings[2]].filter(Boolean);
+
+  $("#podium").innerHTML = order
+    .map(
+      (r) =>
+        `<article class="podium-card ${r.place === 1 ? "first" : r.place === 3 ? "third" : ""}">
+          <div class="rank-badge">${r.place}</div>
+          <img class="driver-img" src="${driverImage(r.driver)}" onerror="this.src='assets/drivers/placeholder.png'"/>
+          <div class="podium-info">
+            <h2>${String(r.driver).toUpperCase()}</h2>
+            <div class="podium-points">${r.points}<small> PTS</small></div>
+            <div class="gap">${r.place === 1 ? "LEADER" : `${r.behindLeader} BEHIND LEADER`}</div>
+          </div>
+          <div class="stats-row">
+            <div><b>${r.races}</b><span>RACES</span></div>
+            <div><b>${r.wins ?? 0}</b><span>WINS</span></div>
+            <div><b>${r.top5 ?? 0}</b><span>TOP 5s</span></div>
+            <div><b>${r.top10 ?? 0}</b><span>TOP 10s</span></div>
+          </div>
+        </article>`
+    )
+    .join("");
+}
+
+function renderTable(target, rows, cut = true) {
+  const html = [];
+
+  rows.forEach((r) => {
+    html.push(row(r));
+
+    if (cut && r.place === PLAYOFF_CUT) {
+      html.push(
+        `<tr class="cutline"><td colspan="10">PLAYOFF CUT LINE — TOP ${PLAYOFF_CUT}</td></tr>`
+      );
+    }
+  });
+
+  $(target).innerHTML = html.join("");
+}
+
+function render() {
+  $("#overviewHead").innerHTML = head();
+  $("#fullHead").innerHTML = head();
+
+  renderPodium();
+  renderTable("#overviewBody", standings.slice(0, PLAYOFF_CUT));
+  renderTable("#fullBody", standings);
+
+  const maxRaces = standings.length
+    ? Math.max(...standings.map((x) => Number(x.races || 0)))
+    : 0;
+
+  $("#raceCount").textContent = `${maxRaces} / 20`;
+  $("#fieldCount").textContent = standings.length;
+
+  const leader = standings[0];
+
+  if (leader) {
+    $("#leaderCard").innerHTML =
+      `<h3>POINTS LEADER</h3>
+       <div class="big">${leader.points} <small>PTS</small></div>
+       <p>${leader.driver}</p>
+       <button>VIEW DRIVER STATS</button>`;
+  } else {
+    $("#leaderCard").innerHTML =
+      `<h3>POINTS LEADER</h3><p>No standings loaded.</p>`;
+  }
+}
+
+async function load(force = false) {
+  try {
+    $("#lastUpdated").textContent = "Updating...";
+
+    const res = await fetch(`/api/standings${force ? "?force=1" : ""}`);
+    const data = await res.json();
+
+    console.log("API RESPONSE:", data);
+
+    const rows = data.rows || [];
+    const leaderPoints = rows[0]?.points || 0;
+
+    standings = rows.map((r, index) => {
+      const previous = rows[index - 1];
+
+      return {
+        place: r.position,
+        change: r.gainLoss,
+        driver: r.driver,
+        carNumber: r.carNumber,
+        points: r.points,
+        behindLeader: r.position === 1 ? "—" : r.points - leaderPoints,
+        behindNext: previous ? r.points - previous.points : "—",
+        races: r.races,
+        wins: r.wins,
+        top5: r.top5,
+        top10: r.top10
+      };
+    });
+
+    $("#lastUpdated").textContent = data.updatedAt
+      ? new Date(data.updatedAt).toLocaleString()
+      : new Date().toLocaleString();
+
+    render();
+
+    if (data.error) {
+      console.warn("Using fallback/cache:", data.error);
+    }
+  } catch (e) {
+    console.error("Failed to load standings:", e);
+    $("#lastUpdated").textContent = "Load failed";
+  }
+}
+
+document.querySelectorAll("nav button").forEach((b) =>
+  b.addEventListener("click", () => {
+    document
+      .querySelectorAll("nav button,.tab")
+      .forEach((x) => x.classList.remove("active"));
+
+    b.classList.add("active");
+    $("#" + b.dataset.tab).classList.add("active");
+  })
+);
+
+$("#refreshBtn").addEventListener("click", () => load(true));
+
+$("#search").addEventListener("input", (e) => {
+  const q = e.target.value.toLowerCase();
+
+  renderTable(
+    "#fullBody",
+    standings.filter((r) => r.driver.toLowerCase().includes(q)),
+    true
+  );
+});
+
+load();
+setInterval(() => load(), 60000);
