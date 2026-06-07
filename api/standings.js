@@ -1,7 +1,8 @@
-import { getDriverProfiles, slugify } from './_lib.js';
+import { getSettings, getDriverProfiles, slugify } from './_lib.js';
 
 export default async function handler(req, res) {
   try {
+    const settings = await getSettings();
     const seasonId = settings.seasonId || '27987';
 const scheduleId = settings.scheduleId || '346493';
 
