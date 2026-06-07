@@ -1,42 +1,82 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Blazing Pedals Truck Series Standings</title>
-  <link rel="stylesheet" href="styles.css" />
-</head>
-<body>
-  <div class="page-bg"></div>
-  <header class="topbar">
-    <div class="brand"><div class="bp">BP</div><div><b>BLAZING <span>PEDALS</span></b><small>SIM RACING LEAGUE</small></div></div>
-    <div class="title"><h1>TRUCK SERIES STANDINGS</h1><p>SEASON 11</p></div>
-    <nav><button class="active" data-tab="overview">🏆 Overview</button><button data-tab="full">▦ Full Standings</button></nav>
-    <div class="refresh"><div>LAST UPDATED</div><strong id="lastUpdated">Loading...</strong><button id="refreshBtn">↻</button></div>
-  </header>
-
-  <main>
-    <section id="overview" class="tab active">
-      <section id="podium" class="podium"></section>
-      <div class="content-grid">
-        <section class="panel wide">
-          <div class="tabs-mini"><span class="active">TOP 16</span><span>PLAYOFF CUT LINE</span></div>
-          <table><thead id="overviewHead"></thead><tbody id="overviewBody"></tbody></table>
-        </section>
-        <aside class="sidebar">
-          <div class="card stat"><h3>SEASON 11</h3><p><b id="raceCount">11 / 20</b><span>RACES COMPLETED</span></p><p><b id="fieldCount">43</b><span>DRIVERS RANKED</span></p></div>
-          <div class="card leader" id="leaderCard"></div>
-          <div class="card"><h3>NEXT RACE</h3><div class="track">DOVER<br><small>MOTOR SPEEDWAY</small></div><button>VIEW SCHEDULE</button></div>
-        </aside>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Blazing Pedals Truck Series Standings</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="page-bg"></div>
+    <header class="topbar">
+      <div class="brand">
+        <div class="bp">BP</div>
+        <div>
+          <b>BLAZING <span>PEDALS</span></b
+          ><small>SIM RACING LEAGUE</small>
+        </div>
       </div>
-    </section>
+      <div class="title">
+        <h1>TRUCK SERIES STANDINGS</h1>
+        <p>SEASON 11</p>
+      </div>
+      <nav>
+        <button class="active" data-tab="overview">🏆 Overview</button>
+        <button data-tab="full">▦ Full Standings</button>
+        <button data-tab="schedule">▣ Schedule</button>
+        <button data-tab="drivers">♟ Drivers</button>
+        <button data-tab="stats">▥ Stats</button>
+        <button data-tab="about">● About</button>
+      </nav>
+      <div class="refresh">
+        <div>LAST UPDATED</div>
+        <strong id="lastUpdated">Loading...</strong
+        ><button id="refreshBtn">↻</button>
+      </div>
+    </header>
 
-    <section id="full" class="tab">
-      <section class="panel full-panel"><h2>FULL STANDINGS 1–43</h2><input id="search" placeholder="Search driver..." /><table><thead id="fullHead"></thead><tbody id="fullBody"></tbody></table></section>
-    </section>
-  </main>
+    <main>
+      <section id="overview" class="tab active">
+        <section id="podium" class="podium"></section>
+        <div class="content-grid">
+          <section class="panel wide">
+            <div class="tabs-mini">
+              <span class="active">TOP 16</span><span>PLAYOFF CUT LINE</span>
+            </div>
+            <table>
+              <thead id="overviewHead"></thead>
+              <tbody id="overviewBody"></tbody>
+            </table>
+          </section>
+          <aside class="sidebar">
+            <div class="card stat">
+              <h3>SEASON 11</h3>
+              <p><b id="raceCount">11 / 20</b><span>RACES COMPLETED</span></p>
+              <p><b id="fieldCount">43</b><span>DRIVERS RANKED</span></p>
+            </div>
+            <div class="card leader" id="leaderCard"></div>
+            <div class="card">
+              <h3>NEXT RACE</h3>
+              <div class="track">DOVER<br /><small>MOTOR SPEEDWAY</small></div>
+              <button>VIEW SCHEDULE</button>
+            </div>
+          </aside>
+        </div>
+      </section>
 
-  <footer>FAST DRIVERS. CLOSE RACING. <span>BIG FUN.</span></footer>
-  <script src="app.js"></script>
-</body>
+      <section id="full" class="tab">
+        <section class="panel full-panel">
+          <h2>FULL STANDINGS 1–43</h2>
+          <input id="search" placeholder="Search driver..." />
+          <table>
+            <thead id="fullHead"></thead>
+            <tbody id="fullBody"></tbody>
+          </table>
+        </section>
+      </section>
+    </main>
+
+    <footer>FAST DRIVERS. CLOSE RACING. <span>BIG FUN.</span></footer>
+    <script src="app.js"></script>
+  </body>
 </html>
