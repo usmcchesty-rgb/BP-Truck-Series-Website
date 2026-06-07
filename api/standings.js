@@ -46,6 +46,7 @@ const response = await fetch(
           photoUrl: profile?.photo_url || `/assets/drivers/${slug}.png`
         };
       })
+      .filter(r => r.position >= 1)
       .sort((a, b) => a.position - b.position);
 
     res.setHeader('Cache-Control', 's-maxage=120, stale-while-revalidate=300');
