@@ -2,9 +2,12 @@ import { getDriverProfiles, slugify } from './_lib.js';
 
 export default async function handler(req, res) {
   try {
-    const response = await fetch(
-      'https://www.simracerhub.com/scoring/get_standings.php?season_id=27987&schedule_id=346493'
-    );
+    const seasonId = settings.seasonId || '27987';
+const scheduleId = settings.scheduleId || '346493';
+
+const response = await fetch(
+  `https://www.simracerhub.com/scoring/get_standings.php?season_id=${seasonId}&schedule_id=${scheduleId}`
+);
 
     const data = await response.json();
     const profiles = await getDriverProfiles();

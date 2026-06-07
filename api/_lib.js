@@ -6,6 +6,8 @@ export const DEFAULTS = {
   seasonName: 'Season 11',
   standingsUrl: 'https://www.simracerhub.com/scoring/season_standings.php?season_id=27987',
   scheduleUrl: 'https://www.simracerhub.com/scoring/season_schedule.php?season_id=27987',
+  seasonId: '27987',
+  scheduleId: '346493',
   playoffCut: 16,
   refreshSeconds: 60
 };
