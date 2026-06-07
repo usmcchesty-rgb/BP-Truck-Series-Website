@@ -12,7 +12,7 @@ const response = await fetch(
 
     const data = await response.json();
     const profiles = await getDriverProfiles();
-    const bySlug = Object.fromEntries(profiles.map(p => [p.slug, p]));
+    const byDriverId = Object.fromEntries(profiles.map(p => [String(p.driver_id), p]));
 
     const rows = Object.values(data.rps || {})
       .map(r => {
@@ -23,7 +23,8 @@ const response = await fetch(
           : rawName;
 
         const slug = slugify(name);
-        const profile = bySlug[slug] || null;
+        const profile = byDriverId[String(r.drid)] || null;
+        const displayName = profile?.display_name || name;
         const finishes = [];
 
 for (const schedule of Object.values(data.schedules || {})) {
@@ -49,9 +50,9 @@ const avgFinish =
           position: Number(r.pos1),
           previousPosition: Number(r.pos2),
           gainLoss: Number(r.pos2 || r.pos1) - Number(r.pos1 || r.pos2),
-          driver: name,
+          driver: displayName,
           driverId: r.drid,
-          carNumber: profile?.car_number || r.cars?.[0] || '',
+          carNumber: profile?.car_number || '',
           points: Number(r.tpts || 0),
           races: Number(r.counted || r.starts || 0),
           starts: Number(r.starts || 0),
@@ -63,7 +64,8 @@ const avgFinish =
           incidents: Number(r.inc || 0),
           avgFinish,
           profile,
-          photoUrl: profile?.photo_url || `/assets/drivers/${slug}.png`
+          photoUrl: profile?.photo_url || `/assets/drivers/${slug}.png`,
+          active: profile?.active ?? true
         };
       })
       .filter(r => r.position >= 1)

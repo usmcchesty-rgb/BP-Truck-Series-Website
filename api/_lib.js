@@ -30,7 +30,7 @@ export async function getSettings() {
 export async function getDriverProfiles() {
   const sb = supabase();
   if (!sb) return [];
-  const { data, error } = await sb.from('driver_profiles').select('*').order('driver_name');
+  const { data, error } = await sb.from('driver_profiles').select('*').order('iracing_name');
   if (error) return [];
   return data || [];
 }

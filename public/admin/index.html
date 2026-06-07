@@ -1,1 +1,354 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Admin</title><link rel="stylesheet" href="/styles.css"></head><body><header class="nav"><div class="brand">BP ADMIN <span>SETTINGS</span></div><nav><a href="/">Site</a></nav></header><main class="wrap"><h1>Admin</h1><p class="sub">Password is checked by the server. Settings and driver profiles save to Supabase after you add Supabase keys in Vercel.</p><div class="panel"><h2>Site Settings / Scrape Links</h2><input id="pw" class="input" type="password" placeholder="Admin password"><input id="seriesName" class="input" placeholder="Series name"><input id="seasonName" class="input" placeholder="Season name"><input id="standingsUrl" class="input" placeholder="Standings URL"><input id="scheduleUrl" class="input" placeholder="Schedule URL"><input id="playoffCut" class="input" type="number" placeholder="Playoff cut"><button class="btn" onclick="saveSettings()">Save Settings</button><pre id="adminMsg"></pre></div><div class="panel"><h2>Driver Profile</h2><input id="driver_name" class="input" placeholder="Driver name exactly as standings shows"><input id="truck_number" class="input" placeholder="Truck number"><input id="iracing_id" class="input" placeholder="iRacing / SimRacerHub ID"><input id="manufacturer" class="input" placeholder="Manufacturer"><input id="team" class="input" placeholder="Team"><input id="photo_url" class="input" placeholder="Photo URL or /assets/drivers/name.png"><button class="btn" onclick="saveDriver()">Save Driver</button></div></main><script src="/app.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Admin</title>
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+    .wrap { padding: 18px; max-width: 1200px; margin: 0 auto; }
+    .nav { display: flex; justify-content: space-between; align-items: center; padding: 12px 18px; border-bottom: 1px solid #333; background: #0a0a0a; }
+    .nav .brand { font-weight: 900; font-size: 18px; }
+    .nav .brand span { color: var(--red); }
+    .nav a { color: #fff; text-decoration: none; font-size: 12px; font-weight: 900; }
+    .sub { color: var(--muted); font-size: 12px; margin-bottom: 16px; }
+    .admin-tabs { display: flex; gap: 0; margin-bottom: 14px; }
+    .admin-tabs button { margin-left: 0; }
+    .admin-section { display: none; }
+    .admin-section.active { display: block; }
+    .panel { padding: 14px; margin-bottom: 14px; }
+    .panel h2 { margin: 0 0 12px; font-size: 18px; color: #ff3030; }
+    .input { width: 100%; margin-bottom: 8px; padding: 8px; background: #090909; color: #fff; border: 1px solid #555; border-radius: 4px; font-size: 12px; }
+    .btn { margin-top: 4px; }
+    #adminMsg, #driversMsg { margin-top: 10px; font-size: 12px; color: #ccc; white-space: pre-wrap; }
+    #driversMsg.error { color: #ff6060; }
+    .table-wrap { overflow-x: auto; }
+    .drivers-table input[type="text"] { width: 100%; min-width: 80px; padding: 4px 6px; background: #111; color: #fff; border: 1px solid #444; font-size: 11px; }
+    .drivers-table input[type="checkbox"] { width: 16px; height: 16px; }
+    .drivers-table .readonly { color: #aaa; font-size: 11px; }
+    .drivers-table .btn-save { padding: 4px 10px; font-size: 9px; }
+    .pw-row { max-width: 320px; margin-bottom: 14px; }
+  </style>
+</head>
+<body>
+  <header class="nav">
+    <div class="brand">BP ADMIN <span>PANEL</span></div>
+    <nav><a href="/">Site</a></nav>
+  </header>
+  <main class="wrap">
+    <h1>Admin</h1>
+    <p class="sub">Password is checked by the server. Settings and driver profiles save to Supabase after you add Supabase keys in Vercel.</p>
+
+    <div class="pw-row">
+      <input id="pw" class="input" type="password" placeholder="Admin password">
+    </div>
+
+    <div class="admin-tabs">
+      <button type="button" class="active" data-section="settingsSection">Settings</button>
+      <button type="button" data-section="driversSection">Drivers</button>
+    </div>
+
+    <div id="settingsSection" class="admin-section active">
+      <div class="panel">
+        <h2>Site Settings / Scrape Links</h2>
+        <input id="seriesName" class="input" placeholder="Series name">
+        <input id="seasonName" class="input" placeholder="Season name">
+        <input id="standingsUrl" class="input" placeholder="Standings URL">
+        <input id="scheduleUrl" class="input" placeholder="Schedule URL">
+        <input id="playoffCut" class="input" type="number" placeholder="Playoff cut">
+        <button class="btn" type="button" onclick="saveSettings()">Save Settings</button>
+        <pre id="adminMsg"></pre>
+      </div>
+    </div>
+
+    <div id="driversSection" class="admin-section">
+      <div class="panel">
+        <h2>Driver Profiles</h2>
+        <p class="sub">Drivers load from current standings. Save a row or use Sync All to write profiles to Supabase.</p>
+        <p class="sub">Driver ID = SimRacerHub Driver ID. Car Numbers are managed by BP and do not come from SimRacerHub.</p>
+        <button class="btn" type="button" onclick="syncAllDrivers()">Sync All Drivers</button>
+        <div class="table-wrap">
+          <table class="drivers-table" id="driversTable">
+            <thead>
+              <tr>
+                <th>Driver ID</th>
+                <th>iRacing Name</th>
+                <th>Display Name</th>
+                <th>Car #</th>
+                <th>Photo URL</th>
+                <th>Active</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="driversBody"></tbody>
+          </table>
+        </div>
+        <pre id="driversMsg"></pre>
+      </div>
+    </div>
+  </main>
+  <script>
+    const $ = (s) => document.querySelector(s);
+
+    function setDriversMsg(text, isError = false) {
+      const msg = $('#driversMsg');
+      msg.textContent = text;
+      msg.classList.toggle('error', isError);
+    }
+
+    document.querySelectorAll('.admin-tabs button').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.admin-tabs button').forEach((b) => b.classList.remove('active'));
+        document.querySelectorAll('.admin-section').forEach((s) => s.classList.remove('active'));
+        btn.classList.add('active');
+        $(`#${btn.dataset.section}`).classList.add('active');
+        if (btn.dataset.section === 'driversSection') loadDrivers();
+      });
+    });
+
+    async function saveSettings() {
+      const msg = $('#adminMsg');
+      msg.textContent = 'Saving...';
+      try {
+        const body = {
+          password: $('#pw').value,
+          seriesName: $('#seriesName').value,
+          seasonName: $('#seasonName').value,
+          standingsUrl: $('#standingsUrl').value,
+          scheduleUrl: $('#scheduleUrl').value,
+          playoffCut: Number($('#playoffCut').value) || undefined
+        };
+        const res = await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Save failed');
+        msg.textContent = 'Settings saved.';
+      } catch (e) {
+        msg.textContent = e.message;
+      }
+    }
+
+    async function loadSettings() {
+      try {
+        const res = await fetch('/api/settings');
+        const data = await res.json();
+        $('#seriesName').value = data.seriesName || '';
+        $('#seasonName').value = data.seasonName || '';
+        $('#standingsUrl').value = data.standingsUrl || '';
+        $('#scheduleUrl').value = data.scheduleUrl || '';
+        $('#playoffCut').value = data.playoffCut ?? '';
+      } catch (e) {
+        $('#adminMsg').textContent = 'Failed to load settings: ' + e.message;
+      }
+    }
+
+    function buildDriverList(standingsRows, profiles) {
+      const byId = Object.fromEntries(profiles.map((p) => [String(p.driver_id), p]));
+      return standingsRows.map((row) => {
+        const profile = byId[String(row.driverId)] || null;
+        return {
+          driver_id: String(row.driverId),
+          iracing_name: row.driver,
+          display_name: profile?.display_name || row.driver,
+          car_number: profile?.car_number || '',
+          photo_url: profile?.photo_url || row.photoUrl || '',
+          active: profile?.active !== false
+        };
+      });
+    }
+
+    function rowInput(rowEl, name) {
+      return rowEl.querySelector(`[name="${name}"]`);
+    }
+
+    function driverRowPayload(rowEl) {
+      return {
+        password: $('#pw').value,
+        driver_id: rowEl.dataset.driverId,
+        iracing_name: rowEl.querySelector('.iracing-name')?.textContent.trim() || '',
+        display_name: rowInput(rowEl, 'display_name')?.value ?? '',
+        car_number: rowInput(rowEl, 'car_number')?.value ?? '',
+        photo_url: rowInput(rowEl, 'photo_url')?.value ?? '',
+        active: rowInput(rowEl, 'active')?.checked ?? true
+      };
+    }
+
+    function formatDriverError(res, data) {
+      const err = data?.error || '';
+      if (res.status === 401) return 'Bad password';
+      if (res.status === 400 && /missing driver_id/i.test(err)) return 'Missing driver_id';
+      if (res.status === 400 && /supabase not configured/i.test(err)) return err;
+      if (res.status === 500 && /supabase error/i.test(err)) return err;
+      if (res.status === 500) return `Supabase error: ${err || 'Unknown error'}`;
+      return err || `Save failed (${res.status})`;
+    }
+
+    async function postDriver(body) {
+      const res = await fetch('/api/drivers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+
+      let data = {};
+      try {
+        data = await res.json();
+      } catch {
+        data = {};
+      }
+
+      if (!res.ok) throw new Error(formatDriverError(res, data));
+      return data;
+    }
+
+    async function confirmSavedCarNumber(driverId, expectedCarNumber) {
+      const res = await fetch('/api/drivers');
+      const profiles = await res.json();
+      if (!res.ok) {
+        throw new Error(formatDriverError(res, profiles));
+      }
+
+      const profile = (Array.isArray(profiles) ? profiles : []).find(
+        (p) => String(p.driver_id) === String(driverId)
+      );
+
+      if (!profile) {
+        throw new Error('Missing driver_id: profile not found after save.');
+      }
+
+      const saved = String(profile.car_number ?? '');
+      const expected = String(expectedCarNumber ?? '');
+      if (saved !== expected) {
+        throw new Error(`Supabase error: car_number did not persist (expected "${expected}", got "${saved}").`);
+      }
+
+      return profile;
+    }
+
+    function renderDriversTable(drivers) {
+      const tbody = $('#driversBody');
+      tbody.innerHTML = drivers.map((d) => {
+        const id = escapeAttr(d.driver_id);
+        return `<tr data-driver-id="${id}">
+          <td class="readonly">${escapeHtml(d.driver_id)}</td>
+          <td class="readonly iracing-name">${escapeHtml(d.iracing_name)}</td>
+          <td><input type="text" name="display_name" value="${escapeAttr(d.display_name || '')}"></td>
+          <td><input type="text" name="car_number" value="${escapeAttr(d.car_number || '')}"></td>
+          <td><input type="text" name="photo_url" value="${escapeAttr(d.photo_url || '')}"></td>
+          <td><input type="checkbox" name="active"${d.active !== false ? ' checked' : ''}></td>
+          <td><button type="button" class="btn btn-save">Save</button></td>
+        </tr>`;
+      }).join('');
+
+      tbody.querySelectorAll('.btn-save').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const row = btn.closest('tr[data-driver-id]');
+          if (row) saveDriverRow(row);
+        });
+      });
+    }
+
+    function escapeHtml(s) {
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function escapeAttr(s) {
+      return escapeHtml(s).replace(/'/g, '&#39;');
+    }
+
+    async function loadDrivers() {
+      setDriversMsg('Loading...');
+      try {
+        const [standingsRes, driversRes] = await Promise.all([
+          fetch('/api/standings'),
+          fetch('/api/drivers')
+        ]);
+        const standingsData = await standingsRes.json();
+        const profiles = await driversRes.json();
+
+        if (!standingsRes.ok) throw new Error(standingsData.error || 'Failed to load standings');
+        if (!driversRes.ok) throw new Error(profiles.error || 'Failed to load profiles');
+
+        const standingsRows = standingsData.rows || [];
+        const profileList = Array.isArray(profiles) ? profiles : [];
+        const list = buildDriverList(standingsRows, profileList);
+
+        renderDriversTable(list);
+        setDriversMsg(`Loaded ${list.length} drivers from standings (${profileList.length} saved in Supabase).`);
+      } catch (e) {
+        setDriversMsg(e.message, true);
+      }
+    }
+
+    async function saveDriverRow(row) {
+      if (!row) return;
+
+      const payload = driverRowPayload(row);
+      const driverId = payload.driver_id;
+
+      if (!payload.password) {
+        setDriversMsg('Bad password: enter admin password first.', true);
+        return;
+      }
+
+      if (!driverId) {
+        setDriversMsg('Missing driver_id', true);
+        return;
+      }
+
+      setDriversMsg('Saving...');
+      try {
+        const saved = await postDriver(payload);
+
+        if (String(saved.car_number ?? '') !== String(payload.car_number ?? '')) {
+          throw new Error(
+            `Supabase error: car_number did not persist (expected "${payload.car_number}", got "${saved.car_number ?? ''}").`
+          );
+        }
+
+        const profile = await confirmSavedCarNumber(driverId, payload.car_number);
+        setDriversMsg(`Saved ${driverId}. car_number = "${profile.car_number || ''}".`);
+        await loadDrivers();
+      } catch (e) {
+        setDriversMsg(e.message, true);
+      }
+    }
+
+    async function syncAllDrivers() {
+      const pw = $('#pw').value;
+      if (!pw) {
+        setDriversMsg('Bad password: enter admin password first.', true);
+        return;
+      }
+
+      const rows = [...document.querySelectorAll('#driversBody tr[data-driver-id]')];
+      if (!rows.length) {
+        setDriversMsg('No drivers to sync. Open the Drivers tab to load standings first.', true);
+        return;
+      }
+
+      setDriversMsg(`Syncing ${rows.length} drivers...`);
+      try {
+        let saved = 0;
+        for (const row of rows) {
+          await postDriver(driverRowPayload(row));
+          saved++;
+        }
+        setDriversMsg(`Synced ${saved} drivers.`);
+        await loadDrivers();
+      } catch (e) {
+        setDriversMsg(e.message, true);
+      }
+    }
+
+    loadSettings();
+  </script>
+</body>
+</html>

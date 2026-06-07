@@ -12,13 +12,15 @@ insert into site_settings (id, "seriesName", "seasonName", "standingsUrl", "sche
 values (1, 'Blazing Pedals Truck Series', 'Season 11', 'https://www.simracerhub.com/scoring/season_standings.php?season_id=27987', 'https://www.simracerhub.com/scoring/season_schedule.php?season_id=27987', 16, 60)
 on conflict (id) do nothing;
 
+-- If upgrading from the old slug-based driver_profiles table, run once:
+-- drop table if exists driver_profiles;
+
 create table if not exists driver_profiles (
-  slug text primary key,
-  driver_name text not null,
-  iracing_id text,
-  truck_number text,
+  driver_id text primary key,
+  iracing_name text not null,
+  display_name text,
+  car_number text,
   photo_url text,
-  manufacturer text,
-  team text,
+  active boolean default true,
   updated_at timestamptz default now()
 );

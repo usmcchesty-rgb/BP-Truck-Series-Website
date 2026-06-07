@@ -28,7 +28,7 @@ function head() {
 function row(r) {
   return `<tr>
     <td class="pos">${r.place}</td>
-    <td><span class="num">${r.carNumber || r.place}</span>${r.driver}</td>
+    <td>${r.carNumber ? `<span class="num">${r.carNumber}</span>` : ""}${r.driver}</td>
     <td class="${changeClass(r.change)}">${changeText(r.change)}</td>
     <td class="points">${r.points}</td>
     <td class="negative">${r.behindLeader}</td>
