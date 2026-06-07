@@ -1,0 +1,19 @@
+{
+  "name": "bp-truck-series-website",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 3000",
+    "start": "vercel dev"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.4",
+    "@vercel/node": "latest",
+    "cheerio": "^1.0.0"
+  },
+  "devDependencies": {
+    "vercel": "latest",
+    "vite": "^8.0.16"
+  }
+}

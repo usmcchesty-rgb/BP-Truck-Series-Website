@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#191919"/><stop offset="1" stop-color="#8c1111"/></linearGradient></defs>
+  <rect width="600" height="800" fill="none"/>
+  <g transform="translate(300 390)">
+    <path d="M-190 270c18-150 92-226 190-226s172 76 190 226z" fill="url(#g)" stroke="#ff2a2a" stroke-width="12"/>
+    <path d="M-122 64c-30-58-28-148 16-198 50-58 162-58 212 0 44 50 46 140 16 198-28 54-70 78-122 78S-94 118-122 64z" fill="#101010" stroke="#ff2a2a" stroke-width="10"/>
+    <path d="M-108-42c18-48 68-78 108-78s90 30 108 78c-66 20-150 20-216 0z" fill="#2a2a2a"/>
+    <path d="M-126 6c34-34 218-34 252 0-24 58-226 58-252 0z" fill="#f4b13f" stroke="#ffffff" stroke-width="6"/>
+    <text x="0" y="-84" text-anchor="middle" font-size="62" font-family="Arial Black, Arial" fill="#fff">BP</text>
+    <text x="0" y="220" text-anchor="middle" font-size="42" font-family="Arial Black, Arial" fill="#fff">DRIVER</text>
+  </g>
+</svg>
