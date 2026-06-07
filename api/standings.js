@@ -24,6 +24,26 @@ const response = await fetch(
 
         const slug = slugify(name);
         const profile = bySlug[slug] || null;
+        const finishes = [];
+
+for (const schedule of Object.values(data.schedules || {})) {
+  const drivers = schedule?.drivers || {};
+
+  for (const race of Object.values(drivers)) {
+    const result = race?.[r.drid];
+
+    if (result?.finish_pos) {
+      finishes.push(Number(result.finish_pos));
+    }
+  }
+}
+
+const avgFinish =
+  finishes.length > 0
+    ? Number(
+        (finishes.reduce((a, b) => a + b, 0) / finishes.length).toFixed(1)
+      )
+    : null;
 
         return {
           position: Number(r.pos1),
@@ -41,7 +61,7 @@ const response = await fetch(
           poles: Number(r.poles || 0),
           lapsLed: Number(r.led || 0),
           incidents: Number(r.inc || 0),
-          avgFinish: null,
+          avgFinish,
           profile,
           photoUrl: profile?.photo_url || `/assets/drivers/${slug}.png`
         };
