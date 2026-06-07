@@ -3,11 +3,18 @@ import { fetchHtml, getSettings, getDriverProfiles, slugify } from './_lib.js';
 function extractStandingsProps(html) {
   const marker = 'React.createElement(StandingsTable,';
   const start = html.indexOf(marker);
-  if (start < 0) throw new Error('Could not find StandingsTable data');
+
+  if (start < 0) {
+    throw new Error('Could not find StandingsTable data');
+  }
 
   const after = html.slice(start + marker.length);
-  const end = after.indexOf(');');
-  if (end < 0) throw new Error('Could not find end of StandingsTable data');
+
+  const end = after.indexOf('\n\t);');
+
+  if (end < 0) {
+    throw new Error('Could not find end of StandingsTable data');
+  }
 
   return JSON.parse(after.slice(0, end).trim());
 }
