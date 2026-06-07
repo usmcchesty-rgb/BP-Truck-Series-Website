@@ -8,15 +8,44 @@ function extractStandingsProps(html) {
     throw new Error('Could not find StandingsTable data');
   }
 
-  const after = html.slice(start + marker.length);
-
-  const end = after.indexOf('\n\t);');
-
-  if (end < 0) {
-    throw new Error('Could not find end of StandingsTable data');
+  const jsonStart = html.indexOf('{', start);
+  if (jsonStart < 0) {
+    throw new Error('Could not find JSON start');
   }
 
-  return JSON.parse(after.slice(0, end).trim());
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+
+  for (let i = jsonStart; i < html.length; i++) {
+    const ch = html[i];
+
+    if (escape) {
+      escape = false;
+      continue;
+    }
+
+    if (ch === '\\') {
+      escape = true;
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = !inString;
+      continue;
+    }
+
+    if (!inString) {
+      if (ch === '{') depth++;
+      if (ch === '}') depth--;
+
+      if (depth === 0) {
+        return JSON.parse(html.slice(jsonStart, i + 1));
+      }
+    }
+  }
+
+  throw new Error('Could not find JSON end');
 }
 
 export default async function handler(req, res) {
