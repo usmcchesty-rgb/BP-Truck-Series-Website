@@ -1,1 +1,177 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Blazing Pedals Truck Series</title><link rel="stylesheet" href="/styles.css"></head><body><header class="nav"><div class="brand">BLAZING PEDALS <span>TRUCK SERIES</span></div><nav><a href="/">Home</a><a href="/standings.html">Standings</a><a href="/schedule.html">Schedule</a><a href="/drivers.html">Drivers</a><a href="/admin">Admin</a></nav></header><main class="wrap"><section class="hero"><div><p class="kicker">Season 11 Championship</p><h1>Blazing Pedals Truck Series</h1><p class="sub">Live NASCAR-style league dashboard powered by SimRacerHub standings.</p><div class="buttons"><a class="btn" href="/standings.html">View Standings</a><a class="btn secondary" href="/schedule.html">View Schedule</a></div></div><div class="race-card" id="nextRace">Loading next race...</div></section><section><div class="section-title"><h2>Top 3 Drivers</h2><span id="lastUpdated"></span></div><div class="podium" id="podium"></div></section><section class="grid2"><div class="panel"><h2>Playoff Cutline</h2><div id="cutline" class="cutline">Loading...</div></div><div class="panel"><h2>Quick Links</h2><div class="quick"><a href="/standings.html">Full standings 1–43</a><a href="/drivers.html">Driver profiles</a><a href="/schedule.html">Season schedule</a></div></div></section></main><script src="/app.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Blazing Pedals Truck Series</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="nav series-nav">
+      <div class="brand-wrap">
+        <div class="brand">BLAZING PEDALS <span>TRUCK SERIES</span></div>
+        <div class="nav-sub">LIVE CHAMPIONSHIP CENTER</div>
+      </div>
+      <nav>
+        <a href="/">Home</a><a href="/standings.html">Standings</a
+        ><a href="/schedule.html">Schedule</a><a href="/drivers.html">Drivers</a
+        ><a href="/admin">Admin</a>
+      </nav>
+    </header>
+
+    <main class="wrap home-pro">
+      <section class="scoreboard-hero">
+        <div class="hero-copy">
+          <p class="kicker">Season 11 Championship</p>
+          <h1>Blazing Pedals Truck Series</h1>
+          <p class="sub">
+            Live championship battle, playoff bubble, race schedule, and driver stats powered by SimRacerHub.
+          </p>
+          <div class="buttons">
+            <a class="btn" href="/standings.html">View Full Standings</a
+            ><a class="btn secondary" href="/schedule.html">View Schedule</a>
+          </div>
+        </div>
+
+        <aside class="leader-spotlight" id="leaderSpotlight">
+          <div class="spotlight-label">Points Leader</div>
+          <div class="spotlight-number">#1</div>
+          <div class="spotlight-name">Loading...</div>
+          <div class="spotlight-stats">
+            <div><b>--</b><span>Points</span></div>
+            <div><b>--</b><span>Wins</span></div>
+            <div><b>--</b><span>Avg Finish</span></div>
+          </div>
+        </aside>
+      </section>
+
+      <section class="home-strip">
+        <div class="strip-card redline">
+          <span>Drivers</span>
+          <b id="statDrivers">--</b>
+        </div>
+        <div class="strip-card">
+          <span>Races Counted</span>
+          <b id="statRaces">--</b>
+        </div>
+        <div class="strip-card goldline">
+          <span>Playoff Cut</span>
+          <b id="statCut">16</b>
+        </div>
+        <div class="strip-card">
+          <span>Last Updated</span>
+          <b id="lastUpdated">--</b>
+        </div>
+      </section>
+
+      <section class="section-block championship-block">
+        <div class="section-title pro-title">
+          <div>
+            <p class="kicker">Championship Battle</p>
+            <h2>Top 3 Drivers</h2>
+          </div>
+          <a class="mini-link" href="/standings.html">Full Standings</a>
+        </div>
+        <div class="podium pro-podium" id="podium"></div>
+      </section>
+
+      <section class="dashboard-grid">
+        <div class="panel playoff-panel">
+          <div class="panel-head">
+            <p class="kicker">Playoff Bubble</p>
+            <h2>Cutline Watch</h2>
+          </div>
+          <div id="cutline" class="cutline">Loading...</div>
+        </div>
+
+        <div class="panel next-panel">
+          <div class="panel-head">
+            <p class="kicker">Upcoming Event</p>
+            <h2>Next Race</h2>
+          </div>
+          <div class="race-card race-card-pro" id="nextRace">Loading next race...</div>
+        </div>
+      </section>
+
+      <section class="dashboard-grid bottom-grid">
+        <div class="panel video-panel">
+          <div class="panel-head">
+            <p class="kicker">Race Broadcasts</p>
+            <h2>Latest Race Video</h2>
+          </div>
+          <div class="video-placeholder">
+            <div class="play-icon">▶</div>
+            <div>
+              <b>YouTube Race Archive</b>
+              <span>Add race links in Admin settings next.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel standings-preview-panel">
+          <div class="panel-head">
+            <p class="kicker">Points Snapshot</p>
+            <h2>Top 10 Preview</h2>
+          </div>
+          <div class="mini-table" id="standingsPreview">Loading standings...</div>
+        </div>
+      </section>
+
+      <section class="link-row-pro">
+        <a href="/standings.html">Standings</a>
+        <a href="/schedule.html">Schedule</a>
+        <a href="/drivers.html">Drivers</a>
+        <a href="#">YouTube</a>
+        <a href="#">Discord</a>
+        <a href="#">Facebook</a>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+    <script>
+      async function enhanceHomePage() {
+        try {
+          const res = await fetch('/api/standings');
+          const data = await res.json();
+          const rows = data.rows || [];
+          const settings = data.settings || {};
+          const cut = Number(settings.playoffCut || 16);
+          const leader = rows[0];
+
+          const fmt = n => Number(n || 0).toLocaleString();
+
+          if (leader) {
+            document.getElementById('leaderSpotlight').innerHTML = `
+              <div class="spotlight-label">Points Leader</div>
+              <div class="spotlight-number">#${leader.position}</div>
+              <div class="spotlight-name">${leader.driver}</div>
+              <div class="spotlight-stats">
+                <div><b>${fmt(leader.points)}</b><span>Points</span></div>
+                <div><b>${fmt(leader.wins)}</b><span>Wins</span></div>
+                <div><b>${leader.avgFinish ?? '--'}</b><span>Avg Finish</span></div>
+              </div>
+            `;
+          }
+
+          const maxRaces = rows.reduce((m, r) => Math.max(m, Number(r.races || 0)), 0);
+          document.getElementById('statDrivers').textContent = rows.length || '--';
+          document.getElementById('statRaces').textContent = maxRaces || '--';
+          document.getElementById('statCut').textContent = cut;
+          document.getElementById('lastUpdated').textContent = data.updatedAt ? new Date(data.updatedAt).toLocaleTimeString([], {hour:'numeric', minute:'2-digit'}) : '--';
+
+          const preview = rows.slice(0, 10).map(r => `
+            <div class="mini-row">
+              <span class="mini-pos">${r.position}</span>
+              <span class="mini-driver">${r.driver}</span>
+              <span class="mini-points">${fmt(r.points)}</span>
+            </div>
+          `).join('');
+          document.getElementById('standingsPreview').innerHTML = preview || 'No standings loaded.';
+        } catch (err) {
+          console.error(err);
+        }
+      }
+      enhanceHomePage();
+    </script>
+  </body>
+</html>
