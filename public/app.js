@@ -2,6 +2,21 @@ const PLAYOFF_CUT = 16;
 const $ = (s) => document.querySelector(s);
 let standings = [];
 
+const TRACK_IMAGES = {
+  dover: "/assets/tracks/dover.png",
+  "dover motor speedway": "/assets/tracks/dover.png",
+  iowa: "/assets/tracks/iowa.png",
+  "iowa speedway": "/assets/tracks/iowa.png",
+  charlotte: "/assets/tracks/charlotte.png",
+  "charlotte motor speedway": "/assets/tracks/charlotte.png",
+};
+
+const SPONSOR_FILES = [
+  "Flying Pig Logo Transparent.png",
+  "OIRoofing_Logo_White_Transparent.png",
+  "Short Stop Logo Transparent.png",
+];
+
 function driverImage(driver) {
   const slug = String(driver || "")
     .toLowerCase()
@@ -21,14 +36,29 @@ function changeText(v) {
   return n > 0 ? `▲ ${n}` : n < 0 ? `▼ ${Math.abs(n)}` : "—";
 }
 
+function podiumClass(place) {
+  if (place === 1) return "first";
+  if (place === 2) return "second";
+  if (place === 3) return "third";
+  return "";
+}
+
+function gapHtml(r) {
+  if (r.place === 1) {
+    return `<div class="gap"><span class="leader-label">LEADER</span></div>`;
+  }
+  return `<div class="gap"><b class="gap-value">${r.behindLeader}</b><span class="behind-label">BEHIND LEADER</span></div>`;
+}
+
 function head() {
   return `<tr><th>POS</th><th>DRIVER</th><th>CHANGE</th><th>POINTS</th><th>BEHIND LEADER</th><th>BEHIND NEXT</th><th>RACES</th><th>WINS</th><th>TOP 5s</th><th>TOP 10s</th></tr>`;
 }
 
 function row(r) {
+  const numPlate = r.carNumber ? `<span class="num">${r.carNumber}</span>` : "";
   return `<tr>
     <td class="pos">${r.place}</td>
-    <td>${r.carNumber ? `<span class="num">${r.carNumber}</span>` : ""}${r.driver}</td>
+    <td><span class="driver-cell">${numPlate}${r.driver}</span></td>
     <td class="${changeClass(r.change)}">${changeText(r.change)}</td>
     <td class="points">${r.points}</td>
     <td class="negative">${r.behindLeader}</td>
@@ -46,13 +76,13 @@ function renderPodium() {
   $("#podium").innerHTML = order
     .map(
       (r) =>
-        `<article class="podium-card ${r.place === 1 ? "first" : r.place === 3 ? "third" : ""}">
+        `<article class="podium-card ${podiumClass(r.place)}">
           <div class="rank-badge">${r.place}</div>
-          <img class="driver-img" src="${driverImage(r.driver)}" onerror="this.onerror=null;this.src='/assets/drivers/placeholder.png'"/>
+          <img class="driver-img" src="${r.photoUrl || driverImage(r.driver)}" alt="" onerror="this.onerror=null;this.src='/assets/drivers/placeholder.png'"/>
           <div class="podium-info">
             <h2>${String(r.driver).toUpperCase()}</h2>
             <div class="podium-points">${r.points}<small> PTS</small></div>
-            <div class="gap">${r.place === 1 ? "LEADER" : `${r.behindLeader} BEHIND LEADER`}</div>
+            ${gapHtml(r)}
           </div>
           <div class="stats-row">
             <div><b>${r.races}</b><span>RACES</span></div>
@@ -81,6 +111,196 @@ function renderTable(target, rows, cut = true) {
   $(target).innerHTML = html.join("");
 }
 
+function countDifferentWinners(rows) {
+  return rows.filter((r) => Number(r.wins || 0) > 0).length;
+}
+
+function trackImagePath(track) {
+  const key = String(track || "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!key) return "";
+  if (TRACK_IMAGES[key]) return TRACK_IMAGES[key];
+  for (const [name, path] of Object.entries(TRACK_IMAGES)) {
+    if (key.includes(name)) return path;
+  }
+  const slug = key.replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  return slug ? `/assets/tracks/${slug}.png` : "";
+}
+
+function formatTrackHtml(track) {
+  const t = String(track || "TBD").trim();
+  const words = t.split(/\s+/);
+  if (words.length <= 1) return t.toUpperCase();
+  return `${words[0].toUpperCase()}<br /><small>${words.slice(1).join(" ").toUpperCase()}</small>`;
+}
+
+function splitDateTime(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return { date: "Date TBD", time: "" };
+  const atParts = raw.split(/\s+@\s+|\s+at\s+/i);
+  if (atParts.length > 1) {
+    return { date: atParts[0].trim(), time: atParts.slice(1).join(" ").trim() };
+  }
+  const timeMatch = raw.match(
+    /(\d{1,2}:\d{2}\s*(?:AM|PM|am|pm)?|\d{1,2}\s*(?:AM|PM|am|pm))/
+  );
+  if (timeMatch) {
+    return {
+      date: raw.replace(timeMatch[0], "").replace(/[,–-]\s*$/, "").trim(),
+      time: timeMatch[0].trim(),
+    };
+  }
+  return { date: raw, time: "" };
+}
+
+function findDriverPhoto(name) {
+  const needle = String(name || "").toLowerCase();
+  const row = standings.find((r) => String(r.driver || "").toLowerCase() === needle);
+  return row?.photoUrl || driverImage(name);
+}
+
+function ensureSidebarMarkup() {
+  const nextCard = document.querySelector(".next-race-card");
+  if (nextCard && !$("#nextRaceVisual")) {
+    const visual = document.createElement("div");
+    visual.id = "nextRaceVisual";
+    visual.className = "next-race-visual";
+    nextCard.insertBefore(visual, $("#nextRaceDate"));
+  }
+  if (nextCard && !$("#nextRaceTime")) {
+    const time = document.createElement("p");
+    time.id = "nextRaceTime";
+    time.className = "next-race-time";
+    $("#nextRaceDate").after(time);
+  }
+
+  const sidebar = document.querySelector(".sidebar");
+  const logoCard = sidebar?.querySelector(".logo-card");
+  if (sidebar && logoCard && !$("#sidebarSponsors")) {
+    const wrap = document.createElement("div");
+    wrap.id = "sidebarSponsors";
+    wrap.className = "sidebar-sponsors";
+    sidebar.insertBefore(wrap, logoCard);
+  }
+}
+
+function renderNextRaceVisual(track) {
+  const el = $("#nextRaceVisual");
+  if (!el) return;
+
+  const src = trackImagePath(track);
+  if (!src) {
+    el.innerHTML = "";
+    el.hidden = true;
+    return;
+  }
+
+  el.hidden = false;
+  el.innerHTML = `<div class="next-race-thumb-wrap"><img class="next-race-thumb" src="${src}" alt="" onerror="this.closest('.next-race-visual').hidden=true;this.closest('.next-race-visual').innerHTML=''"/></div>`;
+}
+
+function renderLastWinner(lastRace) {
+  if (!lastRace?.winner) {
+    const withWins = standings.filter((r) => Number(r.wins || 0) > 0);
+    const pick = withWins[0] || standings[0];
+    if (!pick) {
+      $("#lastWinnerName").textContent = "—";
+      $("#lastWinnerTrack").textContent = "Track TBD";
+      $("#lastWinnerDate").textContent = "Date TBD";
+      $("#lastWinnerImg").src = "/assets/drivers/placeholder.png";
+      return;
+    }
+    $("#lastWinnerName").textContent = pick.driver;
+    $("#lastWinnerTrack").textContent = "Track TBD";
+    $("#lastWinnerDate").textContent = "Date TBD";
+    $("#lastWinnerImg").src = pick.photoUrl || driverImage(pick.driver);
+  } else {
+    const { date } = splitDateTime(lastRace.date);
+    $("#lastWinnerName").textContent = lastRace.winner;
+    $("#lastWinnerTrack").textContent = lastRace.track || "Track TBD";
+    $("#lastWinnerDate").textContent = date;
+    $("#lastWinnerImg").src = findDriverPhoto(lastRace.winner);
+  }
+
+  $("#lastWinnerImg").onerror = function () {
+    this.onerror = null;
+    this.src = "/assets/drivers/placeholder.png";
+  };
+}
+
+function renderNextRace(nextRace) {
+  const trackEl = $("#nextRaceTrack");
+  const dateEl = $("#nextRaceDate");
+  const timeEl = $("#nextRaceTime");
+
+  if (!nextRace) {
+    if (trackEl) trackEl.innerHTML = "DOVER<br /><small>MOTOR SPEEDWAY</small>";
+    if (dateEl) dateEl.textContent = "Date TBD";
+    if (timeEl) timeEl.textContent = "";
+    renderNextRaceVisual("Dover Motor Speedway");
+    return;
+  }
+
+  if (trackEl) trackEl.innerHTML = formatTrackHtml(nextRace.track);
+  const { date, time } = splitDateTime(nextRace.date);
+  if (dateEl) dateEl.textContent = date;
+  if (timeEl) timeEl.textContent = time;
+  renderNextRaceVisual(nextRace.track);
+}
+
+function renderSponsorCards() {
+  const wrap = $("#sidebarSponsors");
+  if (!wrap) return;
+
+  wrap.innerHTML = SPONSOR_FILES.map(
+    (file) =>
+      `<div class="card sponsor-card" hidden>
+        <img class="sponsor-logo" src="/assets/sponsors/${encodeURIComponent(file)}" alt="" />
+      </div>`
+  ).join("");
+
+  wrap.querySelectorAll(".sponsor-card").forEach((card) => {
+    const img = card.querySelector("img");
+    const show = () => {
+      card.hidden = false;
+    };
+    img.addEventListener("load", show);
+    img.addEventListener("error", () => card.remove());
+    if (img.complete && img.naturalWidth > 0) show();
+  });
+}
+
+async function loadScheduleSidebar() {
+  try {
+    const res = await fetch("/api/schedule");
+    const data = await res.json();
+    const races = data.races || [];
+    const completed = races.filter((r) => r.winner);
+    const lastRace = completed[completed.length - 1] || null;
+    renderLastWinner(lastRace);
+    renderNextRace(data.next || null);
+  } catch (e) {
+    console.warn("Schedule sidebar fallback:", e);
+    renderLastWinner(null);
+    renderNextRace(null);
+  }
+}
+
+function renderSidebar() {
+  const maxRaces = standings.length
+    ? Math.max(...standings.map((x) => Number(x.races || 0)))
+    : 0;
+
+  $("#raceCount").textContent = `${maxRaces} / 20`;
+  $("#winnerCount").textContent = String(countDifferentWinners(standings));
+  $("#avgCautions").textContent = "0.00";
+  $("#fieldCountTab").textContent = String(standings.length);
+  $("#fieldCountFull").textContent = String(standings.length);
+  loadScheduleSidebar();
+}
+
 function render() {
   $("#overviewHead").innerHTML = head();
   $("#fullHead").innerHTML = head();
@@ -88,26 +308,7 @@ function render() {
   renderPodium();
   renderTable("#overviewBody", standings.slice(0, PLAYOFF_CUT));
   renderTable("#fullBody", standings);
-
-  const maxRaces = standings.length
-    ? Math.max(...standings.map((x) => Number(x.races || 0)))
-    : 0;
-
-  $("#raceCount").textContent = `${maxRaces} / 20`;
-  $("#fieldCount").textContent = standings.length;
-
-  const leader = standings[0];
-
-  if (leader) {
-    $("#leaderCard").innerHTML =
-      `<h3>POINTS LEADER</h3>
-       <div class="big">${leader.points} <small>PTS</small></div>
-       <p>${leader.driver}</p>
-       <button>VIEW DRIVER STATS</button>`;
-  } else {
-    $("#leaderCard").innerHTML =
-      `<h3>POINTS LEADER</h3><p>No standings loaded.</p>`;
-  }
+  renderSidebar();
 }
 
 async function load(force = false) {
@@ -117,10 +318,12 @@ async function load(force = false) {
     const res = await fetch(`/api/standings${force ? "?force=1" : ""}`);
     const data = await res.json();
 
-    console.log("API RESPONSE:", data);
-
     const rows = data.rows || [];
     const leaderPoints = rows[0]?.points || 0;
+    const seasonName = data.settings?.seasonName || "Season 11";
+
+    $("#seasonLabel").textContent = seasonName.toUpperCase();
+    $("#sidebarSeason").textContent = seasonName.toUpperCase();
 
     standings = rows.map((r, index) => {
       const previous = rows[index - 1];
@@ -129,7 +332,8 @@ async function load(force = false) {
         place: r.position,
         change: r.gainLoss,
         driver: r.driver,
-        carNumber: r.carNumber,
+        carNumber: r.carNumber || "",
+        photoUrl: r.photoUrl,
         points: r.points,
         behindLeader: r.position === 1 ? "—" : r.points - leaderPoints,
         behindNext: previous ? r.points - previous.points : "—",
@@ -162,7 +366,8 @@ document.querySelectorAll("nav button").forEach((b) =>
       .forEach((x) => x.classList.remove("active"));
 
     b.classList.add("active");
-    $("#" + b.dataset.tab).classList.add("active");
+    const tab = $("#" + b.dataset.tab);
+    if (tab) tab.classList.add("active");
   })
 );
 
@@ -178,5 +383,7 @@ $("#search").addEventListener("input", (e) => {
   );
 });
 
+ensureSidebarMarkup();
+renderSponsorCards();
 load();
 setInterval(() => load(), 60000);

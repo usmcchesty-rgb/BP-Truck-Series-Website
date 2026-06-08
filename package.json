@@ -5,12 +5,16 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 3000",
-    "start": "vercel dev"
+    "start": "vercel dev --listen 3000",
+    "track-tool": "node server/track-processor.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
     "@vercel/node": "latest",
-    "cheerio": "^1.0.0"
+    "cheerio": "^1.0.0",
+    "express": "^5.1.0",
+    "multer": "^2.0.2",
+    "sharp": "^0.34.3"
   },
   "devDependencies": {
     "vercel": "latest",

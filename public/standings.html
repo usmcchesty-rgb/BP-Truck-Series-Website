@@ -12,53 +12,93 @@
       <div class="brand">
         <div class="bp">BP</div>
         <div>
-          <b>BLAZING <span>PEDALS</span></b
-          ><small>SIM RACING LEAGUE</small>
+          <b>BLAZING <span>PEDALS</span></b>
+          <small>SIM RACING LEAGUE</small>
         </div>
       </div>
       <div class="title">
         <h1>TRUCK SERIES STANDINGS</h1>
-        <p>SEASON 11</p>
+        <p id="seasonLabel">SEASON 11</p>
       </div>
       <nav>
-        <button class="active" data-tab="overview">🏆 Overview</button>
-        <button data-tab="full">▦ Full Standings</button>
-        <button data-tab="schedule">▣ Schedule</button>
-        <button data-tab="drivers">♟ Drivers</button>
-        <button data-tab="stats">▥ Stats</button>
-        <button data-tab="about">● About</button>
+        <button class="active" data-tab="overview">Overview</button>
+        <button data-tab="full">Full Standings</button>
+        <button data-tab="schedule">Schedule</button>
+        <button data-tab="drivers">Drivers</button>
+        <button data-tab="stats">Stats</button>
+        <button data-tab="about">About</button>
       </nav>
       <div class="refresh">
         <div>LAST UPDATED</div>
-        <strong id="lastUpdated">Loading...</strong
-        ><button id="refreshBtn">↻</button>
+        <strong id="lastUpdated">Loading...</strong>
+        <button id="refreshBtn" type="button" aria-label="Refresh">↻</button>
       </div>
     </header>
 
     <main>
       <section id="overview" class="tab active">
-        <section id="podium" class="podium"></section>
-        <div class="content-grid">
-          <section class="panel wide">
-            <div class="tabs-mini">
-              <span class="active">TOP 16</span><span>PLAYOFF CUT LINE</span>
-            </div>
-            <table>
-              <thead id="overviewHead"></thead>
-              <tbody id="overviewBody"></tbody>
-            </table>
-          </section>
+        <div class="overview-layout">
+          <div class="main-col">
+            <section id="podium" class="podium"></section>
+            <section class="panel wide">
+              <div class="tabs-mini">
+                <span class="active">TOP 16</span>
+                <span id="fullStandingsTab" role="button" tabindex="0">FULL STANDINGS (1–<span id="fieldCountTab">43</span>)</span>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead id="overviewHead"></thead>
+                  <tbody id="overviewBody"></tbody>
+                </table>
+              </div>
+            </section>
+          </div>
           <aside class="sidebar">
             <div class="card stat">
-              <h3>SEASON 11</h3>
-              <p><b id="raceCount">11 / 20</b><span>RACES COMPLETED</span></p>
-              <p><b id="fieldCount">43</b><span>DRIVERS RANKED</span></p>
+              <h3 id="sidebarSeason">SEASON 11</h3>
+              <div class="stat-row">
+                <span class="stat-icon" aria-hidden="true">🏁</span>
+                <div>
+                  <b id="raceCount">0 / 20</b>
+                  <span>RACES COMPLETED</span>
+                </div>
+              </div>
+              <div class="stat-row">
+                <span class="stat-icon" aria-hidden="true">🏆</span>
+                <div>
+                  <b id="winnerCount">0</b>
+                  <span>DIFFERENT WINNERS</span>
+                </div>
+              </div>
+              <div class="stat-row">
+                <span class="stat-icon" aria-hidden="true">📊</span>
+                <div>
+                  <b id="avgCautions">0.00</b>
+                  <span>AVG CAUTIONS PER RACE</span>
+                </div>
+              </div>
             </div>
-            <div class="card leader" id="leaderCard"></div>
-            <div class="card">
+            <div class="card last-winner-card" id="lastWinnerCard">
+              <h3>LAST WINNER</h3>
+              <div class="last-winner">
+                <img id="lastWinnerImg" src="/assets/drivers/placeholder.png" alt="" />
+                <div>
+                  <b id="lastWinnerName">—</b>
+                  <span id="lastWinnerTrack">Track TBD</span>
+                  <span id="lastWinnerDate">Date TBD</span>
+                </div>
+              </div>
+            </div>
+            <div class="card next-race-card">
               <h3>NEXT RACE</h3>
-              <div class="track">DOVER<br /><small>MOTOR SPEEDWAY</small></div>
-              <button>VIEW SCHEDULE</button>
+              <div class="track" id="nextRaceTrack">DOVER<br /><small>MOTOR SPEEDWAY</small></div>
+              <p class="next-race-copy" id="nextRaceDate">May 25, 2024</p>
+              <button type="button" onclick="location.href='schedule.html'">VIEW SCHEDULE</button>
+            </div>
+            <div class="card logo-card">
+              <div class="bottom-bp">BP</div>
+              <b>BLAZING <span>PEDALS</span></b>
+              <small>SIM RACING LEAGUE</small>
             </div>
           </aside>
         </div>
@@ -66,12 +106,14 @@
 
       <section id="full" class="tab">
         <section class="panel full-panel">
-          <h2>FULL STANDINGS 1–43</h2>
+          <h2>FULL STANDINGS 1–<span id="fieldCountFull">43</span></h2>
           <input id="search" placeholder="Search driver..." />
-          <table>
-            <thead id="fullHead"></thead>
-            <tbody id="fullBody"></tbody>
-          </table>
+          <div class="table-wrap">
+            <table>
+              <thead id="fullHead"></thead>
+              <tbody id="fullBody"></tbody>
+            </table>
+          </div>
         </section>
       </section>
     </main>

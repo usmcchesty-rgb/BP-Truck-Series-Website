@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Track Image Processor</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <style>
+      .wrap {
+        padding: 18px;
+        max-width: 1100px;
+        margin: 0 auto;
+      }
+      .nav {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 18px;
+        border-bottom: 1px solid #333;
+        background: #0a0a0a;
+      }
+      .nav .brand {
+        font-weight: 900;
+        font-size: 18px;
+      }
+      .nav .brand span {
+        color: var(--red);
+      }
+      .nav a {
+        color: #fff;
+        text-decoration: none;
+        font-size: 12px;
+        font-weight: 900;
+        margin-left: 14px;
+      }
+      .sub {
+        color: var(--muted);
+        font-size: 12px;
+        margin-bottom: 16px;
+        line-height: 1.45;
+      }
+      .panel {
+        padding: 14px;
+        margin-bottom: 14px;
+      }
+      .panel h2 {
+        margin: 0 0 12px;
+        font-size: 18px;
+        color: #ff3030;
+      }
+      .input {
+        width: 100%;
+        max-width: 420px;
+        margin-bottom: 8px;
+        padding: 8px;
+        background: #090909;
+        color: #fff;
+        border: 1px solid #555;
+        border-radius: 4px;
+        font-size: 12px;
+      }
+      .btn {
+        margin-top: 4px;
+      }
+      #msg {
+        margin-top: 12px;
+        font-size: 12px;
+        color: #ccc;
+        white-space: pre-wrap;
+      }
+      #msg.error {
+        color: #ff6060;
+      }
+      #msg.success {
+        color: #45d65a;
+      }
+      .preview-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+        margin-top: 14px;
+      }
+      .preview-card {
+        background: #111;
+        border: 1px solid #333;
+        border-radius: 6px;
+        padding: 10px;
+      }
+      .preview-card h3 {
+        margin: 0 0 8px;
+        font-size: 13px;
+        color: #ff3030;
+        font-style: italic;
+      }
+      .preview-stage {
+        min-height: 220px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background:
+          linear-gradient(45deg, #1a1a1a 25%, transparent 25%),
+          linear-gradient(-45deg, #1a1a1a 25%, transparent 25%),
+          linear-gradient(45deg, transparent 75%, #1a1a1a 75%),
+          linear-gradient(-45deg, transparent 75%, #1a1a1a 75%);
+        background-size: 16px 16px;
+        background-position:
+          0 0,
+          0 8px,
+          8px -8px,
+          -8px 0;
+        background-color: #0d0d0d;
+        border-radius: 4px;
+        padding: 12px;
+      }
+      .preview-stage img {
+        max-width: 100%;
+        max-height: 280px;
+        object-fit: contain;
+      }
+      .preview-empty {
+        color: #777;
+        font-size: 11px;
+      }
+      @media (max-width: 800px) {
+        .preview-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="nav">
+      <div class="brand">BP ADMIN <span>TRACK IMAGES</span></div>
+      <nav>
+        <a href="/admin/">Admin</a>
+        <a href="/">Site</a>
+      </nav>
+    </header>
+    <main class="wrap">
+      <h1>Track Map Processor</h1>
+      <p class="sub">
+        Upload a PNG track map with a white background. The tool removes
+        white/near-white pixels (RGB &gt; 235), keeps dark track lines, adds a
+        1px white outer stroke, and saves to
+        <code>public/assets/tracks/</code> using the original filename. Run
+        <code>npm run start</code>, then use this page on the same dev server.
+        File save works in local <code>vercel dev</code> only — commit generated
+        PNGs before deploy.
+      </p>
+
+      <div class="panel">
+        <h2>Upload PNG</h2>
+        <input
+          id="pw"
+          class="input"
+          type="password"
+          placeholder="Admin password (if set on server)"
+        />
+        <input id="file" class="input" type="file" accept="image/png,.png" />
+        <button id="processBtn" class="btn" type="button" disabled>
+          Process &amp; Save
+        </button>
+        <div id="msg"></div>
+
+        <div class="preview-grid">
+          <div class="preview-card">
+            <h3>Before</h3>
+            <div class="preview-stage" id="beforeStage">
+              <span class="preview-empty">Select a PNG to preview</span>
+            </div>
+          </div>
+          <div class="preview-card">
+            <h3>After</h3>
+            <div class="preview-stage" id="afterStage">
+              <span class="preview-empty">Processed preview appears here</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <script>
+      const $ = (s) => document.querySelector(s);
+      const msg = $("#msg");
+      const fileInput = $("#file");
+      const processBtn = $("#processBtn");
+      let beforeUrl = "";
+
+      function setMsg(text, type = "") {
+        msg.textContent = text;
+        msg.className = type;
+      }
+
+      function setPreview(stage, src, alt) {
+        stage.innerHTML = "";
+        if (!src) {
+          stage.innerHTML = `<span class="preview-empty">${alt}</span>`;
+          return;
+        }
+        const img = document.createElement("img");
+        img.src = src;
+        img.alt = alt;
+        stage.appendChild(img);
+      }
+
+      fileInput.addEventListener("change", () => {
+        const file = fileInput.files?.[0];
+        if (beforeUrl) URL.revokeObjectURL(beforeUrl);
+        beforeUrl = "";
+        setPreview($("#afterStage"), "", "Processed preview appears here");
+        setMsg("");
+
+        if (!file) {
+          processBtn.disabled = true;
+          setPreview($("#beforeStage"), "", "Select a PNG to preview");
+          return;
+        }
+
+        if (
+          !file.name.toLowerCase().endsWith(".png") ||
+          file.type !== "image/png"
+        ) {
+          processBtn.disabled = true;
+          setMsg("Only PNG files are supported.", "error");
+          setPreview($("#beforeStage"), "", "Invalid file type");
+          return;
+        }
+
+        beforeUrl = URL.createObjectURL(file);
+        setPreview($("#beforeStage"), beforeUrl, "Original upload");
+        processBtn.disabled = false;
+      });
+
+      processBtn.addEventListener("click", async () => {
+        const file = fileInput.files?.[0];
+        if (!file) return;
+
+        setMsg("Processing...");
+        processBtn.disabled = true;
+
+        try {
+          const formData = new FormData();
+          formData.append("image", file);
+          formData.append("password", $("#pw").value || "");
+
+          const res = await fetch("/api/process-track", {
+            method: "POST",
+            body: formData,
+          });
+          const raw = await res.text();
+          let data;
+          try {
+            data = JSON.parse(raw);
+          } catch {
+            throw new Error("Server returned invalid JSON.");
+          }
+          if (!res.ok) throw new Error(data.error || "Processing failed.");
+
+          setPreview(
+            $("#beforeStage"),
+            data.before || beforeUrl,
+            "Original upload",
+          );
+          setPreview($("#afterStage"), data.after, "Processed track map");
+          if (data.success) {
+            setMsg(`Saved: ${data.filename}\nPath: ${data.savedTo}`, "success");
+          } else if (data.after) {
+            setMsg(
+              (data.error || "Processed preview only.") +
+                (data.filename ? `\nFilename: ${data.filename}` : ""),
+              "error",
+            );
+          } else {
+            setMsg(data.error || "Processing failed.", "error");
+          }
+        } catch (e) {
+          setMsg(e.message || "Processing failed.", "error");
+        } finally {
+          processBtn.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>
