@@ -1,14 +1,94 @@
 import { getSettings, getDriverProfiles, slugify } from './_lib.js';
+import * as cheerio from "cheerio";
+
 
 export default async function handler(req, res) {
   try {
     const settings = await getSettings();
     const seasonId = settings.seasonId || '27987';
-const scheduleId = settings.scheduleId || '346493';
+    const fallbackScheduleId = settings.scheduleId || '346493';
 
-const response = await fetch(
-  `https://www.simracerhub.com/scoring/get_standings.php?season_id=${seasonId}&schedule_id=${scheduleId}`
-);
+    // Auto-detect the latest completed schedule_id by re-parsing the schedule page.
+    // This avoids the API being pinned to an older schedule snapshot.
+    let detectedScheduleId = null;
+    let scheduleDetectionDebug = {
+      scheduleRowsFound: 0,
+      completedScheduleIds: [],
+      failureReason: null,
+    };
+
+    try {
+      const scheduleHtml = await fetch(
+        settings.scheduleUrl,
+        { headers: { 'user-agent': 'BP-Truck-Series-Website/1.0' } }
+      ).then((r) => (r.ok ? r.text() : ''));
+
+      if (!scheduleHtml) {
+        scheduleDetectionDebug.failureReason = 'Failed to fetch schedule html';
+      } else {
+        const $ = cheerio.load(scheduleHtml);
+        const scheduleRows = $('table').find('tr');
+        scheduleDetectionDebug.scheduleRowsFound = scheduleRows.length;
+
+        // Completed race = winner text non-empty.
+        // Extract schedule_id from ANY race link in that completed row.
+        const completedScheduleIds = [];
+        scheduleRows.each((_i, tr) => {
+          const tds = $(tr).find('td');
+          if (!tds || tds.length < 7) return;
+
+          const winnerCell = tds.eq(6);
+          const winnerLink = winnerCell.find('a').first();
+          const winnerText = String(
+            winnerLink.text() || winnerCell.text() || ''
+          ).trim();
+          if (!winnerText) return;
+
+          const raceHrefs = $(tr)
+            .find("a[href*='race']")
+            .map((_idx, a) => String($(a).attr('href') || ''))
+            .get();
+
+          for (const href of raceHrefs) {
+            const m = String(href).match(/schedule_id=(\d+)/);
+            if (m && m[1]) completedScheduleIds.push(String(m[1]));
+          }
+        });
+
+        // Deduplicate while preserving order.
+        const seen = new Set();
+        const orderedUnique = completedScheduleIds.filter((id) => {
+          if (seen.has(id)) return false;
+          seen.add(id);
+          return true;
+        });
+
+        scheduleDetectionDebug.completedScheduleIds = orderedUnique;
+
+        if (orderedUnique.length) {
+          detectedScheduleId = orderedUnique[orderedUnique.length - 1];
+        } else {
+          scheduleDetectionDebug.failureReason =
+            'No completed rows had any race href containing schedule_id=';
+        }
+      }
+    } catch (e) {
+      scheduleDetectionDebug.failureReason = e?.message || String(e);
+    }
+
+    const scheduleId = detectedScheduleId || fallbackScheduleId;
+    console.log('[standings] settings.scheduleId:', settings.scheduleId);
+    console.log(
+      '[standings] schedule detection debug:',
+      JSON.stringify(scheduleDetectionDebug)
+    );
+    console.log('[standings] detectedScheduleId:', detectedScheduleId);
+    console.log('[standings] final scheduleId used:', scheduleId);
+
+
+    const response = await fetch(
+      `https://www.simracerhub.com/scoring/get_standings.php?season_id=${seasonId}&schedule_id=${scheduleId}`
+    );
 
     const data = await response.json();
     const profiles = await getDriverProfiles();
@@ -47,9 +127,10 @@ const avgFinish =
     : null;
 
         return {
-          position: Number(r.pos1),
-          previousPosition: Number(r.pos2),
-          gainLoss: Number(r.pos2 || r.pos1) - Number(r.pos1 || r.pos2),
+          position: Number(r.pos2),
+          previousPosition: Number(r.pos1),
+          gainLoss: Number(r.chg ?? (r.pos1 || r.pos2) - (r.pos2 || r.pos1)),
+
           driver: displayName,
           driverId: r.drid,
           carNumber: profile?.car_number || '',

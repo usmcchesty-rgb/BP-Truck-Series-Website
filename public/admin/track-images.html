@@ -121,6 +121,15 @@
         color: #777;
         font-size: 11px;
       }
+      .row {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        flex-wrap: wrap;
+      }
+      .row .grow {
+        flex: 1 1 520px;
+      }
       @media (max-width: 800px) {
         .preview-grid {
           grid-template-columns: 1fr;
@@ -140,10 +149,10 @@
       <h1>Track Map Processor</h1>
       <p class="sub">
         Upload a PNG track map with a white background. The tool removes
-        white/near-white pixels (RGB &gt; 235), keeps dark track lines, adds a
+        white/near-white pixels (RGB > 235), keeps dark track lines, adds a
         1px white outer stroke, and saves to
-        <code>public/assets/tracks/</code> using the original filename. Run
-        <code>npm run start</code>, then use this page on the same dev server.
+        <code>public/assets/tracks/</code> using the selected track output filename.
+        Run <code>npm run start</code>, then use this page on the same dev server.
         File save works in local <code>vercel dev</code> only — commit generated
         PNGs before deploy.
       </p>
@@ -156,6 +165,18 @@
           type="password"
           placeholder="Admin password (if set on server)"
         />
+
+        <div class="row">
+          <div class="grow">
+            <select id="trackSelect" class="input" style="max-width: 720px; margin-bottom: 8px;">
+              <option value="">Loading Season 11 tracks...</option>
+            </select>
+            <div style="font-size: 11px; color: #777; margin-top: 4px;">
+              Dropdown options come from <code>/api/schedule</code>.
+            </div>
+          </div>
+        </div>
+
         <input id="file" class="input" type="file" accept="image/png,.png" />
         <button id="processBtn" class="btn" type="button" disabled>
           Process &amp; Save
@@ -184,6 +205,10 @@
       const msg = $("#msg");
       const fileInput = $("#file");
       const processBtn = $("#processBtn");
+      const trackSelect = $("#trackSelect");
+      const beforeStage = $("#beforeStage");
+      const afterStage = $("#afterStage");
+
       let beforeUrl = "";
 
       function setMsg(text, type = "") {
@@ -203,50 +228,162 @@
         stage.appendChild(img);
       }
 
+      function normalizeOutputFilename(displayName) {
+        const raw = String(displayName || "").trim();
+
+        // This must match the Schedule page slug rule.
+        // Rule:
+        // - lowercase
+        // - trim
+        // - replace & with and
+        // - remove apostrophes
+        // - replace any non-letter/number sequence with -
+        // - remove leading/trailing -
+        // - append .png
+        let s = raw.toLowerCase();
+        s = s.replace(/&/g, "and");
+        s = s.replace(/'/g, "");
+        s = s.replace(/[^a-z0-9]+/g, "-");
+        s = s.replace(/^-+|-+$/g, "");
+
+        return `${s}.png`;
+      }
+
+
+      function parseUniqueTracksFromSchedule(scheduleJson) {
+        const races = Array.isArray(scheduleJson?.races) ? scheduleJson.races : [];
+        const seen = new Set();
+        const out = [];
+        for (const r of races) {
+          const t = String(r?.track || "").trim();
+          if (!t) continue;
+          if (seen.has(t)) continue;
+          seen.add(t);
+          out.push({ displayName: t, outputFilename: normalizeOutputFilename(t) });
+        }
+        return out;
+      }
+
+      function rebuildDropdown(tracks, errorText) {
+        trackSelect.innerHTML = "";
+        if (errorText) {
+          const opt = document.createElement("option");
+          opt.value = "";
+          opt.textContent = errorText;
+          trackSelect.appendChild(opt);
+          trackSelect.disabled = true;
+          processBtn.disabled = true;
+          return;
+        }
+
+        trackSelect.disabled = false;
+
+        const empty = document.createElement("option");
+        empty.value = "";
+        empty.textContent = "Select a track...";
+        trackSelect.appendChild(empty);
+
+        // Sort alphabetically by displayName for usability.
+        const sorted = [...tracks].sort((a, b) => a.displayName.localeCompare(b.displayName));
+        for (const t of sorted) {
+          const opt = document.createElement("option");
+          opt.value = t.outputFilename;
+          opt.textContent = `${t.displayName} — ${t.outputFilename}`;
+          opt.dataset.outputFilename = t.outputFilename;
+          opt.dataset.trackName = t.displayName;
+          trackSelect.appendChild(opt);
+        }
+      }
+
+      async function loadDropdownFromSchedule() {
+        trackSelect.disabled = true;
+        trackSelect.innerHTML = `<option value="">Loading Season 11 tracks...</option>`;
+        try {
+          const res = await fetch("/api/schedule");
+          const data = await res.json();
+          if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+
+          const tracks = parseUniqueTracksFromSchedule(data);
+          if (!tracks.length) {
+            rebuildDropdown([], "No schedule tracks found (Season 11)." );
+            return;
+          }
+          rebuildDropdown(tracks);
+        } catch (e) {
+          rebuildDropdown([], `Failed to load tracks: ${e.message || "Unknown"}`);
+        }
+      }
+
       fileInput.addEventListener("change", () => {
         const file = fileInput.files?.[0];
         if (beforeUrl) URL.revokeObjectURL(beforeUrl);
         beforeUrl = "";
-        setPreview($("#afterStage"), "", "Processed preview appears here");
+        setPreview(afterStage, "", "Processed preview appears here");
         setMsg("");
 
         if (!file) {
           processBtn.disabled = true;
-          setPreview($("#beforeStage"), "", "Select a PNG to preview");
+          setPreview(beforeStage, "", "Select a PNG to preview");
           return;
         }
 
-        if (
-          !file.name.toLowerCase().endsWith(".png") ||
-          file.type !== "image/png"
-        ) {
+        if (!file.name.toLowerCase().endsWith(".png") || file.type !== "image/png") {
           processBtn.disabled = true;
           setMsg("Only PNG files are supported.", "error");
-          setPreview($("#beforeStage"), "", "Invalid file type");
+          setPreview(beforeStage, "", "Invalid file type");
           return;
         }
 
         beforeUrl = URL.createObjectURL(file);
-        setPreview($("#beforeStage"), beforeUrl, "Original upload");
-        processBtn.disabled = false;
+        setPreview(beforeStage, beforeUrl, "Original upload");
+
+        processBtn.disabled = !trackSelect.value;
+      });
+
+      trackSelect.addEventListener("change", () => {
+        const file = fileInput.files?.[0];
+        const hasTrack = !!trackSelect.value;
+        processBtn.disabled = !hasTrack || !file;
+        setMsg("");
       });
 
       processBtn.addEventListener("click", async () => {
         const file = fileInput.files?.[0];
         if (!file) return;
 
+        if (!trackSelect.value) {
+          setMsg("Select a track first.", "error");
+          processBtn.disabled = false;
+          return;
+        }
+
+        const outputFilename = trackSelect.value;
+        const selectedTrackName = trackSelect.options[trackSelect.selectedIndex]?.dataset.trackName || "";
+        const password = $("#pw").value || "";
+
         setMsg("Processing...");
         processBtn.disabled = true;
 
         try {
-          const formData = new FormData();
-          formData.append("image", file);
-          formData.append("password", $("#pw").value || "");
+          const dataUrl = await new Promise((resolve, reject) => {
+            const r = new FileReader();
+            r.onload = () => resolve(r.result);
+            r.onerror = () => reject(new Error("Failed to read PNG file."));
+            r.readAsDataURL(file);
+          });
 
           const res = await fetch("/api/process-track", {
             method: "POST",
-            body: formData,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              imageBase64: dataUrl,
+              password,
+              outputFilename,
+              trackName: selectedTrackName,
+            }),
           });
+
+
           const raw = await res.text();
           let data;
           try {
@@ -256,14 +393,12 @@
           }
           if (!res.ok) throw new Error(data.error || "Processing failed.");
 
-          setPreview(
-            $("#beforeStage"),
-            data.before || beforeUrl,
-            "Original upload",
-          );
-          setPreview($("#afterStage"), data.after, "Processed track map");
+          setPreview(beforeStage, data.before || beforeUrl, "Original upload");
+          setPreview(afterStage, data.after, "Processed track map");
+
+          const savedName = data.filename || outputFilename;
           if (data.success) {
-            setMsg(`Saved: ${data.filename}\nPath: ${data.savedTo}`, "success");
+            setMsg(`Saved: ${savedName}\nPath: ${data.savedTo}`, "success");
           } else if (data.after) {
             setMsg(
               (data.error || "Processed preview only.") +
@@ -279,6 +414,9 @@
           processBtn.disabled = false;
         }
       });
+
+      loadDropdownFromSchedule();
     </script>
   </body>
 </html>
+

@@ -24,6 +24,9 @@ function parseBody(req) {
 }
 
 function readUploadBuffer(body) {
+  // This legacy implementation expects the body field to contain a base64 string.
+  // The admin UI sends multipart FormData; the server express tool is responsible
+  // for converting the file upload.
   const raw = body.imageBase64 || body.image || "";
   const base64 = String(raw).replace(/^data:image\/png;base64,/, "").trim();
   if (!base64) {
@@ -35,6 +38,7 @@ function readUploadBuffer(body) {
   }
   return buffer;
 }
+
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -50,8 +54,29 @@ export default async function handler(req, res) {
       return;
     }
 
+    // This endpoint is intended to be used with a dedicated track image tool
+    // (server/track-processor.mjs / server express+multer). If we receive a request
+    // with no multipart file, fail with a clear error so the admin UI can be corrected.
+    const hasBase64Image = body.imageBase64 || body.image;
+    if (!hasBase64Image) {
+      json(res, 400, {
+        error:
+          'No image received. Expected multipart upload field name: "image" (sent as FormData).',
+        expectedFileField: "image",
+        receivedKeys: Object.keys(body || {}),
+      });
+      return;
+    }
+
     const uploadBuffer = readUploadBuffer(body);
-    const filename = safeFilename(body.filename || body.name || "track.png");
+
+    // Prefer an explicit output filename from the admin UI (selected official track).
+    // Still run through safeFilename() to prevent traversal / unsafe names.
+    const rawOutput =
+      body.outputFilename || body.filename || body.name || "track.png";
+    const filename = safeFilename(rawOutput);
+
+
 
     if (uploadBuffer.length > 12 * 1024 * 1024) {
       json(res, 400, { error: "File too large (max 12MB)." });
@@ -89,6 +114,8 @@ export default async function handler(req, res) {
       success: true,
       filename,
       savedTo: `public/assets/tracks/${filename}`,
+      // Echo back the final server-chosen output filename.
+
       before: `data:image/png;base64,${uploadBuffer.toString("base64")}`,
       after: `data:image/png;base64,${processed.toString("base64")}`,
     });

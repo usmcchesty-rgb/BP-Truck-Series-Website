@@ -23,7 +23,13 @@
       <nav>
         <button class="active" data-tab="overview">Overview</button>
         <button data-tab="full">Full Standings</button>
-        <button data-tab="schedule">Schedule</button>
+        <button
+          data-tab="schedule"
+          type="button"
+          onclick="location.href = '/schedule.html'"
+        >
+          Schedule
+        </button>
         <button data-tab="drivers">Drivers</button>
         <button data-tab="stats">Stats</button>
         <button data-tab="about">About</button>
@@ -43,7 +49,9 @@
             <section class="panel wide">
               <div class="tabs-mini">
                 <span class="active">TOP 16</span>
-                <span id="fullStandingsTab" role="button" tabindex="0">FULL STANDINGS (1–<span id="fieldCountTab">43</span>)</span>
+                <span id="fullStandingsTab" role="button" tabindex="0"
+                  >FULL STANDINGS (1–<span id="fieldCountTab">43</span>)</span
+                >
               </div>
               <div class="table-wrap">
                 <table>
@@ -81,7 +89,11 @@
             <div class="card last-winner-card" id="lastWinnerCard">
               <h3>LAST WINNER</h3>
               <div class="last-winner">
-                <img id="lastWinnerImg" src="/assets/drivers/placeholder.png" alt="" />
+                <img
+                  id="lastWinnerImg"
+                  src="/assets/drivers/placeholder.png"
+                  alt=""
+                />
                 <div>
                   <b id="lastWinnerName">—</b>
                   <span id="lastWinnerTrack">Track TBD</span>
@@ -91,9 +103,13 @@
             </div>
             <div class="card next-race-card">
               <h3>NEXT RACE</h3>
-              <div class="track" id="nextRaceTrack">DOVER<br /><small>MOTOR SPEEDWAY</small></div>
+              <div class="track" id="nextRaceTrack">
+                DOVER<br /><small>MOTOR SPEEDWAY</small>
+              </div>
               <p class="next-race-copy" id="nextRaceDate">May 25, 2024</p>
-              <button type="button" onclick="location.href='schedule.html'">VIEW SCHEDULE</button>
+              <button type="button" onclick="location.href = 'schedule.html'">
+                VIEW SCHEDULE
+              </button>
             </div>
             <div class="card logo-card">
               <div class="bottom-bp">BP</div>

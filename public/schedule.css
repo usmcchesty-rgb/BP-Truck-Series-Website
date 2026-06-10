@@ -1,0 +1,227 @@
+/* schedule page only */
+
+/* Widened layout like standings */
+main > .tab.active{
+  max-width:1500px;
+  margin:0 auto;
+}
+
+/* schedule table wrapper should not remain the old narrow width */
+.full-panel{
+  max-width:1500px;
+}
+
+/* keep base spacing tidy */
+#scheduleSummary{
+  margin-bottom:10px;
+}
+
+
+.schedule-overview-layout{
+  grid-template-columns:minmax(0,1fr) 225px;
+  gap:13px;
+  align-items:start;
+}
+
+/* --- Schedule Summary (compact horizontal) --- */
+#scheduleSummary{
+  margin-bottom:10px;
+}
+
+.schedule-summary-strip{
+  padding:10px 12px;
+}
+
+.schedule-summary-title{
+  margin:0 0 8px;
+}
+
+.schedule-summary-stats{
+  display:flex;
+  gap:14px;
+  align-items:center;
+  flex-wrap:wrap;
+}
+
+.summary-stat{
+  display:flex;
+  gap:8px;
+  align-items:center;
+  white-space:nowrap;
+}
+
+.summary-emoji{
+  font-size:18px;
+  width:22px;
+  display:inline-flex;
+  justify-content:center;
+}
+
+.schedule-summary-stats b{
+  color:#fff;
+  font-weight:900;
+  font-size:16px;
+}
+
+.schedule-summary-stats span{
+  color:#ccc;
+  font-size:9px;
+  font-weight:800;
+  letter-spacing:.3px;
+}
+
+/* --- Next Race preview card --- */
+.race-preview{
+  display:grid;
+  grid-template-columns:150px 1fr;
+  gap:12px;
+  align-items:stretch;
+}
+
+.race-preview-media{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+
+.race-preview-thumb{
+  display:none;
+}
+
+.race-preview-media .race-preview-img{
+  width:100%;
+  height:88px;
+  object-fit:contain;
+  background:transparent;
+  filter:drop-shadow(0 0 8px rgba(255,255,255,.1)) drop-shadow(0 0 14px rgba(0,0,0,.45));
+  border-radius:6px;
+  display:block;
+}
+
+.race-preview-body{
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+}
+
+.race-preview-title{
+  font-size:17px;
+  font-style:italic;
+  font-weight:900;
+  line-height:1.15;
+  margin-bottom:6px;
+}
+
+.race-preview-meta{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+}
+
+.race-preview-date{
+  color:#ccc;
+  font-size:10px;
+  font-weight:700;
+}
+
+.race-preview-length{
+  color:#ddd;
+  font-size:10px;
+  font-weight:800;
+}
+
+/* hide broken-image icon behavior */
+.race-preview-img{background:transparent}
+
+/* --- Table visual improvements --- */
+#scheduleTable th,
+#scheduleTable td{
+  font-size:inherit;
+}
+
+.schedule-winner{
+  color:var(--gold);
+  font-weight:900;
+}
+
+.schedule-row-completed td:nth-child(3){
+  padding-left:18px;
+}
+
+.schedule-row-upcoming td:nth-child(3){
+  padding-left:18px;
+}
+
+.schedule-row-completed td:nth-child(3)::before,
+.schedule-row-upcoming td:nth-child(3)::before{
+  content:"";
+  width:8px;
+  height:8px;
+  border-radius:50%;
+  position:absolute;
+  left:6px;
+  top:50%;
+  transform:translateY(-50%);
+}
+
+.schedule-row-completed td:nth-child(3){
+  position:relative;
+}
+
+.schedule-row-completed td:nth-child(3)::before{
+  background:rgba(69,214,90,.85);
+}
+
+.schedule-row-upcoming td:nth-child(3){
+  position:relative;
+}
+
+.schedule-row-upcoming td:nth-child(3)::before{
+  background:rgba(170,170,170,.55);
+}
+
+/* --- Sponsor logo size rules + keep BP fallback --- */
+.sidebar-sponsors .sponsor-logo{
+  width:100%;
+  max-height:64px;
+  object-fit:contain;
+  filter:drop-shadow(0 0 8px rgba(255,255,255,.08)) drop-shadow(0 0 12px rgba(0,0,0,.4));
+  margin:0 auto;
+}
+
+/* Responsive tweaks */
+@media(max-width:1100px){
+  .race-preview{grid-template-columns:1fr;}
+  .race-preview-media .race-preview-img,
+  .race-preview-thumb{height:82px;}
+}
+
+/* Standings-style navigation + active state */
+.topbar nav a{
+  display:inline-block;
+  text-decoration:none;
+  color:#fff;
+  border:1px solid #333;
+  background:linear-gradient(#1c1c1c,#080808);
+  padding:5px 10px;
+  font-size:10px;
+  font-weight:900;
+  text-transform:uppercase;
+  cursor:pointer;
+  border-radius:0;
+  clip-path:polygon(8px 0,100% 0,calc(100% - 8px) 100%,0 100%);
+  margin-left:-1px;
+  white-space:nowrap;
+  line-height:1.2;
+}
+
+.topbar nav a.active,
+.topbar nav a:hover{
+  background:linear-gradient(#d40000,#680000);
+  border-color:#ff2424;
+  box-shadow:0 0 10px rgba(229,9,20,.25);
+}
+
+
+
+

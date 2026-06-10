@@ -1,1 +1,378 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Schedule</title><link rel="stylesheet" href="/styles.css"></head><body><header class="nav"><div class="brand">BLAZING PEDALS <span>SCHEDULE</span></div><nav><a href="/">Home</a><a href="/standings.html">Standings</a><a href="/schedule.html">Schedule</a><a href="/drivers.html">Drivers</a><a href="/admin">Admin</a></nav></header><main class="wrap"><h1>Season Schedule</h1><div class="panel"><div id="scheduleSummary"></div><div class="table-wrap"><table id="scheduleTable"><thead><tr><th>Race</th><th>Date</th><th>Pts</th><th>Track</th><th>Length</th><th>Winner</th></tr></thead><tbody></tbody></table></div></div></main><script src="/app.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Schedule</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/schedule.css" />
+  </head>
+  <body>
+    <div class="page-bg"></div>
+    <header class="topbar">
+      <div class="brand">
+        <div class="bp">BP</div>
+        <div>
+          <b>BLAZING <span>PEDALS</span></b>
+          <small>SIM RACING LEAGUE</small>
+        </div>
+      </div>
+      <div class="title">
+        <h1>TRUCK SERIES SCHEDULE</h1>
+        <p id="seasonLabel">SEASON 11</p>
+      </div>
+      <nav>
+        <a href="/">Home</a>
+        <a href="/standings.html">Standings</a>
+        <a class="active" href="/schedule.html">Schedule</a>
+        <a href="/drivers.html">Drivers</a>
+        <a href="/admin">Admin</a>
+      </nav>
+      <div class="refresh">
+        <div>LAST UPDATED</div>
+        <strong id="lastUpdated">Loading...</strong>
+        <button id="refreshBtn" type="button" aria-label="Refresh">↻</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="tab active">
+        <div class="overview-layout schedule-overview-layout">
+          <div class="main-col">
+            <section class="panel full-panel">
+              <div id="scheduleSummary"></div>
+              <div class="table-wrap">
+                <table id="scheduleTable">
+                  <thead>
+                    <tr>
+                      <th>Race</th>
+                      <th>Date</th>
+                      <th>Pts</th>
+                      <th>Track</th>
+                      <th>Length</th>
+                      <th>Winner</th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+
+          <aside class="sidebar">
+            <div class="card stat" id="sidebarSeason">
+              <h3 id="sidebarSeasonTitle">SEASON 11</h3>
+              <div class="stat-row">
+                <span class="stat-icon" aria-hidden="true">🏁</span>
+                <div>
+                  <b id="raceCount">0 / 20</b>
+                  <span>RACES COMPLETED</span>
+                </div>
+              </div>
+              <div class="stat-row">
+                <span class="stat-icon" aria-hidden="true">🏆</span>
+                <div>
+                  <b id="winnerCount">0</b>
+                  <span>DIFFERENT WINNERS</span>
+                </div>
+              </div>
+              <div class="stat-row">
+                <span class="stat-icon" aria-hidden="true">📊</span>
+                <div>
+                  <b id="avgCautions">0.00</b>
+                  <span>AVG CAUTIONS PER RACE</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="card last-winner-card" id="lastWinnerCard">
+              <h3>LAST WINNER</h3>
+              <div class="last-winner">
+                <img id="lastWinnerImg" src="/assets/drivers/placeholder.png" alt="" />
+                <div>
+                  <b id="lastWinnerName">—</b>
+                  <span id="lastWinnerTrack">Track TBD</span>
+                  <span id="lastWinnerDate">Date TBD</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="card next-race-card">
+              <h3>NEXT RACE</h3>
+              <div class="track" id="nextRaceTrack">DOVER<br /><small>MOTOR SPEEDWAY</small></div>
+              <p class="next-race-copy" id="nextRaceDate">May 25, 2024</p>
+              <button type="button" onclick="location.href='schedule.html'">VIEW SCHEDULE</button>
+            </div>
+
+            <div class="card logo-card sidebar-sponsors" id="sidebarSponsorCard">
+              <div class="bottom-bp" id="sponsorFallbackBp">BP</div>
+              <img id="sponsorImg" class="sponsor-logo" src="" alt="" style="display:none" />
+              <b id="sponsorFallbackBrand">BLAZING <span>PEDALS</span></b>
+              <small id="sponsorFallbackTag">SIM RACING LEAGUE</small>
+            </div>
+
+          </aside>
+        </div>
+      </section>
+    </main>
+   
+  <script>
+
+    (function () {
+      const summaryEl = document.getElementById('scheduleSummary');
+      const tbodyEl = document.querySelector('#scheduleTable tbody');
+      if (!summaryEl || !tbodyEl) return;
+
+      const escapeHtml = (s) =>
+        String(s ?? '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '<')
+          .replace(/>/g, '>')
+          .replace(/"/g, '"')
+          .replace(/'/g, '&#039;');
+
+      const raceWinnerCell = (winner) => {
+        const w = String(winner ?? '').trim();
+        return w ? escapeHtml(w) : '<span>Upcoming</span>';
+      };
+
+      const render = (data) => {
+        const completed = Number(data.completed ?? 0);
+        const totalPointsRaces = Number(data.totalPointsRaces ?? 0);
+        const next = data.next || null;
+
+        // Random sponsor image once per page load (visual only).
+        const sponsorCard = document.getElementById('sidebarSponsorCard');
+        const sponsorImg = document.getElementById('sponsorImg');
+        const sponsorFallbackBp = document.getElementById('sponsorFallbackBp');
+        const sponsorFallbackBrand = document.getElementById('sponsorFallbackBrand');
+        const sponsorFallbackTag = document.getElementById('sponsorFallbackTag');
+
+        const sponsorPool = ['/assets/sponsors/BPnew.png'];
+        const pick = sponsorPool[Math.floor(Math.random() * sponsorPool.length)];
+
+        if (sponsorCard && sponsorImg && sponsorFallbackBp && sponsorFallbackBrand && sponsorFallbackTag && pick) {
+          const tryLoad = () => {
+            sponsorImg.src = pick;
+            sponsorImg.style.display = 'block';
+            sponsorFallbackBp.style.display = 'none';
+            sponsorFallbackBrand.style.display = 'none';
+            sponsorFallbackTag.style.display = 'none';
+          };
+
+          const fallback = () => {
+            sponsorImg.style.display = 'none';
+            sponsorFallbackBp.style.display = 'block';
+            sponsorFallbackBrand.style.display = 'block';
+            sponsorFallbackTag.style.display = 'block';
+          };
+
+          sponsorImg.onerror = fallback;
+          tryLoad();
+        }
+
+
+        const nextText = next
+          ? `Next: Race ${escapeHtml(next.raceNumber ?? '')} — ${escapeHtml(next.date ?? '')} (${escapeHtml(next.track ?? 'TBD')})`
+          : 'Next: —';
+
+        const races = Array.isArray(data.races) ? data.races : [];
+
+        const uniqueWinners = races.reduce((acc, r) => {
+          const w = String(r?.winner ?? '').trim();
+          if (w && r?.winner) acc.add(w);
+          return acc;
+        }, new Set());
+
+        summaryEl.innerHTML = `
+          <div class="schedule-cards">
+            <section class="card stat schedule-card schedule-summary-strip" aria-label="Schedule summary">
+              <h3 class="schedule-summary-title">SEASON SUMMARY</h3>
+              <div class="schedule-summary-stats" role="list">
+                <div class="summary-stat" role="listitem">
+                  <span class="summary-emoji" aria-hidden="true">🏁</span>
+                  <b>${completed} </b><span>RACES COMPLETED</span>
+                </div>
+                <div class="summary-stat" role="listitem">
+                  <span class="summary-emoji" aria-hidden="true">📊</span>
+                  <b>${totalPointsRaces} </b><span>POINTS RACES</span>
+                </div>
+                <div class="summary-stat" role="listitem">
+                  <span class="summary-emoji" aria-hidden="true">🏆</span>
+                  <b>${uniqueWinners.size} </b><span>DIFFERENT WINNERS</span>
+                </div>
+              </div>
+            </section>
+
+            <section class="card next-race-card schedule-card" aria-label="Next race">
+              <h3>NEXT RACE</h3>
+              <div class="race-preview" id="scheduleNextPreview">
+                <div class="race-preview-media">
+                  <img class="race-preview-img" id="scheduleNextImg" alt="" />
+                </div>
+                <div class="race-preview-body">
+                  <div class="race-preview-title" id="scheduleNextTrack">TBD</div>
+                  <div class="race-preview-meta">
+                    <span class="race-preview-date" id="scheduleNextDate">${nextText.replace(/^Next:\s*/,'')}</span>
+                    <span class="race-preview-length" id="scheduleNextLength"></span>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+          </div>
+        `;
+
+        // Keep existing rendering logic targets unchanged; update sidebar next/season if present.
+        const sidebarNextTrack = document.getElementById('nextRaceTrack');
+        const sidebarNextDate = document.getElementById('nextRaceDate');
+        if (sidebarNextTrack && next) {
+          sidebarNextTrack.innerHTML = `${escapeHtml(next.track ?? 'TBD')}<br /><small>${escapeHtml(next.track ?? 'TBD').toUpperCase()}</small>`;
+        }
+        if (sidebarNextDate && next) {
+          sidebarNextDate.textContent = escapeHtml(next.date ?? '');
+        }
+
+        // Next race preview media (track image mapping). Fallback is handled by CSS.
+        const scheduleNextTrackEl = document.getElementById('scheduleNextTrack');
+        const scheduleNextDateEl = document.getElementById('scheduleNextDate');
+        const scheduleNextLengthEl = document.getElementById('scheduleNextLength');
+        const scheduleNextImg = document.getElementById('scheduleNextImg');
+
+        // Use the same slug/path logic as the sidebar cards (and the stored files in /public/assets/tracks/).
+        // Examples:
+        //  "Indianapolis Motor Speedway NASCAR Oval" -> /assets/tracks/indianapolis-motor-speedway-nascar-oval.png
+        const trackToAssetPath = (trackName) => {
+          const t = String(trackName ?? '').trim().toLowerCase();
+          if (!t) return null;
+
+          // Keep rules aligned with filenames in /public/assets/tracks/.
+          // This page previously used short filenames (e.g. /assets/tracks/indianapolis.png) which don't exist.
+          if (/indianapolis\s+motor\s+speedway\s+nasc(ar)?\s+oval/i.test(t) || /indianapolis/i.test(t)) {
+            return '/assets/tracks/indianapolis-motor-speedway-nascar-oval.png';
+          }
+          if (/lucas\s*oil/i.test(t)) {
+            return '/assets/tracks/lucas-oil-speedway.png';
+          }
+          if (/charlotte\s+motor\s+speedway\s+oval/i.test(t) || /charlotte\s+oval/i.test(t)) {
+            return '/assets/tracks/charlotte-motor-speedway-oval-night.png';
+          }
+          if (/charlotte\s+roval/i.test(t)) {
+            return '/assets/tracks/charlotte-motor-speedway-roval.png';
+          }
+          if (/\bdover\b/i.test(t)) {
+            return '/assets/tracks/dover.png';
+          }
+          if (/\biowa\b/i.test(t)) {
+            return '/assets/tracks/iowa.png';
+          }
+          if (/rockingham/i.test(t)) {
+            return '/assets/tracks/rockingham-speedway.png';
+          }
+
+
+          // Unknown track -> null so error handling/placeholder behavior kicks in.
+          return null;
+        };
+
+        if (next) {
+          if (scheduleNextTrackEl) scheduleNextTrackEl.textContent = escapeHtml(next.track ?? 'TBD');
+          if (scheduleNextDateEl) scheduleNextDateEl.textContent = escapeHtml(next.date ?? '');
+          if (scheduleNextLengthEl) scheduleNextLengthEl.textContent = next.length ? `Length: ${escapeHtml(next.length)}` : '';
+
+          const src = trackToAssetPath(next.track);
+
+          if (scheduleNextImg) {
+            if (src) {
+              scheduleNextImg.style.display = 'block';
+              scheduleNextImg.src = src;
+              // If image fails to load, hide the image so fallback UI/spacing can collapse.
+              scheduleNextImg.onerror = () => {
+                scheduleNextImg.style.display = 'none';
+              };
+            } else {
+              scheduleNextImg.style.display = 'none';
+            }
+          }
+        }
+
+        const lastWinner = races.filter((r) => r?.winner).slice(-1)[0];
+
+        const lastWinnerNameEl = document.getElementById('lastWinnerName');
+        const lastWinnerTrackEl = document.getElementById('lastWinnerTrack');
+        const lastWinnerDateEl = document.getElementById('lastWinnerDate');
+        if (lastWinner && lastWinnerNameEl) lastWinnerNameEl.textContent = escapeHtml(lastWinner.winner ?? '');
+        if (lastWinner && lastWinnerTrackEl) lastWinnerTrackEl.textContent = escapeHtml(lastWinner.track ?? 'TBD');
+        if (lastWinner && lastWinnerDateEl) lastWinnerDateEl.textContent = escapeHtml(lastWinner.date ?? '');
+
+        const raceCountEl = document.getElementById('raceCount');
+        const winnerCountEl = document.getElementById('winnerCount');
+        if (raceCountEl) raceCountEl.textContent = `${completed} / ${races.length || 20}`;
+        if (winnerCountEl) winnerCountEl.textContent = String(uniqueWinners.size);
+
+        tbodyEl.innerHTML = races
+          .map((r) => {
+            const raceNum = r.raceNumber ?? '';
+            const date = escapeHtml(r.date ?? '');
+            const pointsStatus = escapeHtml(r.status ?? '');
+            const track = escapeHtml(r.track ?? '');
+            const length = escapeHtml(r.length ?? '');
+            const winner = raceWinnerCell(r.winner);
+            const link = r.link ? String(r.link) : '';
+
+            const raceHtml = link
+              ? `<a href="${escapeHtml(link)}">${escapeHtml(raceNum)}</a>`
+              : escapeHtml(raceNum);
+
+            const isCompleted = !!String(r?.winner ?? '').trim();
+            const rowClass = isCompleted ? 'schedule-row-completed' : 'schedule-row-upcoming';
+
+            return `
+              <tr class="${rowClass}">
+                <td>${raceHtml}</td>
+                <td>${date}</td>
+                <td>${pointsStatus}</td>
+                <td>${track}</td>
+                <td>${length}</td>
+                <td class="schedule-winner">${winner}</td>
+              </tr>
+            `;
+
+          })
+          .join('');
+      };
+
+      (async function loadSchedule() {
+        summaryEl.textContent = 'Loading...';
+        try {
+          const res = await fetch('/api/schedule');
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+
+          // Update season labels from API settings when available.
+          if (data?.settings?.seasonName) {
+            const seasonLabelEl = document.getElementById('seasonLabel');
+            const sidebarSeasonTitleEl = document.getElementById('sidebarSeasonTitle');
+            if (seasonLabelEl) seasonLabelEl.textContent = data.settings.seasonName;
+            if (sidebarSeasonTitleEl) sidebarSeasonTitleEl.textContent = data.settings.seasonName;
+          }
+
+          // Keep existing rendering logic unchanged: render() owns summary + table.
+
+          if (data && data.error) {
+            summaryEl.innerHTML = `<div style="color:#ff7777"><b>Error:</b> ${escapeHtml(data.error)}</div>`;
+          } else {
+            render(data);
+          }
+
+          return;
+        } catch (e) {
+          summaryEl.innerHTML = `<div style="color:#ff7777"><b>Error:</b> Failed to load schedule</div>`;
+          tbodyEl.innerHTML = '';
+          console.error(e);
+        }
+      })();
+    })();
+  </script>
+  </body>
+</html>
