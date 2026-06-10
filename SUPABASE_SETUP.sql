@@ -5,8 +5,12 @@ create table if not exists site_settings (
   "standingsUrl" text,
   "scheduleUrl" text,
   "playoffCut" int,
-  "refreshSeconds" int
+  "refreshSeconds" int,
+  "raceStartTime" text
 );
+
+-- If upgrading an existing site_settings table, run once:
+alter table site_settings add column if not exists "raceStartTime" text;
 
 insert into site_settings (id, "seriesName", "seasonName", "standingsUrl", "scheduleUrl", "playoffCut", "refreshSeconds")
 values (1, 'Blazing Pedals Truck Series', 'Season 11', 'https://www.simracerhub.com/scoring/season_standings.php?season_id=27987', 'https://www.simracerhub.com/scoring/season_schedule.php?season_id=27987', 16, 60)

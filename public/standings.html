@@ -103,10 +103,23 @@
             </div>
             <div class="card next-race-card">
               <h3>NEXT RACE</h3>
-              <div class="track" id="nextRaceTrack">
-                DOVER<br /><small>MOTOR SPEEDWAY</small>
+              <div class="next-race-row">
+                <div class="next-race-media">
+                  <img id="nextRaceImg" alt="" hidden />
+                  <div
+                    class="next-race-placeholder"
+                    id="nextRacePlaceholder"
+                    aria-hidden="true"
+                  >
+                    🏁
+                  </div>
+                </div>
+                <div class="next-race-info">
+                  <div class="track" id="nextRaceTrack">TBD</div>
+                </div>
               </div>
-              <p class="next-race-copy" id="nextRaceDate">May 25, 2024</p>
+              <p class="next-race-copy" id="nextRaceDate">Date TBD</p>
+              <p class="next-race-time" id="nextRaceTime"></p>
               <button type="button" onclick="location.href = 'schedule.html'">
                 VIEW SCHEDULE
               </button>

@@ -124,6 +124,12 @@ main > .tab.active{
   font-weight:700;
 }
 
+.race-preview-time{
+  color:#ddd;
+  font-size:10px;
+  font-weight:800;
+}
+
 .race-preview-length{
   color:#ddd;
   font-size:10px;

@@ -20,8 +20,10 @@
     .panel h2 { margin: 0 0 12px; font-size: 18px; color: #ff3030; }
     .input { width: 100%; margin-bottom: 8px; padding: 8px; background: #090909; color: #fff; border: 1px solid #555; border-radius: 4px; font-size: 12px; }
     .btn { margin-top: 4px; }
-    #adminMsg, #driversMsg { margin-top: 10px; font-size: 12px; color: #ccc; white-space: pre-wrap; }
-    #driversMsg.error { color: #ff6060; }
+    #adminMsg, #driversMsg, #loginMsg { margin-top: 10px; font-size: 12px; color: #ccc; white-space: pre-wrap; }
+    #driversMsg.error, #loginMsg.error { color: #ff6060; }
+    .nav nav { display: flex; align-items: center; gap: 12px; }
+    .nav #logoutBtn { margin: 0; padding: 5px 12px; font-size: 10px; }
     .table-wrap { overflow-x: auto; }
     .drivers-table input[type="text"] { width: 100%; min-width: 80px; padding: 4px 6px; background: #111; color: #fff; border: 1px solid #444; font-size: 11px; }
     .drivers-table input[type="checkbox"] { width: 16px; height: 16px; }
@@ -33,15 +35,25 @@
 <body>
   <header class="nav">
     <div class="brand">BP ADMIN <span>PANEL</span></div>
-    <nav><a href="/">Site</a></nav>
+    <nav>
+      <a href="/">Site</a>
+      <button id="logoutBtn" class="btn" type="button" hidden onclick="logout()">Logout</button>
+    </nav>
   </header>
-  <main class="wrap">
+
+  <main id="loginView" class="wrap" hidden>
+    <h1>Admin Login</h1>
+    <p class="sub">Enter the admin password to unlock the admin tools for this browser session.</p>
+    <div class="pw-row">
+      <input id="loginPw" class="input" type="password" placeholder="Admin password" autocomplete="current-password">
+      <button class="btn" type="button" onclick="login()">Unlock</button>
+      <pre id="loginMsg"></pre>
+    </div>
+  </main>
+
+  <main id="adminView" class="wrap" hidden>
     <h1>Admin</h1>
     <p class="sub">Password is checked by the server. Settings and driver profiles save to Supabase after you add Supabase keys in Vercel.</p>
-
-    <div class="pw-row">
-      <input id="pw" class="input" type="password" placeholder="Admin password">
-    </div>
 
     <div class="admin-tabs">
       <button type="button" class="active" data-section="settingsSection">Settings</button>
@@ -56,6 +68,7 @@
         <input id="standingsUrl" class="input" placeholder="Standings URL">
         <input id="scheduleUrl" class="input" placeholder="Schedule URL">
         <input id="playoffCut" class="input" type="number" placeholder="Playoff cut">
+        <input id="raceStartTime" class="input" placeholder="Race start time (e.g. 9:00 PM EST)">
         <button class="btn" type="button" onclick="saveSettings()">Save Settings</button>
         <pre id="adminMsg"></pre>
       </div>
@@ -90,6 +103,84 @@
   <script>
     const $ = (s) => document.querySelector(s);
 
+    // --- Admin session (sessionStorage only; cleared when the tab/session closes) ---
+    const SESSION_KEY = 'bp_admin_pw';
+
+    function getSessionPw() {
+      return sessionStorage.getItem(SESSION_KEY) || '';
+    }
+
+    async function verifyPassword(pw) {
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pw, verifyOnly: true })
+      });
+      return res.ok;
+    }
+
+    function showLogin() {
+      $('#loginView').hidden = false;
+      $('#adminView').hidden = true;
+      $('#logoutBtn').hidden = true;
+      $('#loginPw').focus();
+    }
+
+    function showAdmin() {
+      $('#loginView').hidden = true;
+      $('#adminView').hidden = false;
+      $('#logoutBtn').hidden = false;
+      loadSettings();
+    }
+
+    async function login() {
+      const msg = $('#loginMsg');
+      const pw = $('#loginPw').value;
+      if (!pw) {
+        msg.textContent = 'Enter the admin password.';
+        msg.classList.add('error');
+        return;
+      }
+      msg.textContent = 'Checking...';
+      msg.classList.remove('error');
+      try {
+        const ok = await verifyPassword(pw);
+        if (!ok) throw new Error('Bad password');
+        sessionStorage.setItem(SESSION_KEY, pw);
+        $('#loginPw').value = '';
+        msg.textContent = '';
+        showAdmin();
+      } catch (e) {
+        msg.textContent = e.message || 'Login failed';
+        msg.classList.add('error');
+      }
+    }
+
+    function logout() {
+      sessionStorage.removeItem(SESSION_KEY);
+      showLogin();
+    }
+
+    async function initSession() {
+      const pw = getSessionPw();
+      if (!pw) {
+        showLogin();
+        return;
+      }
+      try {
+        if (await verifyPassword(pw)) {
+          showAdmin();
+          return;
+        }
+      } catch {}
+      sessionStorage.removeItem(SESSION_KEY);
+      showLogin();
+    }
+
+    $('#loginPw')?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') login();
+    });
+
     function setDriversMsg(text, isError = false) {
       const msg = $('#driversMsg');
       msg.textContent = text;
@@ -111,12 +202,13 @@
       msg.textContent = 'Saving...';
       try {
         const body = {
-          password: $('#pw').value,
+          password: getSessionPw(),
           seriesName: $('#seriesName').value,
           seasonName: $('#seasonName').value,
           standingsUrl: $('#standingsUrl').value,
           scheduleUrl: $('#scheduleUrl').value,
-          playoffCut: Number($('#playoffCut').value) || undefined
+          playoffCut: Number($('#playoffCut').value) || undefined,
+          raceStartTime: $('#raceStartTime').value
         };
         const res = await fetch('/api/settings', {
           method: 'POST',
@@ -140,6 +232,7 @@
         $('#standingsUrl').value = data.standingsUrl || '';
         $('#scheduleUrl').value = data.scheduleUrl || '';
         $('#playoffCut').value = data.playoffCut ?? '';
+        $('#raceStartTime').value = data.raceStartTime || '';
       } catch (e) {
         $('#adminMsg').textContent = 'Failed to load settings: ' + e.message;
       }
@@ -166,7 +259,7 @@
 
     function driverRowPayload(rowEl) {
       return {
-        password: $('#pw').value,
+        password: getSessionPw(),
         driver_id: rowEl.dataset.driverId,
         iracing_name: rowEl.querySelector('.iracing-name')?.textContent.trim() || '',
         display_name: rowInput(rowEl, 'display_name')?.value ?? '',
@@ -294,7 +387,8 @@
       const driverId = payload.driver_id;
 
       if (!payload.password) {
-        setDriversMsg('Bad password: enter admin password first.', true);
+        setDriversMsg('Session expired: log in again.', true);
+        logout();
         return;
       }
 
@@ -322,9 +416,10 @@
     }
 
     async function syncAllDrivers() {
-      const pw = $('#pw').value;
+      const pw = getSessionPw();
       if (!pw) {
-        setDriversMsg('Bad password: enter admin password first.', true);
+        setDriversMsg('Session expired: log in again.', true);
+        logout();
         return;
       }
 
@@ -348,7 +443,7 @@
       }
     }
 
-    loadSettings();
+    initSession();
   </script>
 </body>
 </html>

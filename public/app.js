@@ -2,13 +2,11 @@ const PLAYOFF_CUT = 16;
 const $ = (s) => document.querySelector(s);
 let standings = [];
 
-const TRACK_IMAGES = {
-  dover: "/assets/tracks/dover.png",
-  "dover motor speedway": "/assets/tracks/dover.png",
-  iowa: "/assets/tracks/iowa.png",
-  "iowa speedway": "/assets/tracks/iowa.png",
-  charlotte: "/assets/tracks/charlotte.png",
-  "charlotte motor speedway": "/assets/tracks/charlotte.png",
+// Secondary lookups used only if the slug-based image fails to load.
+const TRACK_IMAGE_ALIASES = {
+  "charlotte-motor-speedway-oval": "/assets/tracks/charlotte-motor-speedway-oval-night.png",
+  "charlotte-oval": "/assets/tracks/charlotte-motor-speedway-oval-night.png",
+  indianapolis: "/assets/tracks/indianapolis-motor-speedway-nascar-oval.png",
 };
 
 const SPONSOR_FILES = [
@@ -115,18 +113,24 @@ function countDifferentWinners(rows) {
   return rows.filter((r) => Number(r.wins || 0) > 0).length;
 }
 
-function trackImagePath(track) {
-  const key = String(track || "")
+function trackSlug(track) {
+  return String(track || "")
     .toLowerCase()
-    .replace(/\s+/g, " ")
-    .trim();
-  if (!key) return "";
-  if (TRACK_IMAGES[key]) return TRACK_IMAGES[key];
-  for (const [name, path] of Object.entries(TRACK_IMAGES)) {
-    if (key.includes(name)) return path;
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+// Slug-based filename first; aliases are fallbacks tried only if the slug 404s.
+function trackImageCandidates(track) {
+  const slug = trackSlug(track);
+  if (!slug) return [];
+  const candidates = [`/assets/tracks/${slug}.png`];
+  for (const [aliasSlug, path] of Object.entries(TRACK_IMAGE_ALIASES)) {
+    if (slug.includes(aliasSlug) && !candidates.includes(path)) {
+      candidates.push(path);
+    }
   }
-  const slug = key.replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-  return slug ? `/assets/tracks/${slug}.png` : "";
+  return candidates;
 }
 
 function formatTrackHtml(track) {
@@ -162,20 +166,6 @@ function findDriverPhoto(name) {
 }
 
 function ensureSidebarMarkup() {
-  const nextCard = document.querySelector(".next-race-card");
-  if (nextCard && !$("#nextRaceVisual")) {
-    const visual = document.createElement("div");
-    visual.id = "nextRaceVisual";
-    visual.className = "next-race-visual";
-    nextCard.insertBefore(visual, $("#nextRaceDate"));
-  }
-  if (nextCard && !$("#nextRaceTime")) {
-    const time = document.createElement("p");
-    time.id = "nextRaceTime";
-    time.className = "next-race-time";
-    $("#nextRaceDate").after(time);
-  }
-
   const sidebar = document.querySelector(".sidebar");
   const logoCard = sidebar?.querySelector(".logo-card");
   if (sidebar && logoCard && !$("#sidebarSponsors")) {
@@ -186,19 +176,39 @@ function ensureSidebarMarkup() {
   }
 }
 
-function renderNextRaceVisual(track) {
-  const el = $("#nextRaceVisual");
-  if (!el) return;
+function renderNextRaceImage(track) {
+  const img = $("#nextRaceImg");
+  const placeholder = $("#nextRacePlaceholder");
+  if (!img || !placeholder) return;
 
-  const src = trackImagePath(track);
-  if (!src) {
-    el.innerHTML = "";
-    el.hidden = true;
+  const candidates = trackImageCandidates(track);
+  let i = 0;
+
+  const showPlaceholder = () => {
+    img.hidden = true;
+    img.removeAttribute("src");
+    placeholder.hidden = false;
+  };
+
+  const tryNext = () => {
+    if (i >= candidates.length) {
+      showPlaceholder();
+      return;
+    }
+    img.src = candidates[i++];
+  };
+
+  img.onload = () => {
+    img.hidden = false;
+    placeholder.hidden = true;
+  };
+  img.onerror = tryNext;
+
+  if (!candidates.length) {
+    showPlaceholder();
     return;
   }
-
-  el.hidden = false;
-  el.innerHTML = `<div class="next-race-thumb-wrap"><img class="next-race-thumb" src="${src}" alt="" onerror="this.closest('.next-race-visual').hidden=true;this.closest('.next-race-visual').innerHTML=''"/></div>`;
+  tryNext();
 }
 
 function renderLastWinner(lastRace) {
@@ -230,24 +240,24 @@ function renderLastWinner(lastRace) {
   };
 }
 
-function renderNextRace(nextRace) {
+function renderNextRace(nextRace, raceStartTime) {
   const trackEl = $("#nextRaceTrack");
   const dateEl = $("#nextRaceDate");
   const timeEl = $("#nextRaceTime");
 
   if (!nextRace) {
-    if (trackEl) trackEl.innerHTML = "DOVER<br /><small>MOTOR SPEEDWAY</small>";
+    if (trackEl) trackEl.textContent = "TBD";
     if (dateEl) dateEl.textContent = "Date TBD";
     if (timeEl) timeEl.textContent = "";
-    renderNextRaceVisual("Dover Motor Speedway");
+    renderNextRaceImage("");
     return;
   }
 
   if (trackEl) trackEl.innerHTML = formatTrackHtml(nextRace.track);
   const { date, time } = splitDateTime(nextRace.date);
   if (dateEl) dateEl.textContent = date;
-  if (timeEl) timeEl.textContent = time;
-  renderNextRaceVisual(nextRace.track);
+  if (timeEl) timeEl.textContent = raceStartTime || time || "";
+  renderNextRaceImage(nextRace.track);
 }
 
 function renderSponsorCards() {
@@ -280,11 +290,11 @@ async function loadScheduleSidebar() {
     const completed = races.filter((r) => r.winner);
     const lastRace = completed[completed.length - 1] || null;
     renderLastWinner(lastRace);
-    renderNextRace(data.next || null);
+    renderNextRace(data.next || null, data.settings?.raceStartTime || "");
   } catch (e) {
     console.warn("Schedule sidebar fallback:", e);
     renderLastWinner(null);
-    renderNextRace(null);
+    renderNextRace(null, "");
   }
 }
 

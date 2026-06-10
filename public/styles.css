@@ -299,7 +299,53 @@ tr:hover{background:#1d1d1d}
   font-size:17px;
   margin:4px 0 6px;
 }
-.next-race-visual{margin:0 0 8px}
+.next-race-row{
+  display:flex;
+  gap:10px;
+  align-items:center;
+  margin:6px 0 8px;
+}
+.next-race-media{
+  flex:0 0 84px;
+  width:84px;
+  height:62px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:rgba(255,255,255,.04);
+  border:1px solid #2a2a2a;
+  border-radius:6px;
+  overflow:hidden;
+  padding:4px;
+}
+.next-race-card .next-race-media img{
+  width:100%;
+  height:100%;
+  min-height:0;
+  max-height:none;
+  margin:0;
+  object-fit:contain;
+  filter:drop-shadow(0 0 8px rgba(255,255,255,.1)) drop-shadow(0 0 10px rgba(0,0,0,.45));
+}
+.next-race-card .next-race-media img[hidden],
+.next-race-placeholder[hidden]{display:none}
+.next-race-placeholder{
+  font-size:24px;
+  line-height:1;
+  opacity:.65;
+}
+.next-race-info{
+  flex:1;
+  min-width:0;
+}
+.next-race-row .track{
+  min-height:0;
+  margin:0;
+  font-size:14px;
+  text-align:left;
+  justify-content:center;
+}
+.next-race-row .track small{font-size:10px}
 .next-race-thumb-wrap{
   width:100%;
   height:88px;

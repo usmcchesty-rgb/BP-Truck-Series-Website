@@ -159,12 +159,10 @@
 
       <div class="panel">
         <h2>Upload PNG</h2>
-        <input
-          id="pw"
-          class="input"
-          type="password"
-          placeholder="Admin password (if set on server)"
-        />
+        <p id="sessionNotice" class="sub" hidden>
+          Not logged in. <a href="/admin/" style="color:#ff3030">Log in on the Admin page</a> first
+          (the session is shared while this tab stays open).
+        </p>
 
         <div class="row">
           <div class="grow">
@@ -210,6 +208,14 @@
       const afterStage = $("#afterStage");
 
       let beforeUrl = "";
+
+      // Shared with /admin/ — password held in sessionStorage for this tab's session only.
+      const SESSION_KEY = "bp_admin_pw";
+      const getSessionPw = () => sessionStorage.getItem(SESSION_KEY) || "";
+
+      if (!getSessionPw()) {
+        $("#sessionNotice").hidden = false;
+      }
 
       function setMsg(text, type = "") {
         msg.textContent = text;
@@ -359,7 +365,7 @@
 
         const outputFilename = trackSelect.value;
         const selectedTrackName = trackSelect.options[trackSelect.selectedIndex]?.dataset.trackName || "";
-        const password = $("#pw").value || "";
+        const password = getSessionPw();
 
         setMsg("Processing...");
         processBtn.disabled = true;

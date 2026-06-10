@@ -99,8 +99,17 @@
 
             <div class="card next-race-card">
               <h3>NEXT RACE</h3>
-              <div class="track" id="nextRaceTrack">DOVER<br /><small>MOTOR SPEEDWAY</small></div>
-              <p class="next-race-copy" id="nextRaceDate">May 25, 2024</p>
+              <div class="next-race-row">
+                <div class="next-race-media">
+                  <img id="nextRaceImg" alt="" hidden />
+                  <div class="next-race-placeholder" id="nextRacePlaceholder" aria-hidden="true">🏁</div>
+                </div>
+                <div class="next-race-info">
+                  <div class="track" id="nextRaceTrack">TBD</div>
+                </div>
+              </div>
+              <p class="next-race-copy" id="nextRaceDate">Date TBD</p>
+              <p class="next-race-time" id="nextRaceTime"></p>
               <button type="button" onclick="location.href='schedule.html'">VIEW SCHEDULE</button>
             </div>
 
@@ -126,9 +135,9 @@
       const escapeHtml = (s) =>
         String(s ?? '')
           .replace(/&/g, '&amp;')
-          .replace(/</g, '<')
-          .replace(/>/g, '>')
-          .replace(/"/g, '"')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
           .replace(/'/g, '&#039;');
 
       const raceWinnerCell = (winner) => {
@@ -136,10 +145,62 @@
         return w ? escapeHtml(w) : '<span>Upcoming</span>';
       };
 
+      // Secondary lookups used only if the slug-based image fails to load.
+      const TRACK_IMAGE_ALIASES = {
+        'charlotte-motor-speedway-oval': '/assets/tracks/charlotte-motor-speedway-oval-night.png',
+        'charlotte-oval': '/assets/tracks/charlotte-motor-speedway-oval-night.png',
+        indianapolis: '/assets/tracks/indianapolis-motor-speedway-nascar-oval.png',
+      };
+
+      const trackSlug = (track) =>
+        String(track ?? '')
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-|-$/g, '');
+
+      // Slug-based filename first; aliases tried only if the slug 404s.
+      const trackImageCandidates = (track) => {
+        const slug = trackSlug(track);
+        if (!slug) return [];
+        const candidates = [`/assets/tracks/${slug}.png`];
+        for (const [aliasSlug, path] of Object.entries(TRACK_IMAGE_ALIASES)) {
+          if (slug.includes(aliasSlug) && !candidates.includes(path)) candidates.push(path);
+        }
+        return candidates;
+      };
+
+      // Walks the candidate list; calls onFail when nothing loads.
+      const loadTrackImage = (img, track, onLoad, onFail) => {
+        const candidates = trackImageCandidates(track);
+        let i = 0;
+        const tryNext = () => {
+          if (i >= candidates.length) {
+            onFail();
+            return;
+          }
+          img.src = candidates[i++];
+        };
+        img.onload = onLoad;
+        img.onerror = tryNext;
+        if (!candidates.length) {
+          onFail();
+          return;
+        }
+        tryNext();
+      };
+
+      const formatTrackHtml = (track) => {
+        const t = String(track ?? 'TBD').trim() || 'TBD';
+        const words = t.split(/\s+/);
+        if (words.length <= 1) return escapeHtml(t.toUpperCase());
+        return `${escapeHtml(words[0].toUpperCase())}<br /><small>${escapeHtml(words.slice(1).join(' ').toUpperCase())}</small>`;
+      };
+
       const render = (data) => {
         const completed = Number(data.completed ?? 0);
         const totalPointsRaces = Number(data.totalPointsRaces ?? 0);
         const next = data.next || null;
+        const raceStartTime = String(data.settings?.raceStartTime ?? '').trim();
 
         // Random sponsor image once per page load (visual only).
         const sponsorCard = document.getElementById('sidebarSponsorCard');
@@ -214,6 +275,7 @@
                   <div class="race-preview-title" id="scheduleNextTrack">TBD</div>
                   <div class="race-preview-meta">
                     <span class="race-preview-date" id="scheduleNextDate">${nextText.replace(/^Next:\s*/,'')}</span>
+                    <span class="race-preview-time" id="scheduleNextTime"></span>
                     <span class="race-preview-length" id="scheduleNextLength"></span>
                   </div>
                 </div>
@@ -223,77 +285,59 @@
           </div>
         `;
 
-        // Keep existing rendering logic targets unchanged; update sidebar next/season if present.
+        // Sidebar Next Race card.
         const sidebarNextTrack = document.getElementById('nextRaceTrack');
         const sidebarNextDate = document.getElementById('nextRaceDate');
-        if (sidebarNextTrack && next) {
-          sidebarNextTrack.innerHTML = `${escapeHtml(next.track ?? 'TBD')}<br /><small>${escapeHtml(next.track ?? 'TBD').toUpperCase()}</small>`;
+        const sidebarNextTime = document.getElementById('nextRaceTime');
+        const sidebarNextImg = document.getElementById('nextRaceImg');
+        const sidebarNextPlaceholder = document.getElementById('nextRacePlaceholder');
+
+        if (next) {
+          if (sidebarNextTrack) sidebarNextTrack.innerHTML = formatTrackHtml(next.track);
+          if (sidebarNextDate) sidebarNextDate.textContent = next.date ?? 'Date TBD';
+          if (sidebarNextTime) sidebarNextTime.textContent = raceStartTime;
         }
-        if (sidebarNextDate && next) {
-          sidebarNextDate.textContent = escapeHtml(next.date ?? '');
+        if (sidebarNextImg && sidebarNextPlaceholder) {
+          loadTrackImage(
+            sidebarNextImg,
+            next?.track ?? '',
+            () => {
+              sidebarNextImg.hidden = false;
+              sidebarNextPlaceholder.hidden = true;
+            },
+            () => {
+              sidebarNextImg.hidden = true;
+              sidebarNextImg.removeAttribute('src');
+              sidebarNextPlaceholder.hidden = false;
+            }
+          );
         }
 
-        // Next race preview media (track image mapping). Fallback is handled by CSS.
+        // Next race preview media (slug-based track image with placeholder fallback).
         const scheduleNextTrackEl = document.getElementById('scheduleNextTrack');
         const scheduleNextDateEl = document.getElementById('scheduleNextDate');
+        const scheduleNextTimeEl = document.getElementById('scheduleNextTime');
         const scheduleNextLengthEl = document.getElementById('scheduleNextLength');
         const scheduleNextImg = document.getElementById('scheduleNextImg');
 
-        // Use the same slug/path logic as the sidebar cards (and the stored files in /public/assets/tracks/).
-        // Examples:
-        //  "Indianapolis Motor Speedway NASCAR Oval" -> /assets/tracks/indianapolis-motor-speedway-nascar-oval.png
-        const trackToAssetPath = (trackName) => {
-          const t = String(trackName ?? '').trim().toLowerCase();
-          if (!t) return null;
-
-          // Keep rules aligned with filenames in /public/assets/tracks/.
-          // This page previously used short filenames (e.g. /assets/tracks/indianapolis.png) which don't exist.
-          if (/indianapolis\s+motor\s+speedway\s+nasc(ar)?\s+oval/i.test(t) || /indianapolis/i.test(t)) {
-            return '/assets/tracks/indianapolis-motor-speedway-nascar-oval.png';
-          }
-          if (/lucas\s*oil/i.test(t)) {
-            return '/assets/tracks/lucas-oil-speedway.png';
-          }
-          if (/charlotte\s+motor\s+speedway\s+oval/i.test(t) || /charlotte\s+oval/i.test(t)) {
-            return '/assets/tracks/charlotte-motor-speedway-oval-night.png';
-          }
-          if (/charlotte\s+roval/i.test(t)) {
-            return '/assets/tracks/charlotte-motor-speedway-roval.png';
-          }
-          if (/\bdover\b/i.test(t)) {
-            return '/assets/tracks/dover.png';
-          }
-          if (/\biowa\b/i.test(t)) {
-            return '/assets/tracks/iowa.png';
-          }
-          if (/rockingham/i.test(t)) {
-            return '/assets/tracks/rockingham-speedway.png';
-          }
-
-
-          // Unknown track -> null so error handling/placeholder behavior kicks in.
-          return null;
-        };
-
         if (next) {
-          if (scheduleNextTrackEl) scheduleNextTrackEl.textContent = escapeHtml(next.track ?? 'TBD');
-          if (scheduleNextDateEl) scheduleNextDateEl.textContent = escapeHtml(next.date ?? '');
+          if (scheduleNextTrackEl) scheduleNextTrackEl.textContent = next.track ?? 'TBD';
+          if (scheduleNextDateEl) scheduleNextDateEl.textContent = next.date ?? '';
+          if (scheduleNextTimeEl) scheduleNextTimeEl.textContent = raceStartTime ? `Race start: ${raceStartTime}` : '';
           if (scheduleNextLengthEl) scheduleNextLengthEl.textContent = next.length ? `Length: ${escapeHtml(next.length)}` : '';
-
-          const src = trackToAssetPath(next.track);
-
-          if (scheduleNextImg) {
-            if (src) {
+        }
+        if (scheduleNextImg) {
+          loadTrackImage(
+            scheduleNextImg,
+            next?.track ?? '',
+            () => {
               scheduleNextImg.style.display = 'block';
-              scheduleNextImg.src = src;
-              // If image fails to load, hide the image so fallback UI/spacing can collapse.
-              scheduleNextImg.onerror = () => {
-                scheduleNextImg.style.display = 'none';
-              };
-            } else {
+            },
+            () => {
               scheduleNextImg.style.display = 'none';
+              scheduleNextImg.removeAttribute('src');
             }
-          }
+          );
         }
 
         const lastWinner = races.filter((r) => r?.winner).slice(-1)[0];
