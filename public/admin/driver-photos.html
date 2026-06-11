@@ -94,6 +94,20 @@
       #msg.success {
         color: #45d65a;
       }
+      #msg .setup-sql {
+        display: block;
+        margin-top: 10px;
+        padding: 10px;
+        background: #090909;
+        border: 1px solid #444;
+        border-radius: 4px;
+        color: #ddd;
+        font-family: Consolas, Monaco, monospace;
+        font-size: 11px;
+        line-height: 1.45;
+        white-space: pre-wrap;
+        overflow-x: auto;
+      }
       /* Checkerboard so transparency is visible */
       .stage-box {
         display: inline-block;
@@ -441,6 +455,34 @@
       function setMsg(text, type = "") {
         msg.textContent = text;
         msg.className = type;
+      }
+
+      function setSaveError(data, fallback = "Save failed.") {
+        msg.className = "error";
+        msg.textContent = "";
+
+        const main = document.createElement("div");
+        main.textContent = data?.error || fallback;
+        msg.appendChild(main);
+
+        if (Array.isArray(data?.missingEnv) && data.missingEnv.length) {
+          const env = document.createElement("div");
+          env.style.marginTop = "8px";
+          env.textContent = `Missing: ${data.missingEnv.join(", ")}`;
+          msg.appendChild(env);
+        }
+
+        if (data?.setupSql) {
+          const label = document.createElement("div");
+          label.style.marginTop = "10px";
+          label.textContent = "Setup SQL (run in Supabase SQL editor):";
+          msg.appendChild(label);
+
+          const pre = document.createElement("pre");
+          pre.className = "setup-sql";
+          pre.textContent = data.setupSql;
+          msg.appendChild(pre);
+        }
       }
 
       // ---------------- Drawing ----------------
@@ -1123,7 +1165,11 @@
           } catch {
             throw new Error("Server returned invalid JSON.");
           }
-          if (!res.ok) throw new Error(data.error || "Save failed.");
+          if (!res.ok) {
+            setSaveError(data, data.error || "Save failed.");
+            if (/password/i.test(data.error || "")) updateLoginStatus();
+            return;
+          }
 
           if (data.storage === "supabase") {
             setMsg(
@@ -1145,7 +1191,7 @@
             : `/${String(previewUrl).replace(/^\/+/, "")}?t=${Date.now()}`;
           savedPreviewWrap.hidden = false;
         } catch (e) {
-          setMsg(e.message || "Save failed.", "error");
+          setSaveError({ error: e.message || "Save failed." });
           if (/password/i.test(e.message || "")) updateLoginStatus();
         } finally {
           saveBtn.disabled = false;

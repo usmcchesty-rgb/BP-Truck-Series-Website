@@ -8,6 +8,15 @@ const ROOT = path.join(__dirname, "..");
 const PUBLIC_DIR = path.join(ROOT, "public");
 const STORAGE_BUCKET = "driver-photos";
 
+const STORAGE_SETUP_SQL = `insert into storage.buckets (id, name, public)
+values ('driver-photos', 'driver-photos', true)
+on conflict (id) do update set public = true;
+
+create policy "Public read driver photos"
+on storage.objects
+for select
+using (bucket_id = 'driver-photos');`;
+
 function json(res, status, body) {
   res.status(status);
   res.setHeader("Content-Type", "application/json");
@@ -59,6 +68,62 @@ function publicStorageUrl(filename) {
 
 function isLocalDev() {
   return process.env.VERCEL_ENV !== "production";
+}
+
+function getSupabaseConfigError() {
+  const missing = [];
+  if (!process.env.SUPABASE_URL) missing.push("SUPABASE_URL");
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    missing.push("SUPABASE_SERVICE_ROLE_KEY");
+  }
+  if (!missing.length) return null;
+  return {
+    error:
+      "Supabase is not configured. Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.",
+    missingEnv: missing,
+  };
+}
+
+function bucketNotFoundError() {
+  return {
+    error: `Supabase Storage bucket '${STORAGE_BUCKET}' was not found. Create it in Supabase Storage or run the setup SQL.`,
+    bucket: STORAGE_BUCKET,
+    setupSql: STORAGE_SETUP_SQL,
+  };
+}
+
+function isBucketNotFoundMessage(message = "") {
+  return /bucket not found|bucket does not exist|invalid bucket|unknown bucket/i.test(
+    message,
+  );
+}
+
+async function verifyStorageBucket(sb) {
+  const { data, error } = await sb.storage.listBuckets();
+  if (error) {
+    if (isBucketNotFoundMessage(error.message)) {
+      return bucketNotFoundError();
+    }
+    throw new Error(`Could not list Supabase Storage buckets: ${error.message}`);
+  }
+
+  const buckets = Array.isArray(data) ? data : [];
+  const found = buckets.some(
+    (bucket) => bucket.name === STORAGE_BUCKET || bucket.id === STORAGE_BUCKET,
+  );
+  if (!found) {
+    return bucketNotFoundError();
+  }
+  return null;
+}
+
+async function assertSupabaseReady(sb) {
+  const configError = getSupabaseConfigError();
+  if (configError) return configError;
+  if (!sb) {
+    return getSupabaseConfigError();
+  }
+  return verifyStorageBucket(sb);
 }
 
 // Turn the driver's Photo URL (e.g. "assets/drivers/mark-arthur.png")
@@ -152,6 +217,12 @@ async function saveToSupabaseStorage(sb, uploadBuffer, filename, driverId, body)
     });
 
   if (uploadError) {
+    if (isBucketNotFoundMessage(uploadError.message)) {
+      const bucketError = bucketNotFoundError();
+      const err = new Error(bucketError.error);
+      err.details = bucketError;
+      throw err;
+    }
     throw new Error(`Storage upload failed: ${uploadError.message}`);
   }
 
@@ -217,9 +288,16 @@ export default async function handler(req, res) {
 
     const filename = safeFilenameFromPhotoUrl(body.photoUrl);
     const driverId = body.driver_id;
-
     const sb = supabase();
-    if (sb && driverId) {
+    const shouldUseSupabase = Boolean(sb && driverId);
+
+    if (shouldUseSupabase) {
+      const readyError = await assertSupabaseReady(sb);
+      if (readyError) {
+        json(res, 400, readyError);
+        return;
+      }
+
       const result = await saveToSupabaseStorage(
         sb,
         uploadBuffer,
@@ -231,29 +309,38 @@ export default async function handler(req, res) {
       return;
     }
 
-    if (!sb && !isLocalDev()) {
-      json(res, 400, {
-        error:
-          "Supabase is not configured. Add SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Vercel to save driver photos on the live site.",
-      });
-      return;
-    }
-
-    if (!driverId && !isLocalDev()) {
-      json(res, 400, { error: "Missing driver_id." });
-      return;
-    }
-
     if (!isLocalDev()) {
+      const configError = getSupabaseConfigError();
+      if (configError) {
+        json(res, 400, configError);
+        return;
+      }
+      if (!driverId) {
+        json(res, 400, { error: "Missing driver_id." });
+        return;
+      }
       json(res, 400, {
         error: "Supabase Storage is required to save driver photos on the live site.",
       });
       return;
     }
 
+    if (!driverId) {
+      json(res, 400, { error: "Missing driver_id." });
+      return;
+    }
+
     const result = saveToLocalFile(uploadBuffer, body.photoUrl);
     json(res, 200, { success: true, ...result });
   } catch (err) {
+    if (err.details?.setupSql) {
+      json(res, 400, {
+        error: err.details.error || err.message || "Save failed.",
+        bucket: err.details.bucket,
+        setupSql: err.details.setupSql,
+      });
+      return;
+    }
     json(res, 400, { error: err.message || "Save failed." });
   }
 }
