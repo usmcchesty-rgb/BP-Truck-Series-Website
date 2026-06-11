@@ -96,10 +96,19 @@ function renderPodium() {
 function renderTable(target, rows, cut = true) {
   const html = [];
 
-  rows.forEach((r) => {
+  rows.forEach((r, i) => {
     html.push(row(r));
 
-    if (cut && r.place === PLAYOFF_CUT) {
+    // Insert after the last row at/inside the cut, even when positions
+    // have ties or gaps and no row is exactly PLAYOFF_CUT.
+    const place = Number(r.place);
+    const nextPlace = rows[i + 1] ? Number(rows[i + 1].place) : Infinity;
+    if (
+      cut &&
+      rows.length >= PLAYOFF_CUT &&
+      place <= PLAYOFF_CUT &&
+      nextPlace > PLAYOFF_CUT
+    ) {
       html.push(
         `<tr class="cutline"><td colspan="10">PLAYOFF CUT LINE — TOP ${PLAYOFF_CUT}</td></tr>`
       );

@@ -4,7 +4,8 @@
   --green:#45d65a;--text:#f4f4f4;--muted:#aaa;
 }
 *{box-sizing:border-box}
-body{margin:0;background:#050505;color:var(--text);font-family:Arial Narrow,Roboto Condensed,Impact,Arial,sans-serif;letter-spacing:.2px;overflow-x:hidden}
+body{margin:0;background:#050505;color:var(--text);font-family:Arial Narrow,Roboto Condensed,Impact,Arial,sans-serif;letter-spacing:.2px;overflow-x:hidden;display:flex;flex-direction:column;min-height:100vh}
+main{flex:1}
 .page-bg{position:fixed;inset:0;background:radial-gradient(circle at top,#242424 0,#080808 45%,#000 100%);z-index:-2}
 .page-bg:after{content:"";position:absolute;inset:0;background:linear-gradient(135deg,transparent 0 40%,rgba(255,255,255,.03) 40% 42%,transparent 42% 100%);background-size:96px 96px;opacity:.34}
 
@@ -409,7 +410,7 @@ tr:hover{background:#1d1d1d}
 #search{width:100%;margin-bottom:6px;padding:6px;background:#090909;color:#fff;border:1px solid #555;border-radius:4px;font-size:11px}
 footer{
   border-top:0;
-  padding:10px 18px 14px;
+  padding:10px 18px 28px;
   text-align:center;
   font-weight:900;
   letter-spacing:2px;

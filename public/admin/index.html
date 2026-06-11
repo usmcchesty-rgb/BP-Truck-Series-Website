@@ -12,12 +12,45 @@
     .nav .brand span { color: var(--red); }
     .nav a { color: #fff; text-decoration: none; font-size: 12px; font-weight: 900; }
     .sub { color: var(--muted); font-size: 12px; margin-bottom: 16px; }
-    .admin-tabs { display: flex; gap: 0; margin-bottom: 14px; }
-    .admin-tabs button { margin-left: 0; }
+    .admin-tabs { display: flex; gap: 0; margin-bottom: 14px; flex-wrap: wrap; }
+    .admin-tabs button,
+    .admin-tabs a.tab-link {
+      margin-left: -1px;
+      clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+    }
+    .admin-tabs button:first-child,
+    .admin-tabs a.tab-link:first-of-type { margin-left: 0; }
+    .admin-tabs a.tab-link {
+      display: inline-block;
+      border: 1px solid #333;
+      background: linear-gradient(#1c1c1c, #080808);
+      color: #fff;
+      padding: 5px 10px;
+      font-size: 9px;
+      font-weight: 900;
+      text-transform: uppercase;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    .admin-tabs a.tab-link:hover {
+      background: linear-gradient(#d40000, #680000);
+      border-color: #ff2424;
+      box-shadow: 0 0 10px rgba(229, 9, 20, 0.25);
+    }
     .admin-section { display: none; }
     .admin-section.active { display: block; }
     .panel { padding: 14px; margin-bottom: 14px; }
     .panel h2 { margin: 0 0 12px; font-size: 18px; color: #ff3030; }
+    .settings-fields { max-width: 520px; }
+    .field-label {
+      display: block;
+      font-size: 11px;
+      color: #999;
+      font-weight: 900;
+      text-transform: uppercase;
+      margin: 10px 0 4px;
+    }
+    .settings-fields .field-label:first-child { margin-top: 0; }
     .input { width: 100%; margin-bottom: 8px; padding: 8px; background: #090909; color: #fff; border: 1px solid #555; border-radius: 4px; font-size: 12px; }
     .btn { margin-top: 4px; }
     #adminMsg, #driversMsg, #loginMsg { margin-top: 10px; font-size: 12px; color: #ccc; white-space: pre-wrap; }
@@ -58,17 +91,32 @@
     <div class="admin-tabs">
       <button type="button" class="active" data-section="settingsSection">Settings</button>
       <button type="button" data-section="driversSection">Drivers</button>
+      <a class="tab-link" href="/admin/track-images">Track Images</a>
+      <a class="tab-link" href="/admin/driver-photos">Driver Photos</a>
     </div>
 
     <div id="settingsSection" class="admin-section active">
       <div class="panel">
         <h2>Site Settings / Scrape Links</h2>
-        <input id="seriesName" class="input" placeholder="Series name">
-        <input id="seasonName" class="input" placeholder="Season name">
-        <input id="standingsUrl" class="input" placeholder="Standings URL">
-        <input id="scheduleUrl" class="input" placeholder="Schedule URL">
-        <input id="playoffCut" class="input" type="number" placeholder="Playoff cut">
-        <input id="raceStartTime" class="input" placeholder="Race start time (e.g. 9:00 PM EST)">
+        <div class="settings-fields">
+          <label class="field-label" for="seriesName">Site Name</label>
+          <input id="seriesName" class="input" type="text" placeholder="Blazing Pedals Truck Series">
+
+          <label class="field-label" for="seasonName">Season Name</label>
+          <input id="seasonName" class="input" type="text" placeholder="Season 11">
+
+          <label class="field-label" for="standingsUrl">Standings URL</label>
+          <input id="standingsUrl" class="input" type="url" placeholder="https://www.simracerhub.com/scoring/season_standings.php?season_id=...">
+
+          <label class="field-label" for="scheduleUrl">Schedule URL</label>
+          <input id="scheduleUrl" class="input" type="url" placeholder="https://www.simracerhub.com/scoring/season_schedule.php?season_id=...">
+
+          <label class="field-label" for="playoffCut">Playoff Cut Line</label>
+          <input id="playoffCut" class="input" type="number" placeholder="16" min="1">
+
+          <label class="field-label" for="raceStartTime">Race Time</label>
+          <input id="raceStartTime" class="input" type="text" placeholder="9:00 PM EST">
+        </div>
         <button class="btn" type="button" onclick="saveSettings()">Save Settings</button>
         <pre id="adminMsg"></pre>
       </div>

@@ -1,0 +1,947 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Driver Photo Processor</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <style>
+      .wrap {
+        padding: 18px;
+        max-width: 1100px;
+        margin: 0 auto;
+      }
+      .nav {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 18px;
+        border-bottom: 1px solid #333;
+        background: #0a0a0a;
+      }
+      .nav .brand {
+        font-weight: 900;
+        font-size: 18px;
+      }
+      .nav .brand span {
+        color: var(--red);
+      }
+      .nav a {
+        color: #fff;
+        text-decoration: none;
+        font-size: 12px;
+        font-weight: 900;
+        margin-left: 14px;
+      }
+      .sub {
+        color: var(--muted);
+        font-size: 12px;
+        margin-bottom: 16px;
+        line-height: 1.45;
+      }
+      #loginStatus {
+        font-size: 12px;
+        font-weight: 900;
+        margin-bottom: 14px;
+      }
+      #loginStatus a {
+        color: #ff3030;
+      }
+      .panel {
+        padding: 14px;
+        margin-bottom: 14px;
+        background: #111;
+        border: 1px solid #333;
+        border-radius: 6px;
+      }
+      .panel h2 {
+        margin: 0 0 12px;
+        font-size: 18px;
+        color: #ff3030;
+      }
+      .input {
+        width: 100%;
+        max-width: 420px;
+        margin-bottom: 8px;
+        padding: 8px;
+        background: #090909;
+        color: #fff;
+        border: 1px solid #555;
+        border-radius: 4px;
+        font-size: 12px;
+      }
+      label.field {
+        display: block;
+        font-size: 11px;
+        color: #999;
+        font-weight: 900;
+        text-transform: uppercase;
+        margin: 10px 0 4px;
+      }
+      .btn {
+        margin-top: 4px;
+        margin-right: 6px;
+      }
+      #msg {
+        margin-top: 12px;
+        font-size: 12px;
+        color: #ccc;
+        white-space: pre-wrap;
+      }
+      #msg.error {
+        color: #ff6060;
+      }
+      #msg.success {
+        color: #45d65a;
+      }
+      /* Checkerboard so transparency is visible */
+      .stage-box {
+        display: inline-block;
+        background:
+          linear-gradient(45deg, #1a1a1a 25%, transparent 25%),
+          linear-gradient(-45deg, #1a1a1a 25%, transparent 25%),
+          linear-gradient(45deg, transparent 75%, #1a1a1a 75%),
+          linear-gradient(-45deg, transparent 75%, #1a1a1a 75%);
+        background-size: 16px 16px;
+        background-position:
+          0 0,
+          0 8px,
+          8px -8px,
+          -8px 0;
+        background-color: #0d0d0d;
+        border: 1px solid #333;
+        border-radius: 4px;
+      }
+      #stage {
+        display: block;
+        /* The real canvas is 600x700 — show it at half size on screen */
+        width: 300px;
+        height: 350px;
+        cursor: grab;
+        touch-action: none;
+      }
+      #stage.dragging {
+        cursor: grabbing;
+      }
+      .editor-row {
+        display: flex;
+        gap: 18px;
+        flex-wrap: wrap;
+        align-items: flex-start;
+      }
+      .editor-controls {
+        flex: 1 1 320px;
+        min-width: 280px;
+      }
+      .zoom-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        max-width: 420px;
+      }
+      .zoom-row input[type="range"] {
+        flex: 1;
+      }
+      .zoom-row span {
+        font-size: 12px;
+        color: #ccc;
+        min-width: 44px;
+        text-align: right;
+      }
+      .guide-toggle {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: #ccc;
+        font-weight: 900;
+        text-transform: uppercase;
+        margin: 12px 0 4px;
+        cursor: pointer;
+      }
+      .guide-toggle input {
+        width: 16px;
+        height: 16px;
+      }
+      .guide-help {
+        font-size: 11px;
+        color: #aaa;
+        line-height: 1.5;
+        background: #0d0d0d;
+        border: 1px solid #2a2a2a;
+        border-radius: 4px;
+        padding: 8px 10px;
+        margin: 8px 0 10px;
+        max-width: 420px;
+      }
+      .filename-preview {
+        font-family: monospace;
+        font-size: 13px;
+        color: #45d65a;
+        background: #090909;
+        border: 1px solid #333;
+        border-radius: 4px;
+        padding: 8px;
+        margin-top: 6px;
+        max-width: 420px;
+      }
+      .hint {
+        font-size: 11px;
+        color: #777;
+        margin-top: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="nav">
+      <div class="brand">BP ADMIN <span>DRIVER PHOTOS</span></div>
+      <nav>
+        <a href="/admin/">Admin</a>
+        <a href="/">Site</a>
+      </nav>
+    </header>
+
+    <main class="wrap">
+      <h1>Driver Photo Processor</h1>
+      <p id="loginStatus">Logged in: checking...</p>
+      <p class="sub">
+        Upload a driver photo, remove the background, then drag and zoom the
+        cutout inside the 600&times;700 canvas. Pick a driver and click Save —
+        the PNG is written directly to that driver's existing Photo URL path
+        (e.g. <code>public/assets/drivers/mark-arthur.png</code>). Background
+        removal runs entirely in your browser — the first run downloads the AI
+        model (~40&nbsp;MB), so it may take a minute. Saving works in local
+        <code>vercel dev</code> only (<code>npm run start</code>) — commit
+        saved PNGs before deploy.
+      </p>
+
+      <!-- STEP 1: Upload + remove background -->
+      <div class="panel">
+        <h2>1. Upload &amp; Remove Background</h2>
+        <input id="file" class="input" type="file" accept="image/*" />
+        <br />
+        <button id="removeBgBtn" class="btn" type="button" disabled>
+          Remove Background
+        </button>
+        <button id="skipBgBtn" class="btn" type="button" disabled>
+          Skip (already transparent)
+        </button>
+        <div class="hint">
+          Use "Skip" if your photo is already a transparent PNG cutout.
+        </div>
+      </div>
+
+      <!-- STEP 2: Position the cutout -->
+      <div class="panel">
+        <h2>2. Position &amp; Zoom</h2>
+        <div class="editor-row">
+          <div class="stage-box">
+            <canvas id="stage" width="600" height="700"></canvas>
+          </div>
+          <div class="editor-controls">
+            <label class="field" for="zoom">Zoom</label>
+            <div class="zoom-row">
+              <input id="zoom" type="range" min="10" max="300" value="100" />
+              <span id="zoomLabel">100%</span>
+            </div>
+            <div class="hint">
+              Drag the photo on the canvas to reposition it. You can also use
+              your mouse wheel over the canvas to zoom.
+            </div>
+
+            <label class="guide-toggle">
+              <input id="usePlaceholderGuide" type="checkbox" checked />
+              Use Placeholder Guide
+            </label>
+
+            <label class="field" for="guideOpacity">Guide Opacity</label>
+            <div class="zoom-row">
+              <input id="guideOpacity" type="range" min="0" max="50" value="20" />
+              <span id="guideOpacityLabel">20%</span>
+            </div>
+
+            <div class="guide-help">
+              Align each driver over the ghost placeholder from
+              <code>/assets/drivers/placeholder.png</code> — the same image used
+              on driver cards across the site. Use Driver Card Preset or Match
+              Placeholder first, then fine tune with drag and zoom.
+            </div>
+
+            <button id="centerBtn" class="btn" type="button">
+              Center Photo
+            </button>
+            <button id="fitBtn" class="btn" type="button">Fit to Canvas</button>
+            <button id="presetBtn" class="btn" type="button">
+              Driver Card Preset
+            </button>
+            <button id="matchBtn" class="btn" type="button">
+              Match Placeholder
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 3: Pick driver + save -->
+      <div class="panel">
+        <h2>3. Select Driver &amp; Save</h2>
+        <label class="field" for="driverSelect">Driver</label>
+        <select id="driverSelect" class="input">
+          <option value="">Loading drivers...</option>
+        </select>
+        <div class="hint">
+          Drivers come from the same records as Admin &gt; Drivers
+          (standings + saved profiles).
+        </div>
+
+        <label class="field">Display Name</label>
+        <input id="displayName" class="input" type="text" readonly />
+
+        <label class="field">Car Number</label>
+        <input id="carNumber" class="input" type="text" readonly />
+
+        <label class="field">Existing Photo URL</label>
+        <input id="photoUrl" class="input" type="text" readonly />
+
+        <label class="field">Export Filename (from Photo URL)</label>
+        <div class="filename-preview" id="filenamePreview">
+          select a driver...
+        </div>
+
+        <button id="saveBtn" class="btn" type="button" disabled>
+          Save Driver Photo
+        </button>
+        <div class="hint">
+          The PNG is saved directly to the driver's Photo URL path under
+          <code>public/</code> — no downloading or renaming needed. The guide
+          overlay is never saved into the PNG.
+        </div>
+        <div id="msg"></div>
+
+        <div id="savedPreviewWrap" hidden style="margin-top: 12px">
+          <label class="field">Saved Photo</label>
+          <div class="stage-box" style="padding: 8px">
+            <img
+              id="savedPreview"
+              alt="Saved driver photo"
+              style="display: block; max-width: 220px; max-height: 260px"
+            />
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <script type="module">
+      const $ = (s) => document.querySelector(s);
+
+      const fileInput = $("#file");
+      const removeBgBtn = $("#removeBgBtn");
+      const skipBgBtn = $("#skipBgBtn");
+      const stage = $("#stage");
+      const ctx = stage.getContext("2d");
+      const zoomSlider = $("#zoom");
+      const zoomLabel = $("#zoomLabel");
+      const usePlaceholderGuide = $("#usePlaceholderGuide");
+      const guideOpacity = $("#guideOpacity");
+      const guideOpacityLabel = $("#guideOpacityLabel");
+      const centerBtn = $("#centerBtn");
+      const fitBtn = $("#fitBtn");
+      const presetBtn = $("#presetBtn");
+      const matchBtn = $("#matchBtn");
+      const driverSelect = $("#driverSelect");
+      const displayNameInput = $("#displayName");
+      const carNumberInput = $("#carNumber");
+      const photoUrlInput = $("#photoUrl");
+      const filenamePreview = $("#filenamePreview");
+      const saveBtn = $("#saveBtn");
+      const msg = $("#msg");
+      const savedPreviewWrap = $("#savedPreviewWrap");
+      const savedPreview = $("#savedPreview");
+      const loginStatus = $("#loginStatus");
+
+      const CANVAS_W = 600;
+      const CANVAS_H = 700;
+      const PLACEHOLDER_URL = "/assets/drivers/placeholder.png";
+      const GUIDE_MARGIN = 30;
+      const GUIDE_CX = 300;
+
+      let placeholderImg = null;
+      let placeholderLayout = null; // how placeholder.png is drawn on the canvas
+      let placeholderBounds = null; // opaque pixels within placeholder.png
+
+      // ---------------- Admin session ----------------
+      // EXACTLY the same key + helpers as /admin/ (public/admin/index.html).
+      // Logging in there stores the password in sessionStorage for this tab,
+      // and Save sends that same value, just like Admin Settings / Drivers.
+
+      const SESSION_KEY = "bp_admin_pw";
+
+      function getSessionPw() {
+        return sessionStorage.getItem(SESSION_KEY) || "";
+      }
+
+      async function verifyPassword(pw) {
+        const res = await fetch("/api/settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password: pw, verifyOnly: true }),
+        });
+        return res.ok;
+      }
+
+      async function updateLoginStatus() {
+        const pw = getSessionPw();
+        if (!pw) {
+          loginStatus.innerHTML =
+            'Logged in: <span style="color:#ff6060">no</span> — ' +
+            '<a href="/admin/">log in on the Admin page</a>, then come back ' +
+            "in this same tab.";
+          return;
+        }
+        try {
+          if (await verifyPassword(pw)) {
+            loginStatus.innerHTML =
+              'Logged in: <span style="color:#45d65a">yes</span>';
+            return;
+          }
+        } catch {}
+        loginStatus.innerHTML =
+          'Logged in: <span style="color:#ff6060">no</span> (saved password ' +
+          'was rejected) — <a href="/admin/">log in again</a>.';
+      }
+
+      // ---------------- Background removal (lazy-loaded) ----------------
+      // Free, browser-based library: @imgly/background-removal via CDN.
+      // Loaded only when "Remove Background" is clicked, so a slow or
+      // blocked CDN can never break the rest of this page.
+
+      let removeBackgroundFn = null;
+
+      async function getRemoveBackground() {
+        if (!removeBackgroundFn) {
+          const mod = await import(
+            "https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.8/+esm"
+          );
+          removeBackgroundFn = mod.removeBackground;
+        }
+        return removeBackgroundFn;
+      }
+
+      // The cutout image and its position/scale on the canvas.
+      let cutout = null; // an Image with a transparent background
+      let posX = 0; // top-left of the drawn image, in canvas pixels
+      let posY = 0;
+      let scale = 1; // 1 = original image size
+
+      function setMsg(text, type = "") {
+        msg.textContent = text;
+        msg.className = type;
+      }
+
+      // ---------------- Drawing ----------------
+
+      function analyzeImageBounds(img) {
+        const c = document.createElement("canvas");
+        c.width = img.width;
+        c.height = img.height;
+        const cctx = c.getContext("2d");
+        cctx.drawImage(img, 0, 0);
+        const { data, width, height } = cctx.getImageData(0, 0, c.width, c.height);
+        let minX = width;
+        let minY = height;
+        let maxX = -1;
+        let maxY = -1;
+
+        for (let y = 0; y < height; y++) {
+          for (let x = 0; x < width; x++) {
+            if (data[(y * width + x) * 4 + 3] > 12) {
+              minX = Math.min(minX, x);
+              minY = Math.min(minY, y);
+              maxX = Math.max(maxX, x);
+              maxY = Math.max(maxY, y);
+            }
+          }
+        }
+
+        if (maxX < minX) {
+          return {
+            left: 0,
+            top: 0,
+            right: width - 1,
+            bottom: height - 1,
+            width,
+            height,
+            centerX: width / 2,
+          };
+        }
+
+        return {
+          left: minX,
+          top: minY,
+          right: maxX,
+          bottom: maxY,
+          width: maxX - minX + 1,
+          height: maxY - minY + 1,
+          centerX: (minX + maxX) / 2,
+        };
+      }
+
+      function computePlaceholderLayout(img) {
+        const scale = Math.min(CANVAS_W / img.width, CANVAS_H / img.height);
+        const w = img.width * scale;
+        const h = img.height * scale;
+        return {
+          x: (CANVAS_W - w) / 2,
+          y: (CANVAS_H - h) / 2,
+          w,
+          h,
+          scale,
+        };
+      }
+
+      function boundsToCanvas(bounds, layout) {
+        return {
+          left: layout.x + bounds.left * layout.scale,
+          top: layout.y + bounds.top * layout.scale,
+          right: layout.x + bounds.right * layout.scale,
+          bottom: layout.y + bounds.bottom * layout.scale,
+          width: bounds.width * layout.scale,
+          height: bounds.height * layout.scale,
+          centerX: layout.x + bounds.centerX * layout.scale,
+        };
+      }
+
+      function loadPlaceholderGuide() {
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => {
+            placeholderImg = img;
+            placeholderLayout = computePlaceholderLayout(img);
+            placeholderBounds = analyzeImageBounds(img);
+            resolve();
+          };
+          img.onerror = () =>
+            reject(
+              new Error(
+                "Could not load placeholder guide from /assets/drivers/placeholder.png",
+              ),
+            );
+          img.src = PLACEHOLDER_URL;
+        });
+      }
+
+      function placeholderTargetOnCanvas() {
+        if (!placeholderLayout || !placeholderBounds) return null;
+        return boundsToCanvas(placeholderBounds, placeholderLayout);
+      }
+
+      function cutoutOpaqueBounds() {
+        if (!cutout) return null;
+        return analyzeImageBounds(cutout);
+      }
+
+      // Scale and position the cutout to match the placeholder silhouette.
+      function fitCutoutToPlaceholder() {
+        if (!cutout || !placeholderTargetOnCanvas()) return;
+        const target = placeholderTargetOnCanvas();
+        const source = cutoutOpaqueBounds();
+        if (!source.width || !source.height) return;
+
+        scale = Math.min(
+          3,
+          Math.max(0.1, target.height / source.height),
+        );
+        posX = target.centerX - source.centerX * scale;
+        posY = target.top - source.top * scale;
+        syncZoomUi();
+        draw();
+      }
+
+      function drawFrameGuide() {
+        ctx.save();
+        ctx.lineWidth = 2;
+
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.18)";
+        ctx.setLineDash([8, 8]);
+        ctx.strokeRect(
+          GUIDE_MARGIN,
+          GUIDE_MARGIN,
+          CANVAS_W - GUIDE_MARGIN * 2,
+          CANVAS_H - GUIDE_MARGIN * 2,
+        );
+
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.28)";
+        ctx.setLineDash([12, 10]);
+        ctx.beginPath();
+        ctx.moveTo(GUIDE_CX, GUIDE_MARGIN);
+        ctx.lineTo(GUIDE_CX, CANVAS_H - GUIDE_MARGIN);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      function drawPlaceholderOverlay() {
+        if (!placeholderImg || !placeholderLayout) return;
+        const alpha = Number(guideOpacity.value) / 100;
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.drawImage(
+          placeholderImg,
+          placeholderLayout.x,
+          placeholderLayout.y,
+          placeholderLayout.w,
+          placeholderLayout.h,
+        );
+        ctx.restore();
+      }
+
+      function draw() {
+        ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+
+        if (usePlaceholderGuide.checked) {
+          drawPlaceholderOverlay();
+        }
+
+        if (cutout) {
+          ctx.drawImage(
+            cutout,
+            posX,
+            posY,
+            cutout.width * scale,
+            cutout.height * scale,
+          );
+        }
+
+        if (usePlaceholderGuide.checked) {
+          drawFrameGuide();
+        }
+      }
+
+      // Saved PNG = cutout only, on a clean offscreen canvas (no guide).
+      function exportPngDataUrl() {
+        const out = document.createElement("canvas");
+        out.width = CANVAS_W;
+        out.height = CANVAS_H;
+        const octx = out.getContext("2d");
+        octx.drawImage(
+          cutout,
+          posX,
+          posY,
+          cutout.width * scale,
+          cutout.height * scale,
+        );
+        return out.toDataURL("image/png");
+      }
+
+      function syncZoomUi() {
+        zoomSlider.value = Math.round(scale * 100);
+        zoomLabel.textContent = `${Math.round(scale * 100)}%`;
+      }
+
+      // Scale the image so it fills the canvas nicely, then center it.
+      function fitToCanvas() {
+        if (!cutout) return;
+        scale = Math.min(CANVAS_W / cutout.width, CANVAS_H / cutout.height);
+        syncZoomUi();
+        centerImage();
+      }
+
+      function centerImage() {
+        if (!cutout) return;
+        posX = (CANVAS_W - cutout.width * scale) / 2;
+        posY = (CANVAS_H - cutout.height * scale) / 2;
+        draw();
+      }
+
+      // Fit cutout to the placeholder guide's opaque silhouette on canvas.
+      function driverCardPreset() {
+        fitCutoutToPlaceholder();
+      }
+
+      function syncGuideOpacityLabel() {
+        guideOpacityLabel.textContent = `${guideOpacity.value}%`;
+      }
+
+      // Zoom while keeping the image centered around its current middle.
+      function setScale(newScale) {
+        if (!cutout) return;
+        newScale = Math.min(3, Math.max(0.1, newScale));
+        const midX = posX + (cutout.width * scale) / 2;
+        const midY = posY + (cutout.height * scale) / 2;
+        scale = newScale;
+        posX = midX - (cutout.width * scale) / 2;
+        posY = midY - (cutout.height * scale) / 2;
+        syncZoomUi();
+        draw();
+      }
+
+      // ---------------- Load images ----------------
+
+      function loadImageFromBlob(blob) {
+        return new Promise((resolve, reject) => {
+          const url = URL.createObjectURL(blob);
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = () => reject(new Error("Could not load image."));
+          img.src = url;
+        });
+      }
+
+      fileInput.addEventListener("change", () => {
+        const hasFile = !!fileInput.files?.[0];
+        removeBgBtn.disabled = !hasFile;
+        skipBgBtn.disabled = !hasFile;
+        setMsg("");
+      });
+
+      // Remove the background, then show the cutout on the canvas.
+      removeBgBtn.addEventListener("click", async () => {
+        const file = fileInput.files?.[0];
+        if (!file) return;
+
+        removeBgBtn.disabled = true;
+        skipBgBtn.disabled = true;
+        setMsg(
+          "Removing background... first run downloads the AI model (~40 MB), please wait.",
+        );
+
+        try {
+          const removeBackground = await getRemoveBackground();
+          const resultBlob = await removeBackground(file);
+          cutout = await loadImageFromBlob(resultBlob);
+          fitToCanvas();
+          updateSaveState();
+          setMsg(
+            "Background removed. Drag and zoom to position the photo.",
+            "success",
+          );
+        } catch (e) {
+          setMsg(`Background removal failed: ${e.message || e}`, "error");
+        } finally {
+          removeBgBtn.disabled = false;
+          skipBgBtn.disabled = false;
+        }
+      });
+
+      // Use the uploaded image as-is (already transparent).
+      skipBgBtn.addEventListener("click", async () => {
+        const file = fileInput.files?.[0];
+        if (!file) return;
+        try {
+          cutout = await loadImageFromBlob(file);
+          fitToCanvas();
+          updateSaveState();
+          setMsg("Photo loaded. Drag and zoom to position it.", "success");
+        } catch (e) {
+          setMsg(e.message, "error");
+        }
+      });
+
+      // ---------------- Drag to reposition ----------------
+
+      let dragging = false;
+      let dragStartX = 0;
+      let dragStartY = 0;
+      let startPosX = 0;
+      let startPosY = 0;
+
+      // The canvas is displayed smaller than its real 600x700 size,
+      // so convert screen pixels to canvas pixels.
+      function canvasScaleFactor() {
+        return CANVAS_W / stage.getBoundingClientRect().width;
+      }
+
+      stage.addEventListener("pointerdown", (e) => {
+        if (!cutout) return;
+        dragging = true;
+        stage.classList.add("dragging");
+        stage.setPointerCapture(e.pointerId);
+        dragStartX = e.clientX;
+        dragStartY = e.clientY;
+        startPosX = posX;
+        startPosY = posY;
+      });
+
+      stage.addEventListener("pointermove", (e) => {
+        if (!dragging) return;
+        const f = canvasScaleFactor();
+        posX = startPosX + (e.clientX - dragStartX) * f;
+        posY = startPosY + (e.clientY - dragStartY) * f;
+        draw();
+      });
+
+      stage.addEventListener("pointerup", () => {
+        dragging = false;
+        stage.classList.remove("dragging");
+      });
+
+      // ---------------- Zoom + guide controls ----------------
+
+      zoomSlider.addEventListener("input", () => {
+        setScale(Number(zoomSlider.value) / 100);
+      });
+
+      stage.addEventListener("wheel", (e) => {
+        if (!cutout) return;
+        e.preventDefault();
+        const step = e.deltaY < 0 ? 0.05 : -0.05;
+        setScale(scale + step);
+      });
+
+      usePlaceholderGuide.addEventListener("change", draw);
+      guideOpacity.addEventListener("input", () => {
+        syncGuideOpacityLabel();
+        draw();
+      });
+      centerBtn.addEventListener("click", centerImage);
+      fitBtn.addEventListener("click", fitToCanvas);
+      presetBtn.addEventListener("click", driverCardPreset);
+      matchBtn.addEventListener("click", fitCutoutToPlaceholder);
+
+      // ---------------- Driver list (same records as Admin > Drivers) ----------------
+
+      let drivers = []; // [{ driver_id, display_name, car_number, photo_url }]
+
+      // Same merge the Admin > Drivers page uses:
+      // standings rows + saved Supabase profiles.
+      function buildDriverList(standingsRows, profiles) {
+        const byId = Object.fromEntries(
+          profiles.map((p) => [String(p.driver_id), p]),
+        );
+        return standingsRows.map((row) => {
+          const profile = byId[String(row.driverId)] || null;
+          return {
+            driver_id: String(row.driverId),
+            display_name: profile?.display_name || row.driver,
+            car_number: profile?.car_number || "",
+            photo_url: profile?.photo_url || row.photoUrl || "",
+          };
+        });
+      }
+
+      async function loadDrivers() {
+        try {
+          const [standingsRes, driversRes] = await Promise.all([
+            fetch("/api/standings"),
+            fetch("/api/drivers"),
+          ]);
+          const standingsData = await standingsRes.json();
+          const profiles = await driversRes.json();
+
+          if (!standingsRes.ok)
+            throw new Error(standingsData.error || "Failed to load standings");
+          if (!driversRes.ok)
+            throw new Error(profiles.error || "Failed to load profiles");
+
+          drivers = buildDriverList(
+            standingsData.rows || [],
+            Array.isArray(profiles) ? profiles : [],
+          );
+          drivers.sort((a, b) => a.display_name.localeCompare(b.display_name));
+
+          driverSelect.innerHTML = "";
+          const empty = document.createElement("option");
+          empty.value = "";
+          empty.textContent = "Select a driver...";
+          driverSelect.appendChild(empty);
+
+          for (const d of drivers) {
+            const opt = document.createElement("option");
+            opt.value = d.driver_id;
+            opt.textContent = d.car_number
+              ? `#${d.car_number} ${d.display_name}`
+              : d.display_name;
+            driverSelect.appendChild(opt);
+          }
+        } catch (e) {
+          driverSelect.innerHTML = `<option value="">Failed to load drivers: ${e.message || e}</option>`;
+        }
+      }
+
+      // "assets/drivers/mark-arthur.png" -> "mark-arthur.png"
+      function filenameFromPhotoUrl(photoUrl) {
+        const clean = String(photoUrl || "").split("?")[0].split("#")[0];
+        const last = clean.split("/").pop() || "";
+        return last.toLowerCase().endsWith(".png") ? last : "";
+      }
+
+      function selectedDriver() {
+        return drivers.find((d) => d.driver_id === driverSelect.value) || null;
+      }
+
+      function updateSaveState() {
+        const d = selectedDriver();
+        displayNameInput.value = d?.display_name || "";
+        carNumberInput.value = d?.car_number || "";
+        photoUrlInput.value = d?.photo_url || "";
+
+        const filename = filenameFromPhotoUrl(d?.photo_url);
+        if (!d) {
+          filenamePreview.textContent = "select a driver...";
+        } else if (!filename) {
+          filenamePreview.textContent =
+            "No .png Photo URL set for this driver — set one in Admin > Drivers first.";
+        } else {
+          filenamePreview.textContent = filename;
+        }
+        saveBtn.disabled = !cutout || !filename;
+      }
+
+      driverSelect.addEventListener("change", () => {
+        savedPreviewWrap.hidden = true;
+        updateSaveState();
+      });
+
+      // ---------------- Save to the server ----------------
+
+      saveBtn.addEventListener("click", async () => {
+        const driver = selectedDriver();
+        const filename = filenameFromPhotoUrl(driver?.photo_url);
+        if (!cutout || !filename) return;
+
+        saveBtn.disabled = true;
+        setMsg("Saving...");
+
+        try {
+          const res = await fetch("/api/save-driver-photo", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              password: getSessionPw(),
+              imageBase64: exportPngDataUrl(),
+              photoUrl: driver.photo_url,
+            }),
+          });
+
+          const raw = await res.text();
+          let data;
+          try {
+            data = JSON.parse(raw);
+          } catch {
+            throw new Error("Server returned invalid JSON.");
+          }
+          if (!res.ok) throw new Error(data.error || "Save failed.");
+
+          setMsg(`Saved: ${data.filename}\nPath: ${data.savedTo}`, "success");
+
+          // Show the freshly saved file (cache-busted so the new image loads).
+          savedPreview.src = `/${data.photoUrl}?t=${Date.now()}`;
+          savedPreviewWrap.hidden = false;
+        } catch (e) {
+          setMsg(e.message || "Save failed.", "error");
+          if (/password/i.test(e.message || "")) updateLoginStatus();
+        } finally {
+          saveBtn.disabled = false;
+        }
+      });
+
+      draw();
+      syncGuideOpacityLabel();
+      updateLoginStatus();
+      loadDrivers();
+      loadPlaceholderGuide()
+        .then(() => draw())
+        .catch((e) => {
+          console.warn(e.message || e);
+        });
+    </script>
+  </body>
+</html>
