@@ -1,10 +1,12 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { slugify, supabase } from "./_lib.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
 const PUBLIC_DIR = path.join(ROOT, "public");
+const STORAGE_BUCKET = "driver-photos";
 
 function json(res, status, body) {
   res.status(status);
@@ -37,6 +39,28 @@ function readUploadBuffer(body) {
   return buffer;
 }
 
+function safeFilenameFromPhotoUrl(photoUrl) {
+  const clean = String(photoUrl || "").split("?")[0].split("#")[0];
+  const last = path.basename(clean);
+  if (!last.toLowerCase().endsWith(".png")) {
+    throw new Error("Photo URL must end with .png");
+  }
+  if (!last || last.includes("..")) {
+    throw new Error("Invalid filename.");
+  }
+  return last;
+}
+
+function publicStorageUrl(filename) {
+  const base = String(process.env.SUPABASE_URL || "").replace(/\/$/, "");
+  if (!base) throw new Error("Supabase URL is not configured.");
+  return `${base}/storage/v1/object/public/${STORAGE_BUCKET}/${encodeURIComponent(filename)}`;
+}
+
+function isLocalDev() {
+  return process.env.VERCEL_ENV !== "production";
+}
+
 // Turn the driver's Photo URL (e.g. "assets/drivers/mark-arthur.png")
 // into a safe absolute path inside public/.
 function resolvePhotoOutputPath(photoUrl) {
@@ -46,12 +70,12 @@ function resolvePhotoOutputPath(photoUrl) {
   }
   if (/^https?:\/\//i.test(rel)) {
     throw new Error(
-      "Photo URL is an external link. Set a local path (e.g. assets/drivers/name.png) in Admin > Drivers first.",
+      "Photo URL is an external link. Use a local assets/drivers/name.png path in Admin > Drivers for local file saves.",
     );
   }
 
   rel = rel.split("?")[0].split("#")[0];
-  rel = rel.replace(/^\/+/, ""); // allow "/assets/..." too
+  rel = rel.replace(/^\/+/, "");
 
   if (!rel.toLowerCase().endsWith(".png")) {
     throw new Error("Photo URL must end with .png");
@@ -66,6 +90,97 @@ function resolvePhotoOutputPath(photoUrl) {
   }
 
   return { resolved, rel };
+}
+
+async function upsertDriverPhotoUrl(sb, driverId, publicUrl, body) {
+  const id = String(driverId);
+  const { data: existing, error: readError } = await sb
+    .from("driver_profiles")
+    .select("*")
+    .eq("driver_id", id)
+    .maybeSingle();
+
+  if (readError) {
+    throw new Error(`Supabase error: ${readError.message}`);
+  }
+
+  const displayName =
+    existing?.display_name || body.display_name || body.iracing_name || "";
+  const iracingName =
+    existing?.iracing_name || body.iracing_name || displayName || "";
+  const carNumber = existing?.car_number ?? body.car_number ?? "";
+
+  if (!iracingName) {
+    throw new Error(
+      "Missing driver profile. Open Admin > Drivers and save this driver once before uploading a photo.",
+    );
+  }
+
+  const row = {
+    driver_id: id,
+    iracing_name: iracingName,
+    display_name: displayName || iracingName,
+    driver_name: displayName || iracingName,
+    slug: slugify(displayName || iracingName || id),
+    car_number: carNumber,
+    truck_number: carNumber,
+    photo_url: publicUrl,
+    active: existing?.active !== false,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await sb
+    .from("driver_profiles")
+    .upsert(row, { onConflict: "driver_id" })
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(`Supabase error: ${error.message}`);
+  }
+
+  return data;
+}
+
+async function saveToSupabaseStorage(sb, uploadBuffer, filename, driverId, body) {
+  const { error: uploadError } = await sb.storage
+    .from(STORAGE_BUCKET)
+    .upload(filename, uploadBuffer, {
+      contentType: "image/png",
+      upsert: true,
+      cacheControl: "3600",
+    });
+
+  if (uploadError) {
+    throw new Error(`Storage upload failed: ${uploadError.message}`);
+  }
+
+  const publicUrl = publicStorageUrl(filename);
+  await upsertDriverPhotoUrl(sb, driverId, publicUrl, body);
+
+  return {
+    filename,
+    savedTo: `Supabase Storage (${STORAGE_BUCKET}/${filename})`,
+    photoUrl: publicUrl,
+    publicUrl,
+    profileUpdated: true,
+    storage: "supabase",
+  };
+}
+
+function saveToLocalFile(uploadBuffer, photoUrl) {
+  const { resolved, rel } = resolvePhotoOutputPath(photoUrl);
+  const filename = path.basename(resolved);
+  fs.mkdirSync(path.dirname(resolved), { recursive: true });
+  fs.writeFileSync(resolved, uploadBuffer);
+  return {
+    filename,
+    savedTo: `public/${rel}`,
+    photoUrl: rel,
+    publicUrl: `/${rel.replace(/^\/+/, "")}`,
+    profileUpdated: false,
+    storage: "local",
+  };
 }
 
 export default async function handler(req, res) {
@@ -100,27 +215,44 @@ export default async function handler(req, res) {
       return;
     }
 
-    const { resolved, rel } = resolvePhotoOutputPath(body.photoUrl);
-    const filename = path.basename(resolved);
+    const filename = safeFilenameFromPhotoUrl(body.photoUrl);
+    const driverId = body.driver_id;
 
-    if (process.env.VERCEL_ENV === "production") {
-      json(res, 501, {
-        error:
-          "Saving driver photos is only supported in local vercel dev. Commit saved PNGs from your machine.",
+    const sb = supabase();
+    if (sb && driverId) {
+      const result = await saveToSupabaseStorage(
+        sb,
+        uploadBuffer,
         filename,
+        driverId,
+        body,
+      );
+      json(res, 200, { success: true, ...result });
+      return;
+    }
+
+    if (!sb && !isLocalDev()) {
+      json(res, 400, {
+        error:
+          "Supabase is not configured. Add SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Vercel to save driver photos on the live site.",
       });
       return;
     }
 
-    fs.mkdirSync(path.dirname(resolved), { recursive: true });
-    fs.writeFileSync(resolved, uploadBuffer);
+    if (!driverId && !isLocalDev()) {
+      json(res, 400, { error: "Missing driver_id." });
+      return;
+    }
 
-    json(res, 200, {
-      success: true,
-      filename,
-      savedTo: `public/${rel}`,
-      photoUrl: rel,
-    });
+    if (!isLocalDev()) {
+      json(res, 400, {
+        error: "Supabase Storage is required to save driver photos on the live site.",
+      });
+      return;
+    }
+
+    const result = saveToLocalFile(uploadBuffer, body.photoUrl);
+    json(res, 200, { success: true, ...result });
   } catch (err) {
     json(res, 400, { error: err.message || "Save failed." });
   }

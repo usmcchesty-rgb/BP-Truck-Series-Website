@@ -210,9 +210,8 @@
         the PNG is written directly to that driver's existing Photo URL path
         (e.g. <code>public/assets/drivers/mark-arthur.png</code>). Background
         removal runs entirely in your browser — the first run downloads the AI
-        model (~40&nbsp;MB), so it may take a minute. Saving works in local
-        <code>vercel dev</code> only (<code>npm run start</code>) — commit
-        saved PNGs before deploy.
+        model (~40&nbsp;MB), so it may take a minute. Photos are saved directly
+        to Supabase Storage and appear on the live site immediately.
       </p>
 
       <!-- STEP 1: Upload + remove background -->
@@ -250,8 +249,12 @@
             </div>
 
             <label class="guide-toggle">
-              <input id="usePlaceholderGuide" type="checkbox" checked />
-              Use Placeholder Guide
+              <input id="useSilhouetteGuide" type="checkbox" checked />
+              Silhouette Guide
+            </label>
+            <label class="guide-toggle">
+              <input id="usePlaceholderImage" type="checkbox" />
+              Placeholder Image
             </label>
 
             <label class="field" for="guideOpacity">Guide Opacity</label>
@@ -261,10 +264,12 @@
             </div>
 
             <div class="guide-help">
-              Align each driver over the ghost placeholder from
-              <code>/assets/drivers/placeholder.png</code> — the same image used
-              on driver cards across the site. Use Driver Card Preset or Match
-              Placeholder first, then fine tune with drag and zoom.
+              Match each new driver to the traced placeholder silhouette — not
+              another person's face. Use Silhouette Guide (default) for a bright
+              outline with head, eye, shoulder, chest, and bottom markers.
+              Enable Placeholder Image to overlay the real
+              <code>/assets/drivers/placeholder.png</code> at low opacity.
+              Use Driver Card Preset or Match Placeholder first, then fine tune.
             </div>
 
             <button id="centerBtn" class="btn" type="button">
@@ -311,9 +316,8 @@
           Save Driver Photo
         </button>
         <div class="hint">
-          The PNG is saved directly to the driver's Photo URL path under
-          <code>public/</code> — no downloading or renaming needed. The guide
-          overlay is never saved into the PNG.
+          Photos are saved directly to Supabase Storage. The guide overlay is
+          never saved into the PNG.
         </div>
         <div id="msg"></div>
 
@@ -340,7 +344,8 @@
       const ctx = stage.getContext("2d");
       const zoomSlider = $("#zoom");
       const zoomLabel = $("#zoomLabel");
-      const usePlaceholderGuide = $("#usePlaceholderGuide");
+      const useSilhouetteGuide = $("#useSilhouetteGuide");
+      const usePlaceholderImage = $("#usePlaceholderImage");
       const guideOpacity = $("#guideOpacity");
       const guideOpacityLabel = $("#guideOpacityLabel");
       const centerBtn = $("#centerBtn");
@@ -365,8 +370,9 @@
       const GUIDE_CX = 300;
 
       let placeholderImg = null;
-      let placeholderLayout = null; // how placeholder.png is drawn on the canvas
-      let placeholderBounds = null; // opaque pixels within placeholder.png
+      let placeholderLayout = null;
+      let placeholderBounds = null;
+      let silhouetteRowsCanvas = [];
 
       // ---------------- Admin session ----------------
       // EXACTLY the same key + helpers as /admin/ (public/admin/index.html).
@@ -510,6 +516,100 @@
         };
       }
 
+      function buildSilhouetteScan(img) {
+        const c = document.createElement("canvas");
+        c.width = img.width;
+        c.height = img.height;
+        const cctx = c.getContext("2d");
+        cctx.drawImage(img, 0, 0);
+        const { data, width, height } = cctx.getImageData(0, 0, c.width, c.height);
+        const rows = new Array(height).fill(null);
+
+        for (let y = 0; y < height; y++) {
+          let minX = width;
+          let maxX = -1;
+          for (let x = 0; x < width; x++) {
+            if (data[(y * width + x) * 4 + 3] > 12) {
+              minX = Math.min(minX, x);
+              maxX = Math.max(maxX, x);
+            }
+          }
+          if (maxX >= minX) {
+            rows[y] = {
+              minX,
+              maxX,
+              width: maxX - minX + 1,
+              centerX: (minX + maxX) / 2,
+            };
+          }
+        }
+        return rows;
+      }
+
+      function buildSilhouetteRowsCanvas(img, layout) {
+        const imageRows = buildSilhouetteScan(img);
+        const rows = [];
+        for (let imageY = 0; imageY < img.height; imageY++) {
+          const row = imageRows[imageY];
+          if (!row) continue;
+          rows.push({
+            y: layout.y + imageY * layout.scale,
+            left: layout.x + row.minX * layout.scale,
+            right: layout.x + row.maxX * layout.scale,
+            width: row.width * layout.scale,
+            centerX: layout.x + row.centerX * layout.scale,
+          });
+        }
+        return rows;
+      }
+
+      function rowAtCanvasY(y) {
+        if (!silhouetteRowsCanvas.length) return null;
+        let best = silhouetteRowsCanvas[0];
+        let bestDist = Math.abs(best.y - y);
+        for (const row of silhouetteRowsCanvas) {
+          const dist = Math.abs(row.y - y);
+          if (dist < bestDist) {
+            best = row;
+            bestDist = dist;
+          }
+        }
+        return bestDist <= 12 ? best : null;
+      }
+
+      function computeGuideMarkers(target) {
+        const h = target.height;
+        const top = target.top;
+        const bottom = target.bottom;
+        const eye = top + h * 0.22;
+        const shoulderStart = top + h * 0.28;
+        const shoulderEnd = top + h * 0.42;
+        let shoulderY = top + h * 0.34;
+        let shoulderWidth = 0;
+
+        for (const row of silhouetteRowsCanvas) {
+          if (row.y >= shoulderStart && row.y <= shoulderEnd) {
+            if (row.width > shoulderWidth) {
+              shoulderWidth = row.width;
+              shoulderY = row.y;
+            }
+          }
+        }
+
+        return {
+          top,
+          eye,
+          shoulderY,
+          chest: top + h * 0.55,
+          bottom,
+          centerX: target.centerX,
+          headWidth: rowAtCanvasY(top)?.width || target.width * 0.35,
+          shoulderWidth: shoulderWidth || rowAtCanvasY(shoulderY)?.width || target.width * 0.85,
+          torsoWidth: rowAtCanvasY(top + h * 0.55)?.width || target.width * 0.65,
+          bottomWidth: rowAtCanvasY(bottom)?.width || target.width * 0.6,
+        };
+      }
+
       function loadPlaceholderGuide() {
         return new Promise((resolve, reject) => {
           const img = new Image();
@@ -517,6 +617,10 @@
             placeholderImg = img;
             placeholderLayout = computePlaceholderLayout(img);
             placeholderBounds = analyzeImageBounds(img);
+            silhouetteRowsCanvas = buildSilhouetteRowsCanvas(
+              img,
+              placeholderLayout,
+            );
             resolve();
           };
           img.onerror = () =>
@@ -578,6 +682,93 @@
         ctx.restore();
       }
 
+      function drawSilhouetteGuide() {
+        if (!silhouetteRowsCanvas.length || !placeholderTargetOnCanvas()) return;
+
+        const guideAlpha = Number(guideOpacity.value) / 100;
+        const outlineAlpha = Math.min(1, 0.45 + guideAlpha);
+        const markerAlpha = Math.min(1, 0.55 + guideAlpha);
+        const target = placeholderTargetOnCanvas();
+        const markers = computeGuideMarkers(target);
+
+        ctx.save();
+        ctx.lineWidth = 2.5;
+        ctx.lineJoin = "round";
+
+        ctx.strokeStyle = `rgba(255, 48, 48, ${outlineAlpha})`;
+        ctx.beginPath();
+        ctx.moveTo(silhouetteRowsCanvas[0].left, silhouetteRowsCanvas[0].y);
+        for (const row of silhouetteRowsCanvas) {
+          ctx.lineTo(row.left, row.y);
+        }
+        for (let i = silhouetteRowsCanvas.length - 1; i >= 0; i--) {
+          ctx.lineTo(silhouetteRowsCanvas[i].right, silhouetteRowsCanvas[i].y);
+        }
+        ctx.closePath();
+        ctx.stroke();
+
+        const markerLines = [
+          { y: markers.top, label: "Top of Head", color: "rgba(255,255,255," + markerAlpha + ")" },
+          { y: markers.eye, label: "Eye Level", color: "rgba(255,255,255," + markerAlpha + ")" },
+          { y: markers.shoulderY, label: "Shoulders", color: "rgba(255,177,61," + markerAlpha + ")" },
+          { y: markers.chest, label: "Chest", color: "rgba(255,177,61," + markerAlpha + ")" },
+          { y: markers.bottom, label: "Bottom Crop", color: "rgba(255,96,96," + markerAlpha + ")" },
+        ];
+
+        ctx.setLineDash([6, 6]);
+        ctx.font = "900 16px Arial, sans-serif";
+        for (const line of markerLines) {
+          const row = rowAtCanvasY(line.y);
+          const half = (row?.width || target.width) / 2;
+          ctx.strokeStyle = line.color;
+          ctx.beginPath();
+          ctx.moveTo(markers.centerX - half, line.y);
+          ctx.lineTo(markers.centerX + half, line.y);
+          ctx.stroke();
+          ctx.fillStyle = line.color;
+          ctx.fillText(line.label, 8, line.y - 6);
+        }
+
+        ctx.setLineDash([10, 8]);
+        ctx.strokeStyle = `rgba(255, 255, 255, ${markerAlpha})`;
+        ctx.beginPath();
+        ctx.moveTo(markers.centerX, GUIDE_MARGIN);
+        ctx.lineTo(markers.centerX, CANVAS_H - GUIDE_MARGIN);
+        ctx.stroke();
+
+        const measurements = [
+          {
+            y: markers.top + 18,
+            label: `Head Width ${Math.round(markers.headWidth)}px`,
+            width: markers.headWidth,
+          },
+          {
+            y: markers.shoulderY + 18,
+            label: `Shoulder Width ${Math.round(markers.shoulderWidth)}px`,
+            width: markers.shoulderWidth,
+          },
+          {
+            y: markers.chest + 18,
+            label: `Torso Width ${Math.round(markers.torsoWidth)}px`,
+            width: markers.torsoWidth,
+          },
+          {
+            y: markers.bottom - 10,
+            label: `Bottom Crop ${Math.round(markers.bottomWidth)}px`,
+            width: markers.bottomWidth,
+          },
+        ];
+
+        ctx.setLineDash([]);
+        ctx.font = "900 14px Arial, sans-serif";
+        ctx.fillStyle = `rgba(255, 48, 48, ${markerAlpha})`;
+        for (const m of measurements) {
+          ctx.fillText(m.label, CANVAS_W - 168, m.y);
+        }
+
+        ctx.restore();
+      }
+
       function drawPlaceholderOverlay() {
         if (!placeholderImg || !placeholderLayout) return;
         const alpha = Number(guideOpacity.value) / 100;
@@ -593,11 +784,19 @@
         ctx.restore();
       }
 
+      function guidesEnabled() {
+        return useSilhouetteGuide.checked || usePlaceholderImage.checked;
+      }
+
       function draw() {
         ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
 
-        if (usePlaceholderGuide.checked) {
+        if (usePlaceholderImage.checked) {
           drawPlaceholderOverlay();
+        }
+
+        if (useSilhouetteGuide.checked) {
+          drawSilhouetteGuide();
         }
 
         if (cutout) {
@@ -610,7 +809,7 @@
           );
         }
 
-        if (usePlaceholderGuide.checked) {
+        if (guidesEnabled()) {
           drawFrameGuide();
         }
       }
@@ -786,7 +985,8 @@
         setScale(scale + step);
       });
 
-      usePlaceholderGuide.addEventListener("change", draw);
+      useSilhouetteGuide.addEventListener("change", draw);
+      usePlaceholderImage.addEventListener("change", draw);
       guideOpacity.addEventListener("input", () => {
         syncGuideOpacityLabel();
         draw();
@@ -810,6 +1010,7 @@
           const profile = byId[String(row.driverId)] || null;
           return {
             driver_id: String(row.driverId),
+            iracing_name: profile?.iracing_name || row.driver,
             display_name: profile?.display_name || row.driver,
             car_number: profile?.car_number || "",
             photo_url: profile?.photo_url || row.photoUrl || "",
@@ -908,6 +1109,10 @@
               password: getSessionPw(),
               imageBase64: exportPngDataUrl(),
               photoUrl: driver.photo_url,
+              driver_id: driver.driver_id,
+              iracing_name: driver.iracing_name,
+              display_name: driver.display_name,
+              car_number: driver.car_number,
             }),
           });
 
@@ -920,10 +1125,24 @@
           }
           if (!res.ok) throw new Error(data.error || "Save failed.");
 
-          setMsg(`Saved: ${data.filename}\nPath: ${data.savedTo}`, "success");
+          if (data.storage === "supabase") {
+            setMsg(
+              `Saved to Supabase Storage\nUpdated driver profile\nPublic image URL:\n${data.publicUrl || data.photoUrl}`,
+              "success",
+            );
+            driver.photo_url = data.publicUrl || data.photoUrl;
+            photoUrlInput.value = driver.photo_url;
+          } else {
+            setMsg(
+              `Saved locally: ${data.filename}\nPath: ${data.savedTo}\n(Development mode — Supabase not configured)`,
+              "success",
+            );
+          }
 
-          // Show the freshly saved file (cache-busted so the new image loads).
-          savedPreview.src = `/${data.photoUrl}?t=${Date.now()}`;
+          const previewUrl = data.publicUrl || data.photoUrl;
+          savedPreview.src = previewUrl.startsWith("http")
+            ? `${previewUrl}?t=${Date.now()}`
+            : `/${String(previewUrl).replace(/^\/+/, "")}?t=${Date.now()}`;
           savedPreviewWrap.hidden = false;
         } catch (e) {
           setMsg(e.message || "Save failed.", "error");

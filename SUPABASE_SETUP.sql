@@ -19,6 +19,17 @@ on conflict (id) do nothing;
 -- If upgrading from the old slug-based driver_profiles table, run once:
 -- drop table if exists driver_profiles;
 
+-- Driver photo uploads (Supabase Storage)
+-- Run once in the Supabase SQL editor:
+--
+-- insert into storage.buckets (id, name, public)
+-- values ('driver-photos', 'driver-photos', true)
+-- on conflict (id) do update set public = true;
+--
+-- create policy "Public read driver photos"
+-- on storage.objects for select
+-- using (bucket_id = 'driver-photos');
+
 create table if not exists driver_profiles (
   driver_id text primary key,
   iracing_name text not null,
