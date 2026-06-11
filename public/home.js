@@ -1,0 +1,281 @@
+const $ = (s) => document.querySelector(s);
+
+// URL-safe filenames served from /assets/sponsors/ (web root = public/).
+const HOME_SPONSOR_FILES = [
+  { file: "flying-pig-logo.png", label: "Flying Pig" },
+  { file: "oi-roofing-logo.png", label: "OI Roofing" },
+  { file: "short-stop-logo.png", label: "Short Stop" },
+];
+
+function sponsorImageSrc(file) {
+  return `/assets/sponsors/${encodeURIComponent(file)}`;
+}
+
+function renderHomeSponsors() {
+  const strip = $("#homeSponsorsStrip");
+  if (!strip) return;
+
+  const urls = HOME_SPONSOR_FILES.map((sponsor) => sponsorImageSrc(sponsor.file));
+  console.log("[BP Home] Sponsor image URLs:", urls);
+
+  strip.innerHTML = HOME_SPONSOR_FILES.map((sponsor) => {
+    const src = sponsorImageSrc(sponsor.file);
+    return `<div class="home-sponsor-slot">
+      <img src="${src}" alt="${sponsor.label}" loading="lazy" />
+    </div>`;
+  }).join("");
+}
+
+const TRACK_IMAGE_ALIASES = {
+  "charlotte-motor-speedway-oval": "/assets/tracks/charlotte-motor-speedway-oval-night.png",
+  "charlotte-oval": "/assets/tracks/charlotte-motor-speedway-oval-night.png",
+  indianapolis: "/assets/tracks/indianapolis-motor-speedway-nascar-oval.png",
+};
+
+function trackSlug(track) {
+  return String(track || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function trackImageCandidates(track) {
+  const slug = trackSlug(track);
+  if (!slug) return [];
+  const candidates = [`/assets/tracks/${slug}.png`];
+  for (const [aliasSlug, path] of Object.entries(TRACK_IMAGE_ALIASES)) {
+    if (slug.includes(aliasSlug) && !candidates.includes(path)) {
+      candidates.push(path);
+    }
+  }
+  return candidates;
+}
+
+function driverImage(driver) {
+  const slug = String(driver || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+  return `/assets/drivers/${slug}.png`;
+}
+
+function formatTrackHtml(track) {
+  const t = String(track || "TBD").trim();
+  const words = t.split(/\s+/);
+  if (words.length <= 1) return t.toUpperCase();
+  return `${words[0].toUpperCase()}<br /><small>${words.slice(1).join(" ").toUpperCase()}</small>`;
+}
+
+function splitDateTime(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return { date: "Date TBD", time: "" };
+  const atParts = raw.split(/\s+@\s+|\s+at\s+/i);
+  if (atParts.length > 1) {
+    return { date: atParts[0].trim(), time: atParts.slice(1).join(" ").trim() };
+  }
+  return { date: raw, time: "" };
+}
+
+function renderNextRaceImage(track) {
+  const img = $("#homeNextRaceImg");
+  const placeholder = $("#homeNextRacePlaceholder");
+  if (!img || !placeholder) return;
+
+  const candidates = trackImageCandidates(track);
+  let i = 0;
+
+  const showPlaceholder = () => {
+    img.hidden = true;
+    img.removeAttribute("src");
+    placeholder.hidden = false;
+  };
+
+  const tryNext = () => {
+    if (i >= candidates.length) {
+      showPlaceholder();
+      return;
+    }
+    img.src = candidates[i++];
+  };
+
+  img.onload = () => {
+    img.hidden = false;
+    placeholder.hidden = true;
+  };
+  img.onerror = tryNext;
+
+  if (!candidates.length) {
+    showPlaceholder();
+    return;
+  }
+  tryNext();
+}
+
+function renderNextRace(nextRace, raceStartTime) {
+  const trackEl = $("#homeNextRaceTrack");
+  const dateEl = $("#homeNextRaceDate");
+  const timeEl = $("#homeNextRaceTime");
+
+  if (!nextRace) {
+    if (trackEl) trackEl.textContent = "TBD";
+    if (dateEl) dateEl.textContent = "Date TBD";
+    if (timeEl) timeEl.textContent = "";
+    renderNextRaceImage("");
+    return;
+  }
+
+  if (trackEl) trackEl.innerHTML = formatTrackHtml(nextRace.track);
+  const { date, time } = splitDateTime(nextRace.date);
+  if (dateEl) dateEl.textContent = date;
+  if (timeEl) timeEl.textContent = raceStartTime || time || "";
+  renderNextRaceImage(nextRace.track);
+}
+
+function renderLastWinner(lastRace, leaderFallback) {
+  const nameEl = $("#homeLastWinnerName");
+  const trackEl = $("#homeLastWinnerTrack");
+  const dateEl = $("#homeLastWinnerDate");
+  const imgEl = $("#homeLastWinnerImg");
+  if (!nameEl || !trackEl || !dateEl || !imgEl) return;
+
+  if (lastRace?.winner) {
+    const { date } = splitDateTime(lastRace.date);
+    nameEl.textContent = lastRace.winner;
+    trackEl.textContent = lastRace.track || "Track TBD";
+    dateEl.textContent = date;
+    imgEl.src = driverImage(lastRace.winner);
+  } else if (leaderFallback) {
+    nameEl.textContent = leaderFallback.driver;
+    trackEl.textContent = "Track TBD";
+    dateEl.textContent = "Date TBD";
+    imgEl.src = leaderFallback.photoUrl || driverImage(leaderFallback.driver);
+  } else {
+    nameEl.textContent = "—";
+    trackEl.textContent = "Track TBD";
+    dateEl.textContent = "Date TBD";
+    imgEl.src = "/assets/drivers/placeholder.png";
+  }
+
+  imgEl.onerror = function () {
+    this.onerror = null;
+    this.src = "/assets/drivers/placeholder.png";
+  };
+}
+
+function renderStandingsTop10(rows) {
+  const body = $("#homeStandingsBody");
+  if (!body) return;
+
+  const top = rows.slice(0, 10);
+  if (!top.length) {
+    body.innerHTML = `<tr><td colspan="4">Standings loading...</td></tr>`;
+    return;
+  }
+
+  body.innerHTML = top
+    .map((r) => {
+      const num = r.carNumber ? `<span class="num">${r.carNumber}</span>` : "";
+      return `<tr>
+        <td class="pos">${r.place}</td>
+        <td><span class="driver-cell">${num}${r.driver}</span></td>
+        <td class="points">${r.points}</td>
+        <td>${r.wins ?? 0}</td>
+      </tr>`;
+    })
+    .join("");
+}
+
+function renderPointsLeader(leader) {
+  const nameEl = $("#homePointsLeaderName");
+  const ptsEl = $("#homePointsLeaderPts");
+  const imgEl = $("#homePointsLeaderImg");
+  if (!leader || !nameEl || !ptsEl || !imgEl) return;
+
+  nameEl.textContent = leader.driver;
+  ptsEl.textContent = `${leader.points} PTS`;
+  imgEl.src = leader.photoUrl || driverImage(leader.driver);
+  imgEl.onerror = function () {
+    this.onerror = null;
+    this.src = "/assets/drivers/placeholder.png";
+  };
+
+  const spotlightImg = $("#homeSpotlightImg");
+  const spotlightCopy = $("#homeSpotlightCopy");
+  if (spotlightImg) {
+    spotlightImg.src = leader.photoUrl || driverImage(leader.driver);
+    spotlightImg.onerror = function () {
+      this.onerror = null;
+      this.src = "/assets/drivers/placeholder.png";
+    };
+  }
+  if (spotlightCopy) {
+    spotlightCopy.textContent = `${leader.driver} leads the BP Truck Series with ${leader.points} points. Full driver spotlight stories coming soon.`;
+    spotlightCopy.classList.remove("home-placeholder");
+  }
+}
+
+function renderQuickStats(rows) {
+  const driversEl = $("#homeStatDrivers");
+  const racesEl = $("#homeStatRaces");
+  const playoffEl = $("#homeStatPlayoff");
+  if (!driversEl) return;
+
+  const maxRaces = rows.length
+    ? Math.max(...rows.map((x) => Number(x.races || 0)))
+    : 0;
+
+  driversEl.textContent = String(rows.length);
+  if (racesEl) racesEl.textContent = String(maxRaces);
+  if (playoffEl) playoffEl.textContent = "16";
+}
+
+async function loadHome() {
+  let leader = null;
+  let rows = [];
+
+  try {
+    const standingsRes = await fetch("/api/standings");
+    const standingsData = await standingsRes.json();
+    const apiRows = standingsData.rows || [];
+
+    if (standingsData.settings?.seasonName) {
+      const seasonEl = $("#seasonLabel");
+      if (seasonEl) seasonEl.textContent = standingsData.settings.seasonName.toUpperCase();
+    }
+
+    rows = apiRows.map((r, index) => ({
+      place: r.position,
+      driver: r.driver,
+      carNumber: r.carNumber || "",
+      photoUrl: r.photoUrl,
+      points: r.points,
+      races: r.races,
+      wins: r.wins,
+    }));
+
+    leader = rows[0] || null;
+    renderStandingsTop10(rows);
+    renderPointsLeader(leader);
+    renderQuickStats(rows);
+  } catch (e) {
+    console.warn("Home standings load failed:", e);
+  }
+
+  try {
+    const scheduleRes = await fetch("/api/schedule");
+    const scheduleData = await scheduleRes.json();
+    const races = scheduleData.races || [];
+    const completed = races.filter((r) => r.winner);
+    const lastRace = completed[completed.length - 1] || null;
+
+    renderNextRace(scheduleData.next || null, scheduleData.settings?.raceStartTime || "");
+    renderLastWinner(lastRace, leader);
+  } catch (e) {
+    console.warn("Home schedule load failed:", e);
+    renderNextRace(null, "");
+    renderLastWinner(null, leader);
+  }
+}
+
+renderHomeSponsors();
+loadHome();

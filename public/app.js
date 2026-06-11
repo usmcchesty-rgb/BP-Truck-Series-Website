@@ -1,6 +1,7 @@
 const PLAYOFF_CUT = 16;
 const $ = (s) => document.querySelector(s);
 let standings = [];
+let standingsTableView = "top16";
 
 // Secondary lookups used only if the slug-based image fails to load.
 const TRACK_IMAGE_ALIASES = {
@@ -315,18 +316,57 @@ function renderSidebar() {
   $("#raceCount").textContent = `${maxRaces} / 20`;
   $("#winnerCount").textContent = String(countDifferentWinners(standings));
   $("#avgCautions").textContent = "0.00";
-  $("#fieldCountTab").textContent = String(standings.length);
-  $("#fieldCountFull").textContent = String(standings.length);
+  const count = standings.length;
+  const fullStandingsTab = $("#fullStandingsTab");
+  if (fullStandingsTab) fullStandingsTab.textContent = `FULL STANDINGS (1–${count})`;
   loadScheduleSidebar();
+}
+
+function getStandingsTableRows() {
+  if (standingsTableView === "top16") {
+    return standings.slice(0, PLAYOFF_CUT);
+  }
+
+  const q = $("#search")?.value?.toLowerCase() || "";
+  if (!q) return standings;
+  return standings.filter((r) => r.driver.toLowerCase().includes(q));
+}
+
+function renderStandingsTable() {
+  const searchInput = $("#search");
+  if (searchInput) searchInput.hidden = standingsTableView === "top16";
+  renderTable("#overviewBody", getStandingsTableRows(), true);
+}
+
+function setStandingsTableView(view) {
+  standingsTableView = view;
+
+  document.querySelectorAll(".standings-table-tabs [data-table-view]").forEach((btn) => {
+    const isActive = btn.dataset.tableView === view;
+    btn.classList.toggle("active", isActive);
+    btn.setAttribute("aria-selected", isActive ? "true" : "false");
+  });
+
+  if (view === "top16" && $("#search")) $("#search").value = "";
+  renderStandingsTable();
+}
+
+function initStandingsTableTabs() {
+  if (!$("#overviewBody")) return;
+
+  document.querySelectorAll(".standings-table-tabs [data-table-view]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      setStandingsTableView(btn.dataset.tableView);
+    });
+  });
 }
 
 function render() {
   $("#overviewHead").innerHTML = head();
-  $("#fullHead").innerHTML = head();
 
   renderPodium();
-  renderTable("#overviewBody", standings.slice(0, PLAYOFF_CUT));
-  renderTable("#fullBody", standings);
+  renderStandingsTable();
   renderSidebar();
 }
 
@@ -378,31 +418,20 @@ async function load(force = false) {
   }
 }
 
-document.querySelectorAll("nav button").forEach((b) =>
-  b.addEventListener("click", () => {
-    document
-      .querySelectorAll("nav button,.tab")
-      .forEach((x) => x.classList.remove("active"));
+const refreshBtn = $("#refreshBtn");
+if (refreshBtn) refreshBtn.addEventListener("click", () => load(true));
 
-    b.classList.add("active");
-    const tab = $("#" + b.dataset.tab);
-    if (tab) tab.classList.add("active");
-  })
-);
+const searchInput = $("#search");
+if (searchInput) {
+  searchInput.addEventListener("input", () => {
+    if (standingsTableView === "full") renderStandingsTable();
+  });
+}
 
-$("#refreshBtn").addEventListener("click", () => load(true));
-
-$("#search").addEventListener("input", (e) => {
-  const q = e.target.value.toLowerCase();
-
-  renderTable(
-    "#fullBody",
-    standings.filter((r) => r.driver.toLowerCase().includes(q)),
-    true
-  );
-});
-
-ensureSidebarMarkup();
-renderSponsorCards();
-load();
-setInterval(() => load(), 60000);
+if ($("#overviewBody")) {
+  initStandingsTableTabs();
+  ensureSidebarMarkup();
+  renderSponsorCards();
+  load();
+  setInterval(() => load(), 60000);
+}

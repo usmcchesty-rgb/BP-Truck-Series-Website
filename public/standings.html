@@ -8,51 +8,19 @@
   </head>
   <body>
     <div class="page-bg"></div>
-    <header class="topbar">
-      <div class="brand">
-        <div class="bp">BP</div>
-        <div>
-          <b>BLAZING <span>PEDALS</span></b>
-          <small>SIM RACING LEAGUE</small>
-        </div>
-      </div>
-      <div class="title">
-        <h1>TRUCK SERIES STANDINGS</h1>
-        <p id="seasonLabel">SEASON 11</p>
-      </div>
-      <nav>
-        <button class="active" data-tab="overview">Overview</button>
-        <button data-tab="full">Full Standings</button>
-        <button
-          data-tab="schedule"
-          type="button"
-          onclick="location.href = '/schedule.html'"
-        >
-          Schedule
-        </button>
-        <button data-tab="drivers">Drivers</button>
-        <button data-tab="stats">Stats</button>
-        <button data-tab="about">About</button>
-      </nav>
-      <div class="refresh">
-        <div>LAST UPDATED</div>
-        <strong id="lastUpdated">Loading...</strong>
-        <button id="refreshBtn" type="button" aria-label="Refresh">↻</button>
-      </div>
-    </header>
+    <header class="topbar"></header>
 
     <main>
-      <section id="overview" class="tab active">
+      <section id="overview">
         <div class="overview-layout">
           <div class="main-col">
             <section id="podium" class="podium"></section>
             <section class="panel wide">
-              <div class="tabs-mini">
-                <span class="active">TOP 16</span>
-                <span id="fullStandingsTab" role="button" tabindex="0"
-                  >FULL STANDINGS (1–<span id="fieldCountTab">43</span>)</span
-                >
+              <div class="standings-table-tabs" role="tablist" aria-label="Standings table view">
+                <button type="button" class="active" data-table-view="top16" role="tab" aria-selected="true">TOP 16</button>
+                <button type="button" id="fullStandingsTab" data-table-view="full" role="tab" aria-selected="false">FULL STANDINGS (1–43)</button>
               </div>
+              <input id="search" type="search" placeholder="Search driver..." hidden />
               <div class="table-wrap">
                 <table>
                   <thead id="overviewHead"></thead>
@@ -132,22 +100,19 @@
           </aside>
         </div>
       </section>
-
-      <section id="full" class="tab">
-        <section class="panel full-panel">
-          <h2>FULL STANDINGS 1–<span id="fieldCountFull">43</span></h2>
-          <input id="search" placeholder="Search driver..." />
-          <div class="table-wrap">
-            <table>
-              <thead id="fullHead"></thead>
-              <tbody id="fullBody"></tbody>
-            </table>
-          </div>
-        </section>
-      </section>
     </main>
 
     <footer>FAST DRIVERS. CLOSE RACING. <span>BIG FUN.</span></footer>
+    <script src="public-nav.js"></script>
+    <script>
+      BPPublicNav.init({
+        active: "standings",
+        title: "TRUCK SERIES STANDINGS",
+        subtitle: "SEASON 11",
+        subtitleId: "seasonLabel",
+        right: "refresh",
+      });
+    </script>
     <script src="app.js"></script>
   </body>
 </html>

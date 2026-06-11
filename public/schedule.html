@@ -9,31 +9,7 @@
   </head>
   <body>
     <div class="page-bg"></div>
-    <header class="topbar">
-      <div class="brand">
-        <div class="bp">BP</div>
-        <div>
-          <b>BLAZING <span>PEDALS</span></b>
-          <small>SIM RACING LEAGUE</small>
-        </div>
-      </div>
-      <div class="title">
-        <h1>TRUCK SERIES SCHEDULE</h1>
-        <p id="seasonLabel">SEASON 11</p>
-      </div>
-      <nav>
-        <a href="/">Home</a>
-        <a href="/standings.html">Standings</a>
-        <a class="active" href="/schedule.html">Schedule</a>
-        <a href="/drivers.html">Drivers</a>
-        <a href="/admin">Admin</a>
-      </nav>
-      <div class="refresh">
-        <div>LAST UPDATED</div>
-        <strong id="lastUpdated">Loading...</strong>
-        <button id="refreshBtn" type="button" aria-label="Refresh">↻</button>
-      </div>
-    </header>
+    <header class="topbar"></header>
 
     <main>
       <section class="tab active">
@@ -124,7 +100,20 @@
         </div>
       </section>
     </main>
-   
+
+    <footer>FAST DRIVERS. CLOSE RACING. <span>BIG FUN.</span></footer>
+
+    <script src="public-nav.js"></script>
+    <script>
+      BPPublicNav.init({
+        active: "schedule",
+        title: "TRUCK SERIES SCHEDULE",
+        subtitle: "SEASON 11",
+        subtitleId: "seasonLabel",
+        right: "refresh",
+      });
+    </script>
+
   <script>
 
     (function () {
