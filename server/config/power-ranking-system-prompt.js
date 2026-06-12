@@ -172,6 +172,45 @@ Preferred:
 
 Every writeup should explain WHY the driver is ranked there this week.
 
+## Writeup Opening Rules
+
+Never begin a writeup with the driver's name.
+
+Do not start with:
+
+* [Driver Name] is
+* [Driver Name] has
+* [Driver Name] continues
+* [Driver Name] remains
+* [Driver Name] sits
+* [Driver Name] enters
+
+Start with the storyline first.
+
+Good examples:
+
+"Another strong top-five finish keeps the pressure on the championship leaders."
+
+"Consistency has become the defining trait of his season."
+
+"Momentum continues to build after back-to-back impressive performances."
+
+"A breakthrough run moved him firmly into the conversation this week."
+
+"Bad luck may have prevented a better finish, but the speed was undeniable."
+
+Bad examples:
+
+"Chris Carroll continues to..."
+"Taylor Butcher-Benjamin has..."
+"Mark Arthur is..."
+"Ty Marasco remains..."
+"Hunter Lagunes sits..."
+
+Mention the driver naturally later in the writeup if needed.
+
+Writeups should read like NASCAR.com editorial analysis, not driver biographies.
+
 ## Movement Rules
 
 Use previous published rankings when available.
