@@ -61,6 +61,37 @@
       align-items: start;
       margin-bottom: 10px;
     }
+    .generate-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 12px;
+      margin: 14px 0 4px;
+    }
+    .generate-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--gold);
+      font-size: 12px;
+      font-weight: 900;
+    }
+    .generate-status[hidden] { display: none !important; }
+    .generate-spinner {
+      width: 14px;
+      height: 14px;
+      border: 2px solid #444;
+      border-top-color: var(--gold);
+      border-radius: 50%;
+      animation: pr-generate-spin .8s linear infinite;
+    }
+    @keyframes pr-generate-spin {
+      to { transform: rotate(360deg); }
+    }
+    .btn:disabled {
+      opacity: .55;
+      cursor: not-allowed;
+    }
     @media (max-width: 900px) {
       .ranking-row, .ranking-row-head { grid-template-columns: 1fr; }
       .ranking-row-head { display: none; }
@@ -110,6 +141,15 @@
           <input id="publishedDate" class="input" type="date">
         </div>
       </div>
+
+      <div class="generate-row">
+        <button id="generateDraftBtn" class="btn btn-secondary" type="button" onclick="generateAiDraft()">Generate AI Draft</button>
+        <span id="generateDraftStatus" class="generate-status" hidden>
+          <span class="generate-spinner" aria-hidden="true"></span>
+          Generating draft...
+        </span>
+      </div>
+      <p class="sub">Select a race number, generate a draft, review every field, then save or publish manually.</p>
 
       <div class="ranking-row ranking-row-head">
         <div>Rank</div>
@@ -451,6 +491,63 @@
       if (!res.ok) throw new Error(data.error || 'Failed to load saved weeks.');
       savedWeeks = data.weeks || [];
       renderWeekList();
+    }
+
+    function setGenerating(isGenerating) {
+      const btn = $('#generateDraftBtn');
+      const status = $('#generateDraftStatus');
+      if (btn) btn.disabled = isGenerating;
+      if (status) status.hidden = !isGenerating;
+    }
+
+    async function generateAiDraft() {
+      const pw = getSessionPw();
+      if (!pw) {
+        setMsg('Session expired: log in again.', true);
+        logout();
+        return;
+      }
+
+      const raceNumber = readRaceNumberInput();
+      if (!raceNumber) {
+        setMsg('Enter a valid race number before generating a draft.', true);
+        return;
+      }
+
+      setGenerating(true);
+      setMsg('Gathering standings, results, and previous rankings...');
+
+      try {
+        const res = await fetch('/api/power-rankings-generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            password: pw,
+            raceNumber,
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'AI draft generation failed.');
+
+        loadWeekIntoForm({
+          id: currentWeekId,
+          raceNumber: data.raceNumber || raceNumber,
+          publishedDate: $('#publishedDate').value || new Date().toISOString().slice(0, 10),
+          label: `Race ${data.raceNumber || raceNumber} Rankings`,
+          entries: data.entries || [],
+          honorableMentions: data.honorableMentions || [],
+        });
+
+        const previousNote = data.previousRaceNumber
+          ? ` Movement compared to Race ${data.previousRaceNumber} rankings.`
+          : ' No previous rankings found — movement defaults applied.';
+        setMsg(`AI draft loaded.${previousNote} Review and edit before saving or publishing.`);
+      } catch (e) {
+        setMsg(e.message, true);
+      } finally {
+        setGenerating(false);
+      }
     }
 
     async function saveWeek(publish) {
