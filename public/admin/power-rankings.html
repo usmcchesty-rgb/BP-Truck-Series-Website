@@ -557,7 +557,11 @@
         const existingNote = weekId
           ? ' Updated existing Race week in the form — save to overwrite the draft.'
           : ' Review and edit before saving or publishing.';
-        setMsg(`AI draft loaded.${transcriptNote}${previousNote}${existingNote}`);
+        const warningNote =
+          Array.isArray(data.warnings) && data.warnings.length
+            ? ` Warnings: ${data.warnings.join(' ')}`
+            : '';
+        setMsg(`AI draft loaded.${transcriptNote}${previousNote}${existingNote}${warningNote}`);
       } catch (e) {
         setMsg(e.message, true);
       } finally {

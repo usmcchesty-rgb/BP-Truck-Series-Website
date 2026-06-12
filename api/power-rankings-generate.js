@@ -475,36 +475,48 @@ function getFirstSentence(text) {
 
 function validateWriteup(writeup, driver) {
   const text = String(writeup || '').trim();
+  const warnings = [];
+
   if (!text) {
-    return 'Writeup is required.';
+    return { error: 'Writeup is required.', warnings };
+  }
+
+  const words = countWords(text);
+  if (words < 20) {
+    return {
+      error: `Writeup is too short (${words} words; minimum 20).`,
+      warnings,
+    };
+  }
+
+  if (words < 35 || words > 75) {
+    warnings.push(`Outside preferred length (35–75 words, got ${words}).`);
   }
 
   const sentences = countSentences(text);
   if (sentences < 2 || sentences > 4) {
-    return 'Writeup must be 2–4 sentences.';
-  }
-
-  const words = countWords(text);
-  if (words < 30) {
-    return 'Writeup is too short (target 35–75 words).';
-  }
-  if (words > 90) {
-    return 'Writeup is too long (target 35–75 words).';
+    warnings.push(`Outside preferred sentence count (2–4 sentences, got ${sentences}).`);
   }
 
   const firstSentence = getFirstSentence(text);
   const firstLower = firstSentence.toLowerCase();
 
   if (/^driver\s+\w+\s+(is|continues|has|remains)\b/i.test(firstSentence)) {
-    return 'Writeup cannot start with "Driver X is/continues/has/remains".';
+    return {
+      error: 'Writeup cannot start with "Driver X is/continues/has/remains".',
+      warnings,
+    };
   }
 
   for (const token of getDriverNameTokens(driver?.driverName)) {
     if (new RegExp(`^${token}\\b`, 'i').test(firstLower.replace(/[^a-z0-9\s']/g, ' '))) {
-      return 'Writeup should not start with the driver\'s name.';
+      return { error: 'Writeup should not start with the driver\'s name.', warnings };
     }
     if (new RegExp(`\\b${token}\\s+(is|continues|has|remains)\\b`, 'i').test(firstSentence)) {
-      return 'Writeup cannot open with "[Name] is/continues/has/remains".';
+      return {
+        error: 'Writeup cannot open with "[Name] is/continues/has/remains".',
+        warnings,
+      };
     }
   }
 
@@ -516,10 +528,10 @@ function validateWriteup(writeup, driver) {
     /^has been consistent\b/i,
   ];
   if (genericPatterns.some((pattern) => pattern.test(firstLower))) {
-    return 'Writeup opening is too generic.';
+    warnings.push('Writeup opening is generic.');
   }
 
-  return null;
+  return { error: null, warnings };
 }
 
 function normalizeDraft(aiDraft, driverLookup, previousRankings) {
@@ -538,6 +550,7 @@ function normalizeDraft(aiDraft, driverLookup, previousRankings) {
   const usedDrivers = new Set();
   const usedSubtitles = new Set();
   const normalizedEntries = [];
+  const warnings = [];
 
   for (let expectedRank = 1; expectedRank <= 10; expectedRank += 1) {
     const raw =
@@ -576,9 +589,12 @@ function normalizeDraft(aiDraft, driverLookup, previousRankings) {
   for (const entry of normalizedEntries) {
     const driver = driverLookup.get(entry.driverId);
 
-    const writeupError = validateWriteup(entry.writeup, driver);
-    if (writeupError) {
-      throw new Error(`AI draft rank ${entry.rank} writeup rejected: ${writeupError}`);
+    const writeupResult = validateWriteup(entry.writeup, driver);
+    if (writeupResult.error) {
+      throw new Error(`AI draft rank ${entry.rank} writeup rejected: ${writeupResult.error}`);
+    }
+    for (const warning of writeupResult.warnings) {
+      warnings.push(`Rank ${entry.rank}: ${warning}`);
     }
 
     const subtitleError = validateSubtitle(entry.subtitle, driver, usedSubtitles);
@@ -609,6 +625,7 @@ function normalizeDraft(aiDraft, driverLookup, previousRankings) {
   return {
     entries: normalizedEntries,
     honorableMentions,
+    warnings,
   };
 }
 

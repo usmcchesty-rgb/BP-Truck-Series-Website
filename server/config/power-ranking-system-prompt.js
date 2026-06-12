@@ -151,6 +151,7 @@ Length:
 
 * 2–4 sentences.
 * 35–75 words preferred.
+* 25–90 words acceptable.
 
 Avoid:
 
