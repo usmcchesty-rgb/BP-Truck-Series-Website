@@ -553,7 +553,7 @@
           : ' No previous rankings found — movement defaults applied.';
         const transcriptNote = data.transcriptUsed
           ? ` Green Flag TV transcript used${data.transcriptVideoTitle ? `: ${data.transcriptVideoTitle}` : ''}.`
-          : ' No transcript available — draft used standings/results only.';
+          : ` No transcript available — draft used standings/results only.${data.transcriptDebugReason ? ` Debug: ${data.transcriptDebugReason}.` : ''}`;
         const existingNote = weekId
           ? ' Updated existing Race week in the form — save to overwrite the draft.'
           : ' Review and edit before saving or publishing.';

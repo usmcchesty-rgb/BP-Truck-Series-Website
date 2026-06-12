@@ -210,41 +210,161 @@ async function loadExistingWeekForRace(raceNumber) {
 }
 
 async function loadBroadcastContext(raceNumber, drivers) {
+  const requestedRaceNumber = Number(raceNumber);
+  const logTag = '[power-rankings-transcript]';
   const videos = await fetchGreenFlagPlaylistVideos();
-  const selection = selectBroadcastVideoForRankings(videos, raceNumber);
-  const video = selection.video;
+  const playlistVideos = videos.map((video) => ({
+    videoId: video.videoId,
+    title: video.title || null,
+    parsedRaceNumber: video.raceNumber ?? null,
+    published: video.published || null,
+  }));
 
-  const selectionDebug = {
-    requestedRaceNumber: selection.requestedRaceNumber,
-    selectedVideoRaceNumber: selection.selectedVideoRaceNumber,
-    selectedVideoTitle: selection.selectedVideoTitle,
-    selectionMethod: selection.selectionMethod,
-    nonPointsAdjustmentApplied: selection.nonPointsAdjustmentApplied,
-  };
+  console.log(logTag, 'transcript retrieval started', {
+    requestedRaceNumber,
+    playlistVideoCount: playlistVideos.length,
+    playlistVideos,
+  });
 
-  if (!video?.videoId) {
+  if (!videos.length) {
+    const diagnostics = {
+      requestedRaceNumber,
+      playlistVideoCount: 0,
+      playlistVideos: [],
+      selectedVideoTitle: null,
+      selectedVideoRaceNumber: null,
+      selectionMethod: 'not-found',
+      videoId: null,
+      transcriptFetchAttempted: false,
+      transcriptFetchFailureReason: null,
+      transcriptLength: 0,
+      transcriptUsed: false,
+      transcriptDebugReason: 'playlist-empty',
+    };
+    console.warn(logTag, 'transcript retrieval failed', diagnostics);
     return {
-      ...selectionDebug,
+      requestedRaceNumber,
+      selectedVideoRaceNumber: null,
+      selectedVideoTitle: null,
+      selectionMethod: 'not-found',
+      nonPointsAdjustmentApplied: false,
       transcriptUsed: false,
       transcriptVideoTitle: null,
       transcriptLength: 0,
+      transcriptDebugReason: 'playlist-empty',
       broadcastContext: null,
     };
   }
 
-  let transcript = null;
-  try {
-    transcript = await fetchYouTubeTranscript(video.videoId);
-  } catch (error) {
-    console.warn('[power-rankings-generate] transcript fetch failed:', error?.message || error);
+  const selection = selectBroadcastVideoForRankings(videos, raceNumber);
+  const video = selection.video;
+
+  console.log(logTag, 'video selection', {
+    requestedRaceNumber,
+    selectedVideoTitle: selection.selectedVideoTitle,
+    selectedVideoRaceNumber: selection.selectedVideoRaceNumber,
+    selectionMethod: selection.selectionMethod,
+    videoId: video?.videoId || null,
+  });
+
+  if (!video?.videoId) {
+    const hasParsedRaceNumbers = videos.some((item) => item.raceNumber != null);
+    const transcriptDebugReason = hasParsedRaceNumbers ? 'race-not-found' : 'title-parse-failed';
+    const diagnostics = {
+      requestedRaceNumber,
+      playlistVideoCount: playlistVideos.length,
+      parsedRaceNumbers: playlistVideos.map((item) => item.parsedRaceNumber),
+      selectedVideoTitle: null,
+      selectedVideoRaceNumber: null,
+      selectionMethod: selection.selectionMethod,
+      videoId: null,
+      transcriptFetchAttempted: false,
+      transcriptFetchFailureReason: null,
+      transcriptLength: 0,
+      transcriptUsed: false,
+      transcriptDebugReason,
+    };
+    console.warn(logTag, 'transcript retrieval failed', diagnostics);
+
+    return {
+      requestedRaceNumber: selection.requestedRaceNumber,
+      selectedVideoRaceNumber: selection.selectedVideoRaceNumber,
+      selectedVideoTitle: selection.selectedVideoTitle,
+      selectionMethod: selection.selectionMethod,
+      nonPointsAdjustmentApplied: selection.nonPointsAdjustmentApplied,
+      transcriptUsed: false,
+      transcriptVideoTitle: null,
+      transcriptLength: 0,
+      transcriptDebugReason,
+      broadcastContext: null,
+    };
   }
 
-  if (!transcript) {
+  console.log(logTag, 'transcript fetch attempt', {
+    requestedRaceNumber,
+    videoId: video.videoId,
+    selectedVideoTitle: selection.selectedVideoTitle,
+  });
+
+  let fetchResult;
+  try {
+    fetchResult = await fetchYouTubeTranscript(video.videoId);
+  } catch (error) {
+    fetchResult = {
+      transcript: null,
+      transcriptLength: 0,
+      fetchAttempted: true,
+      failureReason: `unexpected-error: ${error?.message || error}`,
+      debugReason: 'transcript-fetch-failed',
+      captionTrackCount: 0,
+      hasEnglishTrack: false,
+      selectedLanguageCode: null,
+    };
+    console.warn(logTag, 'transcript fetch threw', {
+      requestedRaceNumber,
+      videoId: video.videoId,
+      error: error?.message || String(error),
+    });
+  }
+
+  console.log(logTag, 'transcript fetch result', {
+    requestedRaceNumber,
+    videoId: video.videoId,
+    fetchAttempted: fetchResult.fetchAttempted,
+    fetchSuccess: Boolean(fetchResult.transcript),
+    failureReason: fetchResult.failureReason,
+    debugReason: fetchResult.debugReason,
+    captionTrackCount: fetchResult.captionTrackCount,
+    hasEnglishTrack: fetchResult.hasEnglishTrack,
+    selectedLanguageCode: fetchResult.selectedLanguageCode,
+    transcriptLength: fetchResult.transcriptLength,
+  });
+
+  if (!fetchResult.transcript) {
+    const diagnostics = {
+      requestedRaceNumber,
+      selectedVideoTitle: selection.selectedVideoTitle,
+      selectedVideoRaceNumber: selection.selectedVideoRaceNumber,
+      selectionMethod: selection.selectionMethod,
+      videoId: video.videoId,
+      transcriptFetchAttempted: fetchResult.fetchAttempted,
+      transcriptFetchFailureReason: fetchResult.failureReason,
+      transcriptLength: fetchResult.transcriptLength,
+      transcriptUsed: false,
+      transcriptDebugReason: fetchResult.debugReason || 'transcript-fetch-failed',
+    };
+    console.warn(logTag, 'transcript retrieval failed', diagnostics);
+
     return {
-      ...selectionDebug,
+      requestedRaceNumber: selection.requestedRaceNumber,
+      selectedVideoRaceNumber: selection.selectedVideoRaceNumber,
+      selectedVideoTitle: selection.selectedVideoTitle,
+      selectionMethod: selection.selectionMethod,
+      nonPointsAdjustmentApplied: selection.nonPointsAdjustmentApplied,
       transcriptUsed: false,
       transcriptVideoTitle: selection.selectedVideoTitle,
-      transcriptLength: 0,
+      transcriptLength: fetchResult.transcriptLength,
+      transcriptDebugReason: fetchResult.debugReason || 'transcript-fetch-failed',
       broadcastContext: {
         videoId: video.videoId,
         videoTitle: video.title || null,
@@ -255,13 +375,46 @@ async function loadBroadcastContext(raceNumber, drivers) {
     };
   }
 
-  const trimmed = summarizeTranscriptForRankings(transcript, drivers);
+  const trimmed = summarizeTranscriptForRankings(fetchResult.transcript, drivers);
+  const transcriptUsed = Boolean(trimmed.summary);
+  let transcriptDebugReason = null;
+
+  if (!transcriptUsed && fetchResult.transcriptLength < 100) {
+    transcriptDebugReason = 'transcript-too-short';
+  }
+
+  const diagnostics = {
+    requestedRaceNumber,
+    selectedVideoTitle: selection.selectedVideoTitle,
+    selectedVideoRaceNumber: selection.selectedVideoRaceNumber,
+    selectionMethod: selection.selectionMethod,
+    videoId: video.videoId,
+    transcriptFetchAttempted: fetchResult.fetchAttempted,
+    transcriptFetchFailureReason: fetchResult.failureReason,
+    transcriptLength: trimmed.fullLength,
+    summaryLength: trimmed.summary?.length || 0,
+    highlightCount: trimmed.highlightCount,
+    transcriptUsed,
+    transcriptDebugReason,
+    summaryEmptyDespiteRawTranscript: !transcriptUsed && fetchResult.transcriptLength >= 100,
+  };
+
+  if (transcriptUsed) {
+    console.log(logTag, 'transcript retrieval succeeded', diagnostics);
+  } else {
+    console.warn(logTag, 'transcript retrieval incomplete', diagnostics);
+  }
 
   return {
-    ...selectionDebug,
-    transcriptUsed: Boolean(trimmed.summary),
+    requestedRaceNumber: selection.requestedRaceNumber,
+    selectedVideoRaceNumber: selection.selectedVideoRaceNumber,
+    selectedVideoTitle: selection.selectedVideoTitle,
+    selectionMethod: selection.selectionMethod,
+    nonPointsAdjustmentApplied: selection.nonPointsAdjustmentApplied,
+    transcriptUsed,
     transcriptVideoTitle: selection.selectedVideoTitle,
     transcriptLength: trimmed.fullLength,
+    transcriptDebugReason,
     broadcastContext: {
       videoId: video.videoId,
       videoTitle: video.title || null,
@@ -708,6 +861,7 @@ export default async function handler(req, res) {
       existingPublishedDate: existingWeek?.published_date || null,
       existingPublished: existingWeek?.published === true,
       transcriptUsed: transcriptMeta.transcriptUsed,
+      transcriptDebugReason: transcriptMeta.transcriptDebugReason || null,
       transcriptVideoTitle: transcriptMeta.transcriptVideoTitle,
       transcriptLength: transcriptMeta.transcriptLength,
       requestedRaceNumber: transcriptMeta.requestedRaceNumber,

@@ -197,31 +197,110 @@ export function selectBroadcastVideoForRankings(videos, requestedRaceNumber) {
 }
 
 export async function fetchYouTubeTranscript(videoId) {
-  if (!videoId) return null;
+  const result = {
+    transcript: null,
+    transcriptLength: 0,
+    fetchAttempted: false,
+    failureReason: null,
+    debugReason: 'transcript-fetch-failed',
+    captionTrackCount: 0,
+    hasEnglishTrack: false,
+    selectedLanguageCode: null,
+  };
 
-  const watchRes = await fetch(`https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`, {
-    headers: FETCH_HEADERS,
-  });
+  if (!videoId) {
+    result.failureReason = 'missing-video-id';
+    result.debugReason = 'transcript-fetch-failed';
+    return result;
+  }
 
-  if (!watchRes.ok) return null;
+  result.fetchAttempted = true;
+
+  let watchRes;
+  try {
+    watchRes = await fetch(`https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`, {
+      headers: FETCH_HEADERS,
+    });
+  } catch (error) {
+    result.failureReason = `watch-page-error: ${error?.message || error}`;
+    result.debugReason = 'transcript-fetch-failed';
+    return result;
+  }
+
+  if (!watchRes.ok) {
+    result.failureReason = `watch-page-http-${watchRes.status}`;
+    result.debugReason = 'transcript-fetch-failed';
+    return result;
+  }
 
   const html = await watchRes.text();
   const captionTracks = extractCaptionTracks(html);
-  if (!captionTracks.length) return null;
+  result.captionTrackCount = captionTracks.length;
 
-  const track =
-    captionTracks.find((item) => String(item.languageCode || '').startsWith('en')) ||
-    captionTracks[0];
+  if (!captionTracks.length) {
+    result.failureReason = 'no-caption-tracks-in-watch-page';
+    result.debugReason = 'transcript-disabled';
+    return result;
+  }
 
-  const baseUrl = unescapeJsonUrl(track.baseUrl);
-  if (!baseUrl) return null;
+  const englishTrack = captionTracks.find((item) =>
+    String(item.languageCode || '').startsWith('en')
+  );
+  result.hasEnglishTrack = Boolean(englishTrack);
+
+  const track = englishTrack || captionTracks[0];
+  result.selectedLanguageCode = track?.languageCode || null;
+
+  const baseUrl = unescapeJsonUrl(track?.baseUrl);
+  if (!baseUrl) {
+    result.failureReason = englishTrack
+      ? 'english-caption-base-url-missing'
+      : 'caption-base-url-missing';
+    result.debugReason = englishTrack ? 'transcript-disabled' : 'transcript-language-not-found';
+    return result;
+  }
 
   const captionUrl = baseUrl.includes('fmt=') ? baseUrl : `${baseUrl}&fmt=json3`;
-  const captionRes = await fetch(captionUrl, { headers: FETCH_HEADERS });
-  if (!captionRes.ok) return null;
+
+  let captionRes;
+  try {
+    captionRes = await fetch(captionUrl, { headers: FETCH_HEADERS });
+  } catch (error) {
+    result.failureReason = `caption-download-error: ${error?.message || error}`;
+    result.debugReason = 'transcript-fetch-failed';
+    return result;
+  }
+
+  if (!captionRes.ok) {
+    result.failureReason = `caption-download-http-${captionRes.status}`;
+    result.debugReason = 'transcript-fetch-failed';
+    return result;
+  }
 
   const text = parseTimedText(await captionRes.text());
-  return text || null;
+  result.transcriptLength = text.length;
+
+  if (!text) {
+    result.failureReason = englishTrack
+      ? 'caption-text-empty'
+      : 'non-english-caption-text-empty';
+    result.debugReason = englishTrack ? 'transcript-too-short' : 'transcript-language-not-found';
+    return result;
+  }
+
+  if (text.length < 100) {
+    result.failureReason = `caption-text-too-short-${text.length}-chars`;
+    result.debugReason = 'transcript-too-short';
+    return result;
+  }
+
+  if (!englishTrack) {
+    result.failureReason = 'used-non-english-caption-track';
+  }
+
+  result.transcript = text;
+  result.debugReason = null;
+  return result;
 }
 
 const KEYWORD_PATTERNS = [
