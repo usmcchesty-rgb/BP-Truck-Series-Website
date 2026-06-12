@@ -1,4 +1,4 @@
-export const POWER_RANKING_PROMPT_VERSION = '1.0';
+export const POWER_RANKING_PROMPT_VERSION = '1.1';
 
 export const POWER_RANKING_SYSTEM_PROMPT = `# BP Truck Series Power Rankings System
 
