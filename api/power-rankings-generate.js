@@ -482,15 +482,21 @@ function validateWriteup(writeup, driver) {
   }
 
   const words = countWords(text);
-  if (words < 20) {
+  if (words < 45) {
     return {
-      error: `Writeup is too short (${words} words; minimum 20).`,
+      error: `Writeup is too short (${words} words; minimum 45).`,
       warnings,
     };
   }
 
-  if (words < 35 || words > 75) {
-    warnings.push(`Outside preferred length (35–75 words, got ${words}).`);
+  if (words < 60 || words > 80) {
+    warnings.push(`Outside preferred length (60–80 words, got ${words}).`);
+  }
+  if (words < 50 || words > 100) {
+    warnings.push(`Outside target length (50–100 words, got ${words}).`);
+  }
+  if (words > 120) {
+    warnings.push(`Exceeds maximum length (120 words, got ${words}).`);
   }
 
   const sentences = countSentences(text);

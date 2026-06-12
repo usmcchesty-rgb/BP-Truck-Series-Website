@@ -1,4 +1,4 @@
-export const POWER_RANKING_PROMPT_VERSION = '1.2';
+export const POWER_RANKING_PROMPT_VERSION = '1.3';
 
 export const POWER_RANKING_SYSTEM_PROMPT = `# BP Truck Series Power Rankings System
 
@@ -149,9 +149,21 @@ Do NOT write like:
 
 Length:
 
-* 2–4 sentences.
-* 35–75 words preferred.
-* 25–90 words acceptable.
+* Target: 50–100 words per ranking entry.
+* Preferred: 60–80 words.
+* Minimum: 45 words.
+* Maximum: 120 words.
+
+Each writeup should contain:
+
+1. Recent performance
+2. Current trend (rising, falling, steady)
+3. Championship/playoff implications when relevant
+4. Race-specific context from results or transcript when available
+
+Avoid generic filler.
+
+The writeup should feel like racing analysis, not a driver bio.
 
 Avoid:
 
