@@ -229,6 +229,40 @@ function renderQuickStats(rows) {
   if (playoffEl) playoffEl.textContent = "16";
 }
 
+const PLAYLIST_EMBED =
+  "https://www.youtube.com/embed/videoseries?list=PL4aFms0YBw6_uE-yoYgOFDtaNcN9ozPIO";
+
+function renderGreenFlagBroadcast(data) {
+  const titleEl = $("#homeBroadcastTitle");
+  const iframe = $("#homeBroadcastEmbed");
+  if (!titleEl || !iframe) return;
+
+  const featured = data?.featured;
+  const usePlaylistFallback = data?.fallback || !featured?.videoId;
+
+  if (usePlaylistFallback) {
+    titleEl.textContent = "Green Flag TV Broadcasts";
+    iframe.src = data?.embedUrl || PLAYLIST_EMBED;
+    iframe.title = "Green Flag TV race broadcasts";
+    return;
+  }
+
+  titleEl.textContent = featured.title || "Green Flag TV Broadcast";
+  iframe.src = featured.embedUrl || `https://www.youtube.com/embed/${featured.videoId}`;
+  iframe.title = featured.title || "Green Flag TV race broadcast";
+}
+
+async function loadGreenFlagBroadcast() {
+  try {
+    const res = await fetch("/api/youtube-broadcasts");
+    const data = await res.json();
+    renderGreenFlagBroadcast(data);
+  } catch (e) {
+    console.warn("Green Flag TV broadcast load failed:", e);
+    renderGreenFlagBroadcast({ fallback: true, embedUrl: PLAYLIST_EMBED });
+  }
+}
+
 async function loadHome() {
   let leader = null;
   let rows = [];
@@ -278,4 +312,5 @@ async function loadHome() {
 }
 
 renderHomeSponsors();
+loadGreenFlagBroadcast();
 loadHome();

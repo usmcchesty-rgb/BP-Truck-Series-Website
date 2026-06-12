@@ -658,6 +658,14 @@ footer{
   letter-spacing:.35px;
   line-height:1.45;
 }
+.home-broadcast-title{
+  margin:0 0 12px;
+  color:#fff;
+  font-size:14px;
+  font-style:italic;
+  font-weight:900;
+  line-height:1.35;
+}
 .home-social-placeholder{
   display:flex;
   flex-direction:column;
