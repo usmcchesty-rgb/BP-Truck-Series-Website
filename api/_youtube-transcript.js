@@ -8,7 +8,7 @@ const FETCH_HEADERS = {
 
 const GREEN_FLAG_PLAYLIST_ID = 'PL4aFms0YBw6_uE-yoYgOFDtaNcN9ozPIO';
 const GREEN_FLAG_RSS_URL = `https://www.youtube.com/feeds/videos.xml?playlist_id=${GREEN_FLAG_PLAYLIST_ID}`;
-export const TRANSCRIPT_FETCHER_VERSION = '2.1-innertube-discovery';
+export const TRANSCRIPT_FETCHER_VERSION = '2.2-login-required-bypass';
 
 function decodeHtml(text) {
   return String(text || '')
@@ -81,21 +81,123 @@ function extractInnertubeApiKey(html) {
   return match?.[1] || 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
 }
 
+function extractYtInitialPlayerResponse(html) {
+  return (
+    extractJsonAfterMarker(String(html || ''), 'ytInitialPlayerResponse = ') ||
+    extractJsonAfterMarker(String(html || ''), 'var ytInitialPlayerResponse = ')
+  );
+}
+
+function extractJsonAfterMarker(html, marker) {
+  const start = html.indexOf(marker);
+  if (start === -1) return null;
+
+  const jsonStart = start + marker.length;
+  const openChar = html[jsonStart];
+  if (openChar !== '{' && openChar !== '[') return null;
+
+  const closeChar = openChar === '{' ? '}' : ']';
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = jsonStart; i < html.length; i += 1) {
+    const char = html[i];
+
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (char === '\\') escaped = true;
+      else if (char === '"') inString = false;
+      continue;
+    }
+
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+
+    if (char === openChar) depth += 1;
+    if (char === closeChar) {
+      depth -= 1;
+      if (depth === 0) {
+        try {
+          return JSON.parse(html.slice(jsonStart, i + 1));
+        } catch {
+          return null;
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
+function buildInnertubeClientContext(client) {
+  const context = {
+    clientName: client.clientName,
+    clientVersion: client.clientVersion,
+    hl: client.hl || 'en',
+    gl: client.gl || 'US',
+  };
+
+  if (client.androidSdkVersion != null) context.androidSdkVersion = client.androidSdkVersion;
+  if (client.deviceMake) context.deviceMake = client.deviceMake;
+  if (client.deviceModel) context.deviceModel = client.deviceModel;
+  if (client.osName) context.osName = client.osName;
+  if (client.osVersion) context.osVersion = client.osVersion;
+  if (client.platform) context.platform = client.platform;
+  if (client.clientUserAgent) context.userAgent = client.clientUserAgent;
+  if (client.contentCheckOk === true) context.contentCheckOk = true;
+  if (client.racyCheckOk === true) context.racyCheckOk = true;
+
+  return context;
+}
+
 const INNERTUBE_CLIENTS = [
   {
     name: 'ANDROID',
-    clientName: 'ANDROID',
-    clientVersion: '20.10.38',
     clientNameHeader: '3',
     userAgent: 'com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip',
+    clientName: 'ANDROID',
+    clientVersion: '20.10.38',
+    androidSdkVersion: 30,
+    contentCheckOk: true,
+    racyCheckOk: true,
   },
   {
     name: 'IOS',
-    clientName: 'IOS',
-    clientVersion: '20.10.4',
     clientNameHeader: '5',
     userAgent:
       'com.google.ios.youtube/20.10.4 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)',
+    clientName: 'IOS',
+    clientVersion: '20.10.4',
+    deviceMake: 'Apple',
+    deviceModel: 'iPhone14,3',
+    osName: 'iPhone',
+    osVersion: '15_6',
+    clientUserAgent: 'com.google.ios.youtube/20.10.4',
+    contentCheckOk: true,
+    racyCheckOk: true,
+  },
+  {
+    name: 'TVHTML5',
+    clientNameHeader: '7',
+    userAgent:
+      'Mozilla/5.0 (ChromiumStylePlatform) Cobalt/Version/glass-future/24.260000000000000',
+    clientName: 'TVHTML5',
+    clientVersion: '7.20250327.00.00',
+    contentCheckOk: true,
+    racyCheckOk: true,
+  },
+  {
+    name: 'MWEB',
+    clientNameHeader: '2',
+    userAgent:
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+    clientName: 'MWEB',
+    clientVersion: '2.20250210.01.00',
+    contentCheckOk: true,
+    racyCheckOk: true,
   },
 ];
 
@@ -151,11 +253,42 @@ function buildCaptionDownloadUrl(baseUrl, fmt = 'json3') {
   return url.toString();
 }
 
+function applyPlayerResponseToAttempt(attempt, playerResponse) {
+  const tracks = playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
+  attempt.playabilityStatus = playerResponse?.playabilityStatus?.status || null;
+  attempt.playabilityReason = playerResponse?.playabilityStatus?.reason || null;
+  attempt.hasCaptionsObject = Boolean(playerResponse?.captions);
+  attempt.tracks = tracks;
+  Object.assign(attempt, analyzeCaptionTracks(tracks));
+  attempt.captionsPresentDespiteLoginRequired =
+    attempt.playabilityStatus === 'LOGIN_REQUIRED' && tracks.length > 0;
+
+  if (tracks.length > 0) {
+    attempt.error =
+      attempt.playabilityStatus === 'LOGIN_REQUIRED'
+        ? 'tracks-found-despite-login-required'
+        : null;
+    return;
+  }
+
+  if (attempt.playabilityStatus === 'LOGIN_REQUIRED') {
+    attempt.error = `login-required-no-tracks: ${attempt.playabilityReason || 'unknown'}`;
+    return;
+  }
+
+  attempt.error = `no-tracks-playability-${attempt.playabilityStatus || 'unknown'}`;
+}
+
 async function fetchInnertubeCaptionTracks(videoId, client) {
+  const clientContext = buildInnertubeClientContext(client);
   const attempt = {
     source: client.name,
     playerResponseSource: client.name,
     attempted: true,
+    clientName: client.clientName,
+    clientVersion: client.clientVersion,
+    contentCheckOk: client.contentCheckOk === true,
+    racyCheckOk: client.racyCheckOk === true,
     watchPageStatus: null,
     watchPageSucceeded: false,
     watchPageHtmlLength: 0,
@@ -163,6 +296,9 @@ async function fetchInnertubeCaptionTracks(videoId, client) {
     innertubeRequestStatus: null,
     innertubeRequestSucceeded: false,
     playabilityStatus: null,
+    playabilityReason: null,
+    hasCaptionsObject: false,
+    captionsPresentDespiteLoginRequired: false,
     error: null,
     tracks: [],
     ...analyzeCaptionTracks([]),
@@ -189,6 +325,10 @@ async function fetchInnertubeCaptionTracks(videoId, client) {
     const apiKey = extractInnertubeApiKey(html);
     attempt.apiKeyPresent = Boolean(apiKey);
 
+    const cookieHeader = (watchRes.headers.getSetCookie?.() || [])
+      .map((cookie) => cookie.split(';')[0])
+      .join('; ');
+
     const playerRes = await fetch(`https://www.youtube.com/youtubei/v1/player?key=${apiKey}`, {
       method: 'POST',
       headers: {
@@ -197,15 +337,11 @@ async function fetchInnertubeCaptionTracks(videoId, client) {
         'Accept-Language': 'en-US,en;q=0.9',
         'X-Youtube-Client-Name': client.clientNameHeader,
         'X-Youtube-Client-Version': client.clientVersion,
+        ...(cookieHeader ? { Cookie: cookieHeader } : {}),
       },
       body: JSON.stringify({
         context: {
-          client: {
-            clientName: client.clientName,
-            clientVersion: client.clientVersion,
-            hl: 'en',
-            gl: 'US',
-          },
+          client: clientContext,
         },
         videoId,
       }),
@@ -227,13 +363,7 @@ async function fetchInnertubeCaptionTracks(videoId, client) {
       return attempt;
     }
 
-    attempt.playabilityStatus = data?.playabilityStatus?.status || null;
-    const tracks = data?.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
-    attempt.tracks = tracks;
-    Object.assign(attempt, analyzeCaptionTracks(tracks));
-    attempt.error = tracks.length
-      ? null
-      : `no-tracks-playability-${attempt.playabilityStatus || 'unknown'}`;
+    applyPlayerResponseToAttempt(attempt, data);
   } catch (error) {
     attempt.error = `exception: ${error?.message || error}`;
   }
@@ -241,11 +371,15 @@ async function fetchInnertubeCaptionTracks(videoId, client) {
   return attempt;
 }
 
-async function fetchWatchPageCaptionTracks(videoId) {
+async function fetchWatchPagePlayerResponseCaptionTracks(videoId) {
   const attempt = {
-    source: 'WEB_WATCH_PAGE',
-    playerResponseSource: 'WEB_WATCH_PAGE',
+    source: 'WEB_WATCH_PLAYER',
+    playerResponseSource: 'WEB_WATCH_PLAYER',
     attempted: true,
+    clientName: 'WEB',
+    clientVersion: 'watch-page-embedded',
+    contentCheckOk: null,
+    racyCheckOk: null,
     watchPageStatus: null,
     watchPageSucceeded: false,
     watchPageHtmlLength: 0,
@@ -254,6 +388,9 @@ async function fetchWatchPageCaptionTracks(videoId) {
     innertubeRequestStatus: null,
     innertubeRequestSucceeded: false,
     playabilityStatus: null,
+    playabilityReason: null,
+    hasCaptionsObject: false,
+    captionsPresentDespiteLoginRequired: false,
     error: null,
     tracks: [],
     ...analyzeCaptionTracks([]),
@@ -277,9 +414,79 @@ async function fetchWatchPageCaptionTracks(videoId) {
     attempt.captionTracksMarkerFound = html.includes('"captionTracks":');
     attempt.apiKeyPresent = Boolean(extractInnertubeApiKey(html));
 
-    const tracks = extractCaptionTracks(html);
+    const playerResponse = extractYtInitialPlayerResponse(html);
+    if (!playerResponse) {
+      attempt.error = 'ytInitialPlayerResponse-not-found';
+      return attempt;
+    }
+
+    applyPlayerResponseToAttempt(attempt, playerResponse);
+  } catch (error) {
+    attempt.error = `exception: ${error?.message || error}`;
+  }
+
+  return attempt;
+}
+
+async function fetchWatchPageCaptionTracks(videoId) {
+  const attempt = {
+    source: 'WEB_WATCH_PAGE',
+    playerResponseSource: 'WEB_WATCH_PAGE',
+    attempted: true,
+    clientName: 'WEB',
+    clientVersion: 'watch-page-regex',
+    contentCheckOk: null,
+    racyCheckOk: null,
+    watchPageStatus: null,
+    watchPageSucceeded: false,
+    watchPageHtmlLength: 0,
+    captionTracksMarkerFound: false,
+    apiKeyPresent: false,
+    innertubeRequestStatus: null,
+    innertubeRequestSucceeded: false,
+    playabilityStatus: null,
+    playabilityReason: null,
+    hasCaptionsObject: false,
+    captionsPresentDespiteLoginRequired: false,
+    error: null,
+    tracks: [],
+    ...analyzeCaptionTracks([]),
+  };
+
+  try {
+    const watchRes = await fetch(`https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`, {
+      headers: FETCH_HEADERS,
+    });
+
+    attempt.watchPageStatus = watchRes.status;
+    attempt.watchPageSucceeded = watchRes.ok;
+
+    if (!watchRes.ok) {
+      attempt.error = `watch-page-http-${watchRes.status}`;
+      return attempt;
+    }
+
+    const html = await watchRes.text();
+    attempt.watchPageHtmlLength = html.length;
+    attempt.captionTracksMarkerFound = html.includes('"captionTracks":');
+    attempt.apiKeyPresent = Boolean(extractInnertubeApiKey(html));
+
+    let tracks = extractCaptionTracks(html);
+    if (!tracks.length) {
+      const playerResponse = extractYtInitialPlayerResponse(html);
+      tracks = playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
+      if (tracks.length) {
+        attempt.playerResponseSource = 'WEB_WATCH_PAGE_FALLBACK_PLAYER';
+        attempt.playabilityStatus = playerResponse?.playabilityStatus?.status || null;
+        attempt.playabilityReason = playerResponse?.playabilityStatus?.reason || null;
+        attempt.hasCaptionsObject = Boolean(playerResponse?.captions);
+      }
+    }
+
     attempt.tracks = tracks;
     Object.assign(attempt, analyzeCaptionTracks(tracks));
+    attempt.captionsPresentDespiteLoginRequired =
+      attempt.playabilityStatus === 'LOGIN_REQUIRED' && tracks.length > 0;
     attempt.error = tracks.length ? null : 'no-caption-tracks-in-watch-page';
   } catch (error) {
     attempt.error = `exception: ${error?.message || error}`;
@@ -293,6 +500,10 @@ function summarizeCaptionDiscoveryAttempt(attempt) {
     source: attempt.source,
     playerResponseSource: attempt.playerResponseSource,
     attempted: attempt.attempted === true,
+    clientName: attempt.clientName ?? null,
+    clientVersion: attempt.clientVersion ?? null,
+    contentCheckOk: attempt.contentCheckOk ?? null,
+    racyCheckOk: attempt.racyCheckOk ?? null,
     watchPageStatus: attempt.watchPageStatus ?? null,
     watchPageSucceeded: attempt.watchPageSucceeded === true,
     watchPageHtmlLength: attempt.watchPageHtmlLength ?? 0,
@@ -301,6 +512,9 @@ function summarizeCaptionDiscoveryAttempt(attempt) {
     innertubeRequestStatus: attempt.innertubeRequestStatus ?? null,
     innertubeRequestSucceeded: attempt.innertubeRequestSucceeded === true,
     playabilityStatus: attempt.playabilityStatus ?? null,
+    playabilityReason: attempt.playabilityReason ?? null,
+    hasCaptionsObject: attempt.hasCaptionsObject === true,
+    captionsPresentDespiteLoginRequired: attempt.captionsPresentDespiteLoginRequired === true,
     error: attempt.error ?? null,
     captionTrackCount: attempt.captionTrackCount ?? 0,
     captionTrackLanguages: attempt.captionTrackLanguages ?? [],
@@ -315,24 +529,47 @@ function buildCaptionDiscoverySummary(captionSourcesAttempted) {
   const bySource = Object.fromEntries(attempts.map((attempt) => [attempt.source, attempt]));
   const android = bySource.ANDROID;
   const ios = bySource.IOS;
+  const tvhtml5 = bySource.TVHTML5;
+  const mweb = bySource.MWEB;
+  const webWatchPlayer = bySource.WEB_WATCH_PLAYER;
   const web = bySource.WEB_WATCH_PAGE;
   const bestAttempt = [...attempts].sort(
     (a, b) => (b.captionTrackCount || 0) - (a.captionTrackCount || 0)
   )[0];
   const successfulInnertube = attempts.find((attempt) => attempt.innertubeRequestSucceeded);
+  const loginRequiredAttempts = attempts.filter(
+    (attempt) => attempt.playabilityStatus === 'LOGIN_REQUIRED'
+  );
 
   return {
     transcriptFetcherVersion: TRANSCRIPT_FETCHER_VERSION,
     attemptedANDROID: android?.attempted === true,
     attemptedIOS: ios?.attempted === true,
-    attemptedWEB: web?.attempted === true,
+    attemptedTVHTML5: tvhtml5?.attempted === true,
+    attemptedMWEB: mweb?.attempted === true,
+    attemptedWEB:
+      webWatchPlayer?.attempted === true || web?.attempted === true,
     captionDiscoverySource: bestAttempt?.captionTrackCount
       ? bestAttempt.source
       : attempts[attempts.length - 1]?.source || null,
-    playerResponseSource: successfulInnertube?.playerResponseSource || null,
+    playerResponseSource:
+      bestAttempt?.playerResponseSource || successfulInnertube?.playerResponseSource || null,
     innertubeRequestSucceeded: attempts.some((attempt) => attempt.innertubeRequestSucceeded),
     innertubeRequestStatus:
-      android?.innertubeRequestStatus ?? ios?.innertubeRequestStatus ?? null,
+      android?.innertubeRequestStatus ??
+      ios?.innertubeRequestStatus ??
+      tvhtml5?.innertubeRequestStatus ??
+      mweb?.innertubeRequestStatus ??
+      null,
+    loginRequiredSeen: loginRequiredAttempts.length > 0,
+    loginRequiredTrackCount: loginRequiredAttempts.reduce(
+      (max, attempt) => Math.max(max, attempt.captionTrackCount || 0),
+      0
+    ),
+    androidClientName: android?.clientName ?? null,
+    androidClientVersion: android?.clientVersion ?? null,
+    iosClientName: ios?.clientName ?? null,
+    iosClientVersion: ios?.clientVersion ?? null,
   };
 }
 
@@ -534,6 +771,14 @@ export async function fetchYouTubeTranscript(videoId) {
   result.fetchAttempted = true;
 
   const sourceAttempts = [
+    {
+      type: 'watch-player',
+      client: {
+        name: 'WEB_WATCH_PLAYER',
+        userAgent: FETCH_HEADERS['User-Agent'],
+      },
+      loader: () => fetchWatchPagePlayerResponseCaptionTracks(videoId),
+    },
     ...INNERTUBE_CLIENTS.map((client) => ({
       type: 'innertube',
       client,

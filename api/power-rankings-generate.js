@@ -248,6 +248,14 @@ function buildTranscriptDiagnostics(meta) {
     playerResponseSource: meta.playerResponseSource ?? null,
     innertubeRequestSucceeded: meta.innertubeRequestSucceeded ?? false,
     innertubeRequestStatus: meta.innertubeRequestStatus ?? null,
+    loginRequiredSeen: meta.loginRequiredSeen ?? false,
+    loginRequiredTrackCount: meta.loginRequiredTrackCount ?? 0,
+    androidClientName: meta.androidClientName ?? null,
+    androidClientVersion: meta.androidClientVersion ?? null,
+    iosClientName: meta.iosClientName ?? null,
+    iosClientVersion: meta.iosClientVersion ?? null,
+    attemptedTVHTML5: meta.attemptedTVHTML5 ?? false,
+    attemptedMWEB: meta.attemptedMWEB ?? false,
   };
 }
 
@@ -280,6 +288,14 @@ function captionFieldsFromFetchResult(fetchResult = {}) {
     playerResponseSource: fetchResult.playerResponseSource ?? null,
     innertubeRequestSucceeded: fetchResult.innertubeRequestSucceeded ?? false,
     innertubeRequestStatus: fetchResult.innertubeRequestStatus ?? null,
+    loginRequiredSeen: fetchResult.loginRequiredSeen ?? false,
+    loginRequiredTrackCount: fetchResult.loginRequiredTrackCount ?? 0,
+    androidClientName: fetchResult.androidClientName ?? null,
+    androidClientVersion: fetchResult.androidClientVersion ?? null,
+    iosClientName: fetchResult.iosClientName ?? null,
+    iosClientVersion: fetchResult.iosClientVersion ?? null,
+    attemptedTVHTML5: fetchResult.attemptedTVHTML5 ?? false,
+    attemptedMWEB: fetchResult.attemptedMWEB ?? false,
   };
 }
 
