@@ -209,6 +209,41 @@ async function loadExistingWeekForRace(raceNumber) {
   return data;
 }
 
+function buildTranscriptDiagnostics(meta) {
+  const transcriptUsed = meta.transcriptUsed === true;
+  let transcriptDebugReason = meta.transcriptDebugReason ?? null;
+
+  if (!transcriptUsed && !transcriptDebugReason) {
+    transcriptDebugReason = meta.summaryEmptyDespiteRawTranscript
+      ? 'transcript-summary-empty'
+      : 'transcript-unavailable';
+  }
+
+  return {
+    transcriptDebugReason,
+    transcriptUsed,
+    selectedVideoTitle: meta.selectedVideoTitle ?? null,
+    selectedVideoRaceNumber: meta.selectedVideoRaceNumber ?? null,
+    selectionMethod: meta.selectionMethod ?? null,
+    transcriptLength: meta.transcriptLength ?? 0,
+    requestedRaceNumber: meta.requestedRaceNumber ?? null,
+    videoId: meta.videoId ?? meta.broadcastContext?.videoId ?? null,
+    transcriptFetchAttempted: meta.transcriptFetchAttempted ?? false,
+    transcriptFetchFailureReason: meta.transcriptFetchFailureReason ?? null,
+    playlistVideoCount: meta.playlistVideoCount ?? null,
+  };
+}
+
+function withTranscriptDiagnostics(meta) {
+  const transcriptDiagnostics = buildTranscriptDiagnostics(meta);
+  return {
+    ...meta,
+    transcriptUsed: transcriptDiagnostics.transcriptUsed,
+    transcriptDebugReason: transcriptDiagnostics.transcriptDebugReason,
+    transcriptDiagnostics,
+  };
+}
+
 async function loadBroadcastContext(raceNumber, drivers) {
   const requestedRaceNumber = Number(raceNumber);
   const logTag = '[power-rankings-transcript]';
@@ -242,7 +277,7 @@ async function loadBroadcastContext(raceNumber, drivers) {
       transcriptDebugReason: 'playlist-empty',
     };
     console.warn(logTag, 'transcript retrieval failed', diagnostics);
-    return {
+    return withTranscriptDiagnostics({
       requestedRaceNumber,
       selectedVideoRaceNumber: null,
       selectedVideoTitle: null,
@@ -252,8 +287,9 @@ async function loadBroadcastContext(raceNumber, drivers) {
       transcriptVideoTitle: null,
       transcriptLength: 0,
       transcriptDebugReason: 'playlist-empty',
+      playlistVideoCount: 0,
       broadcastContext: null,
-    };
+    });
   }
 
   const selection = selectBroadcastVideoForRankings(videos, raceNumber);
@@ -286,7 +322,7 @@ async function loadBroadcastContext(raceNumber, drivers) {
     };
     console.warn(logTag, 'transcript retrieval failed', diagnostics);
 
-    return {
+    return withTranscriptDiagnostics({
       requestedRaceNumber: selection.requestedRaceNumber,
       selectedVideoRaceNumber: selection.selectedVideoRaceNumber,
       selectedVideoTitle: selection.selectedVideoTitle,
@@ -296,8 +332,9 @@ async function loadBroadcastContext(raceNumber, drivers) {
       transcriptVideoTitle: null,
       transcriptLength: 0,
       transcriptDebugReason,
+      playlistVideoCount: playlistVideos.length,
       broadcastContext: null,
-    };
+    });
   }
 
   console.log(logTag, 'transcript fetch attempt', {
@@ -355,7 +392,7 @@ async function loadBroadcastContext(raceNumber, drivers) {
     };
     console.warn(logTag, 'transcript retrieval failed', diagnostics);
 
-    return {
+    return withTranscriptDiagnostics({
       requestedRaceNumber: selection.requestedRaceNumber,
       selectedVideoRaceNumber: selection.selectedVideoRaceNumber,
       selectedVideoTitle: selection.selectedVideoTitle,
@@ -365,6 +402,9 @@ async function loadBroadcastContext(raceNumber, drivers) {
       transcriptVideoTitle: selection.selectedVideoTitle,
       transcriptLength: fetchResult.transcriptLength,
       transcriptDebugReason: fetchResult.debugReason || 'transcript-fetch-failed',
+      videoId: video.videoId,
+      transcriptFetchAttempted: fetchResult.fetchAttempted,
+      transcriptFetchFailureReason: fetchResult.failureReason,
       broadcastContext: {
         videoId: video.videoId,
         videoTitle: video.title || null,
@@ -372,7 +412,7 @@ async function loadBroadcastContext(raceNumber, drivers) {
         summary: null,
         note: 'Transcript unavailable — follow No-Transcript Fallback rules. Use standings, schedule, results, and stats only.',
       },
-    };
+    });
   }
 
   const trimmed = summarizeTranscriptForRankings(fetchResult.transcript, drivers);
@@ -405,7 +445,7 @@ async function loadBroadcastContext(raceNumber, drivers) {
     console.warn(logTag, 'transcript retrieval incomplete', diagnostics);
   }
 
-  return {
+  return withTranscriptDiagnostics({
     requestedRaceNumber: selection.requestedRaceNumber,
     selectedVideoRaceNumber: selection.selectedVideoRaceNumber,
     selectedVideoTitle: selection.selectedVideoTitle,
@@ -415,6 +455,10 @@ async function loadBroadcastContext(raceNumber, drivers) {
     transcriptVideoTitle: selection.selectedVideoTitle,
     transcriptLength: trimmed.fullLength,
     transcriptDebugReason,
+    videoId: video.videoId,
+    transcriptFetchAttempted: fetchResult.fetchAttempted,
+    transcriptFetchFailureReason: fetchResult.failureReason,
+    summaryEmptyDespiteRawTranscript: !transcriptUsed && fetchResult.transcriptLength >= 100,
     broadcastContext: {
       videoId: video.videoId,
       videoTitle: video.title || null,
@@ -422,7 +466,7 @@ async function loadBroadcastContext(raceNumber, drivers) {
       highlightCount: trimmed.highlightCount,
       summary: trimmed.summary,
     },
-  };
+  });
 }
 function buildContextPayload({
   raceNumber,
@@ -852,6 +896,19 @@ export default async function handler(req, res) {
     const driverLookup = buildDriverLookup(standings, profiles);
     const draft = normalizeDraft(aiDraft, driverLookup, previousRankings);
 
+    console.log(
+      '[power-rankings-generate] transcript diagnostics',
+      JSON.stringify(transcriptMeta.transcriptDiagnostics || {
+        transcriptDebugReason: transcriptMeta.transcriptDebugReason ?? null,
+        transcriptUsed: transcriptMeta.transcriptUsed === true,
+        selectedVideoTitle: transcriptMeta.selectedVideoTitle ?? null,
+        selectedVideoRaceNumber: transcriptMeta.selectedVideoRaceNumber ?? null,
+        selectionMethod: transcriptMeta.selectionMethod ?? null,
+        transcriptLength: transcriptMeta.transcriptLength ?? 0,
+        requestedRaceNumber: transcriptMeta.requestedRaceNumber ?? raceNumber,
+      })
+    );
+
     return res.status(200).json({
       promptVersion: POWER_RANKING_PROMPT_VERSION,
       raceNumber,
@@ -860,8 +917,10 @@ export default async function handler(req, res) {
       existingWeekId: existingWeek?.id || null,
       existingPublishedDate: existingWeek?.published_date || null,
       existingPublished: existingWeek?.published === true,
+      ...draft,
+      transcriptDiagnostics: transcriptMeta.transcriptDiagnostics,
       transcriptUsed: transcriptMeta.transcriptUsed,
-      transcriptDebugReason: transcriptMeta.transcriptDebugReason || null,
+      transcriptDebugReason: transcriptMeta.transcriptDebugReason ?? null,
       transcriptVideoTitle: transcriptMeta.transcriptVideoTitle,
       transcriptLength: transcriptMeta.transcriptLength,
       requestedRaceNumber: transcriptMeta.requestedRaceNumber,
@@ -869,7 +928,6 @@ export default async function handler(req, res) {
       selectedVideoTitle: transcriptMeta.selectedVideoTitle,
       selectionMethod: transcriptMeta.selectionMethod,
       nonPointsAdjustmentApplied: transcriptMeta.nonPointsAdjustmentApplied,
-      ...draft,
     });
   } catch (error) {
     console.error('[power-rankings-generate]', error);

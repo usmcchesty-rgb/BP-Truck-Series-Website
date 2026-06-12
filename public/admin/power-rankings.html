@@ -22,6 +22,24 @@
     .btn-danger { background: linear-gradient(#5a1010, #2a0505); border-color: #733; }
     #adminMsg, #loginMsg { margin-top: 10px; font-size: 12px; color: #ccc; white-space: pre-wrap; }
     #adminMsg.error, #loginMsg.error { color: #ff6060; }
+    .transcript-diagnostics {
+      margin-top: 12px;
+      padding: 10px 12px;
+      border: 1px solid #444;
+      border-radius: 6px;
+      background: #1a1a1a;
+    }
+    .transcript-diagnostics h3 {
+      margin: 0 0 8px;
+      font-size: 13px;
+      color: #f0c040;
+    }
+    .transcript-diagnostics pre {
+      margin: 0;
+      font-size: 12px;
+      color: #ccc;
+      white-space: pre-wrap;
+    }
     .pw-row { max-width: 320px; margin-bottom: 14px; }
     .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; max-width: 520px; }
     .ranking-row {
@@ -171,6 +189,10 @@
         <button class="btn btn-danger" type="button" onclick="deleteWeek()">Delete Week</button>
       </div>
       <pre id="adminMsg"></pre>
+      <div id="transcriptDiagnosticsPanel" class="transcript-diagnostics" hidden>
+        <h3>Transcript Diagnostics</h3>
+        <pre id="transcriptDiagnostics"></pre>
+      </div>
     </div>
   </main>
 
@@ -235,6 +257,56 @@
       const msg = $('#adminMsg');
       msg.textContent = text;
       msg.classList.toggle('error', isError);
+    }
+
+    function buildTranscriptDiagnosticsView(data) {
+      const nested = data?.transcriptDiagnostics;
+      return {
+        transcriptDebugReason:
+          nested?.transcriptDebugReason ?? data?.transcriptDebugReason ?? null,
+        transcriptUsed:
+          nested?.transcriptUsed ?? data?.transcriptUsed === true,
+        selectedVideoTitle:
+          nested?.selectedVideoTitle ?? data?.selectedVideoTitle ?? null,
+        selectedVideoRaceNumber:
+          nested?.selectedVideoRaceNumber ?? data?.selectedVideoRaceNumber ?? null,
+        selectionMethod:
+          nested?.selectionMethod ?? data?.selectionMethod ?? null,
+        transcriptLength:
+          nested?.transcriptLength ?? data?.transcriptLength ?? 0,
+        requestedRaceNumber:
+          nested?.requestedRaceNumber ?? data?.requestedRaceNumber ?? null,
+        videoId: nested?.videoId ?? null,
+        promptVersion: data?.promptVersion ?? null,
+      };
+    }
+
+    function renderTranscriptDiagnostics(data) {
+      const panel = $('#transcriptDiagnosticsPanel');
+      const pre = $('#transcriptDiagnostics');
+      if (!panel || !pre) return;
+
+      const diagnostics = buildTranscriptDiagnosticsView(data);
+      console.log('[power-rankings-admin] transcript diagnostics', diagnostics);
+
+      pre.textContent = [
+        `promptVersion: ${diagnostics.promptVersion ?? 'missing (stale API build?)'}`,
+        `transcriptUsed: ${diagnostics.transcriptUsed}`,
+        `transcriptDebugReason: ${diagnostics.transcriptDebugReason ?? 'null'}`,
+        `requestedRaceNumber: ${diagnostics.requestedRaceNumber ?? 'null'}`,
+        `selectedVideoTitle: ${diagnostics.selectedVideoTitle ?? 'null'}`,
+        `selectedVideoRaceNumber: ${diagnostics.selectedVideoRaceNumber ?? 'null'}`,
+        `selectionMethod: ${diagnostics.selectionMethod ?? 'null'}`,
+        `videoId: ${diagnostics.videoId ?? 'null'}`,
+        `transcriptLength: ${diagnostics.transcriptLength ?? 0}`,
+      ].join('\n');
+
+      panel.hidden = false;
+    }
+
+    function hideTranscriptDiagnostics() {
+      const panel = $('#transcriptDiagnosticsPanel');
+      if (panel) panel.hidden = true;
     }
 
     async function verifyPassword(pw) {
@@ -437,14 +509,17 @@
       setMsg('');
     }
 
-    function loadWeekIntoForm(week) {
+    function loadWeekIntoForm(week, options = {}) {
       currentWeekId = week.id;
       $('#editorTitle').textContent = `Edit ${week.label || `Race ${week.raceNumber}`}`;
       setRaceNumberInput(week.raceNumber);
       $('#publishedDate').value = week.publishedDate || '';
       renderRankingRows(week.entries || []);
       renderMentionRows(week.honorableMentions || []);
-      setMsg('');
+      if (options.clearStatus !== false) {
+        hideTranscriptDiagnostics();
+        setMsg('');
+      }
     }
 
     async function loadWeek(weekId) {
@@ -546,14 +621,17 @@
           label: `Race ${data.raceNumber || raceNumber} Rankings`,
           entries: data.entries || [],
           honorableMentions: data.honorableMentions || [],
-        });
+        }, { clearStatus: false });
 
+        renderTranscriptDiagnostics(data);
+
+        const diagnostics = buildTranscriptDiagnosticsView(data);
         const previousNote = data.previousRaceNumber
           ? ` Movement compared to Race ${data.previousRaceNumber} rankings.`
           : ' No previous rankings found — movement defaults applied.';
-        const transcriptNote = data.transcriptUsed
-          ? ` Green Flag TV transcript used${data.transcriptVideoTitle ? `: ${data.transcriptVideoTitle}` : ''}.`
-          : ` No transcript available — draft used standings/results only.${data.transcriptDebugReason ? ` Debug: ${data.transcriptDebugReason}.` : ''}`;
+        const transcriptNote = diagnostics.transcriptUsed
+          ? ` Green Flag TV transcript used${diagnostics.selectedVideoTitle ? `: ${diagnostics.selectedVideoTitle}` : ''}.`
+          : ` No transcript available — draft used standings/results only. Debug: ${diagnostics.transcriptDebugReason || 'unknown'}.`;
         const existingNote = weekId
           ? ' Updated existing Race week in the form — save to overwrite the draft.'
           : ' Review and edit before saving or publishing.';
