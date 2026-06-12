@@ -1,5 +1,11 @@
 import * as cheerio from 'cheerio';
-import { fetchHtml, getDriverProfiles, getSettings, slugify, supabase } from './_lib.js';
+import { fetchHtml, getDriverProfiles, getSettings, supabase } from './_lib.js';
+import {
+  fetchYoutubeBroadcasts,
+  fetchYouTubeTranscript,
+  selectBroadcastVideo,
+  summarizeTranscriptForRankings,
+} from './_youtube-transcript.js';
 
 function parseBody(req) {
   if (!req.body) return {};
@@ -187,7 +193,81 @@ async function loadPreviousPowerRankings(beforeRaceNumber) {
   };
 }
 
-function buildContextPayload({ raceNumber, standings, scheduleRaces, previousRankings, profiles }) {
+async function loadExistingWeekForRace(raceNumber) {
+  const sb = supabase();
+  if (!sb) return null;
+
+  const { data, error } = await sb
+    .from('power_rankings_weeks')
+    .select('id, race_number, published_date, published')
+    .eq('race_number', raceNumber)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return data;
+}
+
+async function loadBroadcastContext(req, raceNumber, drivers) {
+  const broadcasts = await fetchYoutubeBroadcasts(req);
+  const video = selectBroadcastVideo(broadcasts, raceNumber);
+
+  if (!video?.videoId) {
+    return {
+      transcriptUsed: false,
+      transcriptVideoTitle: null,
+      transcriptLength: 0,
+      broadcastContext: null,
+    };
+  }
+
+  let transcript = null;
+  try {
+    transcript = await fetchYouTubeTranscript(video.videoId);
+  } catch (error) {
+    console.warn('[power-rankings-generate] transcript fetch failed:', error?.message || error);
+  }
+
+  if (!transcript) {
+    return {
+      transcriptUsed: false,
+      transcriptVideoTitle: video.title || null,
+      transcriptLength: 0,
+      broadcastContext: {
+        videoId: video.videoId,
+        videoTitle: video.title || null,
+        videoRaceNumber: video.raceNumber || null,
+        summary: null,
+        note: 'Transcript unavailable — use standings, schedule, and results only.',
+      },
+    };
+  }
+
+  const trimmed = summarizeTranscriptForRankings(transcript, drivers);
+
+  return {
+    transcriptUsed: Boolean(trimmed.summary),
+    transcriptVideoTitle: video.title || null,
+    transcriptLength: trimmed.fullLength,
+    broadcastContext: {
+      videoId: video.videoId,
+      videoTitle: video.title || null,
+      videoRaceNumber: video.raceNumber || null,
+      highlightCount: trimmed.highlightCount,
+      summary: trimmed.summary,
+      guidance:
+        'Use broadcast context for race circumstances. Reward strong runs and wins. Do not over-penalize drivers who ran well but got wrecked or had bad luck.',
+    },
+  };
+}
+
+function buildContextPayload({
+  raceNumber,
+  standings,
+  scheduleRaces,
+  previousRankings,
+  profiles,
+  broadcastContext,
+}) {
   const completedRaces = scheduleRaces
     .filter((race) => race.winner && race.raceNumber <= raceNumber)
     .slice(-5);
@@ -225,6 +305,7 @@ function buildContextPayload({ raceNumber, standings, scheduleRaces, previousRan
       driverName: p.display_name || p.iracing_name,
       carNumber: p.car_number || '',
     })),
+    broadcastContext,
   };
 }
 
@@ -258,7 +339,11 @@ Rules:
 - Writeups are 2-4 sentences each, conversational, specific to recent form and stats provided.
 - movement is an integer: positive = moved UP vs previous power rankings (▲), negative = moved DOWN (▼), 0 = unchanged (—). Compare against previousPowerRankings when available. If a driver was not ranked last week but is now, use a positive movement reflecting their debut rank (e.g. entered at #8 -> movement +2 if you treat unranked as outside top 10, or use your best judgment with a positive value). If no previous rankings exist, use 0 for all movement.
 - honorableMentions: 0 to 3 entries only when truly warranted. Omit the array or return [] if none.
-- Rank drivers on recent race performance, momentum, consistency, and championship relevance — not points order alone.`;
+- Rank drivers on recent race performance, momentum, consistency, and championship relevance — not points order alone.
+- When broadcastContext.summary is provided, treat it as Green Flag TV race broadcast context. Use it for ordering, subtitles, writeups, and honorable mentions.
+- Do not blindly follow points standings if the broadcast tells a different story.
+- A driver who ran strong but got wrecked, caught up in someone else's incident, or had bad luck should not be dropped unfairly — acknowledge the circumstances.
+- Reward race winners and drivers who dominated, led, or passed for the win when the broadcast supports it.`;
 
 async function callOpenAi(contextPayload) {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -429,24 +514,33 @@ export default async function handler(req, res) {
     }
 
     const settings = await getSettings();
-    const [standings, scheduleHtml, previousRankings, profiles] = await Promise.all([
+    const [standings, scheduleHtml, previousRankings, profiles, existingWeek] = await Promise.all([
       fetchStandingsRows(settings),
       fetchHtml(settings.scheduleUrl),
       loadPreviousPowerRankings(raceNumber),
       getDriverProfiles(),
+      loadExistingWeekForRace(raceNumber),
     ]);
 
     if (!standings.length) {
       return res.status(400).json({ error: 'No standings data available for AI generation.' });
     }
 
+    const drivers = standings.map((row) => ({
+      driverId: row.driverId,
+      driverName: row.driverName,
+      carNumber: row.carNumber,
+    }));
+
     const scheduleRaces = parseScheduleRaces(scheduleHtml);
+    const transcriptMeta = await loadBroadcastContext(req, raceNumber, drivers);
     const contextPayload = buildContextPayload({
       raceNumber,
       standings,
       scheduleRaces,
       previousRankings,
       profiles,
+      broadcastContext: transcriptMeta.broadcastContext,
     });
 
     const aiDraft = await callOpenAi(contextPayload);
@@ -457,6 +551,12 @@ export default async function handler(req, res) {
       raceNumber,
       generatedAt: new Date().toISOString(),
       previousRaceNumber: previousRankings?.raceNumber || null,
+      existingWeekId: existingWeek?.id || null,
+      existingPublishedDate: existingWeek?.published_date || null,
+      existingPublished: existingWeek?.published === true,
+      transcriptUsed: transcriptMeta.transcriptUsed,
+      transcriptVideoTitle: transcriptMeta.transcriptVideoTitle,
+      transcriptLength: transcriptMeta.transcriptLength,
       ...draft,
     });
   } catch (error) {

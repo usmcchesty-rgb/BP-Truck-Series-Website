@@ -515,7 +515,7 @@
       }
 
       setGenerating(true);
-      setMsg('Gathering standings, results, and previous rankings...');
+      setMsg('Gathering standings, results, broadcast transcript, and previous rankings...');
 
       try {
         const res = await fetch('/api/power-rankings-generate', {
@@ -530,10 +530,19 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'AI draft generation failed.');
 
+        const existingWeek = savedWeeks.find(
+          (week) => Number(week.raceNumber) === Number(data.raceNumber || raceNumber)
+        );
+        const weekId = data.existingWeekId || existingWeek?.id || currentWeekId;
+
         loadWeekIntoForm({
-          id: currentWeekId,
+          id: weekId,
           raceNumber: data.raceNumber || raceNumber,
-          publishedDate: $('#publishedDate').value || new Date().toISOString().slice(0, 10),
+          publishedDate:
+            data.existingPublishedDate ||
+            existingWeek?.publishedDate ||
+            $('#publishedDate').value ||
+            new Date().toISOString().slice(0, 10),
           label: `Race ${data.raceNumber || raceNumber} Rankings`,
           entries: data.entries || [],
           honorableMentions: data.honorableMentions || [],
@@ -542,7 +551,13 @@
         const previousNote = data.previousRaceNumber
           ? ` Movement compared to Race ${data.previousRaceNumber} rankings.`
           : ' No previous rankings found — movement defaults applied.';
-        setMsg(`AI draft loaded.${previousNote} Review and edit before saving or publishing.`);
+        const transcriptNote = data.transcriptUsed
+          ? ` Green Flag TV transcript used${data.transcriptVideoTitle ? `: ${data.transcriptVideoTitle}` : ''}.`
+          : ' No transcript available — draft used standings/results only.';
+        const existingNote = weekId
+          ? ' Updated existing Race week in the form — save to overwrite the draft.'
+          : ' Review and edit before saving or publishing.';
+        setMsg(`AI draft loaded.${transcriptNote}${previousNote}${existingNote}`);
       } catch (e) {
         setMsg(e.message, true);
       } finally {
