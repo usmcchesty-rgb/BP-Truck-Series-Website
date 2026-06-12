@@ -37,25 +37,10 @@ function renderHeader(week) {
   if (headerEl) headerEl.hidden = false;
 }
 
-function renderCarNumberPlate(carNumber) {
-  const digits = String(carNumber || "").replace(/\D/g, "");
-  if (!digits) return "";
-
-  const digitImgs = [...digits]
-    .filter((d) => d >= "0" && d <= "9")
-    .map(
-      (d) =>
-        `<img class="num-digit" src="/assets/numbers/${d}.svg" alt="" loading="lazy" />`
-    )
-    .join("");
-
-  if (!digitImgs) return "";
-
-  return `<span class="num" aria-label="Car number ${escapeHtml(digits)}">${digitImgs}</span>`;
-}
-
 function renderEntry(entry) {
-  const num = renderCarNumberPlate(entry.carNumber);
+  const num = entry.carNumber
+    ? `<span class="num">${escapeHtml(entry.carNumber)}</span>`
+    : "";
   const movementClass = entry.movementClass ? ` ${entry.movementClass}` : "";
   const rankClass = entry.rank === 1 ? " power-ranking-card-first" : "";
 
@@ -80,7 +65,9 @@ function renderEntry(entry) {
 }
 
 function renderHonorable(mention) {
-  const num = renderCarNumberPlate(mention.carNumber);
+  const num = mention.carNumber
+    ? `<span class="num">${escapeHtml(mention.carNumber)}</span>`
+    : "";
 
   return `<article class="power-ranking-honorable-card">
     <img
