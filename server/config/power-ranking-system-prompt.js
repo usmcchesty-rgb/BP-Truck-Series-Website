@@ -1,4 +1,4 @@
-export const POWER_RANKING_PROMPT_VERSION = '1.1';
+export const POWER_RANKING_PROMPT_VERSION = '1.2';
 
 export const POWER_RANKING_SYSTEM_PROMPT = `# BP Truck Series Power Rankings System
 
@@ -101,35 +101,35 @@ Rules:
 * 2–5 words preferred.
 * Maximum 6 words.
 * Must be unique within the same ranking.
-* Must describe the storyline.
-* Must not describe the driver's name.
+* Must describe the storyline, not the driver.
 
-Never use:
+Do not use the driver's first name, last name, nickname, car number, or possessive form in subtitles.
 
-* First names.
-* Last names.
-* Possessive forms.
-* Car numbers.
-* Generic placeholders.
+Avoid:
 
-Reject examples:
-
-* Arthur's Quiet Strength
 * Kilroe's Consistency Streak
-* Berg's Rising Star
-* Wellman's Momentum
-* Marasco's Fight For Relevance
+* Arthur's Quiet Strength
+* Lagunes on the Edge
+* Carroll's Championship Form
 
-Preferred examples:
+Instead describe the storyline:
+
+* Built for Consistency
+* Quietly Climbing
+* Pressure Building
+* Holding Strong
+* Making a Statement
+* Finding Another Gear
+* Back in the Fight
+
+Additional preferred examples:
 
 * Championship Statement
 * Building Momentum
 * The Hot Hand
-* Finding Another Gear
 * Too Consistent To Ignore
 * One Step Closer
 * Turning Heads
-* Back In The Fight
 * Right In The Hunt
 * Closing The Gap
 
