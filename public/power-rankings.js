@@ -37,15 +37,25 @@ function renderHeader(week) {
   if (headerEl) headerEl.hidden = false;
 }
 
+function formatCarNumber(carNumber) {
+  const raw = String(carNumber || "").trim();
+  if (!raw) return "";
+  return raw.startsWith("#") ? raw : `#${raw}`;
+}
+
 function renderEntry(entry) {
-  const num = entry.carNumber
-    ? `<span class="num">${escapeHtml(entry.carNumber)}</span>`
+  const carNumber = formatCarNumber(entry.carNumber);
+  const carNumberHtml = carNumber
+    ? `<div class="power-ranking-car-number">${escapeHtml(carNumber)}</div>`
     : "";
   const movementClass = entry.movementClass ? ` ${entry.movementClass}` : "";
   const rankClass = entry.rank === 1 ? " power-ranking-card-first" : "";
 
   return `<article class="power-ranking-card${rankClass}">
-    <div class="power-ranking-rank">#${entry.rank}</div>
+    <div class="power-ranking-lead">
+      <div class="power-ranking-rank">#${entry.rank}</div>
+      <span class="power-ranking-movement${movementClass}">${escapeHtml(entry.movementText)}</span>
+    </div>
     <img
       class="power-ranking-photo"
       src="${escapeHtml(entry.photoUrl)}"
@@ -54,9 +64,9 @@ function renderEntry(entry) {
       onerror="this.onerror=null;this.src='/assets/drivers/placeholder.png'"
     />
     <div class="power-ranking-body">
-      <div class="power-ranking-title-row">
-        <h3>${escapeHtml(entry.driverName)}${num}</h3>
-        <span class="power-ranking-movement${movementClass}">${escapeHtml(entry.movementText)}</span>
+      <div class="power-ranking-identity">
+        ${carNumberHtml}
+        <h3 class="power-ranking-name">${escapeHtml(entry.driverName)}</h3>
       </div>
       <p class="power-ranking-subtitle">${escapeHtml(entry.subtitle)}</p>
       <p class="power-ranking-writeup">${escapeHtml(entry.writeup)}</p>
@@ -65,8 +75,9 @@ function renderEntry(entry) {
 }
 
 function renderHonorable(mention) {
-  const num = mention.carNumber
-    ? `<span class="num">${escapeHtml(mention.carNumber)}</span>`
+  const carNumber = formatCarNumber(mention.carNumber);
+  const carNumberHtml = carNumber
+    ? `<div class="power-ranking-honorable-car">${escapeHtml(carNumber)}</div>`
     : "";
 
   return `<article class="power-ranking-honorable-card">
@@ -77,8 +88,11 @@ function renderHonorable(mention) {
       loading="lazy"
       onerror="this.onerror=null;this.src='/assets/drivers/placeholder.png'"
     />
-    <div>
-      <h4>${escapeHtml(mention.driverName)}${num}</h4>
+    <div class="power-ranking-honorable-body">
+      <div class="power-ranking-honorable-identity">
+        ${carNumberHtml}
+        <h4 class="power-ranking-honorable-name">${escapeHtml(mention.driverName)}</h4>
+      </div>
       <p>${escapeHtml(mention.writeup)}</p>
     </div>
   </article>`;

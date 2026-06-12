@@ -785,13 +785,13 @@ footer{
 .power-rankings-header{margin-bottom:18px}
 .power-rankings-header h3{margin:0;font-size:24px;font-style:italic;color:#fff}
 .power-rankings-date{margin:6px 0 0;color:#888;font-size:12px;font-weight:700}
-.power-rankings-list{display:grid;gap:14px}
+.power-rankings-list{display:grid;gap:16px}
 .power-ranking-card{
   display:grid;
-  grid-template-columns:56px 120px minmax(0,1fr);
-  gap:16px;
+  grid-template-columns:72px 128px minmax(0,1fr);
+  gap:18px;
   align-items:start;
-  padding:16px;
+  padding:18px 20px;
   border:1px solid #333;
   background:rgba(8,8,8,.92);
   border-radius:5px;
@@ -800,55 +800,106 @@ footer{
   border-color:var(--gold);
   box-shadow:0 0 16px rgba(255,210,63,.18);
 }
+.power-ranking-lead{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:10px;
+  min-width:72px;
+  padding-top:2px;
+}
 .power-ranking-rank{
-  font-size:28px;
+  font-size:42px;
   font-weight:900;
   color:var(--red);
-  line-height:1;
-  padding-top:8px;
+  line-height:.95;
+  letter-spacing:-1px;
+  text-shadow:0 2px 10px rgba(229,9,20,.28);
 }
-.power-ranking-photo{
-  width:100%;
-  max-width:120px;
-  height:140px;
-  object-fit:contain;
-  filter:drop-shadow(0 0 8px #000);
-}
-.power-ranking-body{min-width:0}
-.power-ranking-title-row{
-  display:flex;
-  justify-content:space-between;
-  align-items:flex-start;
-  gap:12px;
-  flex-wrap:wrap;
-}
-.power-ranking-title-row h3{
-  margin:0;
-  font-size:20px;
-  font-style:italic;
-  color:#fff;
+.power-ranking-card-first .power-ranking-rank{
+  font-size:48px;
+  color:#ff3030;
 }
 .power-ranking-movement{
-  font-size:13px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:42px;
+  padding:4px 8px;
+  border:1px solid #333;
+  border-radius:3px;
+  background:rgba(0,0,0,.35);
+  font-size:12px;
   font-weight:900;
   color:#aaa;
   white-space:nowrap;
+  line-height:1;
 }
-.power-ranking-movement.positive{color:var(--green)}
-.power-ranking-movement.negative{color:#ff2323}
-.power-ranking-subtitle{
-  margin:8px 0 0;
+.power-ranking-movement.positive{
+  color:var(--green);
+  border-color:rgba(69,214,90,.35);
+  background:rgba(16,40,20,.55);
+}
+.power-ranking-movement.negative{
+  color:#ff2323;
+  border-color:rgba(255,35,35,.35);
+  background:rgba(40,12,12,.55);
+}
+.power-ranking-photo{
+  width:100%;
+  max-width:128px;
+  height:150px;
+  object-fit:contain;
+  filter:drop-shadow(0 0 10px #000);
+}
+.power-ranking-body{
+  min-width:0;
+  display:grid;
+  gap:0;
+}
+.power-ranking-identity{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  margin-bottom:2px;
+}
+.power-ranking-car-number{
+  font-size:38px;
+  font-weight:900;
+  line-height:1;
+  letter-spacing:-1px;
   color:var(--gold);
-  font-size:14px;
+  text-shadow:0 0 14px rgba(255,210,63,.28);
+}
+.power-ranking-card-first .power-ranking-car-number{
+  font-size:40px;
+  text-shadow:0 0 16px rgba(255,210,63,.35);
+}
+.power-ranking-name{
+  margin:0;
+  font-size:22px;
+  font-weight:900;
+  font-style:normal;
+  color:#fff;
+  text-transform:uppercase;
+  letter-spacing:.6px;
+  line-height:1.15;
+}
+.power-ranking-subtitle{
+  margin:10px 0 0;
+  color:var(--gold);
+  font-size:15px;
   font-weight:900;
   font-style:italic;
+  line-height:1.3;
 }
 .power-ranking-writeup{
-  margin:10px 0 0;
+  margin:12px 0 0;
   color:#ccc;
   font-size:13px;
-  line-height:1.55;
+  line-height:1.6;
   font-weight:400;
+  max-width:68ch;
 }
 .power-rankings-honorable{margin-top:28px}
 .power-rankings-honorable h3{margin:0 0 12px;font-size:18px;color:#ff3030}
@@ -858,7 +909,7 @@ footer{
   grid-template-columns:72px minmax(0,1fr);
   gap:14px;
   align-items:start;
-  padding:14px;
+  padding:14px 16px;
   border:1px solid #2b2b2b;
   background:rgba(0,0,0,.22);
 }
@@ -868,11 +919,28 @@ footer{
   object-fit:contain;
   filter:drop-shadow(0 0 6px #000);
 }
-.power-ranking-honorable-card h4{
-  margin:0 0 6px;
-  font-size:15px;
-  font-style:italic;
+.power-ranking-honorable-body{min-width:0}
+.power-ranking-honorable-identity{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  margin-bottom:8px;
+}
+.power-ranking-honorable-car{
+  font-size:28px;
+  font-weight:900;
+  line-height:1;
+  color:var(--gold);
+  text-shadow:0 0 10px rgba(255,210,63,.22);
+}
+.power-ranking-honorable-name{
+  margin:0;
+  font-size:16px;
+  font-weight:900;
+  font-style:normal;
   color:#fff;
+  text-transform:uppercase;
+  letter-spacing:.45px;
 }
 .power-ranking-honorable-card p{
   margin:0;
@@ -1005,10 +1073,23 @@ footer{
   .home-sponsors-strip{grid-template-columns:1fr}
   .home-hero h2{font-size:30px}
   .power-rankings-page .power-rankings-layout{grid-template-columns:1fr}
-  .power-ranking-card{grid-template-columns:56px 96px minmax(0,1fr)}
+  .power-ranking-card{grid-template-columns:64px 108px minmax(0,1fr);gap:14px;padding:16px}
+  .power-ranking-rank{font-size:36px}
+  .power-ranking-card-first .power-ranking-rank{font-size:40px}
+  .power-ranking-car-number{font-size:34px}
+  .power-ranking-name{font-size:19px}
 }
 @media(max-width:700px){
-  .power-ranking-card,.power-ranking-honorable-card{grid-template-columns:1fr}
+  .power-ranking-card{
+    grid-template-columns:56px minmax(0,1fr);
+    grid-template-areas:
+      "lead body"
+      "photo body";
+  }
+  .power-ranking-lead{grid-area:lead;align-items:flex-start}
+  .power-ranking-photo{grid-area:photo;max-width:96px;height:118px;margin:0 auto}
+  .power-ranking-body{grid-area:body}
+  .power-ranking-honorable-card{grid-template-columns:1fr}
   .power-ranking-photo,.power-ranking-honorable-photo{margin:0 auto}
 }
 @media(max-width:900px){
