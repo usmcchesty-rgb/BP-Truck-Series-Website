@@ -1,5 +1,13 @@
 const $ = (s) => document.querySelector(s);
 
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 // URL-safe filenames served from /assets/sponsors/ (web root = public/).
 const HOME_SPONSOR_FILES = [
   { file: "flying-pig-logo.png", label: "Flying Pig" },
@@ -263,6 +271,46 @@ async function loadGreenFlagBroadcast() {
   }
 }
 
+function renderPowerRankingsWidget(entries) {
+  const list = $("#homePowerRankingsList");
+  if (!list) return;
+
+  const top = (entries || []).slice(0, 3);
+  if (!top.length) {
+    list.innerHTML = `<div class="home-rank-item home-rank-placeholder">
+      <span class="home-rank-loading">Rankings coming soon.</span>
+    </div>`;
+    return;
+  }
+
+  list.innerHTML = top
+    .map((entry) => {
+      const movementClass = entry.movementClass ? ` ${entry.movementClass}` : "";
+      return `<div class="home-rank-item">
+        <span class="rank">${entry.rank}.</span>
+        <div class="home-rank-main">
+          <div class="home-rank-top">
+            <span class="home-rank-name">${escapeHtml(entry.driverName)}</span>
+            <span class="home-rank-move${movementClass}">${escapeHtml(entry.movementText)}</span>
+          </div>
+          <div class="home-rank-subtitle">${escapeHtml(entry.subtitle || "")}</div>
+        </div>
+      </div>`;
+    })
+    .join("");
+}
+
+async function loadPowerRankingsWidget() {
+  try {
+    const res = await fetch("/api/power-rankings");
+    const data = await res.json();
+    renderPowerRankingsWidget(data.current?.entries || []);
+  } catch (e) {
+    console.warn("Home power rankings load failed:", e);
+    renderPowerRankingsWidget([]);
+  }
+}
+
 async function loadHome() {
   let leader = null;
   let rows = [];
@@ -313,4 +361,5 @@ async function loadHome() {
 
 renderHomeSponsors();
 loadGreenFlagBroadcast();
+loadPowerRankingsWidget();
 loadHome();

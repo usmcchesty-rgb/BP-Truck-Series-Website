@@ -39,3 +39,37 @@ create table if not exists driver_profiles (
   active boolean default true,
   updated_at timestamptz default now()
 );
+
+-- Power Rankings (weekly Top 10 + optional honorable mentions)
+create table if not exists power_rankings_weeks (
+  id serial primary key,
+  race_number int not null,
+  published_date date,
+  published boolean default false,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create unique index if not exists power_rankings_weeks_race_number_idx
+  on power_rankings_weeks (race_number);
+
+create table if not exists power_rankings_entries (
+  id serial primary key,
+  week_id int not null references power_rankings_weeks(id) on delete cascade,
+  rank int not null check (rank >= 1 and rank <= 10),
+  driver_id text not null,
+  movement int default 0,
+  subtitle text not null default '',
+  writeup text not null default '',
+  unique (week_id, rank),
+  unique (week_id, driver_id)
+);
+
+create table if not exists power_rankings_honorable_mentions (
+  id serial primary key,
+  week_id int not null references power_rankings_weeks(id) on delete cascade,
+  sort_order int not null check (sort_order >= 1 and sort_order <= 3),
+  driver_id text not null,
+  writeup text not null default '',
+  unique (week_id, sort_order)
+);

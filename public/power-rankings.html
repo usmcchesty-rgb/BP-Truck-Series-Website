@@ -11,17 +11,37 @@
     <header class="topbar"></header>
 
     <main>
-      <section class="panel full-panel">
+      <section class="panel full-panel power-rankings-page">
         <h2>POWER RANKINGS</h2>
-        <p class="page-intro">
-          Weekly power rankings based on recent form, consistency, and race performance. Rankings data is not available yet.
+        <p class="page-intro" id="prIntro">
+          Weekly power rankings based on recent form, consistency, and race performance.
         </p>
-        <div class="home-rank-list" style="max-width:520px;">
-          <div class="home-rank-item"><span class="rank">1</span><span>Coming Soon</span><span class="pts">—</span></div>
-          <div class="home-rank-item"><span class="rank">2</span><span>Coming Soon</span><span class="pts">—</span></div>
-          <div class="home-rank-item"><span class="rank">3</span><span>Coming Soon</span><span class="pts">—</span></div>
-          <div class="home-rank-item"><span class="rank">4</span><span>Coming Soon</span><span class="pts">—</span></div>
-          <div class="home-rank-item"><span class="rank">5</span><span>Coming Soon</span><span class="pts">—</span></div>
+
+        <div class="power-rankings-layout">
+          <div class="power-rankings-main">
+            <div class="power-rankings-header" id="prHeader" hidden>
+              <div>
+                <h3 id="prWeekTitle">Race Rankings</h3>
+                <p class="power-rankings-date" id="prPublishedDate"></p>
+              </div>
+            </div>
+
+            <div id="prEmpty" class="placeholder-panel" hidden>
+              <p>No power rankings have been published yet. Check back after the next race.</p>
+            </div>
+
+            <div id="prList" class="power-rankings-list"></div>
+
+            <section id="prHonorableSection" class="power-rankings-honorable" hidden>
+              <h3>HONORABLE MENTIONS</h3>
+              <div id="prHonorableList" class="power-rankings-honorable-list"></div>
+            </section>
+          </div>
+
+          <aside class="power-rankings-sidebar panel" id="prArchivePanel" hidden>
+            <h3>PREVIOUS RANKINGS</h3>
+            <nav id="prArchiveNav" class="power-rankings-archive-nav" aria-label="Previous rankings"></nav>
+          </aside>
         </div>
       </section>
     </main>
@@ -37,5 +57,6 @@
         right: "tagline",
       });
     </script>
+    <script src="/power-rankings.js"></script>
   </body>
 </html>

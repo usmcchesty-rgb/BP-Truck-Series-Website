@@ -1,0 +1,489 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Power Rankings Admin</title>
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+    .wrap { padding: 18px; max-width: 1200px; margin: 0 auto; }
+    .nav { display: flex; justify-content: space-between; align-items: center; padding: 12px 18px; border-bottom: 1px solid #333; background: #0a0a0a; }
+    .nav .brand { font-weight: 900; font-size: 18px; }
+    .nav .brand span { color: var(--red); }
+    .nav a { color: #fff; text-decoration: none; font-size: 12px; font-weight: 900; margin-left: 14px; }
+    .sub { color: var(--muted); font-size: 12px; margin-bottom: 16px; line-height: 1.45; }
+    .panel { padding: 14px; margin-bottom: 14px; }
+    .panel h2 { margin: 0 0 12px; font-size: 18px; color: #ff3030; }
+    .field-label { display: block; font-size: 11px; color: #999; font-weight: 900; text-transform: uppercase; margin: 10px 0 4px; }
+    .input, .textarea, .select { width: 100%; margin-bottom: 8px; padding: 8px; background: #090909; color: #fff; border: 1px solid #555; border-radius: 4px; font-size: 12px; }
+    .textarea { min-height: 72px; resize: vertical; font-family: inherit; }
+    .btn-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+    .btn-secondary { background: linear-gradient(#1c1c1c, #080808); }
+    .btn-danger { background: linear-gradient(#5a1010, #2a0505); border-color: #733; }
+    #adminMsg, #loginMsg { margin-top: 10px; font-size: 12px; color: #ccc; white-space: pre-wrap; }
+    #adminMsg.error, #loginMsg.error { color: #ff6060; }
+    .pw-row { max-width: 320px; margin-bottom: 14px; }
+    .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; max-width: 520px; }
+    .ranking-row {
+      display: grid;
+      grid-template-columns: 42px 1.2fr 90px 1fr 1.4fr;
+      gap: 10px;
+      align-items: start;
+      padding: 10px 0;
+      border-bottom: 1px solid #222;
+    }
+    .ranking-row-head {
+      font-size: 10px;
+      color: #888;
+      font-weight: 900;
+      text-transform: uppercase;
+      padding-bottom: 6px;
+    }
+    .ranking-row .rank-label { font-size: 16px; font-weight: 900; color: var(--red); padding-top: 8px; }
+    .week-list { display: grid; gap: 8px; margin-bottom: 16px; }
+    .week-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      border: 1px solid #333;
+      background: rgba(0,0,0,.25);
+    }
+    .week-item strong { font-size: 13px; }
+    .week-item span { color: #888; font-size: 11px; }
+    .week-item-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .week-item-actions button { padding: 4px 10px; font-size: 9px; }
+    .mention-row {
+      display: grid;
+      grid-template-columns: 1.2fr 1.6fr auto;
+      gap: 10px;
+      align-items: start;
+      margin-bottom: 10px;
+    }
+    @media (max-width: 900px) {
+      .ranking-row, .ranking-row-head { grid-template-columns: 1fr; }
+      .ranking-row-head { display: none; }
+      .mention-row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header class="nav">
+    <div class="brand">BP ADMIN <span>POWER RANKINGS</span></div>
+    <nav>
+      <a href="/admin">Admin Home</a>
+      <a href="/">Site</a>
+      <button id="logoutBtn" class="btn" type="button" hidden onclick="logout()">Logout</button>
+    </nav>
+  </header>
+
+  <main id="loginView" class="wrap" hidden>
+    <h1>Admin Login</h1>
+    <p class="sub">Enter the admin password to manage weekly power rankings.</p>
+    <div class="pw-row">
+      <input id="loginPw" class="input" type="password" placeholder="Admin password" autocomplete="current-password">
+      <button class="btn" type="button" onclick="login()">Unlock</button>
+      <pre id="loginMsg"></pre>
+    </div>
+  </main>
+
+  <main id="adminView" class="wrap" hidden>
+    <h1>Power Rankings</h1>
+    <p class="sub">Create and publish weekly Top 10 power rankings with custom subtitles and writeups. Honorable mentions are optional (0–3).</p>
+
+    <div class="panel">
+      <h2>Saved Weeks</h2>
+      <div id="weekList" class="week-list"></div>
+      <button class="btn btn-secondary" type="button" onclick="startNewWeek()">Create New Week</button>
+    </div>
+
+    <div class="panel">
+      <h2 id="editorTitle">Edit Rankings</h2>
+      <div class="meta-grid">
+        <div>
+          <label class="field-label" for="raceNumber">Race Number</label>
+          <input id="raceNumber" class="input" type="number" min="1" placeholder="13">
+        </div>
+        <div>
+          <label class="field-label" for="publishedDate">Published Date</label>
+          <input id="publishedDate" class="input" type="date">
+        </div>
+      </div>
+
+      <div class="ranking-row ranking-row-head">
+        <div>Rank</div>
+        <div>Driver</div>
+        <div>Movement</div>
+        <div>Subtitle</div>
+        <div>Writeup</div>
+      </div>
+      <div id="rankingRows"></div>
+
+      <h2 style="margin-top:18px;">Honorable Mentions</h2>
+      <p class="sub">Optional. Add up to 3 drivers who deserve a mention without a full ranking slot.</p>
+      <div id="mentionRows"></div>
+      <button class="btn btn-secondary" type="button" onclick="addMentionRow()">Add Honorable Mention</button>
+
+      <div class="btn-row">
+        <button class="btn" type="button" onclick="saveWeek(false)">Save Draft</button>
+        <button class="btn" type="button" onclick="saveWeek(true)">Publish Rankings</button>
+        <button class="btn btn-danger" type="button" onclick="deleteWeek()">Delete Week</button>
+      </div>
+      <pre id="adminMsg"></pre>
+    </div>
+  </main>
+
+  <script>
+    const $ = (s) => document.querySelector(s);
+    const SESSION_KEY = 'bp_admin_pw';
+    let driverOptions = [];
+    let currentWeekId = null;
+    let savedWeeks = [];
+
+    function getSessionPw() {
+      return sessionStorage.getItem(SESSION_KEY) || '';
+    }
+
+    function setMsg(text, isError = false) {
+      const msg = $('#adminMsg');
+      msg.textContent = text;
+      msg.classList.toggle('error', isError);
+    }
+
+    async function verifyPassword(pw) {
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pw, verifyOnly: true })
+      });
+      return res.ok;
+    }
+
+    function showLogin() {
+      $('#loginView').hidden = false;
+      $('#adminView').hidden = true;
+      $('#logoutBtn').hidden = true;
+      $('#loginPw').focus();
+    }
+
+    function showAdmin() {
+      $('#loginView').hidden = true;
+      $('#adminView').hidden = false;
+      $('#logoutBtn').hidden = false;
+      initAdmin();
+    }
+
+    async function login() {
+      const msg = $('#loginMsg');
+      const pw = $('#loginPw').value;
+      if (!pw) {
+        msg.textContent = 'Enter the admin password.';
+        msg.classList.add('error');
+        return;
+      }
+      msg.textContent = 'Checking...';
+      msg.classList.remove('error');
+      try {
+        const ok = await verifyPassword(pw);
+        if (!ok) throw new Error('Bad password');
+        sessionStorage.setItem(SESSION_KEY, pw);
+        $('#loginPw').value = '';
+        msg.textContent = '';
+        showAdmin();
+      } catch (e) {
+        msg.textContent = e.message || 'Login failed';
+        msg.classList.add('error');
+      }
+    }
+
+    function logout() {
+      sessionStorage.removeItem(SESSION_KEY);
+      showLogin();
+    }
+
+    async function initSession() {
+      const pw = getSessionPw();
+      if (!pw) {
+        showLogin();
+        return;
+      }
+      try {
+        if (await verifyPassword(pw)) {
+          showAdmin();
+          return;
+        }
+      } catch {}
+      sessionStorage.removeItem(SESSION_KEY);
+      showLogin();
+    }
+
+    $('#loginPw')?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') login();
+    });
+
+    function escapeHtml(s) {
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function driverSelectHtml(selectedId = '') {
+      const options = ['<option value="">Select driver</option>']
+        .concat(driverOptions.map((d) => {
+          const label = d.car_number
+            ? `${d.display_name || d.iracing_name} #${d.car_number}`
+            : (d.display_name || d.iracing_name);
+          const selected = String(d.driver_id) === String(selectedId) ? ' selected' : '';
+          return `<option value="${escapeHtml(d.driver_id)}"${selected}>${escapeHtml(label)}</option>`;
+        }));
+      return options.join('');
+    }
+
+    function renderRankingRows(entries = []) {
+      const container = $('#rankingRows');
+      container.innerHTML = Array.from({ length: 10 }, (_, index) => {
+        const rank = index + 1;
+        const entry = entries.find((e) => Number(e.rank) === rank) || {};
+        return `<div class="ranking-row" data-rank="${rank}">
+          <div class="rank-label">#${rank}</div>
+          <div>
+            <select class="select driver-select">${driverSelectHtml(entry.driverId || entry.driver_id || '')}</select>
+          </div>
+          <div>
+            <input class="input movement-input" type="number" value="${entry.movement ?? 0}" placeholder="0">
+          </div>
+          <div>
+            <input class="input subtitle-input" type="text" value="${escapeHtml(entry.subtitle || '')}" placeholder="Custom headline">
+          </div>
+          <div>
+            <textarea class="textarea writeup-input" placeholder="Full writeup">${escapeHtml(entry.writeup || '')}</textarea>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    function renderMentionRows(mentions = []) {
+      const container = $('#mentionRows');
+      container.innerHTML = mentions.map((mention, index) => mentionRowHtml(mention, index)).join('');
+    }
+
+    function mentionRowHtml(mention = {}, index = 0) {
+      return `<div class="mention-row" data-mention-index="${index}">
+        <select class="select mention-driver">${driverSelectHtml(mention.driverId || mention.driver_id || '')}</select>
+        <textarea class="textarea mention-writeup" placeholder="Short writeup">${escapeHtml(mention.writeup || '')}</textarea>
+        <button class="btn btn-danger" type="button" onclick="removeMentionRow(${index})">Remove</button>
+      </div>`;
+    }
+
+    function addMentionRow() {
+      const container = $('#mentionRows');
+      const count = container.querySelectorAll('.mention-row').length;
+      if (count >= 3) {
+        setMsg('Maximum 3 honorable mentions.', true);
+        return;
+      }
+      container.insertAdjacentHTML('beforeend', mentionRowHtml({}, count));
+    }
+
+    function removeMentionRow(index) {
+      const rows = [...document.querySelectorAll('#mentionRows .mention-row')];
+      if (rows[index]) rows[index].remove();
+    }
+
+    function collectFormData() {
+      const entries = [...document.querySelectorAll('#rankingRows .ranking-row')].map((row) => ({
+        rank: Number(row.dataset.rank),
+        driverId: row.querySelector('.driver-select')?.value || '',
+        movement: Number(row.querySelector('.movement-input')?.value) || 0,
+        subtitle: row.querySelector('.subtitle-input')?.value || '',
+        writeup: row.querySelector('.writeup-input')?.value || '',
+      }));
+
+      const honorableMentions = [...document.querySelectorAll('#mentionRows .mention-row')]
+        .map((row) => ({
+          driverId: row.querySelector('.mention-driver')?.value || '',
+          writeup: row.querySelector('.mention-writeup')?.value || '',
+        }))
+        .filter((mention) => mention.driverId || mention.writeup.trim());
+
+      return {
+        id: currentWeekId || undefined,
+        raceNumber: Number($('#raceNumber').value),
+        publishedDate: $('#publishedDate').value || null,
+        entries,
+        honorableMentions,
+      };
+    }
+
+    function renderWeekList() {
+      const list = $('#weekList');
+      if (!savedWeeks.length) {
+        list.innerHTML = '<p class="sub">No saved weeks yet.</p>';
+        return;
+      }
+
+      list.innerHTML = savedWeeks.map((week) => {
+        const status = week.published ? 'Published' : 'Draft';
+        const date = week.publishedDate || 'No date';
+        return `<div class="week-item">
+          <div>
+            <strong>${escapeHtml(week.label || `Race ${week.raceNumber}`)}</strong>
+            <span>${status} · ${escapeHtml(date)}</span>
+          </div>
+          <div class="week-item-actions">
+            <button class="btn btn-secondary" type="button" onclick="loadWeek(${week.id})">Edit</button>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    function startNewWeek() {
+      currentWeekId = null;
+      $('#editorTitle').textContent = 'Create Rankings';
+      $('#raceNumber').value = '';
+      $('#publishedDate').value = new Date().toISOString().slice(0, 10);
+      renderRankingRows();
+      renderMentionRows([]);
+      setMsg('');
+    }
+
+    function loadWeekIntoForm(week) {
+      currentWeekId = week.id;
+      $('#editorTitle').textContent = `Edit ${week.label || `Race ${week.raceNumber}`}`;
+      $('#raceNumber').value = week.raceNumber || '';
+      $('#publishedDate').value = week.publishedDate || '';
+      renderRankingRows(week.entries || []);
+      renderMentionRows(week.honorableMentions || []);
+      setMsg('');
+    }
+
+    async function loadWeek(weekId) {
+      setMsg('Loading week...');
+      try {
+        const res = await fetch(`/api/power-rankings?weekId=${weekId}&admin=1`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to load week.');
+        loadWeekIntoForm(data.current);
+        setMsg(`Loaded ${data.current.label || 'week'}.`);
+      } catch (e) {
+        setMsg(e.message, true);
+      }
+    }
+
+    async function loadDrivers() {
+      const [standingsRes, driversRes] = await Promise.all([
+        fetch('/api/standings'),
+        fetch('/api/drivers'),
+      ]);
+      const standingsData = await standingsRes.json();
+      const profiles = await driversRes.json();
+      if (!standingsRes.ok) throw new Error(standingsData.error || 'Failed to load standings');
+      if (!driversRes.ok) throw new Error(profiles.error || 'Failed to load drivers');
+
+      const profileById = Object.fromEntries(
+        (Array.isArray(profiles) ? profiles : []).map((p) => [String(p.driver_id), p])
+      );
+
+      driverOptions = (standingsData.rows || []).map((row) => {
+        const profile = profileById[String(row.driverId)] || null;
+        return {
+          driver_id: String(row.driverId),
+          iracing_name: row.driver,
+          display_name: profile?.display_name || row.driver,
+          car_number: profile?.car_number || row.carNumber || '',
+        };
+      }).sort((a, b) => (a.display_name || a.iracing_name).localeCompare(b.display_name || b.iracing_name));
+    }
+
+    async function loadSavedWeeks() {
+      const res = await fetch('/api/power-rankings?admin=1');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to load saved weeks.');
+      savedWeeks = data.weeks || [];
+      renderWeekList();
+    }
+
+    async function saveWeek(publish) {
+      const pw = getSessionPw();
+      if (!pw) {
+        setMsg('Session expired: log in again.', true);
+        logout();
+        return;
+      }
+
+      const payload = collectFormData();
+      setMsg(publish ? 'Publishing...' : 'Saving draft...');
+
+      try {
+        const res = await fetch('/api/power-rankings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            password: pw,
+            action: publish ? 'publish' : 'save',
+            ...payload,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Save failed.');
+        currentWeekId = data.id;
+        await loadSavedWeeks();
+        loadWeekIntoForm(data);
+        setMsg(publish ? 'Rankings published.' : 'Draft saved.');
+      } catch (e) {
+        setMsg(e.message, true);
+      }
+    }
+
+    async function deleteWeek() {
+      if (!currentWeekId) {
+        setMsg('No week selected to delete.', true);
+        return;
+      }
+      if (!confirm('Delete this week and all of its rankings?')) return;
+
+      const pw = getSessionPw();
+      if (!pw) {
+        setMsg('Session expired: log in again.', true);
+        logout();
+        return;
+      }
+
+      setMsg('Deleting...');
+      try {
+        const res = await fetch('/api/power-rankings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            password: pw,
+            action: 'delete',
+            id: currentWeekId,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Delete failed.');
+        startNewWeek();
+        await loadSavedWeeks();
+        setMsg('Week deleted.');
+      } catch (e) {
+        setMsg(e.message, true);
+      }
+    }
+
+    async function initAdmin() {
+      try {
+        await loadDrivers();
+        await loadSavedWeeks();
+        if (!currentWeekId) startNewWeek();
+      } catch (e) {
+        setMsg(e.message, true);
+      }
+    }
+
+    initSession();
+  </script>
+</body>
+</html>

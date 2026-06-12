@@ -758,8 +758,7 @@ footer{
 .home-rank-list{display:grid;gap:8px}
 .home-rank-item{
   display:flex;
-  justify-content:space-between;
-  align-items:center;
+  align-items:flex-start;
   gap:10px;
   padding:8px 10px;
   border:1px solid #2b2b2b;
@@ -768,7 +767,139 @@ footer{
   font-weight:900;
 }
 .home-rank-item .rank{color:var(--red);min-width:22px}
+.home-rank-main{flex:1;min-width:0}
+.home-rank-top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.home-rank-name{font-size:11px;font-weight:900;color:#fff}
+.home-rank-move{font-size:10px;font-weight:900;color:#aaa;white-space:nowrap}
+.home-rank-move.positive{color:var(--green)}
+.home-rank-move.negative{color:#ff2323}
+.home-rank-subtitle{margin-top:4px;color:#bbb;font-size:10px;font-weight:700;font-style:italic;line-height:1.35}
+.home-rank-loading,.home-rank-placeholder{color:#888;font-style:italic}
 .home-rank-item .pts{color:var(--gold)}
+.power-rankings-page .power-rankings-layout{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 260px;
+  gap:20px;
+  align-items:start;
+}
+.power-rankings-header{margin-bottom:18px}
+.power-rankings-header h3{margin:0;font-size:24px;font-style:italic;color:#fff}
+.power-rankings-date{margin:6px 0 0;color:#888;font-size:12px;font-weight:700}
+.power-rankings-list{display:grid;gap:14px}
+.power-ranking-card{
+  display:grid;
+  grid-template-columns:56px 120px minmax(0,1fr);
+  gap:16px;
+  align-items:start;
+  padding:16px;
+  border:1px solid #333;
+  background:rgba(8,8,8,.92);
+  border-radius:5px;
+}
+.power-ranking-card-first{
+  border-color:var(--gold);
+  box-shadow:0 0 16px rgba(255,210,63,.18);
+}
+.power-ranking-rank{
+  font-size:28px;
+  font-weight:900;
+  color:var(--red);
+  line-height:1;
+  padding-top:8px;
+}
+.power-ranking-photo{
+  width:100%;
+  max-width:120px;
+  height:140px;
+  object-fit:contain;
+  filter:drop-shadow(0 0 8px #000);
+}
+.power-ranking-body{min-width:0}
+.power-ranking-title-row{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:12px;
+  flex-wrap:wrap;
+}
+.power-ranking-title-row h3{
+  margin:0;
+  font-size:20px;
+  font-style:italic;
+  color:#fff;
+}
+.power-ranking-movement{
+  font-size:13px;
+  font-weight:900;
+  color:#aaa;
+  white-space:nowrap;
+}
+.power-ranking-movement.positive{color:var(--green)}
+.power-ranking-movement.negative{color:#ff2323}
+.power-ranking-subtitle{
+  margin:8px 0 0;
+  color:var(--gold);
+  font-size:14px;
+  font-weight:900;
+  font-style:italic;
+}
+.power-ranking-writeup{
+  margin:10px 0 0;
+  color:#ccc;
+  font-size:13px;
+  line-height:1.55;
+  font-weight:400;
+}
+.power-rankings-honorable{margin-top:28px}
+.power-rankings-honorable h3{margin:0 0 12px;font-size:18px;color:#ff3030}
+.power-rankings-honorable-list{display:grid;gap:12px}
+.power-ranking-honorable-card{
+  display:grid;
+  grid-template-columns:72px minmax(0,1fr);
+  gap:14px;
+  align-items:start;
+  padding:14px;
+  border:1px solid #2b2b2b;
+  background:rgba(0,0,0,.22);
+}
+.power-ranking-honorable-photo{
+  width:72px;
+  height:84px;
+  object-fit:contain;
+  filter:drop-shadow(0 0 6px #000);
+}
+.power-ranking-honorable-card h4{
+  margin:0 0 6px;
+  font-size:15px;
+  font-style:italic;
+  color:#fff;
+}
+.power-ranking-honorable-card p{
+  margin:0;
+  color:#bbb;
+  font-size:12px;
+  line-height:1.45;
+}
+.power-rankings-sidebar{padding:14px}
+.power-rankings-sidebar h3{margin:0 0 12px;font-size:16px;color:#ff3030}
+.power-rankings-archive-nav{display:grid;gap:8px}
+.power-rankings-archive-link{
+  display:block;
+  padding:10px 12px;
+  border:1px solid #333;
+  background:linear-gradient(#1c1c1c,#080808);
+  color:#fff;
+  text-decoration:none;
+  font-size:11px;
+  font-weight:900;
+  text-transform:uppercase;
+}
+.power-rankings-archive-link:hover,
+.power-rankings-archive-link.active{
+  background:linear-gradient(#d40000,#680000);
+  border-color:#ff2424;
+  box-shadow:0 0 10px rgba(229,9,20,.25);
+}
 .home-placeholder{color:#888;font-size:11px;font-style:italic}
 .home-cta-row{display:flex;flex-wrap:wrap;gap:12px;margin-top:18px}
 .muted{color:var(--muted);font-size:12px}
@@ -873,6 +1004,12 @@ footer{
   .home-card-wide,.home-card-full{grid-column:span 1}
   .home-sponsors-strip{grid-template-columns:1fr}
   .home-hero h2{font-size:30px}
+  .power-rankings-page .power-rankings-layout{grid-template-columns:1fr}
+  .power-ranking-card{grid-template-columns:56px 96px minmax(0,1fr)}
+}
+@media(max-width:700px){
+  .power-ranking-card,.power-ranking-honorable-card{grid-template-columns:1fr}
+  .power-ranking-photo,.power-ranking-honorable-photo{margin:0 auto}
 }
 @media(max-width:900px){
   .home-magazine-grid{grid-template-columns:1fr}
