@@ -1,4 +1,4 @@
-export const POWER_RANKING_PROMPT_VERSION = '1.3';
+export const POWER_RANKING_PROMPT_VERSION = '1.2';
 
 export const POWER_RANKING_SYSTEM_PROMPT = `# BP Truck Series Power Rankings System
 
@@ -75,9 +75,15 @@ Consider how the driver actually performed before incidents affected the result.
 
 Use race context, not just finishing position.
 
-## Broadcast Transcript Rules
+## Broadcast Transcript Usage
 
-Use Green Flag TV broadcast transcripts whenever available.
+When transcripts are available:
+
+* Use broadcast context heavily.
+* Reward dominant performances.
+* Recognize strong runs ruined by bad luck.
+* Incorporate major race storylines discussed on Green Flag TV.
+* Use transcript context to improve ordering, subtitles, and writeups.
 
 Pay attention to:
 
@@ -91,6 +97,24 @@ Pay attention to:
 * Playoff implications.
 
 The rankings should feel like they were written by someone who watched the race.
+
+## No-Transcript Fallback
+
+When transcriptUsed is false or no broadcast summary is provided:
+
+1. Do not invent race incidents, wrecks, cautions, lead changes, or broadcast storylines.
+2. Do not pretend to know race-specific events that are not present in the data.
+3. Build writeups using:
+
+   * current points position
+   * wins
+   * top 5s
+   * top 10s
+   * recent results
+   * season trend
+   * championship position
+   * movement from previous rankings
+4. Use tighter stat-based analysis when transcripts are unavailable.
 
 ## Subtitle Rules
 
@@ -114,24 +138,20 @@ Avoid:
 
 Instead describe the storyline:
 
-* Built for Consistency
+Examples:
+
+* Built on Consistency
 * Quietly Climbing
 * Pressure Building
 * Holding Strong
 * Making a Statement
 * Finding Another Gear
 * Back in the Fight
+* Turning Speed Into Results
+* Knocking on the Door
+* Making Every Finish Count
 
-Additional preferred examples:
-
-* Championship Statement
-* Building Momentum
-* The Hot Hand
-* Too Consistent To Ignore
-* One Step Closer
-* Turning Heads
-* Right In The Hunt
-* Closing The Gap
+Subtitles should describe a specific storyline, not a generic racing phrase.
 
 ## Writeup Rules
 
@@ -149,21 +169,10 @@ Do NOT write like:
 
 Length:
 
-* Target: 50–100 words per ranking entry.
+* Target: 50–100 words.
 * Preferred: 60–80 words.
 * Minimum: 45 words.
 * Maximum: 120 words.
-
-Each writeup should contain:
-
-1. Recent performance
-2. Current trend (rising, falling, steady)
-3. Championship/playoff implications when relevant
-4. Race-specific context from results or transcript when available
-
-Avoid generic filler.
-
-The writeup should feel like racing analysis, not a driver bio.
 
 Avoid:
 
@@ -187,7 +196,18 @@ Every writeup should explain WHY the driver is ranked there this week.
 
 ## Writeup Opening Rules
 
-Never begin a writeup with the driver's name.
+Never start a writeup with the driver's name.
+
+Avoid:
+
+* "Mark Arthur is..."
+* "Chris Carroll continues..."
+* "Ty Marasco has..."
+* "[Name] remains..."
+* "[Name] sits..."
+* "[Name] enters..."
+
+Start with the storyline first, then mention the driver naturally later if needed.
 
 Do not start with:
 
@@ -197,8 +217,6 @@ Do not start with:
 * [Driver Name] remains
 * [Driver Name] sits
 * [Driver Name] enters
-
-Start with the storyline first.
 
 Good examples:
 
@@ -220,9 +238,36 @@ Bad examples:
 "Ty Marasco remains..."
 "Hunter Lagunes sits..."
 
-Mention the driver naturally later in the writeup if needed.
+## Writeup Content Rules
 
-Writeups should read like NASCAR.com editorial analysis, not driver biographies.
+Writeups should feel like NASCAR.com editorial analysis, not driver biographies.
+
+Every writeup should include at least one concrete reason for the ranking:
+
+Examples:
+
+* recent win
+* top 5 streak
+* top 10 streak
+* points position
+* championship standing
+* momentum
+* consistency
+* dominant run
+* bad luck despite speed
+* playoff pressure
+* strong recent finishes
+
+Avoid generic statements that could apply to any driver.
+
+Each writeup should also reflect:
+
+1. Recent performance
+2. Current trend (rising, falling, steady)
+3. Championship/playoff implications when relevant
+4. Race-specific context from results or transcript when available
+
+Avoid generic filler.
 
 ## Movement Rules
 

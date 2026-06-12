@@ -250,7 +250,7 @@ async function loadBroadcastContext(raceNumber, drivers) {
         videoTitle: video.title || null,
         videoRaceNumber: selection.selectedVideoRaceNumber,
         summary: null,
-        note: 'Transcript unavailable — use standings, schedule, and results only.',
+        note: 'Transcript unavailable — follow No-Transcript Fallback rules. Use standings, schedule, results, and stats only.',
       },
     };
   }
@@ -278,6 +278,7 @@ function buildContextPayload({
   previousRankings,
   profiles,
   broadcastContext,
+  transcriptUsed,
 }) {
   const completedRaces = scheduleRaces
     .filter((race) => race.winner && race.raceNumber <= raceNumber)
@@ -317,6 +318,10 @@ function buildContextPayload({
       carNumber: p.car_number || '',
     })),
     broadcastContext,
+    transcriptUsed: transcriptUsed === true,
+    transcriptMode: transcriptUsed
+      ? 'transcript_available'
+      : 'no_transcript_use_stats_only',
   };
 }
 
@@ -340,8 +345,14 @@ async function callOpenAi(contextPayload) {  const apiKey = process.env.OPENAI_A
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: POWER_RANKING_SYSTEM_PROMPT },
-        {          role: 'user',
-          content: `Generate Race ${contextPayload.raceNumber} power rankings using this data:\n${JSON.stringify(contextPayload, null, 2)}`,
+        {
+          role: 'user',
+          content: `Generate Race ${contextPayload.raceNumber} power rankings using this data.
+
+transcriptUsed: ${contextPayload.transcriptUsed === true}
+If transcriptUsed is false, follow the No-Transcript Fallback rules. Do not invent race incidents or broadcast storylines.
+
+${JSON.stringify(contextPayload, null, 2)}`,
         },
       ],
     }),
@@ -482,21 +493,18 @@ function validateWriteup(writeup, driver) {
   }
 
   const words = countWords(text);
-  if (words < 45) {
+  if (words < 30) {
     return {
-      error: `Writeup is too short (${words} words; minimum 45).`,
+      error: `Writeup is too short (${words} words; minimum 30).`,
       warnings,
     };
   }
 
-  if (words < 60 || words > 80) {
-    warnings.push(`Outside preferred length (60–80 words, got ${words}).`);
+  if (words < 50) {
+    warnings.push(`Below preferred length (50–100 words, got ${words}).`);
   }
-  if (words < 50 || words > 100) {
-    warnings.push(`Outside target length (50–100 words, got ${words}).`);
-  }
-  if (words > 120) {
-    warnings.push(`Exceeds maximum length (120 words, got ${words}).`);
+  if (words > 100) {
+    warnings.push(`Above preferred length (50–100 words, got ${words}).`);
   }
 
   const sentences = countSentences(text);
@@ -507,9 +515,9 @@ function validateWriteup(writeup, driver) {
   const firstSentence = getFirstSentence(text);
   const firstLower = firstSentence.toLowerCase();
 
-  if (/^driver\s+\w+\s+(is|continues|has|remains)\b/i.test(firstSentence)) {
+  if (/^driver\s+\w+\s+(is|continues|has|remains|sits|enters)\b/i.test(firstSentence)) {
     return {
-      error: 'Writeup cannot start with "Driver X is/continues/has/remains".',
+      error: 'Writeup cannot start with "Driver X is/continues/has/remains/sits/enters".',
       warnings,
     };
   }
@@ -518,9 +526,13 @@ function validateWriteup(writeup, driver) {
     if (new RegExp(`^${token}\\b`, 'i').test(firstLower.replace(/[^a-z0-9\s']/g, ' '))) {
       return { error: 'Writeup should not start with the driver\'s name.', warnings };
     }
-    if (new RegExp(`\\b${token}\\s+(is|continues|has|remains)\\b`, 'i').test(firstSentence)) {
+    if (
+      new RegExp(`\\b${token}\\s+(is|continues|has|remains|sits|enters)\\b`, 'i').test(
+        firstSentence
+      )
+    ) {
       return {
-        error: 'Writeup cannot open with "[Name] is/continues/has/remains".',
+        error: 'Writeup cannot open with "[Name] is/continues/has/remains/sits/enters".',
         warnings,
       };
     }
@@ -680,6 +692,7 @@ export default async function handler(req, res) {
       previousRankings,
       profiles,
       broadcastContext: transcriptMeta.broadcastContext,
+      transcriptUsed: transcriptMeta.transcriptUsed,
     });
 
     const aiDraft = await callOpenAi(contextPayload);
