@@ -1,4 +1,4 @@
-import { getDriverProfiles, slugify, supabase } from './_lib.js';
+import { slugify, supabase } from './_lib.js';
 
 function parseBody(req) {
   if (!req.body) return {};
@@ -12,9 +12,32 @@ function parseBody(req) {
   return req.body;
 }
 
+async function loadDriverProfiles() {
+  const sb = supabase();
+  if (!sb) return [];
+
+  const { data: profiles, error } = await sb
+    .from('driver_profiles')
+    .select('*')
+    .order('iracing_name');
+
+  if (error) {
+    console.error('driver_profiles query failed:', error);
+    return [];
+  }
+
+  if (!Array.isArray(profiles)) {
+    console.error('driver_profiles is not an array', profiles);
+    return [];
+  }
+
+  return profiles;
+}
+
 function profileMap(profiles) {
+  const rows = Array.isArray(profiles) ? profiles : [];
   return Object.fromEntries(
-    profiles.map((p) => [String(p.driver_id), p])
+    rows.map((p) => [String(p.driver_id), p])
   );
 }
 
@@ -112,8 +135,8 @@ async function loadWeekBundle(weekId) {
     sb.from('power_rankings_honorable_mentions').select('*').eq('week_id', weekId).order('sort_order'),
   ]);
 
-  const profiles = profileMap(await getDriverProfiles());
-  return normalizeWeek(week, entries || [], honorable || [], Object.values(profiles));
+  const profiles = await loadDriverProfiles();
+  return normalizeWeek(week, entries || [], honorable || [], profiles);
 }
 
 async function loadPublishedWeeks(includeUnpublished = false) {
@@ -275,7 +298,7 @@ export default async function handler(req, res) {
 
     const weekId = req.query?.weekId ? Number(req.query.weekId) : null;
     const includeUnpublished = req.query?.admin === '1';
-    const profiles = profileMap(await getDriverProfiles());
+    const profiles = await loadDriverProfiles();
 
     if (weekId) {
       const week = await loadWeekBundle(weekId);

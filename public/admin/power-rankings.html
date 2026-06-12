@@ -103,7 +103,7 @@
       <div class="meta-grid">
         <div>
           <label class="field-label" for="raceNumber">Race Number</label>
-          <input id="raceNumber" class="input" type="number" min="1" placeholder="13">
+          <input id="raceNumber" class="input" type="number" min="1" step="1" placeholder="Race #">
         </div>
         <div>
           <label class="field-label" for="publishedDate">Published Date</label>
@@ -140,6 +140,52 @@
     let driverOptions = [];
     let currentWeekId = null;
     let savedWeeks = [];
+    let suggestedRaceNumber = 1;
+
+    function readRaceNumberInput() {
+      const input = $('#raceNumber');
+      if (!input) return null;
+
+      const raw = String(input.value ?? '').trim();
+      if (raw) {
+        const parsed = Number.parseInt(raw, 10);
+        if (Number.isInteger(parsed) && parsed >= 1) return parsed;
+      }
+
+      if (Number.isInteger(input.valueAsNumber) && input.valueAsNumber >= 1) {
+        return input.valueAsNumber;
+      }
+
+      return null;
+    }
+
+    function setRaceNumberInput(value) {
+      const input = $('#raceNumber');
+      if (!input || value == null || value === '') {
+        if (input) input.value = '';
+        return;
+      }
+      input.value = String(value);
+    }
+
+    function suggestNextRaceNumberFromWeeks() {
+      if (!savedWeeks.length) return 1;
+      const maxSaved = Math.max(...savedWeeks.map((week) => Number(week.raceNumber) || 0));
+      return maxSaved + 1;
+    }
+
+    async function refreshSuggestedRaceNumber() {
+      suggestedRaceNumber = suggestNextRaceNumberFromWeeks();
+
+      try {
+        const res = await fetch('/api/schedule');
+        const data = await res.json();
+        const completed = (data.races || []).filter((race) => race.winner).length;
+        if (completed > 0) {
+          suggestedRaceNumber = Math.max(suggestedRaceNumber, completed + 1);
+        }
+      } catch {}
+    }
 
     function getSessionPw() {
       return sessionStorage.getItem(SESSION_KEY) || '';
@@ -311,7 +357,7 @@
 
       return {
         id: currentWeekId || undefined,
-        raceNumber: Number($('#raceNumber').value),
+        raceNumber: readRaceNumberInput(),
         publishedDate: $('#publishedDate').value || null,
         entries,
         honorableMentions,
@@ -340,10 +386,11 @@
       }).join('');
     }
 
-    function startNewWeek() {
+    async function startNewWeek() {
+      await refreshSuggestedRaceNumber();
       currentWeekId = null;
       $('#editorTitle').textContent = 'Create Rankings';
-      $('#raceNumber').value = '';
+      setRaceNumberInput(suggestedRaceNumber);
       $('#publishedDate').value = new Date().toISOString().slice(0, 10);
       renderRankingRows();
       renderMentionRows([]);
@@ -353,7 +400,7 @@
     function loadWeekIntoForm(week) {
       currentWeekId = week.id;
       $('#editorTitle').textContent = `Edit ${week.label || `Race ${week.raceNumber}`}`;
-      $('#raceNumber').value = week.raceNumber || '';
+      setRaceNumberInput(week.raceNumber);
       $('#publishedDate').value = week.publishedDate || '';
       renderRankingRows(week.entries || []);
       renderMentionRows(week.honorableMentions || []);
@@ -415,6 +462,11 @@
       }
 
       const payload = collectFormData();
+      if (!payload.raceNumber) {
+        setMsg('Enter a valid race number (1 or higher).', true);
+        return;
+      }
+
       setMsg(publish ? 'Publishing...' : 'Saving draft...');
 
       try {
@@ -431,6 +483,7 @@
         if (!res.ok) throw new Error(data.error || 'Save failed.');
         currentWeekId = data.id;
         await loadSavedWeeks();
+        await refreshSuggestedRaceNumber();
         loadWeekIntoForm(data);
         setMsg(publish ? 'Rankings published.' : 'Draft saved.');
       } catch (e) {
@@ -465,8 +518,8 @@
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Delete failed.');
-        startNewWeek();
         await loadSavedWeeks();
+        await startNewWeek();
         setMsg('Week deleted.');
       } catch (e) {
         setMsg(e.message, true);
@@ -477,6 +530,7 @@
       try {
         await loadDrivers();
         await loadSavedWeeks();
+        await refreshSuggestedRaceNumber();
         if (!currentWeekId) startNewWeek();
       } catch (e) {
         setMsg(e.message, true);
