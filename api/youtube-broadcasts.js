@@ -50,6 +50,8 @@ function sameCalendarDay(a, b) {
 }
 
 function parseVideoRaceNumber(title) {
+  // Green Flag TV titles use official points race numbers (e.g. S11R12).
+  // Do not apply schedule non-points adjustments to these values.
   const match = String(title || "").match(/\bS11\s*R\s*(\d+)\b/i);
   if (!match) return null;
   const raceNumber = Number(match[1]);

@@ -1,8 +1,13 @@
+import * as cheerio from 'cheerio';
+
 const FETCH_HEADERS = {
   'User-Agent':
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
   'Accept-Language': 'en-US,en;q=0.9',
 };
+
+const GREEN_FLAG_PLAYLIST_ID = 'PL4aFms0YBw6_uE-yoYgOFDtaNcN9ozPIO';
+const GREEN_FLAG_RSS_URL = `https://www.youtube.com/feeds/videos.xml?playlist_id=${GREEN_FLAG_PLAYLIST_ID}`;
 
 function decodeHtml(text) {
   return String(text || '')
@@ -93,6 +98,102 @@ function parseTimedText(body) {
   }
 
   return parts.join(' ').trim();
+}
+
+export function parseVideoRaceNumber(title) {
+  const match = String(title || '').match(/\bS11\s*R\s*(\d+)\b/i);
+  if (!match) return null;
+  const raceNumber = Number(match[1]);
+  return Number.isFinite(raceNumber) && raceNumber > 0 ? raceNumber : null;
+}
+
+function titleMatchesOfficialRaceNumber(title, requestedRaceNumber) {
+  const requested = Number(requestedRaceNumber);
+  if (!Number.isFinite(requested) || requested < 1) return false;
+  const pattern = new RegExp(`\\bS11\\s*R\\s*${requested}\\b`, 'i');
+  return pattern.test(String(title || ''));
+}
+
+export async function fetchGreenFlagPlaylistVideos() {
+  const res = await fetch(GREEN_FLAG_RSS_URL, {
+    headers: { 'user-agent': 'BP-Truck-Series-Website/1.0' },
+  });
+
+  if (!res.ok) return [];
+
+  const xml = await res.text();
+  const $ = cheerio.load(xml, { xmlMode: true, decodeEntities: true });
+  const videos = [];
+
+  $('entry').each((_, entry) => {
+    const $entry = $(entry);
+    const videoId =
+      $entry.find('yt\\:videoId').first().text().trim() ||
+      $entry.find('videoId').first().text().trim();
+    if (!videoId) return;
+
+    const title = $entry.find('title').first().text().trim();
+    const published = $entry.find('published').first().text().trim();
+
+    videos.push({
+      videoId,
+      title,
+      published,
+      raceNumber: parseVideoRaceNumber(title),
+    });
+  });
+
+  return videos.sort(
+    (a, b) => new Date(b.published).getTime() - new Date(a.published).getTime()
+  );
+}
+
+export function selectBroadcastVideoForRankings(videos, requestedRaceNumber) {
+  const requested = Number(requestedRaceNumber);
+  const baseSelection = {
+    video: null,
+    requestedRaceNumber: Number.isFinite(requested) ? requested : null,
+    selectedVideoRaceNumber: null,
+    selectedVideoTitle: null,
+    selectionMethod: 'not-found',
+    nonPointsAdjustmentApplied: false,
+  };
+
+  if (!Number.isFinite(requested) || requested < 1) {
+    return { ...baseSelection, selectionMethod: 'invalid-race-number' };
+  }
+
+  const list = Array.isArray(videos) ? videos : [];
+
+  const exactRaceNumber = list.find(
+    (video) => Number(video.raceNumber) === requested
+  );
+  if (exactRaceNumber) {
+    return {
+      video: exactRaceNumber,
+      requestedRaceNumber: requested,
+      selectedVideoRaceNumber: exactRaceNumber.raceNumber,
+      selectedVideoTitle: exactRaceNumber.title || null,
+      selectionMethod: 'exact-race-number',
+      nonPointsAdjustmentApplied: false,
+    };
+  }
+
+  const exactTitle = list.find((video) =>
+    titleMatchesOfficialRaceNumber(video.title, requested)
+  );
+  if (exactTitle) {
+    return {
+      video: exactTitle,
+      requestedRaceNumber: requested,
+      selectedVideoRaceNumber: parseVideoRaceNumber(exactTitle.title) ?? requested,
+      selectedVideoTitle: exactTitle.title || null,
+      selectionMethod: 'exact-title-match',
+      nonPointsAdjustmentApplied: false,
+    };
+  }
+
+  return baseSelection;
 }
 
 export async function fetchYouTubeTranscript(videoId) {
@@ -232,37 +333,4 @@ export function summarizeTranscriptForRankings(transcript, drivers, maxChars = 2
     highlightCount: selected.length,
     fullLength: transcript.length,
   };
-}
-
-export async function fetchYoutubeBroadcasts(req) {
-  try {
-    const host = req.headers.host || 'localhost:3000';
-    const proto = req.headers['x-forwarded-proto'] || 'http';
-    const res = await fetch(`${proto}://${host}/api/youtube-broadcasts`, {
-      headers: { 'user-agent': 'BP-Truck-Series-Website/1.0' },
-    });
-    if (!res.ok) return null;
-    return res.json();
-  } catch {
-    return null;
-  }
-}
-
-export function selectBroadcastVideo(broadcastsData, raceNumber) {
-  const videos = broadcastsData?.videos || [];
-  if (!videos.length) return broadcastsData?.featured || null;
-
-  const exact = videos.find((video) => Number(video.raceNumber) === Number(raceNumber));
-  if (exact) return exact;
-
-  const completed = videos
-    .filter(
-      (video) =>
-        video.raceNumber != null && Number(video.raceNumber) <= Number(raceNumber)
-    )
-    .sort((a, b) => Number(b.raceNumber) - Number(a.raceNumber));
-
-  if (completed.length) return completed[0];
-
-  return broadcastsData?.featured || videos[0] || null;
 }

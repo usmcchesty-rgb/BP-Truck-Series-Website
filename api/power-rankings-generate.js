@@ -1,9 +1,11 @@
 import * as cheerio from 'cheerio';
 import { fetchHtml, getDriverProfiles, getSettings, supabase } from './_lib.js';
-import {
-  fetchYoutubeBroadcasts,
+import POWER_RANKING_SYSTEM_PROMPT, {
+  POWER_RANKING_PROMPT_VERSION,
+} from '../server/config/power-ranking-system-prompt.js';
+import {  fetchGreenFlagPlaylistVideos,
   fetchYouTubeTranscript,
-  selectBroadcastVideo,
+  selectBroadcastVideoForRankings,
   summarizeTranscriptForRankings,
 } from './_youtube-transcript.js';
 
@@ -207,12 +209,22 @@ async function loadExistingWeekForRace(raceNumber) {
   return data;
 }
 
-async function loadBroadcastContext(req, raceNumber, drivers) {
-  const broadcasts = await fetchYoutubeBroadcasts(req);
-  const video = selectBroadcastVideo(broadcasts, raceNumber);
+async function loadBroadcastContext(raceNumber, drivers) {
+  const videos = await fetchGreenFlagPlaylistVideos();
+  const selection = selectBroadcastVideoForRankings(videos, raceNumber);
+  const video = selection.video;
+
+  const selectionDebug = {
+    requestedRaceNumber: selection.requestedRaceNumber,
+    selectedVideoRaceNumber: selection.selectedVideoRaceNumber,
+    selectedVideoTitle: selection.selectedVideoTitle,
+    selectionMethod: selection.selectionMethod,
+    nonPointsAdjustmentApplied: selection.nonPointsAdjustmentApplied,
+  };
 
   if (!video?.videoId) {
     return {
+      ...selectionDebug,
       transcriptUsed: false,
       transcriptVideoTitle: null,
       transcriptLength: 0,
@@ -229,13 +241,14 @@ async function loadBroadcastContext(req, raceNumber, drivers) {
 
   if (!transcript) {
     return {
+      ...selectionDebug,
       transcriptUsed: false,
-      transcriptVideoTitle: video.title || null,
+      transcriptVideoTitle: selection.selectedVideoTitle,
       transcriptLength: 0,
       broadcastContext: {
         videoId: video.videoId,
         videoTitle: video.title || null,
-        videoRaceNumber: video.raceNumber || null,
+        videoRaceNumber: selection.selectedVideoRaceNumber,
         summary: null,
         note: 'Transcript unavailable — use standings, schedule, and results only.',
       },
@@ -245,21 +258,19 @@ async function loadBroadcastContext(req, raceNumber, drivers) {
   const trimmed = summarizeTranscriptForRankings(transcript, drivers);
 
   return {
+    ...selectionDebug,
     transcriptUsed: Boolean(trimmed.summary),
-    transcriptVideoTitle: video.title || null,
+    transcriptVideoTitle: selection.selectedVideoTitle,
     transcriptLength: trimmed.fullLength,
     broadcastContext: {
       videoId: video.videoId,
       videoTitle: video.title || null,
-      videoRaceNumber: video.raceNumber || null,
+      videoRaceNumber: selection.selectedVideoRaceNumber,
       highlightCount: trimmed.highlightCount,
       summary: trimmed.summary,
-      guidance:
-        'Use broadcast context for race circumstances. Reward strong runs and wins. Do not over-penalize drivers who ran well but got wrecked or had bad luck.',
     },
   };
 }
-
 function buildContextPayload({
   raceNumber,
   standings,
@@ -270,7 +281,7 @@ function buildContextPayload({
 }) {
   const completedRaces = scheduleRaces
     .filter((race) => race.winner && race.raceNumber <= raceNumber)
-    .slice(-5);
+    .slice(-3);
 
   const recentResults = completedRaces.map((race) => ({
     raceNumber: race.raceNumber,
@@ -309,44 +320,7 @@ function buildContextPayload({
   };
 }
 
-const SYSTEM_PROMPT = `You write weekly Power Rankings for the Blazing Pedals Truck Series, a competitive iRacing NASCAR Truck league.
-
-Write like a fellow racer breaking down the field — not corporate, not robotic, not repetitive.
-
-Return ONLY valid JSON with this shape:
-{
-  "entries": [
-    {
-      "rank": 1,
-      "driverId": "string",
-      "movement": 0,
-      "subtitle": "string",
-      "writeup": "string"
-    }
-  ],
-  "honorableMentions": [
-    {
-      "driverId": "string",
-      "writeup": "string"
-    }
-  ]
-}
-
-Rules:
-- Exactly 10 entries with ranks 1 through 10.
-- Each driverId MUST come from the provided drivers list. No duplicates.
-- Subtitles are unique custom headlines tied to that driver's story this week. Do NOT pick from a fixed category list. Do NOT use generic labels like "Hot Streak" unless it truly fits.
-- Writeups are 2-4 sentences each, conversational, specific to recent form and stats provided.
-- movement is an integer: positive = moved UP vs previous power rankings (▲), negative = moved DOWN (▼), 0 = unchanged (—). Compare against previousPowerRankings when available. If a driver was not ranked last week but is now, use a positive movement reflecting their debut rank (e.g. entered at #8 -> movement +2 if you treat unranked as outside top 10, or use your best judgment with a positive value). If no previous rankings exist, use 0 for all movement.
-- honorableMentions: 0 to 3 entries only when truly warranted. Omit the array or return [] if none.
-- Rank drivers on recent race performance, momentum, consistency, and championship relevance — not points order alone.
-- When broadcastContext.summary is provided, treat it as Green Flag TV race broadcast context. Use it for ordering, subtitles, writeups, and honorable mentions.
-- Do not blindly follow points standings if the broadcast tells a different story.
-- A driver who ran strong but got wrecked, caught up in someone else's incident, or had bad luck should not be dropped unfairly — acknowledge the circumstances.
-- Reward race winners and drivers who dominated, led, or passed for the win when the broadcast supports it.`;
-
-async function callOpenAi(contextPayload) {
-  const apiKey = process.env.OPENAI_API_KEY;
+async function callOpenAi(contextPayload) {  const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     throw new Error('OPENAI_API_KEY is not configured in Vercel environment variables.');
   }
@@ -365,9 +339,8 @@ async function callOpenAi(contextPayload) {
       max_tokens: 4500,
       response_format: { type: 'json_object' },
       messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        {
-          role: 'user',
+        { role: 'system', content: POWER_RANKING_SYSTEM_PROMPT },
+        {          role: 'user',
           content: `Generate Race ${contextPayload.raceNumber} power rankings using this data:\n${JSON.stringify(contextPayload, null, 2)}`,
         },
       ],
@@ -413,6 +386,142 @@ function buildDriverLookup(standings, profiles) {
   return lookup;
 }
 
+function normalizeNameToken(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
+function getDriverNameTokens(driverName) {
+  return String(driverName || '')
+    .trim()
+    .split(/\s+/)
+    .map(normalizeNameToken)
+    .filter((token) => token.length > 2);
+}
+
+function subtitleWordCount(subtitle) {
+  return String(subtitle || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length;
+}
+
+function subtitleContainsToken(subtitle, token) {
+  if (!token) return false;
+  const pattern = new RegExp(`\\b${token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+  return pattern.test(String(subtitle || ''));
+}
+
+function validateSubtitle(subtitle, driver, usedSubtitles) {
+  const text = String(subtitle || '').trim();
+  if (!text) {
+    return 'Subtitle is required.';
+  }
+
+  const words = subtitleWordCount(text);
+  if (words < 2) {
+    return 'Subtitle must be at least 2 words.';
+  }
+  if (words > 6) {
+    return 'Subtitle must be 6 words or fewer.';
+  }
+
+  const normalized = text.toLowerCase();
+  if (usedSubtitles.has(normalized)) {
+    return 'Subtitle must be unique within the Top 10.';
+  }
+
+  if (/\bdriver'?s\b/i.test(text)) {
+    return 'Subtitle cannot use "Driver\'s" format.';
+  }
+
+  if (/'s\b/i.test(text)) {
+    return 'Subtitle cannot use possessive forms.';
+  }
+
+  const carNumber = String(driver?.carNumber || '').trim();
+  if (carNumber && subtitleContainsToken(text, carNumber)) {
+    return 'Subtitle cannot include a car number.';
+  }
+
+  for (const token of getDriverNameTokens(driver?.driverName)) {
+    if (subtitleContainsToken(text, token)) {
+      return `Subtitle cannot include driver name text ("${token}").`;
+    }
+  }
+
+  return null;
+}
+
+function countSentences(text) {
+  return String(text || '')
+    .split(/[.!?]+/)
+    .map((part) => part.trim())
+    .filter(Boolean).length;
+}
+
+function countWords(text) {
+  return String(text || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length;
+}
+
+function getFirstSentence(text) {
+  const match = String(text || '').match(/^[^.!?]+[.!?]?/);
+  return (match?.[0] || String(text || '')).trim();
+}
+
+function validateWriteup(writeup, driver) {
+  const text = String(writeup || '').trim();
+  if (!text) {
+    return 'Writeup is required.';
+  }
+
+  const sentences = countSentences(text);
+  if (sentences < 2 || sentences > 4) {
+    return 'Writeup must be 2–4 sentences.';
+  }
+
+  const words = countWords(text);
+  if (words < 30) {
+    return 'Writeup is too short (target 35–75 words).';
+  }
+  if (words > 90) {
+    return 'Writeup is too long (target 35–75 words).';
+  }
+
+  const firstSentence = getFirstSentence(text);
+  const firstLower = firstSentence.toLowerCase();
+
+  if (/^driver\s+\w+\s+(is|continues|has|remains)\b/i.test(firstSentence)) {
+    return 'Writeup cannot start with "Driver X is/continues/has/remains".';
+  }
+
+  for (const token of getDriverNameTokens(driver?.driverName)) {
+    if (new RegExp(`^${token}\\b`, 'i').test(firstLower.replace(/[^a-z0-9\s']/g, ' '))) {
+      return 'Writeup should not start with the driver\'s name.';
+    }
+    if (new RegExp(`\\b${token}\\s+(is|continues|has|remains)\\b`, 'i').test(firstSentence)) {
+      return 'Writeup cannot open with "[Name] is/continues/has/remains".';
+    }
+  }
+
+  const genericPatterns = [
+    /^steadily climbing the ranks\b/i,
+    /^continues to impress\b/i,
+    /^has shown speed\b/i,
+    /^remains a threat\b/i,
+    /^has been consistent\b/i,
+  ];
+  if (genericPatterns.some((pattern) => pattern.test(firstLower))) {
+    return 'Writeup opening is too generic.';
+  }
+
+  return null;
+}
+
 function normalizeDraft(aiDraft, driverLookup, previousRankings) {
   const previousRankByDriver = Object.fromEntries(
     (previousRankings?.entries || []).map((entry) => [
@@ -427,6 +536,7 @@ function normalizeDraft(aiDraft, driverLookup, previousRankings) {
   }
 
   const usedDrivers = new Set();
+  const usedSubtitles = new Set();
   const normalizedEntries = [];
 
   for (let expectedRank = 1; expectedRank <= 10; expectedRank += 1) {
@@ -463,6 +573,21 @@ function normalizeDraft(aiDraft, driverLookup, previousRankings) {
     });
   }
 
+  for (const entry of normalizedEntries) {
+    const driver = driverLookup.get(entry.driverId);
+
+    const writeupError = validateWriteup(entry.writeup, driver);
+    if (writeupError) {
+      throw new Error(`AI draft rank ${entry.rank} writeup rejected: ${writeupError}`);
+    }
+
+    const subtitleError = validateSubtitle(entry.subtitle, driver, usedSubtitles);
+    if (subtitleError) {
+      throw new Error(`AI draft rank ${entry.rank} subtitle rejected: ${subtitleError}`);
+    }
+    usedSubtitles.add(entry.subtitle.toLowerCase());
+  }
+
   const honorableMentions = (Array.isArray(aiDraft?.honorableMentions)
     ? aiDraft.honorableMentions
     : []
@@ -480,15 +605,6 @@ function normalizeDraft(aiDraft, driverLookup, previousRankings) {
       };
     })
     .filter(Boolean);
-
-  for (const entry of normalizedEntries) {
-    if (!entry.subtitle) {
-      throw new Error(`AI draft rank ${entry.rank} is missing a subtitle.`);
-    }
-    if (!entry.writeup) {
-      throw new Error(`AI draft rank ${entry.rank} is missing a writeup.`);
-    }
-  }
 
   return {
     entries: normalizedEntries,
@@ -533,7 +649,7 @@ export default async function handler(req, res) {
     }));
 
     const scheduleRaces = parseScheduleRaces(scheduleHtml);
-    const transcriptMeta = await loadBroadcastContext(req, raceNumber, drivers);
+    const transcriptMeta = await loadBroadcastContext(raceNumber, drivers);
     const contextPayload = buildContextPayload({
       raceNumber,
       standings,
@@ -548,6 +664,7 @@ export default async function handler(req, res) {
     const draft = normalizeDraft(aiDraft, driverLookup, previousRankings);
 
     return res.status(200).json({
+      promptVersion: POWER_RANKING_PROMPT_VERSION,
       raceNumber,
       generatedAt: new Date().toISOString(),
       previousRaceNumber: previousRankings?.raceNumber || null,
@@ -557,6 +674,11 @@ export default async function handler(req, res) {
       transcriptUsed: transcriptMeta.transcriptUsed,
       transcriptVideoTitle: transcriptMeta.transcriptVideoTitle,
       transcriptLength: transcriptMeta.transcriptLength,
+      requestedRaceNumber: transcriptMeta.requestedRaceNumber,
+      selectedVideoRaceNumber: transcriptMeta.selectedVideoRaceNumber,
+      selectedVideoTitle: transcriptMeta.selectedVideoTitle,
+      selectionMethod: transcriptMeta.selectionMethod,
+      nonPointsAdjustmentApplied: transcriptMeta.nonPointsAdjustmentApplied,
       ...draft,
     });
   } catch (error) {
