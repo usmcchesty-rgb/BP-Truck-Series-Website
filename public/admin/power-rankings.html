@@ -86,6 +86,14 @@
       gap: 12px;
       margin: 14px 0 4px;
     }
+    .manual-notes-box {
+      margin-top: 14px;
+    }
+    .manual-notes-box .textarea {
+      min-height: 160px;
+      width: 100%;
+      max-width: 920px;
+    }
     .generate-status {
       display: inline-flex;
       align-items: center;
@@ -158,6 +166,12 @@
           <label class="field-label" for="publishedDate">Published Date</label>
           <input id="publishedDate" class="input" type="date">
         </div>
+      </div>
+
+      <div class="manual-notes-box">
+        <label class="field-label" for="manualRaceNotes">Manual Race Notes / Transcript</label>
+        <p class="sub">Optional. Paste race notes, broadcast transcript, or key storylines here. If provided, this is used before YouTube transcript fallback.</p>
+        <textarea id="manualRaceNotes" class="textarea" placeholder="Paste race notes or transcript text here..."></textarea>
       </div>
 
       <div class="generate-row">
@@ -274,6 +288,11 @@
           nested?.selectionMethod ?? data?.selectionMethod ?? null,
         transcriptLength:
           nested?.transcriptLength ?? data?.transcriptLength ?? 0,
+        transcriptMode: nested?.transcriptMode ?? data?.transcriptMode ?? null,
+        manualRaceNotesUsed:
+          nested?.manualRaceNotesUsed ?? data?.manualRaceNotesUsed === true,
+        manualRaceNotesLength:
+          nested?.manualRaceNotesLength ?? data?.manualRaceNotesLength ?? 0,
         requestedRaceNumber:
           nested?.requestedRaceNumber ?? data?.requestedRaceNumber ?? null,
         videoId: nested?.videoId ?? null,
@@ -341,6 +360,9 @@
         `promptVersion: ${diagnostics.promptVersion ?? 'missing (stale API build?)'}`,
         `transcriptFetcherVersion: ${diagnostics.transcriptFetcherVersion ?? 'missing (stale transcript fetcher?)'}`,
         `transcriptUsed: ${diagnostics.transcriptUsed}`,
+        `transcriptMode: ${diagnostics.transcriptMode ?? 'null'}`,
+        `manualRaceNotesUsed: ${diagnostics.manualRaceNotesUsed ?? false}`,
+        `manualRaceNotesLength: ${diagnostics.manualRaceNotesLength ?? 0}`,
         `transcriptDebugReason: ${diagnostics.transcriptDebugReason ?? 'null'}`,
         `requestedRaceNumber: ${diagnostics.requestedRaceNumber ?? 'null'}`,
         `selectedVideoTitle: ${diagnostics.selectedVideoTitle ?? 'null'}`,
@@ -678,6 +700,7 @@
           body: JSON.stringify({
             password: pw,
             raceNumber,
+            manualRaceNotes: $('#manualRaceNotes')?.value || '',
           }),
         });
 
@@ -708,9 +731,12 @@
         const previousNote = data.previousRaceNumber
           ? ` Movement compared to Race ${data.previousRaceNumber} rankings.`
           : ' No previous rankings found — movement defaults applied.';
-        const transcriptNote = diagnostics.transcriptUsed
+        const transcriptNote =
+          diagnostics.transcriptMode === 'manual'
+            ? ` Manual race notes used (${diagnostics.manualRaceNotesLength || 0} characters).`
+            : diagnostics.transcriptUsed
           ? ` Green Flag TV transcript used${diagnostics.selectedVideoTitle ? `: ${diagnostics.selectedVideoTitle}` : ''}.`
-          : ` No transcript available — draft used standings/results only. Debug: ${diagnostics.transcriptDebugReason || 'unknown'}.`;
+          : ` No transcript available — draft used standings/results only.${diagnostics.transcriptDebugReason ? ` Debug: ${diagnostics.transcriptDebugReason}.` : ''}`;
         const existingNote = weekId
           ? ' Updated existing Race week in the form — save to overwrite the draft.'
           : ' Review and edit before saving or publishing.';

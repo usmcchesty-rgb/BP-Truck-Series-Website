@@ -209,6 +209,48 @@ async function loadExistingWeekForRace(raceNumber) {
   return data;
 }
 
+const MANUAL_RACE_NOTES_MAX_LENGTH = 15000;
+const MANUAL_RACE_NOTES_MIN_LENGTH = 100;
+
+function normalizeManualRaceNotes(value) {
+  const text = String(value || '').trim();
+  if (text.length < MANUAL_RACE_NOTES_MIN_LENGTH) {
+    return '';
+  }
+  return text.slice(0, MANUAL_RACE_NOTES_MAX_LENGTH);
+}
+
+function buildManualRaceContextMeta(manualRaceNotes, raceNumber) {
+  return withTranscriptDiagnostics({
+    requestedRaceNumber: raceNumber,
+    selectedVideoRaceNumber: null,
+    selectedVideoTitle: null,
+    selectionMethod: null,
+    nonPointsAdjustmentApplied: false,
+    transcriptUsed: true,
+    transcriptDebugReason: null,
+    transcriptVideoTitle: null,
+    transcriptLength: manualRaceNotes.length,
+    transcriptMode: 'manual',
+    manualRaceNotesUsed: true,
+    manualRaceNotesLength: manualRaceNotes.length,
+    broadcastContext: {
+      source: 'manual',
+      summary: manualRaceNotes,
+      note: 'Manual race notes provided by admin.',
+    },
+  });
+}
+
+function applyYoutubeContextMeta(transcriptMeta) {
+  return withTranscriptDiagnostics({
+    ...transcriptMeta,
+    transcriptMode: transcriptMeta.transcriptUsed ? 'youtube' : 'none',
+    manualRaceNotesUsed: false,
+    manualRaceNotesLength: 0,
+  });
+}
+
 function buildTranscriptDiagnostics(meta) {
   const transcriptUsed = meta.transcriptUsed === true;
   let transcriptDebugReason = meta.transcriptDebugReason ?? null;
@@ -256,6 +298,9 @@ function buildTranscriptDiagnostics(meta) {
     iosClientVersion: meta.iosClientVersion ?? null,
     attemptedTVHTML5: meta.attemptedTVHTML5 ?? false,
     attemptedMWEB: meta.attemptedMWEB ?? false,
+    transcriptMode: meta.transcriptMode ?? null,
+    manualRaceNotesUsed: meta.manualRaceNotesUsed === true,
+    manualRaceNotesLength: meta.manualRaceNotesLength ?? 0,
   };
 }
 
@@ -531,6 +576,8 @@ function buildContextPayload({
   profiles,
   broadcastContext,
   transcriptUsed,
+  transcriptMode,
+  manualRaceNotes,
 }) {
   const completedRaces = scheduleRaces
     .filter((race) => race.winner && race.raceNumber <= raceNumber)
@@ -570,10 +617,9 @@ function buildContextPayload({
       carNumber: p.car_number || '',
     })),
     broadcastContext,
+    manualRaceNotes: manualRaceNotes || null,
     transcriptUsed: transcriptUsed === true,
-    transcriptMode: transcriptUsed
-      ? 'transcript_available'
-      : 'no_transcript_use_stats_only',
+    transcriptMode: transcriptMode || (transcriptUsed ? 'youtube' : 'none'),
   };
 }
 
@@ -601,8 +647,10 @@ async function callOpenAi(contextPayload) {  const apiKey = process.env.OPENAI_A
           role: 'user',
           content: `Generate Race ${contextPayload.raceNumber} power rankings using this data.
 
+transcriptMode: ${contextPayload.transcriptMode || 'none'}
 transcriptUsed: ${contextPayload.transcriptUsed === true}
-If transcriptUsed is false, follow the No-Transcript Fallback rules. Do not invent race incidents or broadcast storylines.
+If transcriptMode is "manual", treat manualRaceNotes as trusted race context provided by the admin.
+If transcriptMode is "none", follow the No-Transcript Fallback rules. Do not invent race incidents or broadcast storylines.
 
 ${JSON.stringify(contextPayload, null, 2)}`,
         },
@@ -936,15 +984,24 @@ export default async function handler(req, res) {
     }));
 
     const scheduleRaces = parseScheduleRaces(scheduleHtml);
-    const transcriptMeta = await loadBroadcastContext(raceNumber, drivers);
+    const manualRaceNotes = normalizeManualRaceNotes(
+      body.manualRaceNotes ?? body.manual_race_notes
+    );
+
+    const contextMeta = manualRaceNotes
+      ? buildManualRaceContextMeta(manualRaceNotes, raceNumber)
+      : applyYoutubeContextMeta(await loadBroadcastContext(raceNumber, drivers));
+
     const contextPayload = buildContextPayload({
       raceNumber,
       standings,
       scheduleRaces,
       previousRankings,
       profiles,
-      broadcastContext: transcriptMeta.broadcastContext,
-      transcriptUsed: transcriptMeta.transcriptUsed,
+      broadcastContext: contextMeta.broadcastContext,
+      transcriptUsed: contextMeta.transcriptUsed,
+      transcriptMode: contextMeta.transcriptMode,
+      manualRaceNotes: manualRaceNotes || null,
     });
 
     const aiDraft = await callOpenAi(contextPayload);
@@ -953,14 +1010,17 @@ export default async function handler(req, res) {
 
     console.log(
       '[power-rankings-generate] transcript diagnostics',
-      JSON.stringify(transcriptMeta.transcriptDiagnostics || {
-        transcriptDebugReason: transcriptMeta.transcriptDebugReason ?? null,
-        transcriptUsed: transcriptMeta.transcriptUsed === true,
-        selectedVideoTitle: transcriptMeta.selectedVideoTitle ?? null,
-        selectedVideoRaceNumber: transcriptMeta.selectedVideoRaceNumber ?? null,
-        selectionMethod: transcriptMeta.selectionMethod ?? null,
-        transcriptLength: transcriptMeta.transcriptLength ?? 0,
-        requestedRaceNumber: transcriptMeta.requestedRaceNumber ?? raceNumber,
+      JSON.stringify(contextMeta.transcriptDiagnostics || {
+        transcriptDebugReason: contextMeta.transcriptDebugReason ?? null,
+        transcriptUsed: contextMeta.transcriptUsed === true,
+        transcriptMode: contextMeta.transcriptMode ?? null,
+        manualRaceNotesUsed: contextMeta.manualRaceNotesUsed === true,
+        manualRaceNotesLength: contextMeta.manualRaceNotesLength ?? 0,
+        selectedVideoTitle: contextMeta.selectedVideoTitle ?? null,
+        selectedVideoRaceNumber: contextMeta.selectedVideoRaceNumber ?? null,
+        selectionMethod: contextMeta.selectionMethod ?? null,
+        transcriptLength: contextMeta.transcriptLength ?? 0,
+        requestedRaceNumber: contextMeta.requestedRaceNumber ?? raceNumber,
       })
     );
 
@@ -973,16 +1033,19 @@ export default async function handler(req, res) {
       existingPublishedDate: existingWeek?.published_date || null,
       existingPublished: existingWeek?.published === true,
       ...draft,
-      transcriptDiagnostics: transcriptMeta.transcriptDiagnostics,
-      transcriptUsed: transcriptMeta.transcriptUsed,
-      transcriptDebugReason: transcriptMeta.transcriptDebugReason ?? null,
-      transcriptVideoTitle: transcriptMeta.transcriptVideoTitle,
-      transcriptLength: transcriptMeta.transcriptLength,
-      requestedRaceNumber: transcriptMeta.requestedRaceNumber,
-      selectedVideoRaceNumber: transcriptMeta.selectedVideoRaceNumber,
-      selectedVideoTitle: transcriptMeta.selectedVideoTitle,
-      selectionMethod: transcriptMeta.selectionMethod,
-      nonPointsAdjustmentApplied: transcriptMeta.nonPointsAdjustmentApplied,
+      transcriptDiagnostics: contextMeta.transcriptDiagnostics,
+      transcriptUsed: contextMeta.transcriptUsed,
+      transcriptMode: contextMeta.transcriptMode ?? null,
+      manualRaceNotesUsed: contextMeta.manualRaceNotesUsed === true,
+      manualRaceNotesLength: contextMeta.manualRaceNotesLength ?? 0,
+      transcriptDebugReason: contextMeta.transcriptDebugReason ?? null,
+      transcriptVideoTitle: contextMeta.transcriptVideoTitle,
+      transcriptLength: contextMeta.transcriptLength,
+      requestedRaceNumber: contextMeta.requestedRaceNumber,
+      selectedVideoRaceNumber: contextMeta.selectedVideoRaceNumber,
+      selectedVideoTitle: contextMeta.selectedVideoTitle,
+      selectionMethod: contextMeta.selectionMethod,
+      nonPointsAdjustmentApplied: contextMeta.nonPointsAdjustmentApplied,
     });
   } catch (error) {
     console.error('[power-rankings-generate]', error);

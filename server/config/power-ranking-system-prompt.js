@@ -98,9 +98,24 @@ Pay attention to:
 
 The rankings should feel like they were written by someone who watched the race.
 
+## Manual Race Notes
+
+When manualRaceNotes are provided in the context payload:
+
+* Treat them as trusted race context supplied by the admin.
+* Use them heavily for ordering, subtitles, and writeups.
+* Prefer manual notes over standings-only analysis when both are available.
+* Do not invent race incidents beyond what the manual notes, transcript, or results support.
+
+Priority order for race context:
+
+1. Manual race notes/transcript
+2. Green Flag TV transcript
+3. Standings/results fallback
+
 ## No-Transcript Fallback
 
-When transcriptUsed is false or no broadcast summary is provided:
+When transcriptMode is "none" or transcriptUsed is false and no manualRaceNotes are provided:
 
 1. Do not invent race incidents, wrecks, cautions, lead changes, or broadcast storylines.
 2. Do not pretend to know race-specific events that are not present in the data.
