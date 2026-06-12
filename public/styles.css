@@ -829,12 +829,22 @@ footer{
   color:#fff;
 }
 .power-rankings-page .num{
-  font-size:13px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:1px;
   min-width:34px;
   height:18px;
   padding:0 6px;
+  margin-left:6px;
   margin-right:6px;
   clip-path:polygon(5px 0,100% 0,calc(100% - 5px) 100%,0 100%);
+  vertical-align:middle;
+}
+.power-rankings-page .num .num-digit{
+  height:14px;
+  width:auto;
+  display:block;
 }
 .power-ranking-movement{
   font-size:13px;
