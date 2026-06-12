@@ -8,6 +8,7 @@ const FETCH_HEADERS = {
 
 const GREEN_FLAG_PLAYLIST_ID = 'PL4aFms0YBw6_uE-yoYgOFDtaNcN9ozPIO';
 const GREEN_FLAG_RSS_URL = `https://www.youtube.com/feeds/videos.xml?playlist_id=${GREEN_FLAG_PLAYLIST_ID}`;
+export const TRANSCRIPT_FETCHER_VERSION = '2.1-innertube-discovery';
 
 function decodeHtml(text) {
   return String(text || '')
@@ -151,92 +152,198 @@ function buildCaptionDownloadUrl(baseUrl, fmt = 'json3') {
 }
 
 async function fetchInnertubeCaptionTracks(videoId, client) {
-  const watchRes = await fetch(`https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`, {
-    headers: {
-      ...FETCH_HEADERS,
-      'User-Agent': client.userAgent,
-    },
-  });
-
-  if (!watchRes.ok) {
-    return {
-      tracks: [],
-      source: client.name,
-      playabilityStatus: null,
-      error: `watch-page-http-${watchRes.status}`,
-    };
-  }
-
-  const html = await watchRes.text();
-  const apiKey = extractInnertubeApiKey(html);
-
-  const playerRes = await fetch(`https://www.youtube.com/youtubei/v1/player?key=${apiKey}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'User-Agent': client.userAgent,
-      'Accept-Language': 'en-US,en;q=0.9',
-      'X-Youtube-Client-Name': client.clientNameHeader,
-      'X-Youtube-Client-Version': client.clientVersion,
-    },
-    body: JSON.stringify({
-      context: {
-        client: {
-          clientName: client.clientName,
-          clientVersion: client.clientVersion,
-          hl: 'en',
-          gl: 'US',
-        },
-      },
-      videoId,
-    }),
-  });
-
-  if (!playerRes.ok) {
-    return {
-      tracks: [],
-      source: client.name,
-      playabilityStatus: null,
-      error: `innertube-player-http-${playerRes.status}`,
-    };
-  }
-
-  const data = await playerRes.json();
-  const tracks = data?.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
-
-  return {
-    tracks,
+  const attempt = {
     source: client.name,
-    playabilityStatus: data?.playabilityStatus?.status || null,
-    error: tracks.length
-      ? null
-      : `no-tracks-playability-${data?.playabilityStatus?.status || 'unknown'}`,
+    playerResponseSource: client.name,
+    attempted: true,
+    watchPageStatus: null,
+    watchPageSucceeded: false,
+    watchPageHtmlLength: 0,
+    apiKeyPresent: false,
+    innertubeRequestStatus: null,
+    innertubeRequestSucceeded: false,
+    playabilityStatus: null,
+    error: null,
+    tracks: [],
+    ...analyzeCaptionTracks([]),
   };
+
+  try {
+    const watchRes = await fetch(`https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`, {
+      headers: {
+        ...FETCH_HEADERS,
+        'User-Agent': client.userAgent,
+      },
+    });
+
+    attempt.watchPageStatus = watchRes.status;
+    attempt.watchPageSucceeded = watchRes.ok;
+
+    if (!watchRes.ok) {
+      attempt.error = `watch-page-http-${watchRes.status}`;
+      return attempt;
+    }
+
+    const html = await watchRes.text();
+    attempt.watchPageHtmlLength = html.length;
+    const apiKey = extractInnertubeApiKey(html);
+    attempt.apiKeyPresent = Boolean(apiKey);
+
+    const playerRes = await fetch(`https://www.youtube.com/youtubei/v1/player?key=${apiKey}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': client.userAgent,
+        'Accept-Language': 'en-US,en;q=0.9',
+        'X-Youtube-Client-Name': client.clientNameHeader,
+        'X-Youtube-Client-Version': client.clientVersion,
+      },
+      body: JSON.stringify({
+        context: {
+          client: {
+            clientName: client.clientName,
+            clientVersion: client.clientVersion,
+            hl: 'en',
+            gl: 'US',
+          },
+        },
+        videoId,
+      }),
+    });
+
+    attempt.innertubeRequestStatus = playerRes.status;
+    attempt.innertubeRequestSucceeded = playerRes.ok;
+
+    if (!playerRes.ok) {
+      attempt.error = `innertube-player-http-${playerRes.status}`;
+      return attempt;
+    }
+
+    let data;
+    try {
+      data = await playerRes.json();
+    } catch (error) {
+      attempt.error = `innertube-player-json-parse-failed: ${error?.message || error}`;
+      return attempt;
+    }
+
+    attempt.playabilityStatus = data?.playabilityStatus?.status || null;
+    const tracks = data?.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
+    attempt.tracks = tracks;
+    Object.assign(attempt, analyzeCaptionTracks(tracks));
+    attempt.error = tracks.length
+      ? null
+      : `no-tracks-playability-${attempt.playabilityStatus || 'unknown'}`;
+  } catch (error) {
+    attempt.error = `exception: ${error?.message || error}`;
+  }
+
+  return attempt;
 }
 
 async function fetchWatchPageCaptionTracks(videoId) {
-  const watchRes = await fetch(`https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`, {
-    headers: FETCH_HEADERS,
-  });
+  const attempt = {
+    source: 'WEB_WATCH_PAGE',
+    playerResponseSource: 'WEB_WATCH_PAGE',
+    attempted: true,
+    watchPageStatus: null,
+    watchPageSucceeded: false,
+    watchPageHtmlLength: 0,
+    captionTracksMarkerFound: false,
+    apiKeyPresent: false,
+    innertubeRequestStatus: null,
+    innertubeRequestSucceeded: false,
+    playabilityStatus: null,
+    error: null,
+    tracks: [],
+    ...analyzeCaptionTracks([]),
+  };
 
-  if (!watchRes.ok) {
-    return {
-      tracks: [],
-      source: 'WEB_WATCH_PAGE',
-      playabilityStatus: null,
-      error: `watch-page-http-${watchRes.status}`,
-    };
+  try {
+    const watchRes = await fetch(`https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`, {
+      headers: FETCH_HEADERS,
+    });
+
+    attempt.watchPageStatus = watchRes.status;
+    attempt.watchPageSucceeded = watchRes.ok;
+
+    if (!watchRes.ok) {
+      attempt.error = `watch-page-http-${watchRes.status}`;
+      return attempt;
+    }
+
+    const html = await watchRes.text();
+    attempt.watchPageHtmlLength = html.length;
+    attempt.captionTracksMarkerFound = html.includes('"captionTracks":');
+    attempt.apiKeyPresent = Boolean(extractInnertubeApiKey(html));
+
+    const tracks = extractCaptionTracks(html);
+    attempt.tracks = tracks;
+    Object.assign(attempt, analyzeCaptionTracks(tracks));
+    attempt.error = tracks.length ? null : 'no-caption-tracks-in-watch-page';
+  } catch (error) {
+    attempt.error = `exception: ${error?.message || error}`;
   }
 
-  const html = await watchRes.text();
-  const tracks = extractCaptionTracks(html);
+  return attempt;
+}
+
+function summarizeCaptionDiscoveryAttempt(attempt) {
+  return {
+    source: attempt.source,
+    playerResponseSource: attempt.playerResponseSource,
+    attempted: attempt.attempted === true,
+    watchPageStatus: attempt.watchPageStatus ?? null,
+    watchPageSucceeded: attempt.watchPageSucceeded === true,
+    watchPageHtmlLength: attempt.watchPageHtmlLength ?? 0,
+    captionTracksMarkerFound: attempt.captionTracksMarkerFound ?? null,
+    apiKeyPresent: attempt.apiKeyPresent === true,
+    innertubeRequestStatus: attempt.innertubeRequestStatus ?? null,
+    innertubeRequestSucceeded: attempt.innertubeRequestSucceeded === true,
+    playabilityStatus: attempt.playabilityStatus ?? null,
+    error: attempt.error ?? null,
+    captionTrackCount: attempt.captionTrackCount ?? 0,
+    captionTrackLanguages: attempt.captionTrackLanguages ?? [],
+    autoGeneratedTracksFound: attempt.autoGeneratedTracksFound ?? 0,
+    manualTracksFound: attempt.manualTracksFound ?? 0,
+    captionTracks: attempt.captionTracks ?? [],
+  };
+}
+
+function buildCaptionDiscoverySummary(captionSourcesAttempted) {
+  const attempts = Array.isArray(captionSourcesAttempted) ? captionSourcesAttempted : [];
+  const bySource = Object.fromEntries(attempts.map((attempt) => [attempt.source, attempt]));
+  const android = bySource.ANDROID;
+  const ios = bySource.IOS;
+  const web = bySource.WEB_WATCH_PAGE;
+  const bestAttempt = [...attempts].sort(
+    (a, b) => (b.captionTrackCount || 0) - (a.captionTrackCount || 0)
+  )[0];
+  const successfulInnertube = attempts.find((attempt) => attempt.innertubeRequestSucceeded);
 
   return {
-    tracks,
-    source: 'WEB_WATCH_PAGE',
-    playabilityStatus: null,
-    error: tracks.length ? null : 'no-caption-tracks-in-watch-page',
+    transcriptFetcherVersion: TRANSCRIPT_FETCHER_VERSION,
+    attemptedANDROID: android?.attempted === true,
+    attemptedIOS: ios?.attempted === true,
+    attemptedWEB: web?.attempted === true,
+    captionDiscoverySource: bestAttempt?.captionTrackCount
+      ? bestAttempt.source
+      : attempts[attempts.length - 1]?.source || null,
+    playerResponseSource: successfulInnertube?.playerResponseSource || null,
+    innertubeRequestSucceeded: attempts.some((attempt) => attempt.innertubeRequestSucceeded),
+    innertubeRequestStatus:
+      android?.innertubeRequestStatus ?? ios?.innertubeRequestStatus ?? null,
   };
+}
+
+function applyBestCaptionTrackAnalysis(result, attempt) {
+  if ((attempt?.captionTrackCount || 0) >= (result.captionTrackCount || 0)) {
+    result.captionTrackCount = attempt.captionTrackCount ?? 0;
+    result.captionTrackLanguages = attempt.captionTrackLanguages ?? [];
+    result.autoGeneratedTracksFound = attempt.autoGeneratedTracksFound ?? 0;
+    result.manualTracksFound = attempt.manualTracksFound ?? 0;
+    result.captionTracks = attempt.captionTracks ?? [];
+  }
 }
 
 async function downloadCaptionTrackText(baseUrl, videoId, userAgent) {
@@ -442,39 +549,27 @@ export async function fetchYouTubeTranscript(videoId) {
     },
   ];
 
-  let lastTrackAnalysis = analyzeCaptionTracks([]);
   let lastSelectedTrack = null;
-  let lastSelectedClient = null;
 
   for (const attempt of sourceAttempts) {
     const sourceResult = await attempt.loader();
-    const trackAnalysis = analyzeCaptionTracks(sourceResult.tracks);
+    const attemptSummary = summarizeCaptionDiscoveryAttempt(sourceResult);
     const selectedTrack = selectPreferredCaptionTrack(sourceResult.tracks);
 
-    result.captionSourcesAttempted.push({
-      source: sourceResult.source,
-      playabilityStatus: sourceResult.playabilityStatus,
-      error: sourceResult.error,
-      ...trackAnalysis,
-    });
+    result.captionSourcesAttempted.push(attemptSummary);
 
-    console.log(logTag, 'caption tracks discovered', {
+    console.log(logTag, 'caption discovery attempt', {
       videoId,
-      source: sourceResult.source,
-      playabilityStatus: sourceResult.playabilityStatus,
-      error: sourceResult.error,
-      ...trackAnalysis,
+      ...attemptSummary,
     });
 
-    lastTrackAnalysis = trackAnalysis;
-    Object.assign(result, trackAnalysis);
+    applyBestCaptionTrackAnalysis(result, attemptSummary);
 
     if (!sourceResult.tracks.length) {
       continue;
     }
 
     lastSelectedTrack = selectedTrack;
-    lastSelectedClient = attempt.client;
     result.hasEnglishTrack = sourceResult.tracks.some((track) =>
       String(track.languageCode || '').startsWith('en')
     );
@@ -513,11 +608,18 @@ export async function fetchYouTubeTranscript(videoId) {
     });
 
     if (downloaded?.text) {
+      Object.assign(result, buildCaptionDiscoverySummary(result.captionSourcesAttempted));
       result.transcript = downloaded.text;
       result.transcriptLength = downloaded.text.length;
       result.captionDownloadFormat = downloaded.fmt;
       result.failureReason = downloaded.requiresPoToken ? 'used-po-token-protected-url' : null;
       result.debugReason = null;
+      console.log(logTag, 'caption discovery summary', {
+        videoId,
+        ...buildCaptionDiscoverySummary(result.captionSourcesAttempted),
+        captionTrackCount: result.captionTrackCount,
+        transcriptLength: result.transcriptLength,
+      });
       return result;
     }
 
@@ -530,8 +632,10 @@ export async function fetchYouTubeTranscript(videoId) {
     }
   }
 
-  if (lastTrackAnalysis.captionTrackCount === 0) {
-    result.failureReason = 'no-caption-tracks-found';
+  Object.assign(result, buildCaptionDiscoverySummary(result.captionSourcesAttempted));
+
+  if (result.captionTrackCount === 0) {
+    result.failureReason = result.failureReason || 'no-caption-tracks-found';
     result.debugReason = 'transcript-disabled';
   } else if (!result.failureReason) {
     result.failureReason = lastSelectedTrack ? 'caption-download-empty' : 'caption-track-unusable';
@@ -544,6 +648,7 @@ export async function fetchYouTubeTranscript(videoId) {
     debugReason: result.debugReason,
     requiresPoToken: result.requiresPoToken,
     selectedTrackSource: result.selectedTrackSource,
+    ...buildCaptionDiscoverySummary(result.captionSourcesAttempted),
     captionSourcesAttempted: result.captionSourcesAttempted,
     captionTracks: result.captionTracks,
   });
