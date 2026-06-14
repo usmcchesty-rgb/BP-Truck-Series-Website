@@ -1,4 +1,5 @@
 import { getSettings, getDriverProfiles, slugify, withPhotoCacheBust, photoCacheVersion } from './_lib.js';
+import { computeSeasonCautionStatsFromScheduleHtml } from './_caution-stats.js';
 import * as cheerio from "cheerio";
 
 
@@ -11,6 +12,7 @@ export default async function handler(req, res) {
     // Auto-detect the latest completed schedule_id by re-parsing the schedule page.
     // This avoids the API being pinned to an older schedule snapshot.
     let detectedScheduleId = null;
+    let scheduleHtml = '';
     let scheduleDetectionDebug = {
       scheduleRowsFound: 0,
       completedScheduleIds: [],
@@ -18,7 +20,7 @@ export default async function handler(req, res) {
     };
 
     try {
-      const scheduleHtml = await fetch(
+      scheduleHtml = await fetch(
         settings.scheduleUrl,
         { headers: { 'user-agent': 'BP-Truck-Series-Website/1.0' } }
       ).then((r) => (r.ok ? r.text() : ''));
@@ -157,6 +159,19 @@ const avgFinish =
       .filter(r => r.position >= 1)
       .sort((a, b) => a.position - b.position);
 
+    const cautionStats = scheduleHtml
+      ? await computeSeasonCautionStatsFromScheduleHtml(scheduleHtml, {
+          now: new Date(),
+          settings,
+        })
+      : {
+          cautionDataAvailable: false,
+          cautionDataSource: 'schedule-html-unavailable',
+          cautionRacesCounted: 0,
+          totalCautions: null,
+          averageCautionsPerRace: null,
+        };
+
     res.setHeader('Cache-Control', 's-maxage=120, stale-while-revalidate=300');
     return res.status(200).json({
       settings: {
@@ -166,6 +181,7 @@ const avgFinish =
       },
       rows,
       schedules: data.schedules || [],
+      cautionStats,
       updatedAt: new Date().toISOString()
     });
   } catch (e) {

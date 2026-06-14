@@ -2,6 +2,7 @@ const PLAYOFF_CUT = 16;
 const $ = (s) => document.querySelector(s);
 let standings = [];
 let standingsTableView = "top16";
+let latestCautionStats = null;
 
 // Secondary lookups used only if the slug-based image fails to load.
 const TRACK_IMAGE_ALIASES = {
@@ -315,7 +316,7 @@ function renderSidebar() {
 
   $("#raceCount").textContent = `${maxRaces} / 20`;
   $("#winnerCount").textContent = String(countDifferentWinners(standings));
-  $("#avgCautions").textContent = "0.00";
+  window.BPSeasonSummary?.renderAvgCautions(latestCautionStats);
   const count = standings.length;
   const fullStandingsTab = $("#fullStandingsTab");
   if (fullStandingsTab) fullStandingsTab.textContent = `FULL STANDINGS (1–${count})`;
@@ -402,6 +403,8 @@ async function load(force = false) {
         top10: r.top10
       };
     });
+
+    latestCautionStats = data.cautionStats || null;
 
     $("#lastUpdated").textContent = data.updatedAt
       ? new Date(data.updatedAt).toLocaleString()

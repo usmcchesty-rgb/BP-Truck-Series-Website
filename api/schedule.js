@@ -1,6 +1,9 @@
-import * as cheerio from "cheerio";
 import { fetchHtml, getSettings } from "./_lib.js";
 import { enrichScheduleRaces } from "./_schedule-points-races.js";
+import {
+  computeSeasonCautionStatsFromRaces,
+  parseScheduleRacesFromHtml,
+} from "./_caution-stats.js";
 import {
   buildRaceProgressionDiagnostics,
   countEffectiveCompletedScheduleRaces,
@@ -13,44 +16,6 @@ function cleanText(value) {
     .replace(/\s+/g, " ")
     .replace(/\u00a0/g, " ")
     .trim();
-}
-
-function isRaceNumber(value) {
-  return /^\d+$/.test(cleanText(value));
-}
-
-function parseRaceRow($, row) {
-  const cells = $(row).find("td");
-  if (cells.length < 5) return null;
-
-  const raceNumber = cleanText(cells.eq(0).text());
-  if (!isRaceNumber(raceNumber)) return null;
-
-  const date = cleanText(cells.eq(1).text());
-  const points = cleanText(cells.eq(2).text());
-
-  const trackCell = cells.eq(4);
-  const trackLink = trackCell.find("a").first();
-  const track = cleanText(trackLink.text() || trackCell.text());
-
-  const length = cleanText(cells.eq(5).text());
-
-  const winnerCell = cells.eq(6);
-  const winnerLink = winnerCell.find("a").first();
-  const winner = cleanText(winnerLink.text() || winnerCell.text());
-
-  const resultLink = $(row).find("a[href*='race']").last().attr("href") || "";
-
-  return {
-    raceNumber: Number(raceNumber),
-    date,
-    points,
-    status: points?.toLowerCase() === "yes" ? "points" : "non-points",
-    track,
-    length,
-    winner,
-    link: resultLink,
-  };
 }
 
 function mapEnrichedRaceToApiShape(race) {
@@ -74,22 +39,7 @@ export default async function handler(req, res) {
   try {
     const settings = await getSettings();
     const html = await fetchHtml(settings.scheduleUrl);
-    const $ = cheerio.load(html);
-
-    const tables = $("table");
-    const rowCounts = [];
-
-    const races = [];
-
-    tables.each((tableIndex, table) => {
-      const rows = $(table).find("tr");
-      rowCounts.push(rows.length);
-
-      rows.each((_rowIndex, row) => {
-        const race = parseRaceRow($, row);
-        if (race) races.push(race);
-      });
-    });
+    const races = parseScheduleRacesFromHtml(html);
 
     const now = new Date();
     const progressionOptions = { now, settings };
@@ -101,10 +51,9 @@ export default async function handler(req, res) {
     const next = mapEnrichedRaceToApiShape(nextPointsRace) || nextRaw;
     const completed = countEffectiveCompletedScheduleRaces(races, progressionOptions);
     const totalPointsRaces = races.filter((race) => race.points?.toLowerCase() === "yes").length;
+    const cautionStats = await computeSeasonCautionStatsFromRaces(races, progressionOptions);
 
     console.log("[schedule] htmlLength:", html.length);
-    console.log("[schedule] tableCount:", tables.length);
-    console.log("[schedule] rowCounts:", rowCounts.join(", "));
     console.log("[schedule] parsedRaceCount:", races.length);
 
     const payload = {
@@ -114,6 +63,7 @@ export default async function handler(req, res) {
       totalPointsRaces,
       next,
       raceProgression,
+      cautionStats,
       updatedAt: new Date().toISOString(),
     };
 
@@ -121,9 +71,8 @@ export default async function handler(req, res) {
       payload.error = "No schedule rows found";
       payload.debug = {
         htmlLength: html.length,
-        tableCount: tables.length,
-        rowCounts,
-        firstTableText: cleanText(tables.first().text()).slice(0, 500),
+        parsedRaceCount: races.length,
+        firstTableText: cleanText(html).slice(0, 500),
       };
     }
 

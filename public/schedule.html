@@ -55,8 +55,8 @@
               <div class="stat-row">
                 <span class="stat-icon" aria-hidden="true">📊</span>
                 <div>
-                  <b id="avgCautions">0.00</b>
-                  <span>AVG CAUTIONS PER RACE</span>
+                  <b id="avgCautions">N/A</b>
+                  <span title="Caution data unavailable">AVG CAUTIONS PER RACE</span>
                 </div>
               </div>
             </div>
@@ -114,6 +114,7 @@
       });
     </script>
 
+    <script src="/season-summary.js"></script>
   <script>
 
     (function () {
@@ -342,6 +343,7 @@
         const winnerCountEl = document.getElementById('winnerCount');
         if (raceCountEl) raceCountEl.textContent = `${completed} / ${races.length || 20}`;
         if (winnerCountEl) winnerCountEl.textContent = String(uniqueWinners.size);
+        window.BPSeasonSummary?.renderAvgCautions(data?.cautionStats);
 
         tbodyEl.innerHTML = races
           .map((r) => {
