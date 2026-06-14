@@ -6,6 +6,14 @@ import NEWS_SYSTEM_PROMPT, {
 } from '../server/config/news-system-prompt.js';
 import { buildNewsFactualContext } from './_news-factual-grounding.js';
 import {
+  assertNewsPromptWithinLimits,
+  buildNewsPromptContext,
+  buildNewsUserPromptFromContext,
+  logNewsPromptSize,
+  measureNewsPromptSize,
+  NewsPromptTooLargeError,
+} from './_news-prompt-context.js';
+import {
   validateNewsArticle,
   REPAIRABLE_NEWS_ERROR_TYPES,
   formatNewsValidationForRepair,
@@ -53,77 +61,21 @@ function buildValidationContext(generationContext, articleType) {
 function buildNewsUserPrompt(generationContext, options = {}) {
   const articleType = normalizeArticleType(options.articleType);
   const typeConfig = ARTICLE_TYPES[articleType];
-  const raceNumber = Number(options.raceNumber ?? generationContext.raceNumber);
-  const headlineOverride = String(options.headlineOverride || '').trim();
-  const spotlightDriverId = options.spotlightDriverId || null;
-  const spotlight = generationContext.standings?.find(
-    (row) => String(row.driverId) === String(spotlightDriverId)
-  );
+  const promptContext = buildNewsPromptContext(generationContext, {
+    articleType,
+    raceNumber: options.raceNumber ?? generationContext.raceNumber,
+    headlineOverride: options.headlineOverride,
+    spotlightDriverId: options.spotlightDriverId || generationContext.spotlightDriverId,
+  });
 
-  const standingsLines = (generationContext.standings || [])
-    .slice(0, 16)
-    .map(
-      (row) =>
-        `${row.position}. ${row.driverName} (#${row.carNumber || '—'}) — ${row.points} pts, ${row.wins} wins, ${row.top5} top 5s, ${row.top10} top 10s`
-    )
-    .join('\n');
+  const userPrompt = buildNewsUserPromptFromContext(generationContext, promptContext, {
+    typeConfig,
+    raceNumber: options.raceNumber ?? generationContext.raceNumber,
+    headlineOverride: options.headlineOverride,
+    author: NEWS_AUTHOR,
+  });
 
-  const recentResults = (generationContext.recentResultsForGrounding || [])
-    .map(
-      (race) =>
-        `Race ${race.raceNumber}: ${race.track} — Winner: ${race.winner || 'TBD'} (${race.date || ''})`
-    )
-    .join('\n');
-
-  const raceRow = generationContext.scheduleRaces?.find(
-    (race) => race.officialPointsRaceNumber === raceNumber
-  );
-
-  const spotlightCareerHistory =
-    spotlightDriverId &&
-    (generationContext.factualGrounding?.drivers?.[String(spotlightDriverId)]?.truckSeriesCareerHistory ||
-      generationContext.factualGrounding?.drivers?.[String(spotlightDriverId)]?.careerHistory
-        ?.truckSeriesCareerHistory);
-
-  const careerTenureSection =
-    articleType === 'driver-spotlight' && spotlightCareerHistory
-      ? `
-
-Spotlight driver truckSeriesCareerHistory (default career scope for Driver Spotlight — do NOT claim rookie/newcomer/first-season/veteran/longtime-driver/returning-driver unless tenureClaimsAllowed is true and the history supports that specific claim):
-${JSON.stringify(spotlightCareerHistory, null, 2)}
-
-overallLeagueCareerHistory is available in factualGrounding for broader league context, but tenure language must follow truckSeriesCareerHistory unless manual notes explicitly verify otherwise.`
-      : '';
-
-  return `Write a ${typeConfig.label} article for the Blazing Pedals Truck Series.
-
-Article type: ${typeConfig.label}
-Target length: ${typeConfig.minWords}-${typeConfig.maxWords} words
-Structure: ${typeConfig.structure}
-Race number: ${raceNumber}
-Track: ${raceRow?.track || 'See schedule context'}
-Race date: ${raceRow?.date || 'TBD'}
-Winner (if completed): ${raceRow?.winner || 'TBD'}
-Author byline: ${NEWS_AUTHOR}
-${headlineOverride ? `Suggested headline direction: ${headlineOverride}` : ''}
-${spotlight ? `Spotlight driver: ${spotlight.driverName} (P${spotlight.position}, ${spotlight.points} pts)` : ''}
-
-Standings snapshot:
-${standingsLines || '(none)'}
-
-Recent results:
-${recentResults || '(none)'}
-
-Factual grounding (verified facts only):
-${JSON.stringify(generationContext.factualGrounding, null, 2)}
-
-Manual race notes:
-${generationContext.manualRaceNotes || '(none)'}
-
-Transcript / broadcast summary:
-${generationContext.contextMeta?.broadcastContext?.summary || '(none)'}${careerTenureSection}
-
-Return JSON only with headline, subheadline, summary, and body.`;
+  return { userPrompt, promptContext };
 }
 
 async function callOpenAiNews(userPrompt, { repairReason = null, previousArticle = null } = {}) {
@@ -242,12 +194,16 @@ export async function generateNewsArticle(options = {}) {
     spotlightDriverId: options.spotlightDriverId ?? options.spotlight_driver_id,
   });
 
-  const userPrompt = buildNewsUserPrompt(generationContext, {
+  const { userPrompt, promptContext } = buildNewsUserPrompt(generationContext, {
     articleType,
     raceNumber,
     headlineOverride: options.headlineOverride ?? options.headline_override,
     spotlightDriverId: options.spotlightDriverId ?? options.spotlight_driver_id,
   });
+
+  const promptSize = measureNewsPromptSize(NEWS_SYSTEM_PROMPT, userPrompt, promptContext);
+  logNewsPromptSize(promptSize);
+  assertNewsPromptWithinLimits(promptSize);
 
   let draft = await callOpenAiNews(userPrompt);
   const repaired = await repairNewsArticle(draft, generationContext, articleType);
@@ -255,7 +211,8 @@ export async function generateNewsArticle(options = {}) {
   const generationSources = buildGenerationSources(
     generationContext,
     articleType,
-    repaired
+    repaired,
+    promptSize
   );
 
   return {
@@ -269,6 +226,7 @@ export async function generateNewsArticle(options = {}) {
     repairAttempts: repaired.repairAttempts,
     repairReasons: repaired.repairReasons,
     generationSources,
+    promptSize,
     transcriptDiagnostics: buildTranscriptDiagnostics(generationContext),
   };
 }
@@ -290,7 +248,7 @@ function buildTranscriptDiagnostics(generationContext) {
   };
 }
 
-function buildGenerationSources(generationContext, articleType, repaired) {
+function buildGenerationSources(generationContext, articleType, repaired, promptSize = null) {
   const grounding = generationContext.factualGrounding || {};
   const meta = generationContext.contextMeta || {};
   const manualNotes = Boolean(String(generationContext.manualRaceNotes || '').trim());
@@ -318,7 +276,7 @@ function buildGenerationSources(generationContext, articleType, repaired) {
     articleType,
     factsUsed: repaired.validation?.mentionedDrivers || [],
     resultsUsed: generationContext.recentResultsForGrounding || [],
-    standingsSnapshot: (generationContext.standings || []).slice(0, 16).map((row) => ({
+    standingsSnapshot: (generationContext.standings || []).slice(0, 10).map((row) => ({
       position: row.position,
       driverName: row.driverName,
       points: row.points,
@@ -353,7 +311,8 @@ function buildGenerationSources(generationContext, articleType, repaired) {
           classificationIssues: grounding.careerHistoryAudit.classificationIssues || [],
         }
       : null,
+    promptSize,
   };
 }
 
-export { parseBody, normalizeArticleType, ARTICLE_TYPES };
+export { parseBody, normalizeArticleType, ARTICLE_TYPES, NewsPromptTooLargeError };

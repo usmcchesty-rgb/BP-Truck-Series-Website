@@ -294,7 +294,8 @@ async function handleGenerate(body) {
   } catch (error) {
     return {
       error: error.message || 'News generation failed.',
-      status: 500,
+      status: error.status || 500,
+      promptSize: error.promptSize || null,
     };
   }
 }
@@ -309,7 +310,12 @@ async function handlePost(req, res) {
 
   if (action === 'generate') {
     const result = await handleGenerate(body);
-    if (result.error) return res.status(result.status).json({ error: result.error });
+    if (result.error) {
+      return res.status(result.status).json({
+        error: result.error,
+        promptSize: result.promptSize || null,
+      });
+    }
     return res.status(result.status).json(result.data);
   }
 
