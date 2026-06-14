@@ -5,6 +5,7 @@
   const NAV_ITEMS = [
     { id: "dashboard", label: "Dashboard / Settings", href: "/admin" },
     { id: "drivers", label: "Drivers", href: "/admin#drivers" },
+    { id: "track-images", label: "Track Images", href: "/admin/track-images" },
     { id: "driver-photos", label: "Driver Photos", href: "/admin/driver-photos" },
     { id: "power-rankings", label: "Power Rankings", href: "/admin/power-rankings" },
     { id: "news", label: "News", href: "/admin/news" },
@@ -79,15 +80,17 @@
         display: flex;
         flex-wrap: wrap;
         gap: 0;
+        align-items: stretch;
         padding: 0 12px 10px;
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
         scrollbar-width: thin;
       }
       .admin-shell-nav__link {
+        position: relative;
         display: inline-block;
-        margin-left: -1px;
-        padding: 7px 12px;
+        margin: 0;
+        padding: 7px 18px 7px 10px;
         color: #ddd;
         text-decoration: none;
         font-size: 10px;
@@ -95,25 +98,38 @@
         text-transform: uppercase;
         letter-spacing: 0.03em;
         white-space: nowrap;
+        line-height: 1.2;
         border: 1px solid #333;
-        background: linear-gradient(#181818, #070707);
+        border-radius: 0;
+        background: linear-gradient(#1c1c1c, #080808);
         clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
       }
       .admin-shell-nav__link:first-child {
-        margin-left: 0;
+        padding-left: 18px;
+        z-index: 2;
+      }
+      .admin-shell-nav__link:last-child {
+        padding-right: 18px;
+      }
+      .admin-shell-nav__link + .admin-shell-nav__link {
+        margin-left: -8px;
+        padding-left: 18px;
+        border-left: 0;
+        z-index: 1;
       }
       .admin-shell-nav__link:hover {
+        z-index: 4;
         color: #fff;
-        background: linear-gradient(#2a0808, #120000);
-        border-color: #a00;
+        background: linear-gradient(#d40000, #680000);
+        border-color: #ff2424;
+        box-shadow: 0 0 10px rgba(229, 9, 20, 0.25);
       }
       .admin-shell-nav__link.is-active {
+        z-index: 3;
         color: #fff;
         background: linear-gradient(#d40000, #680000);
         border-color: #ff2424;
         box-shadow: 0 0 12px rgba(229, 9, 20, 0.35);
-        position: relative;
-        z-index: 1;
       }
       @media (max-width: 640px) {
         .admin-shell-nav__top {
