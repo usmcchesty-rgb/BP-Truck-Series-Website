@@ -99,6 +99,12 @@ function alignFinishRacesWithTrace(recentPointsRaces, finishRaces, driverLookup)
   return aligned;
 }
 
+export function getAlignedRaceFinishes(scheduleRaces, raceNumber, schedules, driverLookup) {
+  const recentPointsRaces = getRecentPointsRaceResults(scheduleRaces, raceNumber, 3);
+  const finishRaces = extractFinishRacesFromSchedules(schedules);
+  return alignFinishRacesWithTrace(recentPointsRaces, finishRaces, driverLookup);
+}
+
 function raceLabel(race) {
   return `Race ${race.pointsRaceNumber} - ${race.track || 'Unknown'}`;
 }

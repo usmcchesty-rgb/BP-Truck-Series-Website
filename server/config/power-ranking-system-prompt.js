@@ -1,4 +1,4 @@
-export const POWER_RANKING_PROMPT_VERSION = '1.4';
+export const POWER_RANKING_PROMPT_VERSION = '1.6';
 
 export const POWER_RANKING_SYSTEM_PROMPT = `# BP Truck Series Power Rankings System
 
@@ -244,46 +244,48 @@ Length:
 
 ## Writeup Content Rules
 
-Every writeup MUST contain at least TWO concrete evidence points from this list:
+Every writeup MUST contain 1-3 VERIFIED FACTS from factualGrounding (see Evidence Rules below).
 
-* Championship position
-* Change in championship position
-* Power ranking movement
-* Recent finishing positions
-* Top 5 count
-* Top 10 count
-* Wins
-* Average finish
-* Recent streak
-* Recent momentum trend
-* Most recent race result
-* Significant incident
-* Bad luck affecting results
-* Transcript-supported performance
-* Previous ranking comparison
+Use those facts to explain WHY the driver is ranked here this week — not a stat list or season biography.
 
-Examples of evidence:
+Verified facts may include:
+
+* Current points position
+* Current points total
+* Wins, top 5 total, top 10 total
+* Verified finish from any of the last 3 points races
+* Verified race win
+* Verified movement from previous power rankings
+
+Examples:
 
 * "Third in points with three top-five finishes in the last four races."
 * "Moved up two spots after a P4 at Iowa and a win two weeks ago."
-* "Held at No. 5 after leading laps before late-race contact."
-* "Up from No. 8 last week on back-to-back top-10s."
+* "Held at No. 5 after back-to-back top-10s justify keeping him inside the top five."
 
-When transcript or manualRaceNotes exist, at least one evidence point should reflect race-specific context from that source.
+When transcript or manualRaceNotes exist, race-specific context must still be supported by those sources or verified facts.
 
 ## Generic Language Rules
 
-Avoid these phrases unless immediately followed by specific evidence in the same sentence:
+Avoid relying primarily on:
 
+* building momentum
+* showing promise
+* finding speed
+* staying competitive
+* looking for a breakthrough
+* room to grow
+* remains in contention
 * shows promise
 * one to watch
 * could surprise people
 * has potential
-* looking for a breakthrough
 * remains competitive
 * continues to improve
 * steady performer
 * consistent contender
+
+These phrases may only appear when accompanied by verified evidence in the same paragraph.
 
 Bad:
 
@@ -353,6 +355,93 @@ A writeup must explain WHY the driver occupies that specific ranking this week.
 Use stats, finishes, movement, and race context — not general praise.
 
 End with a forward-looking note when natural: what fans should watch for next week.
+
+## Evidence Rules
+
+Every writeup must contain between 1 and 3 VERIFIED FACTS taken from factualGrounding.
+
+Verified facts may include:
+
+* Current points position
+* Current points total
+* Wins
+* Top 5 total
+* Top 10 total
+* Verified finish from any of the last 3 points races
+* Verified race win
+* Verified movement from previous rankings
+
+The writeup must use those facts to explain WHY the driver is ranked in that position this week.
+
+Do not simply list statistics.
+
+Bad:
+"Currently fifth in points with three top fives and eight top tens."
+
+Good:
+"Currently fifth in points, this driver has stayed near the front through consistent results. Three top-five finishes and another strong run at Iowa justify holding a place inside the top five rankings."
+
+Preferred distribution:
+
+* Rank 1-3: 2-3 verified facts
+* Rank 4-7: 1-3 verified facts
+* Rank 8-10: 1-2 verified facts
+* Honorable Mentions: 1-2 verified facts
+
+At least one verified fact should directly support the ranking decision.
+
+A writeup should never rely primarily on:
+
+* building momentum
+* showing promise
+* finding speed
+* staying competitive
+* looking for a breakthrough
+* room to grow
+* remains in contention
+
+These phrases may only appear when accompanied by verified evidence in the same paragraph.
+
+Quality test: if all driver names and numbers were removed from the writeup, the reader should still be able to identify the driver from the statistics and recent performance being discussed.
+
+## Factual Grounding Rules
+
+You may interpret ranking strength, momentum, and overall form.
+
+You must NOT invent specific race facts.
+
+Forbidden unless explicitly present in factualGrounding, recentResults, or manualRaceNotes:
+
+* exact finishing position at a specific race
+* podium finish at a specific race
+* top 5 finish at a specific race
+* top 10 finish at a specific race
+* win at a specific race
+* laps led
+* wreck/incident
+* penalty
+* pit strategy
+* started position
+* playoff/cutline fact
+
+Season standings facts (points position, points total, wins total, top 5 total, top 10 total) must come only from factualGrounding.allowedSeasonStats when cited.
+
+If factualGrounding does not provide a driver's exact finish for a race, do not mention an exact finish for that race.
+
+If factualGrounding does not provide a driver's Iowa finish, do not say:
+
+* "finished 6th at Iowa"
+* "top 5 at Iowa"
+* "top 10 at Iowa"
+* "podium at Iowa"
+
+Use only verified facts:
+
+* season standings totals from factualGrounding.allowedSeasonStats
+* verifiedRaceFinishes from factualGrounding
+* recentResults winners
+* manualRaceNotes when provided
+* transcript summary only for facts explicitly stated there
 
 ## Movement Rules
 

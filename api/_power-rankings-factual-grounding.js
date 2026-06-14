@@ -1,0 +1,902 @@
+import { matchDriverIdByName } from './_power-rankings-recent-form.js';
+import { getAlignedRaceFinishes } from './_power-rankings-results-audit.js';
+
+function normalizeText(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function parseNumeric(value) {
+  const parsed = Number(String(value || '').replace(/,/g, ''));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function ordinalToNumber(value) {
+  const map = {
+    first: 1,
+    second: 2,
+    third: 3,
+    fourth: 4,
+    fifth: 5,
+    sixth: 6,
+    seventh: 7,
+    eighth: 8,
+    ninth: 9,
+    tenth: 10,
+  };
+  const lower = String(value || '').toLowerCase();
+  if (map[lower]) return map[lower];
+  return parseNumeric(value);
+}
+
+function matchRaceByContext(text, alignedRaces) {
+  const lower = normalizeText(text);
+  for (const race of alignedRaces) {
+    const track = normalizeText(race.track);
+    if (!track) continue;
+    if (lower.includes(track) || track.split(' ').every((token) => lower.includes(token))) {
+      return race;
+    }
+    const tokens = track.split(' ').filter((token) => token.length > 2);
+    const hits = tokens.filter((token) => lower.includes(token));
+    if (hits.length >= Math.min(2, tokens.length)) return race;
+  }
+
+  const raceNumberMatch = lower.match(/\brace\s*(\d+)\b/);
+  if (raceNumberMatch) {
+    const target = Number(raceNumberMatch[1]);
+    return alignedRaces.find((race) => race.pointsRaceNumber === target) || null;
+  }
+
+  if (/\b(last race|latest race|most recent race|this past race)\b/i.test(text)) {
+    return alignedRaces[alignedRaces.length - 1] || null;
+  }
+
+  return null;
+}
+
+function getVerifiedFinishForDriver(driverId, race) {
+  if (!race || !driverId) return null;
+  const finish = race.finishes?.[String(driverId)];
+  return Number.isFinite(finish) ? finish : null;
+}
+
+function isVerifiedWinner(driverId, race, recentResults, driverLookup) {
+  const finish = getVerifiedFinishForDriver(driverId, race);
+  if (finish === 1) return true;
+
+  const recent = (recentResults || []).find(
+    (entry) => Number(entry.raceNumber) === Number(race.pointsRaceNumber)
+  );
+  if (!recent?.winner) return false;
+
+  const winnerId = matchDriverIdByName(recent.winner, driverLookup);
+  return winnerId && String(winnerId) === String(driverId);
+}
+
+function claimSupportedInNotes(claimText, manualRaceNotes, transcriptSummary) {
+  const claim = normalizeText(claimText);
+  if (!claim) return false;
+  const sources = [manualRaceNotes, transcriptSummary].filter(Boolean).map(normalizeText);
+  return sources.some((source) => source.includes(claim) || claim.split(' ').filter((word) => word.length > 3 && source.includes(word)).length >= 2);
+}
+
+function buildDriverGrounding(driverId, alignedRaces, standingsRow, recentResults, driverLookup) {
+  const verifiedRaceFinishes = alignedRaces
+    .map((race) => {
+      const finish = getVerifiedFinishForDriver(driverId, race);
+      if (!Number.isFinite(finish)) return null;
+      return {
+        pointsRaceNumber: race.pointsRaceNumber,
+        track: race.track,
+        finishPosition: finish,
+        source: 'SimRacerHub schedules API',
+      };
+    })
+    .filter(Boolean);
+
+  const verifiedWins = alignedRaces
+    .filter((race) => isVerifiedWinner(driverId, race, recentResults, driverLookup))
+    .map((race) => ({
+      pointsRaceNumber: race.pointsRaceNumber,
+      track: race.track,
+      source: getVerifiedFinishForDriver(driverId, race) === 1
+        ? 'SimRacerHub schedules API'
+        : 'parsed schedule page (winner only)',
+    }));
+
+  return {
+    allowedSeasonStats: standingsRow
+      ? {
+          pointsPosition: standingsRow.position,
+          pointsTotal: standingsRow.points,
+          winsTotal: standingsRow.wins,
+          top5Total: standingsRow.top5,
+          top10Total: standingsRow.top10,
+          source: 'standings API',
+        }
+      : null,
+    verifiedRaceFinishes,
+    verifiedRaceWins: verifiedWins,
+  };
+}
+
+export function buildFactualGroundingContext({
+  standings,
+  scheduleRaces,
+  raceNumber,
+  schedules,
+  driverLookup,
+  recentResults,
+  manualRaceNotes,
+  transcriptSummary,
+}) {
+  const alignedRaces = getAlignedRaceFinishes(
+    scheduleRaces,
+    raceNumber,
+    schedules,
+    driverLookup
+  );
+
+  const drivers = {};
+  for (const [driverId, driver] of driverLookup.entries()) {
+    const standingsRow = standings.find((row) => String(row.driverId) === String(driverId));
+    drivers[String(driverId)] = {
+      driverName: driver.driverName,
+      ...buildDriverGrounding(
+        driverId,
+        alignedRaces,
+        standingsRow,
+        recentResults,
+        driverLookup
+      ),
+    };
+  }
+
+  return {
+    rules:
+      'Every writeup must use 1-3 verified facts from this object to explain the ranking. Do not invent race-specific facts. Only cite exact finishes, wins, podiums, incidents, laps led, strategy, or points facts listed here or in manualRaceNotes/transcript summary.',
+    manualNotesAvailable: Boolean(String(manualRaceNotes || '').trim()),
+    transcriptSummaryAvailable: Boolean(String(transcriptSummary || '').trim()),
+    recentResultsWinnersOnly: recentResults,
+    alignedRaces: alignedRaces.map((race) => ({
+      pointsRaceNumber: race.pointsRaceNumber,
+      track: race.track,
+      winner: race.winner,
+    })),
+    drivers,
+  };
+}
+
+function pushUnsupported(unsupported, item) {
+  unsupported.push(item);
+}
+
+function validateRaceBandClaim({
+  text,
+  unsupported,
+  driverId,
+  alignedRaces,
+  band,
+  manualRaceNotes,
+  transcriptSummary,
+}) {
+  const regex =
+    band === 'podium'
+      ? /\b(podium|top\s*-?\s*three|top\s*-?\s*3)\b[^.!?]{0,40}\b(at|in|from)\b[^.!?]+/gi
+      : new RegExp(
+          `\\btop\\s*-?\\s*(${band === 'top5' ? 'five|5' : 'ten|10'})\\b[^.!?]{0,40}\\b(at|in|from)\\b[^.!?]+`,
+          'gi'
+        );
+
+  for (const match of text.matchAll(regex)) {
+    const snippet = match[0];
+    if (claimSupportedInNotes(snippet, manualRaceNotes, transcriptSummary)) continue;
+
+    const race = matchRaceByContext(snippet, alignedRaces);
+    const verifiedFinish = getVerifiedFinishForDriver(driverId, race);
+    const maxFinish = band === 'podium' ? 3 : band === 'top5' ? 5 : 10;
+
+    if (!race || !Number.isFinite(verifiedFinish)) {
+      pushUnsupported(unsupported, {
+        type: band,
+        message: `Unsupported ${band} claim without verified finish data.`,
+        claim: snippet.trim(),
+        race: race?.track || null,
+      });
+      continue;
+    }
+
+    if (verifiedFinish > maxFinish) {
+      pushUnsupported(unsupported, {
+        type: band,
+        message: `Claimed ${band} at ${race.track}, but verified finish is P${verifiedFinish}.`,
+        claim: snippet.trim(),
+        race: race.track,
+        verifiedFinish,
+      });
+    }
+  }
+}
+
+export function validateWriteupFactualGrounding(writeup, context = {}) {
+  const text = String(writeup || '');
+  const unsupported = [];
+  const driverId = String(context.driverId || context.factualGrounding?.driverId || '');
+  const grounding = context.factualGrounding || context.driverGrounding || null;
+  const alignedRaces = context.alignedRaces || [];
+  const manualRaceNotes = context.manualRaceNotes || '';
+  const transcriptSummary = context.transcriptSummary || '';
+  const recentResults = context.recentResults || [];
+  const driverLookup = context.driverLookup;
+  const seasonStats = grounding?.allowedSeasonStats || null;
+
+  const exactFinishPatterns = [
+    /\bfinished\s+(?:(\d+(?:st|nd|rd|th)?)|P(\d+)|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)\b[^.!?]{0,50}\b(at|in|from)\b[^.!?]+/gi,
+    /\b(?:a|his|her|their)\s+(?:(\d+(?:st|nd|rd|th)?)|P(\d+)|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)\b[^.!?]{0,30}\b(at|in|from)\b[^.!?]+/gi,
+    /\bP(\d+)\b[^.!?]{0,30}\b(at|in|from)\b[^.!?]+/gi,
+  ];
+
+  for (const pattern of exactFinishPatterns) {
+    for (const match of text.matchAll(pattern)) {
+      const snippet = match[0];
+      if (claimSupportedInNotes(snippet, manualRaceNotes, transcriptSummary)) continue;
+
+      const claimedFinish =
+        ordinalToNumber(match[1] || match[2]) ??
+        ordinalToNumber(
+          snippet.match(/\b(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)\b/i)?.[1]
+        );
+
+      const race = matchRaceByContext(snippet, alignedRaces);
+      const verifiedFinish = getVerifiedFinishForDriver(driverId, race);
+
+      if (!Number.isFinite(claimedFinish)) continue;
+
+      if (!race || !Number.isFinite(verifiedFinish)) {
+        pushUnsupported(unsupported, {
+          type: 'exact-finish',
+          message: `Unsupported exact finish claim without verified race result.`,
+          claim: snippet.trim(),
+          race: race?.track || null,
+          claimedFinish,
+        });
+        continue;
+      }
+
+      if (verifiedFinish !== claimedFinish) {
+        pushUnsupported(unsupported, {
+          type: 'exact-finish',
+          message: `Claimed P${claimedFinish} at ${race.track}, but verified finish is P${verifiedFinish}.`,
+          claim: snippet.trim(),
+          race: race.track,
+          claimedFinish,
+          verifiedFinish,
+        });
+      }
+    }
+  }
+
+  validateRaceBandClaim({
+    text,
+    unsupported,
+    driverId,
+    alignedRaces,
+    band: 'podium',
+    manualRaceNotes,
+    transcriptSummary,
+  });
+  validateRaceBandClaim({
+    text,
+    unsupported,
+    driverId,
+    alignedRaces,
+    band: 'top5',
+    manualRaceNotes,
+    transcriptSummary,
+  });
+  validateRaceBandClaim({
+    text,
+    unsupported,
+    driverId,
+    alignedRaces,
+    band: 'top10',
+    manualRaceNotes,
+    transcriptSummary,
+  });
+
+  for (const match of text.matchAll(/\b(win(?:ning)?|victory|checkered flag)\b[^.!?]{0,40}\b(at|in|from)\b[^.!?]+/gi)) {
+    const snippet = match[0];
+    if (claimSupportedInNotes(snippet, manualRaceNotes, transcriptSummary)) continue;
+    const race = matchRaceByContext(snippet, alignedRaces);
+    if (!race || !isVerifiedWinner(driverId, race, recentResults, driverLookup)) {
+      pushUnsupported(unsupported, {
+        type: 'win',
+        message: 'Unsupported race win claim without verified winner data.',
+        claim: snippet.trim(),
+        race: race?.track || null,
+      });
+    }
+  }
+
+  for (const match of text.matchAll(/\b(\d+)\s+laps?\s+led\b/gi)) {
+    const snippet = match[0];
+    if (!claimSupportedInNotes(snippet, manualRaceNotes, transcriptSummary)) {
+      pushUnsupported(unsupported, {
+        type: 'laps-led',
+        message: 'Unsupported laps led claim.',
+        claim: snippet.trim(),
+      });
+    }
+  }
+
+  for (const match of text.matchAll(
+    /\b(wreck|crashed|spun|spin|contact|incident|penalty|pitted|pit strategy|started\s+(?:\d+|P\d+)|playoff|cutline|cut line)\b[^.!?]*/gi
+  )) {
+    const snippet = match[0];
+    if (!claimSupportedInNotes(snippet, manualRaceNotes, transcriptSummary)) {
+      pushUnsupported(unsupported, {
+        type: 'race-event',
+        message: 'Unsupported race event or strategy claim.',
+        claim: snippet.trim(),
+      });
+    }
+  }
+
+  if (seasonStats) {
+    for (const match of text.matchAll(/\b(\d+(?:st|nd|rd|th)|#(\d+))\s+in\s+(?:the\s+)?points\b/gi)) {
+      const snippet = match[0];
+      const claimed = parseNumeric(match[1] || match[2]);
+      if (!Number.isFinite(claimed)) continue;
+      if (claimed !== Number(seasonStats.pointsPosition)) {
+        pushUnsupported(unsupported, {
+          type: 'points-position',
+          message: `Claimed points position ${claimed}, but verified position is ${seasonStats.pointsPosition}.`,
+          claim: snippet.trim(),
+          verifiedValue: seasonStats.pointsPosition,
+        });
+      }
+    }
+
+    for (const match of text.matchAll(/\b(\d[\d,]*)\s+points\b/gi)) {
+      const snippet = match[0];
+      const claimed = parseNumeric(match[1]);
+      if (!Number.isFinite(claimed)) continue;
+      if (claimed !== Number(seasonStats.pointsTotal)) {
+        pushUnsupported(unsupported, {
+          type: 'points-total',
+          message: `Claimed ${claimed} points, but verified total is ${seasonStats.pointsTotal}.`,
+          claim: snippet.trim(),
+          verifiedValue: seasonStats.pointsTotal,
+        });
+      }
+    }
+
+    for (const match of text.matchAll(/\b(\d+)\s+wins?\b/gi)) {
+      const snippet = match[0];
+      const claimed = parseNumeric(match[1]);
+      if (!Number.isFinite(claimed)) continue;
+      if (/\b(at|in|from)\b/i.test(snippet)) continue;
+      if (claimed !== Number(seasonStats.winsTotal)) {
+        pushUnsupported(unsupported, {
+          type: 'wins-total',
+          message: `Claimed ${claimed} wins, but verified season wins total is ${seasonStats.winsTotal}.`,
+          claim: snippet.trim(),
+          verifiedValue: seasonStats.winsTotal,
+        });
+      }
+    }
+  } else {
+    for (const match of text.matchAll(/\b(\d+(?:st|nd|rd|th)|#(\d+))\s+in\s+(?:the\s+)?points\b|\b(\d[\d,]*)\s+points\b/gi)) {
+      pushUnsupported(unsupported, {
+        type: 'points-fact',
+        message: 'Unsupported points fact without standings data.',
+        claim: match[0].trim(),
+      });
+    }
+  }
+
+  return { unsupported };
+}
+
+const ORDINAL_BY_NUMBER = {
+  1: 'first',
+  2: 'second',
+  3: 'third',
+  4: 'fourth',
+  5: 'fifth',
+  6: 'sixth',
+  7: 'seventh',
+  8: 'eighth',
+  9: 'ninth',
+  10: 'tenth',
+};
+
+const NUMBER_WORDS = {
+  zero: 0,
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+  eleven: 11,
+  twelve: 12,
+};
+
+const GENERIC_EVIDENCE_PHRASES = [
+  'building momentum',
+  'showing promise',
+  'finding speed',
+  'staying competitive',
+  'looking for a breakthrough',
+  'room to grow',
+  'remains in contention',
+  'shows promise',
+  'one to watch',
+  'could surprise people',
+  'has potential',
+  'continues to improve',
+  'steady performer',
+  'consistent contender',
+];
+
+function getOrdinalSuffix(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return String(value);
+  const mod100 = number % 100;
+  if (mod100 >= 11 && mod100 <= 13) return `${number}th`;
+  const mod10 = number % 10;
+  if (mod10 === 1) return `${number}st`;
+  if (mod10 === 2) return `${number}nd`;
+  if (mod10 === 3) return `${number}rd`;
+  return `${number}th`;
+}
+
+function parseCountToken(token) {
+  if (!token) return null;
+  const numeric = parseNumeric(token);
+  if (Number.isFinite(numeric)) return numeric;
+  return NUMBER_WORDS[String(token).toLowerCase()] ?? null;
+}
+
+function textIncludesTrack(text, track) {
+  const lower = normalizeText(text);
+  const trackNorm = normalizeText(track);
+  if (!trackNorm) return false;
+  if (lower.includes(trackNorm)) return true;
+  const tokens = trackNorm.split(' ').filter((token) => token.length > 2);
+  if (!tokens.length) return false;
+  const hits = tokens.filter((token) => lower.includes(token));
+  return hits.length >= Math.min(2, tokens.length);
+}
+
+function matchPointsPosition(text, position) {
+  const pos = Number(position);
+  if (!Number.isFinite(pos)) return false;
+
+  const patterns = [
+    new RegExp(`\\b${pos}(?:st|nd|rd|th)\\s+in\\s+(?:the\\s+)?(?:points|standings)\\b`, 'i'),
+    new RegExp(`\\b#${pos}\\s+in\\s+(?:points|standings)\\b`, 'i'),
+    new RegExp(`\\b(?:currently|sits|ranked|positioned)\\s+${getOrdinalSuffix(pos)}\\b`, 'i'),
+  ];
+
+  const ordinalWord = ORDINAL_BY_NUMBER[pos];
+  if (ordinalWord) {
+    patterns.push(
+      new RegExp(`\\b${ordinalWord}\\s+in\\s+(?:the\\s+)?(?:points|standings)\\b`, 'i')
+    );
+  }
+
+  return patterns.some((pattern) => pattern.test(text));
+}
+
+function matchPointsTotal(text, total) {
+  const value = Number(total);
+  if (!Number.isFinite(value)) return false;
+  const commaFlexible = String(value).replace(/\B(?=(\d{3})+(?!\d))/g, '[,]?');
+  return new RegExp(`\\b${commaFlexible}\\s+points\\b`, 'i').test(text);
+}
+
+function matchSeasonCount(text, count, kind) {
+  const value = Number(count);
+  if (!Number.isFinite(value)) return false;
+
+  const digitPattern =
+    kind === 'wins'
+      ? `\\b${value}\\s+wins?\\b`
+      : kind === 'top5'
+        ? `\\b${value}\\s+top\\s*-?\\s*fives?\\b|\\b${value}\\s+top-5s?\\b`
+        : `\\b${value}\\s+top\\s*-?\\s*tens?\\b|\\b${value}\\s+top-10s?\\b`;
+
+  if (new RegExp(digitPattern, 'i').test(text) && !/\b(at|in|from)\b/i.test(text)) {
+    return true;
+  }
+
+  const word = Object.entries(NUMBER_WORDS).find(([, num]) => num === value)?.[0];
+  if (!word) return false;
+
+  const wordPattern =
+    kind === 'wins'
+      ? `\\b${word}\\s+wins?\\b`
+      : kind === 'top5'
+        ? `\\b${word}\\s+top\\s*-?\\s*fives?\\b`
+        : `\\b${word}\\s+top\\s*-?\\s*tens?\\b`;
+
+  return new RegExp(wordPattern, 'i').test(text);
+}
+
+function matchVerifiedRaceFinish(text, race) {
+  const finish = Number(race.finishPosition);
+  if (!Number.isFinite(finish) || !textIncludesTrack(text, race.track)) return null;
+
+  const ordinalWord = ORDINAL_BY_NUMBER[finish];
+  const finishTokens = [
+    `P${finish}`,
+    getOrdinalSuffix(finish),
+    ordinalWord,
+    `${finish}(?:st|nd|rd|th)`,
+  ]
+    .filter(Boolean)
+    .join('|');
+
+  const finishRegex = new RegExp(
+    `\\b(?:finished|finish|a|his|her|their|with\\s+a)?\\s*(?:${finishTokens})\\b`,
+    'i'
+  );
+  const barePositionRegex = new RegExp(`\\b(?:${finishTokens})\\b`, 'i');
+
+  if (finishRegex.test(text) || barePositionRegex.test(text)) {
+    return {
+      type: 'verified-race-finish',
+      label: `P${finish} at ${race.track} (Race ${race.pointsRaceNumber})`,
+      raceNumber: race.pointsRaceNumber,
+      track: race.track,
+      finishPosition: finish,
+    };
+  }
+
+  if (finish <= 3 && /\b(podium|top\s*-?\s*three|top\s*-?\s*3)\b/i.test(text)) {
+    return {
+      type: 'verified-race-finish',
+      label: `Podium at ${race.track} (Race ${race.pointsRaceNumber}, verified P${finish})`,
+      raceNumber: race.pointsRaceNumber,
+      track: race.track,
+      finishPosition: finish,
+    };
+  }
+
+  if (finish <= 5 && /\btop\s*-?\s*(five|5)\b/i.test(text)) {
+    return {
+      type: 'verified-race-finish',
+      label: `Top 5 at ${race.track} (Race ${race.pointsRaceNumber}, verified P${finish})`,
+      raceNumber: race.pointsRaceNumber,
+      track: race.track,
+      finishPosition: finish,
+    };
+  }
+
+  if (finish <= 10 && /\btop\s*-?\s*(ten|10)\b/i.test(text)) {
+    return {
+      type: 'verified-race-finish',
+      label: `Top 10 at ${race.track} (Race ${race.pointsRaceNumber}, verified P${finish})`,
+      raceNumber: race.pointsRaceNumber,
+      track: race.track,
+      finishPosition: finish,
+    };
+  }
+
+  return null;
+}
+
+function matchVerifiedRaceWin(text, race) {
+  if (!textIncludesTrack(text, race.track)) return null;
+  if (!/\b(win(?:ning)?|victory|won|checkered flag)\b/i.test(text)) return null;
+
+  return {
+    type: 'verified-race-win',
+    label: `Win at ${race.track} (Race ${race.pointsRaceNumber})`,
+    raceNumber: race.pointsRaceNumber,
+    track: race.track,
+  };
+}
+
+function matchVerifiedMovement(text, context) {
+  const previousRank = Number(context.previousRank);
+  const currentRank = Number(context.rank ?? context.entry?.rank);
+  if (!Number.isFinite(previousRank) || !Number.isFinite(currentRank)) return null;
+
+  const movement = previousRank - currentRank;
+  if (movement === 0) {
+    if (
+      /\b(unchanged|same\s+spot|no\s+change|holds?\s+(?:the\s+)?(?:no\.?\s*)?#?\d+|stays?\s+(?:at|in)\s+(?:the\s+)?(?:no\.?\s*)?#?\d+)\b/i.test(
+        text
+      )
+    ) {
+      return {
+        type: 'movement',
+        label: `Unchanged from previous power rank ${previousRank}`,
+        previousRank,
+        currentRank,
+        movement: 0,
+      };
+    }
+    return null;
+  }
+
+  const spots = Math.abs(movement);
+  const directionPattern =
+    movement > 0
+      ? /\b(up|climbed|jumped|rose|moved\s+up|gained)\b/i
+      : /\b(down|dropped|fell|slid|lost|moved\s+down)\b/i;
+
+  if (
+    directionPattern.test(text) &&
+    (new RegExp(`\\b${spots}\\s+(spots?|positions?)\\b`, 'i').test(text) ||
+      new RegExp(
+        `\\bfrom\\s+#?${previousRank}\\s+to\\s+#?${currentRank}\\b`,
+        'i'
+      ).test(text))
+  ) {
+    return {
+      type: 'movement',
+      label:
+        movement > 0
+          ? `Up ${spots} from previous power rank ${previousRank}`
+          : `Down ${spots} from previous power rank ${previousRank}`,
+      previousRank,
+      currentRank,
+      movement,
+    };
+  }
+
+  return null;
+}
+
+function matchPowerRankPosition(text, rank) {
+  const currentRank = Number(rank ?? null);
+  if (!Number.isFinite(currentRank)) return null;
+
+  const patterns = [
+    new RegExp(`\\b(?:rank|ranked|spot|position)\\s*#?${currentRank}\\b`, 'i'),
+    new RegExp(`\\b(?:no\\.?\\s*)?${getOrdinalSuffix(currentRank)}\\s+spot\\b`, 'i'),
+    new RegExp(`\\b#${currentRank}\\s+this\\s+week\\b`, 'i'),
+  ];
+
+  if (patterns.some((pattern) => pattern.test(text))) {
+    return {
+      type: 'power-rank',
+      label: `Power rank ${currentRank}`,
+      rank: currentRank,
+    };
+  }
+
+  return null;
+}
+
+export function getVerifiedFactsLimits(rank) {
+  if (rank === 'HM') return { min: 1, max: 2 };
+  const numericRank = Number(rank);
+  if (numericRank >= 1 && numericRank <= 3) return { min: 2, max: 3 };
+  if (numericRank >= 4 && numericRank <= 7) return { min: 1, max: 3 };
+  if (numericRank >= 8 && numericRank <= 10) return { min: 1, max: 2 };
+  return { min: 1, max: 3 };
+}
+
+export function analyzeVerifiedFactsUsed(writeup, context = {}) {
+  const text = String(writeup || '');
+  const grounding = context.driverGrounding || context.factualGrounding || null;
+  const stats = grounding?.allowedSeasonStats || null;
+  const used = [];
+  const seen = new Set();
+
+  const pushFact = (fact) => {
+    const key = `${fact.type}:${fact.label}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    used.push(fact);
+  };
+
+  if (stats) {
+    if (matchPointsPosition(text, stats.pointsPosition)) {
+      pushFact({
+        type: 'points-position',
+        label: `P${stats.pointsPosition} in points`,
+        value: stats.pointsPosition,
+      });
+    }
+    if (matchPointsTotal(text, stats.pointsTotal)) {
+      pushFact({
+        type: 'points-total',
+        label: `${stats.pointsTotal} points`,
+        value: stats.pointsTotal,
+      });
+    }
+    if (matchSeasonCount(text, stats.winsTotal, 'wins')) {
+      pushFact({
+        type: 'wins-total',
+        label: `${stats.winsTotal} season wins`,
+        value: stats.winsTotal,
+      });
+    }
+    if (matchSeasonCount(text, stats.top5Total, 'top5')) {
+      pushFact({
+        type: 'top5-total',
+        label: `${stats.top5Total} top 5s`,
+        value: stats.top5Total,
+      });
+    }
+    if (matchSeasonCount(text, stats.top10Total, 'top10')) {
+      pushFact({
+        type: 'top10-total',
+        label: `${stats.top10Total} top 10s`,
+        value: stats.top10Total,
+      });
+    }
+  }
+
+  for (const race of grounding?.verifiedRaceFinishes || []) {
+    const finishFact = matchVerifiedRaceFinish(text, race);
+    if (finishFact) pushFact(finishFact);
+  }
+
+  for (const race of grounding?.verifiedRaceWins || []) {
+    const winFact = matchVerifiedRaceWin(text, race);
+    if (winFact) pushFact(winFact);
+  }
+
+  const movementFact = matchVerifiedMovement(text, context);
+  if (movementFact) pushFact(movementFact);
+
+  const powerRankFact = matchPowerRankPosition(text, context.rank ?? context.entry?.rank);
+  if (powerRankFact) pushFact(powerRankFact);
+
+  const rankingSupportTypes = new Set([
+    'points-position',
+    'movement',
+    'verified-race-finish',
+    'verified-race-win',
+    'power-rank',
+    'top5-total',
+    'top10-total',
+    'wins-total',
+  ]);
+
+  const hasRankingSupport = used.some((fact) => rankingSupportTypes.has(fact.type));
+  const hasJustificationLanguage =
+    /\b(justify|justifies|justifying|earned|deserves|keeps|holds|supports|warrant|warrants|reason|ranked|ranking|moved|climbed|dropped|fell|because|after|through|with|despite|enough to|solidifies|cements|stays|remains at|inside the top|outside the top|this week)\b/i.test(
+      text
+    );
+
+  const genericPhraseHits = GENERIC_EVIDENCE_PHRASES.filter((phrase) =>
+    text.toLowerCase().includes(phrase)
+  );
+
+  const distinctiveFactCount = used.filter((fact) =>
+    ['verified-race-finish', 'verified-race-win', 'movement', 'points-position'].includes(fact.type)
+  ).length;
+
+  return {
+    verifiedFactsUsed: used,
+    verifiedFactsUsedCount: used.length,
+    hasRankingSupport,
+    hasJustificationLanguage,
+    genericPhraseHits,
+    distinctiveFactCount,
+  };
+}
+
+export function validateWriteupVerifiedEvidence(writeup, context = {}) {
+  const rank = context.rank ?? context.entry?.rank ?? null;
+  const limits = getVerifiedFactsLimits(rank);
+  const analysis = analyzeVerifiedFactsUsed(writeup, context);
+  const count = analysis.verifiedFactsUsedCount;
+
+  if (count === 0) {
+    return {
+      error: 'Writeup uses no verified facts from factualGrounding.',
+      errorType: 'insufficient-verified-facts',
+      ...analysis,
+    };
+  }
+
+  if (count > 3) {
+    return {
+      error: `Writeup cites too many verified facts (${count}; maximum 3).`,
+      errorType: 'too-many-verified-facts',
+      ...analysis,
+    };
+  }
+
+  if (count < limits.min) {
+    return {
+      error: `Writeup needs ${limits.min}-${limits.max} verified facts for rank ${rank} (found ${count}).`,
+      errorType: 'insufficient-verified-facts',
+      ...analysis,
+    };
+  }
+
+  if (count > limits.max) {
+    return {
+      error: `Writeup cites too many verified facts for rank ${rank} (${count}; maximum ${limits.max}).`,
+      errorType: 'too-many-verified-facts',
+      ...analysis,
+    };
+  }
+
+  if (!analysis.hasRankingSupport || !analysis.hasJustificationLanguage) {
+    return {
+      error:
+        'Writeup lists verified facts but does not use them to explain why this driver is ranked here this week.',
+      errorType: 'weak-ranking-explanation',
+      ...analysis,
+    };
+  }
+
+  if (
+    analysis.genericPhraseHits.length > 0 &&
+    analysis.distinctiveFactCount === 0 &&
+    count <= 1
+  ) {
+    return {
+      error: `Writeup relies on generic language (${analysis.genericPhraseHits[0]}) without enough verified evidence.`,
+      errorType: 'generic-language',
+      ...analysis,
+    };
+  }
+
+  if (analysis.distinctiveFactCount === 0 && count <= 1 && analysis.genericPhraseHits.length === 0) {
+    const lower = normalizeText(writeup);
+    if (
+      /\b(competitive|improving|potential|promising|contender|consistent|dangerous|threat|talented|momentum|speed)\b/.test(
+        lower
+      )
+    ) {
+      return {
+        error: 'Writeup is too generic and could apply to multiple drivers.',
+        errorType: 'too-generic',
+        ...analysis,
+      };
+    }
+  }
+
+  return {
+    error: null,
+    errorType: null,
+    ...analysis,
+  };
+}
+
+export function formatVerifiedFactsForRepair(grounding, rank) {
+  if (!grounding) return 'No verified facts available.';
+  const limits = getVerifiedFactsLimits(rank);
+  const lines = [
+    `Use ${limits.min}-${limits.max} verified facts below to explain WHY this driver is ranked here this week.`,
+    'Do not simply list statistics — connect facts to the ranking decision.',
+  ];
+  if (grounding.allowedSeasonStats) {
+    const stats = grounding.allowedSeasonStats;
+    lines.push(
+      `Verified season stats: P${stats.pointsPosition}, ${stats.pointsTotal} points, ${stats.winsTotal} wins, ${stats.top5Total} top 5s, ${stats.top10Total} top 10s.`
+    );
+  }
+  for (const race of grounding.verifiedRaceFinishes || []) {
+    lines.push(
+      `Verified Race ${race.pointsRaceNumber} (${race.track}): P${race.finishPosition}.`
+    );
+  }
+  for (const race of grounding.verifiedRaceWins || []) {
+    lines.push(`Verified win: Race ${race.pointsRaceNumber} (${race.track}).`);
+  }
+  if (lines.length <= 2) {
+    lines.push('No verified race finishes available — use season stats only and avoid exact race-result claims.');
+  }
+  return lines.join('\n');
+}

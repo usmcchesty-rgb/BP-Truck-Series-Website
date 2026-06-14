@@ -497,7 +497,31 @@
         promptDataGap: nested?.promptDataGap ?? data?.resultsAudit?.promptDataGap ?? null,
         alignedRaceTrace:
           nested?.alignedRaceTrace ?? data?.resultsAudit?.alignedRaceTrace ?? [],
+        unsupportedFactWarnings:
+          nested?.unsupportedFactWarnings ?? data?.unsupportedFactWarnings ?? [],
+        unsupportedFactRanks:
+          nested?.unsupportedFactRanks ?? data?.unsupportedFactRanks ?? [],
+        unsupportedFactDetails:
+          nested?.unsupportedFactDetails ?? data?.unsupportedFactDetails ?? {},
+        verifiedFactsUsed: nested?.verifiedFactsUsed ?? data?.verifiedFactsUsed ?? {},
+        verifiedFactsUsedCount:
+          nested?.verifiedFactsUsedCount ?? data?.verifiedFactsUsedCount ?? {},
+        evidenceBasedWriteupsCount:
+          nested?.evidenceBasedWriteupsCount ?? data?.evidenceBasedWriteupsCount ?? 0,
+        evidenceRepairRanks:
+          nested?.evidenceRepairRanks ?? data?.evidenceRepairRanks ?? [],
       };
+    }
+
+    function formatVerifiedFactsSummary(verifiedFactsUsed, verifiedFactsUsedCount) {
+      const countEntries = Object.entries(verifiedFactsUsedCount || {});
+      if (!countEntries.length) return ['  (none)'];
+      return countEntries.map(([rank, count]) => {
+        const facts = (verifiedFactsUsed?.[rank] || [])
+          .map((fact) => fact.label || fact.type)
+          .join('; ');
+        return `  ${rank}: ${count} fact(s)${facts ? ` — ${facts}` : ''}`;
+      });
     }
 
     function formatRecentRaceResultRow(row) {
@@ -670,6 +694,27 @@
           ? [
               '  ranked driver finish trace:',
               ...formatRankedDriverFinishTrace(sources.rankedDriverFinishTrace),
+              '',
+            ]
+          : []),
+        'Verified evidence:',
+        `  evidenceBasedWriteupsCount: ${sources.evidenceBasedWriteupsCount ?? 0}`,
+        `  evidenceRepairRanks: ${(sources.evidenceRepairRanks || []).length ? sources.evidenceRepairRanks.join(', ') : 'none'}`,
+        ...formatVerifiedFactsSummary(
+          sources.verifiedFactsUsed,
+          sources.verifiedFactsUsedCount
+        ),
+        '',
+        ...(Array.isArray(sources.unsupportedFactWarnings) && sources.unsupportedFactWarnings.length
+          ? [
+              'Unsupported factual claims:',
+              ...sources.unsupportedFactWarnings.map((warning) => `  ${warning}`),
+              ...(Object.keys(sources.unsupportedFactDetails || {}).length
+                ? [
+                    `  unsupportedFactRanks: ${(sources.unsupportedFactRanks || []).join(', ')}`,
+                    `  unsupportedFactDetails: ${JSON.stringify(sources.unsupportedFactDetails)}`,
+                  ]
+                : []),
               '',
             ]
           : []),

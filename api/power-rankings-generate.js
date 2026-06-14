@@ -21,7 +21,14 @@ import {
 import {
   buildRankedDriverFinishTrace,
   buildRecentResultsAudit,
+  getAlignedRaceFinishes,
 } from './_power-rankings-results-audit.js';
+import {
+  buildFactualGroundingContext,
+  formatVerifiedFactsForRepair,
+  validateWriteupFactualGrounding,
+  validateWriteupVerifiedEvidence,
+} from './_power-rankings-factual-grounding.js';
 
 function parseBody(req) {
   if (!req.body) return {};
@@ -614,6 +621,7 @@ function buildContextPayload({
   manualRaceNotes,
   standingsSnapshot,
   recentFormAnalysis,
+  factualGrounding,
 }) {
   const completedRaces = getRecentPointsRaceResults(scheduleRaces, raceNumber, 3);
 
@@ -642,6 +650,7 @@ function buildContextPayload({
     })),
     recentResults,
     recentFormAnalysis: recentFormAnalysis || null,
+    factualGrounding: factualGrounding || null,
     previousPowerRankings: previousRankings,
     drivers: standings.map((row) => ({
       driverId: row.driverId,
@@ -691,6 +700,8 @@ Only use recentResults and transcript/manual notes for race context through Race
 
 Power Rankings are NOT points standings. Use recentFormAnalysis heavily. Do not simply mirror points order.
 Back-to-back winners should almost always be Top 10. Recent winners and hot drivers left out of the Top 10 should usually appear in honorableMentions (0-3).
+
+Use factualGrounding only for verified facts. Do not invent exact race finishes, podiums, wins, incidents, laps led, strategy, or points totals unless listed in factualGrounding or manualRaceNotes.
 
 transcriptMode: ${contextPayload.transcriptMode || 'none'}
 transcriptUsed: ${contextPayload.transcriptUsed === true}
@@ -962,23 +973,40 @@ const WRITEUP_EVIDENCE_PATTERNS = [
 ];
 
 const GENERIC_WRITEUP_PHRASES = [
+  'building momentum',
+  'showing promise',
+  'finding speed',
+  'staying competitive',
+  'looking for a breakthrough',
+  'room to grow',
+  'remains in contention',
   'shows promise',
   'one to watch',
   'could surprise people',
   'has potential',
-  'looking for a breakthrough',
   'remains competitive',
   'continues to improve',
   'steady performer',
   'consistent contender',
 ];
 
+const EVIDENCE_REPAIR_ERROR_TYPES = new Set([
+  'insufficient-verified-facts',
+  'too-many-verified-facts',
+  'weak-ranking-explanation',
+  'generic-language',
+  'too-generic',
+]);
+
 const REPAIRABLE_WRITEUP_ERROR_TYPES = new Set([
   'name-first-opening',
-  'insufficient-evidence',
+  'insufficient-verified-facts',
+  'too-many-verified-facts',
+  'weak-ranking-explanation',
   'generic-language',
   'season-summary',
   'too-generic',
+  'unsupported-facts',
 ]);
 
 function countWriteupEvidencePoints(text) {
@@ -1124,11 +1152,16 @@ function validateWriteup(writeup, driver, context = {}) {
     };
   }
 
-  const evidenceCount = countWriteupEvidencePoints(text);
-  if (evidenceCount < 2) {
+  const evidenceValidation = validateWriteupVerifiedEvidence(text, {
+    ...context,
+    rank: context.rank ?? context.entry?.rank,
+  });
+  if (evidenceValidation.error) {
     return {
-      error: `Writeup needs at least two concrete evidence points (found ${evidenceCount}).`,
-      errorType: 'insufficient-evidence',
+      error: evidenceValidation.error,
+      errorType: evidenceValidation.errorType,
+      verifiedFactsUsed: evidenceValidation.verifiedFactsUsed,
+      verifiedFactsUsedCount: evidenceValidation.verifiedFactsUsedCount,
       warnings,
     };
   }
@@ -1161,7 +1194,26 @@ function validateWriteup(writeup, driver, context = {}) {
     warnings.push('Transcript/manual notes were available but writeup lacks race-specific context.');
   }
 
-  return { error: null, errorType: null, warnings };
+  const factual = validateWriteupFactualGrounding(text, context);
+  if (factual.unsupported.length) {
+    return {
+      error: `Writeup contains unsupported factual claims: ${factual.unsupported
+        .map((item) => item.message)
+        .join('; ')}`,
+      errorType: 'unsupported-facts',
+      unsupportedFacts: factual.unsupported,
+      warnings,
+    };
+  }
+
+  return {
+    error: null,
+    errorType: null,
+    warnings,
+    unsupportedFacts: [],
+    verifiedFactsUsed: evidenceValidation.verifiedFactsUsed,
+    verifiedFactsUsedCount: evidenceValidation.verifiedFactsUsedCount,
+  };
 }
 
 function isNameFirstOpeningError(error, errorType) {
@@ -1206,6 +1258,7 @@ async function callOpenAiWriteupRepair({
   subtitle,
   repairReason,
   driverStats,
+  verifiedFacts,
   transcriptUsed,
 }) {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -1234,15 +1287,20 @@ Rules:
 - Do NOT start with the driver's name.
 - 50-100 words, 2-4 sentences.
 - Explain WHY this driver is ranked here THIS week (not a season summary or biography).
-- Include at least TWO concrete evidence points (stats, finishes, movement, race context).
-- Avoid generic filler unless immediately backed by specific evidence.
+- Use 1-3 verified facts from the list below (rank tier limits apply).
+- Use those facts to explain WHY this driver is ranked here THIS week — do not simply list statistics.
+- Avoid generic filler like "building momentum", "finding speed", or "stays competitive" unless immediately backed by verified facts in the same paragraph.
 - Do not use unsupported phrases like "shows promise" or "steady performer".
-${transcriptUsed ? '- Transcript/manual race notes were available — include race-specific context.' : ''}
+- Do NOT invent race facts. Only use verified facts listed below or manual/transcript notes.
+${transcriptUsed ? '- Transcript/manual race notes were available — use only facts supported by those notes or verified facts below.' : ''}
 
 Driver: ${driverName}
 Rank: ${rank}
 Subtitle: ${subtitle}
 Repair reason: ${repairReason}
+
+Verified facts only:
+${verifiedFacts}
 
 Driver stats:
 ${driverStats}
@@ -1278,7 +1336,9 @@ async function repairWriteupQuality(entry, driver, context = {}) {
   let repairAttempts = 0;
   let repairAttempted = false;
   const repairReasons = [];
+  const unsupportedFactsDetected = [];
   let writeupResult = validateWriteup(writeup, driver, context);
+  const verifiedFacts = formatVerifiedFactsForRepair(context.driverGrounding, entry.rank);
 
   while (
     writeupResult.error &&
@@ -1287,6 +1347,9 @@ async function repairWriteupQuality(entry, driver, context = {}) {
   ) {
     repairAttempted = true;
     repairReasons.push(writeupResult.errorType);
+    if (writeupResult.unsupportedFacts?.length) {
+      unsupportedFactsDetected.push(...writeupResult.unsupportedFacts);
+    }
     writeup = await callOpenAiWriteupRepair({
       writeup,
       driverName: driver.driverName,
@@ -1294,6 +1357,7 @@ async function repairWriteupQuality(entry, driver, context = {}) {
       subtitle: entry.subtitle,
       repairReason: writeupResult.error,
       driverStats: formatDriverStatsForRepair(driver, entry, context.previousRank),
+      verifiedFacts,
       transcriptUsed: context.transcriptUsed === true,
     });
     writeup = String(writeup || '').trim();
@@ -1307,6 +1371,7 @@ async function repairWriteupQuality(entry, driver, context = {}) {
     repairAttempts,
     repairAttempted,
     repairReasons,
+    unsupportedFactsDetected,
   };
 }
 
@@ -1444,6 +1509,13 @@ function buildGenerationSources({
     rankedDriverFinishTrace: resultsAudit?.rankedDriverFinishTrace ?? [],
     promptDataGap: resultsAudit?.promptDataGap ?? null,
     alignedRaceTrace: resultsAudit?.alignedRaceTrace ?? [],
+    unsupportedFactWarnings: draft.unsupportedFactWarnings ?? [],
+    unsupportedFactRanks: draft.unsupportedFactRanks ?? [],
+    unsupportedFactDetails: draft.unsupportedFactDetails ?? {},
+    verifiedFactsUsed: draft.verifiedFactsUsed ?? {},
+    verifiedFactsUsedCount: draft.verifiedFactsUsedCount ?? {},
+    evidenceBasedWriteupsCount: draft.evidenceBasedWriteupsCount ?? 0,
+    evidenceRepairRanks: draft.evidenceRepairRanks ?? [],
   };
 }
 
@@ -1468,7 +1540,31 @@ async function normalizeDraft(aiDraft, driverLookup, previousRankings, generatio
   const repairFailedRanks = [];
   const repairFailureReasons = {};
   const repairedWriteupReasons = {};
+  const unsupportedFactWarnings = [];
+  const unsupportedFactRanks = [];
+  const unsupportedFactDetails = {};
   let repairAttempted = false;
+
+  const verifiedFactsUsed = {};
+  const verifiedFactsUsedCount = {};
+  const evidenceRepairRanks = [];
+  let evidenceBasedWriteupsCount = 0;
+
+  const buildWriteupContext = (entry, driver, previousRank) => ({
+    transcriptUsed: generationContext.transcriptUsed === true,
+    transcriptMode: generationContext.transcriptMode || 'none',
+    previousRank,
+    rank: entry.rank,
+    entry,
+    driverId: entry.driverId,
+    driverGrounding: generationContext.factualGrounding?.drivers?.[String(entry.driverId)],
+    factualGrounding: generationContext.factualGrounding?.drivers?.[String(entry.driverId)],
+    alignedRaces: generationContext.alignedRaces || [],
+    manualRaceNotes: generationContext.manualRaceNotes || '',
+    transcriptSummary: generationContext.transcriptSummary || '',
+    recentResults: generationContext.recentResults || [],
+    driverLookup: generationContext.driverLookup,
+  });
 
   for (let expectedRank = 1; expectedRank <= 10; expectedRank += 1) {
     const raw =
@@ -1507,17 +1603,23 @@ async function normalizeDraft(aiDraft, driverLookup, previousRankings, generatio
   for (const entry of normalizedEntries) {
     const driver = driverLookup.get(entry.driverId);
     const previousRank = previousRankByDriver[entry.driverId];
-    const writeupContext = {
-      transcriptUsed: generationContext.transcriptUsed === true,
-      transcriptMode: generationContext.transcriptMode || 'none',
-      previousRank,
-    };
+    const writeupContext = buildWriteupContext(entry, driver, previousRank);
 
     const repaired = await repairWriteupQuality(entry, driver, writeupContext);
     entry.writeup = repaired.writeup;
 
     if (repaired.repairAttempted) {
       repairAttempted = true;
+    }
+
+    if (repaired.unsupportedFactsDetected?.length) {
+      unsupportedFactRanks.push(entry.rank);
+      unsupportedFactDetails[String(entry.rank)] = repaired.unsupportedFactsDetected;
+      unsupportedFactWarnings.push(
+        `Rank ${entry.rank}: unsupported factual claims repaired (${repaired.unsupportedFactsDetected
+          .map((fact) => fact.type)
+          .join(', ')}).`
+      );
     }
 
     if (repaired.writeupResult.error) {
@@ -1534,6 +1636,13 @@ async function normalizeDraft(aiDraft, driverLookup, previousRankings, generatio
           repairFailedRanks: [...repairFailedRanks],
           repairFailureReasons: { ...repairFailureReasons },
           repairedWriteupReasons: { ...repairedWriteupReasons },
+          unsupportedFactWarnings,
+          unsupportedFactRanks,
+          unsupportedFactDetails,
+          verifiedFactsUsed,
+          verifiedFactsUsedCount,
+          evidenceBasedWriteupsCount,
+          evidenceRepairRanks,
         };
         throw repairError;
       }
@@ -1547,6 +1656,19 @@ async function normalizeDraft(aiDraft, driverLookup, previousRankings, generatio
       repairedWriteupReasons[String(entry.rank)] = repaired.repairReasons;
     }
 
+    if (
+      repaired.repairReasons.some((reason) => EVIDENCE_REPAIR_ERROR_TYPES.has(reason))
+    ) {
+      evidenceRepairRanks.push(entry.rank);
+    }
+
+    const rankKey = String(entry.rank);
+    verifiedFactsUsed[rankKey] = repaired.writeupResult.verifiedFactsUsed || [];
+    verifiedFactsUsedCount[rankKey] = repaired.writeupResult.verifiedFactsUsedCount ?? 0;
+    if ((repaired.writeupResult.verifiedFactsUsedCount ?? 0) >= 1) {
+      evidenceBasedWriteupsCount += 1;
+    }
+
     for (const warning of repaired.writeupResult.warnings) {
       warnings.push(`Rank ${entry.rank}: ${warning}`);
     }
@@ -1558,23 +1680,64 @@ async function normalizeDraft(aiDraft, driverLookup, previousRankings, generatio
     usedSubtitles.add(entry.subtitle.toLowerCase());
   }
 
-  const honorableMentions = (Array.isArray(aiDraft?.honorableMentions)
-    ? aiDraft.honorableMentions
-    : []
-  )
-    .slice(0, 3)
-    .map((mention) => {
-      const driverId = String(mention?.driverId || mention?.driver_id || '').trim();
-      if (!driverId || !driverLookup.has(driverId) || usedDrivers.has(driverId)) {
-        return null;
-      }
-      return {
-        driverId,
-        driverName: driverLookup.get(driverId).driverName,
-        writeup: String(mention?.writeup || '').trim(),
-      };
-    })
-    .filter(Boolean);
+  const honorableMentions = [];
+  for (const mention of (Array.isArray(aiDraft?.honorableMentions) ? aiDraft.honorableMentions : []).slice(0, 3)) {
+    const driverId = String(mention?.driverId || mention?.driver_id || '').trim();
+    if (!driverId || !driverLookup.has(driverId) || usedDrivers.has(driverId)) {
+      continue;
+    }
+
+    const driver = driverLookup.get(driverId);
+    const mentionEntry = {
+      rank: 'HM',
+      driverId,
+      subtitle: '',
+      writeup: String(mention?.writeup || '').trim(),
+    };
+    const repairedMention = await repairWriteupQuality(
+      mentionEntry,
+      driver,
+      buildWriteupContext(mentionEntry, driver, previousRankByDriver[driverId])
+    );
+
+    if (repairedMention.unsupportedFactsDetected?.length) {
+      unsupportedFactRanks.push('HM');
+      unsupportedFactDetails.HM = [
+        ...(unsupportedFactDetails.HM || []),
+        ...repairedMention.unsupportedFactsDetected.map((fact) => ({
+          ...fact,
+          driverName: driver.driverName,
+        })),
+      ];
+      unsupportedFactWarnings.push(
+        `Honorable mention (${driver.driverName}): unsupported factual claims repaired.`
+      );
+    }
+
+    if (repairedMention.writeupResult.error) {
+      throw new Error(
+        `AI draft honorable mention for ${driver.driverName} rejected: ${repairedMention.writeupResult.error}`
+      );
+    }
+
+    const hmKey = `HM:${driverId}`;
+    verifiedFactsUsed[hmKey] = repairedMention.writeupResult.verifiedFactsUsed || [];
+    verifiedFactsUsedCount[hmKey] = repairedMention.writeupResult.verifiedFactsUsedCount ?? 0;
+    if ((repairedMention.writeupResult.verifiedFactsUsedCount ?? 0) >= 1) {
+      evidenceBasedWriteupsCount += 1;
+    }
+    if (
+      repairedMention.repairReasons.some((reason) => EVIDENCE_REPAIR_ERROR_TYPES.has(reason))
+    ) {
+      evidenceRepairRanks.push(hmKey);
+    }
+
+    honorableMentions.push({
+      driverId,
+      driverName: driver.driverName,
+      writeup: repairedMention.writeup,
+    });
+  }
 
   warnings.push(...validateRecentFormCoverage(normalizedEntries, honorableMentions, generationContext.recentFormAnalysis));
 
@@ -1588,6 +1751,13 @@ async function normalizeDraft(aiDraft, driverLookup, previousRankings, generatio
     repairFailedRanks,
     repairFailureReasons,
     repairedWriteupReasons,
+    unsupportedFactWarnings,
+    unsupportedFactRanks,
+    unsupportedFactDetails,
+    verifiedFactsUsed,
+    verifiedFactsUsedCount,
+    evidenceBasedWriteupsCount,
+    evidenceRepairRanks,
   };
 }
 
@@ -1680,6 +1850,34 @@ export default async function handler(req, res) {
       ? buildManualRaceContextMeta(manualRaceNotes, raceNumber)
       : applyYoutubeContextMeta(await loadBroadcastContext(raceNumber, drivers));
 
+    const recentResultsForGrounding = getRecentPointsRaceResults(scheduleRaces, raceNumber, 3).map(
+      (race) => ({
+        raceNumber: race.officialPointsRaceNumber,
+        scheduleRow: race.scheduleRow,
+        date: race.date,
+        track: race.track,
+        winner: race.winner,
+      })
+    );
+
+    const factualGrounding = buildFactualGroundingContext({
+      standings,
+      scheduleRaces,
+      raceNumber,
+      schedules: standingsResult.schedules,
+      driverLookup,
+      recentResults: recentResultsForGrounding,
+      manualRaceNotes,
+      transcriptSummary: contextMeta.broadcastContext?.summary || '',
+    });
+
+    const alignedRaces = getAlignedRaceFinishes(
+      scheduleRaces,
+      raceNumber,
+      standingsResult.schedules,
+      driverLookup
+    );
+
     const contextPayload = buildContextPayload({
       raceNumber,
       standings,
@@ -1698,6 +1896,7 @@ export default async function handler(req, res) {
         frozenToRequestedRace: raceNumberDebug.standingsFrozenToRequestedRace === true,
       },
       recentFormAnalysis,
+      factualGrounding,
     });
 
     const resultsAudit = buildRecentResultsAudit({
@@ -1732,6 +1931,12 @@ export default async function handler(req, res) {
       transcriptUsed: contextMeta.transcriptUsed,
       transcriptMode: contextMeta.transcriptMode,
       recentFormAnalysis,
+      factualGrounding,
+      alignedRaces,
+      manualRaceNotes,
+      transcriptSummary: contextMeta.broadcastContext?.summary || '',
+      recentResults: recentResultsForGrounding,
+      driverLookup,
     });
 
     resultsAudit.rankedDriverFinishTrace = buildRankedDriverFinishTrace(
@@ -1743,6 +1948,26 @@ export default async function handler(req, res) {
     console.log(
       '[power-rankings-generate] ranked driver finish trace',
       JSON.stringify(resultsAudit.rankedDriverFinishTrace)
+    );
+
+    if (draft.unsupportedFactWarnings?.length) {
+      console.log(
+        '[power-rankings-generate] unsupported factual claims diagnostics',
+        JSON.stringify({
+          unsupportedFactWarnings: draft.unsupportedFactWarnings,
+          unsupportedFactRanks: draft.unsupportedFactRanks,
+          unsupportedFactDetails: draft.unsupportedFactDetails,
+        })
+      );
+    }
+
+    console.log(
+      '[power-rankings-generate] verified evidence diagnostics',
+      JSON.stringify({
+        evidenceBasedWriteupsCount: draft.evidenceBasedWriteupsCount,
+        evidenceRepairRanks: draft.evidenceRepairRanks,
+        verifiedFactsUsedCount: draft.verifiedFactsUsedCount,
+      })
     );
 
     const generationSources = buildGenerationSources({
