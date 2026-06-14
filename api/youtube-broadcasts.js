@@ -1,4 +1,5 @@
 import * as cheerio from "cheerio";
+import { buildPointsRaceIndex, isNonPointsRace } from "./_schedule-points-races.js";
 
 const PLAYLIST_ID = "PL4aFms0YBw6_uE-yoYgOFDtaNcN9ozPIO";
 const RSS_URL = `https://www.youtube.com/feeds/videos.xml?playlist_id=${PLAYLIST_ID}`;
@@ -164,56 +165,6 @@ function selectFeaturedVideo(videos, nextRace) {
   }
 
   return { featured: videos[0], selectionReason: "newest-fallback" };
-}
-
-const NON_POINTS_LABEL_PATTERN = /\b(duel|duels|non-points|exhibition|clash)\b/i;
-
-function isNonPointsRace(race) {
-  const points = String(race?.points ?? "")
-    .trim()
-    .toLowerCase();
-  const status = String(race?.status ?? "")
-    .trim()
-    .toLowerCase();
-  const label = String(race?.track ?? "");
-
-  if (points === "no" || status === "non-points") return true;
-  return NON_POINTS_LABEL_PATTERN.test(label);
-}
-
-function buildPointsRaceIndex(races) {
-  let officialPointsRaceNumber = 0;
-  const excludedNonPointsRaces = [];
-  const enriched = (races || []).map((race) => {
-    const nonPoints = isNonPointsRace(race);
-    if (nonPoints) {
-      excludedNonPointsRaces.push({
-        rawScheduleIndex: race.raceNumber,
-        track: race.track,
-        date: race.date,
-        points: race.points,
-        status: race.status,
-      });
-      return {
-        ...race,
-        nonPoints: true,
-        officialPointsRaceNumber: null,
-      };
-    }
-
-    officialPointsRaceNumber += 1;
-    return {
-      ...race,
-      nonPoints: false,
-      officialPointsRaceNumber,
-    };
-  });
-
-  return {
-    races: enriched,
-    excludedNonPointsCount: excludedNonPointsRaces.length,
-    excludedNonPointsRaces,
-  };
 }
 
 function findUpcomingPointsRace(enrichedRaces) {

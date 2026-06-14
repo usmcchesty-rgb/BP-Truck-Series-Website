@@ -477,6 +477,7 @@
           nested?.repairFailureReasons ?? data?.repairFailureReasons ?? {},
         repairedWriteupReasons:
           nested?.repairedWriteupReasons ?? data?.repairedWriteupReasons ?? {},
+        raceNumberDebug: nested?.raceNumberDebug ?? data?.raceNumberDebug ?? null,
       };
     }
 
@@ -510,12 +511,28 @@
       const repairedRanksText = sources.repairedRanks.length
         ? sources.repairedRanks.join(', ')
         : 'none';
+      const raceDebug = sources.raceNumberDebug;
 
       pre.textContent = [
         `Confidence score: ${sources.confidenceScore ?? 'unknown'}`,
         `Confidence reason: ${sources.confidenceReason ?? 'none'}`,
         `Data quality score: ${sources.dataQualityScore ?? 'unknown'}/100`,
         '',
+        ...(raceDebug
+          ? [
+              'Race number resolution:',
+              `  requestedRaceNumber: ${raceDebug.requestedRaceNumber ?? 'null'}`,
+              `  resolvedPointsRaceNumber: ${raceDebug.resolvedPointsRaceNumber ?? 'null'}`,
+              `  resolvedScheduleRow: ${raceDebug.resolvedScheduleRow ?? 'null'}`,
+              `  currentRaceName: ${raceDebug.currentRaceName ?? 'none'}`,
+              `  previousRaceName: ${raceDebug.previousRaceName ?? 'none'}`,
+              `  recentResultsRaceNumbers: ${formatRaceList(raceDebug.recentResultsRaceNumbers)}`,
+              ...(raceDebug.recentResultsTracks?.length
+                ? [`  recentResultsTracks: ${raceDebug.recentResultsTracks.join(', ')}`]
+                : []),
+              '',
+            ]
+          : []),
         `Prompt version: ${sources.promptVersion ?? 'unknown'}`,
         `Standings used: ${sources.standingsUsed}`,
         `Driver profiles used: ${sources.driverProfilesUsed}`,

@@ -8,6 +8,11 @@ import {  fetchGreenFlagPlaylistVideos,
   selectBroadcastVideoForRankings,
   summarizeTranscriptForRankings,
 } from './_youtube-transcript.js';
+import {
+  buildRaceNumberDebug,
+  enrichScheduleRaces,
+  getRecentPointsRaceResults,
+} from './_schedule-points-races.js';
 
 function parseBody(req) {
   if (!req.body) return {};
@@ -42,20 +47,23 @@ function parseScheduleRaces(html) {
         const raceNumber = cleanText(cells.eq(0).text());
         if (!/^\d+$/.test(raceNumber)) return;
 
+        const points = cleanText(cells.eq(2).text());
         const winner = cleanText(
           cells.eq(6).find('a').first().text() || cells.eq(6).text()
         );
 
         races.push({
-          raceNumber: Number(raceNumber),
+          scheduleRow: Number(raceNumber),
           date: cleanText(cells.eq(1).text()),
+          points,
+          status: points?.toLowerCase() === 'yes' ? 'points' : 'non-points',
           track: cleanText(cells.eq(4).find('a').first().text() || cells.eq(4).text()),
           winner: winner || null,
         });
       });
   });
 
-  return races;
+  return enrichScheduleRaces(races);
 }
 
 async function detectLatestScheduleId(settings) {
@@ -579,12 +587,11 @@ function buildContextPayload({
   transcriptMode,
   manualRaceNotes,
 }) {
-  const completedRaces = scheduleRaces
-    .filter((race) => race.winner && race.raceNumber <= raceNumber)
-    .slice(-3);
+  const completedRaces = getRecentPointsRaceResults(scheduleRaces, raceNumber, 3);
 
   const recentResults = completedRaces.map((race) => ({
-    raceNumber: race.raceNumber,
+    raceNumber: race.officialPointsRaceNumber,
+    scheduleRow: race.scheduleRow,
     date: race.date,
     track: race.track,
     winner: race.winner,
@@ -1331,11 +1338,13 @@ function buildGenerationSources({
   scheduleRaces,
   contextMeta,
   draft,
+  raceNumberDebug,
 }) {
-  const recentResultsRaceNumbers = scheduleRaces
-    .filter((race) => race.winner && race.raceNumber <= raceNumber)
-    .slice(-3)
-    .map((race) => race.raceNumber);
+  const recentResultsRaceNumbers = getRecentPointsRaceResults(
+    scheduleRaces,
+    raceNumber,
+    3
+  ).map((race) => race.officialPointsRaceNumber);
 
   const sourceQuality = buildSourceQuality({
     standings,
@@ -1371,6 +1380,7 @@ function buildGenerationSources({
     confidenceScore: sourceQuality.confidenceScore,
     confidenceReason: sourceQuality.confidenceReason,
     dataQualityScore: sourceQuality.dataQualityScore,
+    raceNumberDebug: raceNumberDebug ?? buildRaceNumberDebug(scheduleRaces, raceNumber),
   };
 }
 
@@ -1553,6 +1563,7 @@ export default async function handler(req, res) {
     }));
 
     const scheduleRaces = parseScheduleRaces(scheduleHtml);
+    const raceNumberDebug = buildRaceNumberDebug(scheduleRaces, raceNumber);
     const manualRaceNotes = normalizeManualRaceNotes(
       body.manualRaceNotes ?? body.manual_race_notes
     );
@@ -1587,7 +1598,13 @@ export default async function handler(req, res) {
       scheduleRaces,
       contextMeta,
       draft,
+      raceNumberDebug,
     });
+
+    console.log(
+      '[power-rankings-generate] race number debug',
+      JSON.stringify(raceNumberDebug)
+    );
 
     console.log(
       '[power-rankings-generate] transcript diagnostics',
@@ -1615,6 +1632,7 @@ export default async function handler(req, res) {
       existingPublished: existingWeek?.published === true,
       ...draft,
       generationSources,
+      raceNumberDebug,
       confidenceScore: generationSources.confidenceScore,
       confidenceReason: generationSources.confidenceReason,
       dataQualityScore: generationSources.dataQualityScore,
