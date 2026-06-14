@@ -10,6 +10,8 @@
     { key: "news", label: "News", href: "/news.html" },
   ];
 
+  const LOGO_SRC = "/assets/logos/New%20Clean%20Logo.png";
+
   function navLinks(active) {
     return NAV_ITEMS.map((item) => {
       const cls = item.key === active ? ' class="active"' : "";
@@ -23,6 +25,17 @@
 
   function refreshPanel() {
     return `<div class="refresh"><div>LAST UPDATED</div><strong id="lastUpdated">Loading...</strong><button id="refreshBtn" type="button" aria-label="Refresh">↻</button></div>`;
+  }
+
+  function brandLogo() {
+    return `<a class="brand" href="/" aria-label="Blazing Pedals Truck Series home">
+      <img
+        class="brand-logo"
+        src="${LOGO_SRC}"
+        alt="Blazing Pedals Truck Series"
+        decoding="async"
+      />
+    </a>`;
   }
 
   function renderHeader(options) {
@@ -44,16 +57,10 @@
           : taglinePanel();
 
     return `
-      <div class="brand">
-        <div class="bp">BP</div>
-        <div>
-          <b>BLAZING <span>PEDALS</span></b>
-          <small>SIM RACING LEAGUE</small>
-        </div>
-      </div>
+      ${brandLogo()}
       <div class="title">
         <h1>${title}</h1>
-        <p${subtitleAttr}>${subtitle}</p>
+        <p class="page-season"${subtitleAttr}>${subtitle}</p>
       </div>
       <nav class="site-nav" aria-label="Main navigation">${navLinks(active)}</nav>
       ${rightContent}
