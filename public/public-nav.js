@@ -10,7 +10,44 @@
     { key: "news", label: "News", href: "/news.html" },
   ];
 
-  const LOGO_SRC = "/assets/logos/New%20Clean%20Logo.png";
+  const DEFAULT_LOGO_SRC = "/assets/logos/New%20Clean%20Logo.png";
+  const DEFAULT_LOGO_ALT = "Blazing Pedals Truck Series";
+
+  function stripUrlQuery(url) {
+    const value = String(url || "").trim();
+    if (!value) return "";
+    return value.split("?")[0].split("#")[0];
+  }
+
+  function cacheVersion(value) {
+    if (!value) return null;
+    const ms = new Date(value).getTime();
+    return Number.isFinite(ms) ? ms : null;
+  }
+
+  function withCacheBust(url, version) {
+    const clean = stripUrlQuery(url);
+    if (!clean) return clean;
+    if (version == null || version === "") return clean;
+    return `${clean}?v=${encodeURIComponent(version)}`;
+  }
+
+  function resolveHeaderLogoUrl(settings) {
+    const custom = stripUrlQuery(settings?.headerLogoUrl || "");
+    return custom || DEFAULT_LOGO_SRC;
+  }
+
+  function resolveHeaderLogoAlt(settings) {
+    const alt = String(settings?.headerLogoAltText || "").trim();
+    return alt || DEFAULT_LOGO_ALT;
+  }
+
+  function resolveHeaderLogoDisplayUrl(settings) {
+    const url = resolveHeaderLogoUrl(settings);
+    if (!settings?.headerLogoUrl) return url;
+    const version = cacheVersion(settings.headerLogoUpdatedAt) || Date.now();
+    return withCacheBust(url, version);
+  }
 
   function navLinks(active) {
     return NAV_ITEMS.map((item) => {
@@ -27,12 +64,14 @@
     return `<div class="refresh"><div>LAST UPDATED</div><strong id="lastUpdated">Loading...</strong><button id="refreshBtn" type="button" aria-label="Refresh">↻</button></div>`;
   }
 
-  function brandLogo() {
+  function brandLogo(logoSrc, logoAlt) {
+    const src = logoSrc || DEFAULT_LOGO_SRC;
+    const alt = logoAlt || DEFAULT_LOGO_ALT;
     return `<a class="brand" href="/" aria-label="Blazing Pedals Truck Series home">
       <img
         class="brand-logo"
-        src="${LOGO_SRC}"
-        alt="Blazing Pedals Truck Series"
+        src="${src}"
+        alt="${alt.replace(/"/g, "&quot;")}"
         decoding="async"
       />
     </a>`;
@@ -46,6 +85,8 @@
       subtitleId = "",
       right = "tagline",
       rightHtml = "",
+      logoSrc = DEFAULT_LOGO_SRC,
+      logoAlt = DEFAULT_LOGO_ALT,
     } = options;
 
     const subtitleAttr = subtitleId ? ` id="${subtitleId}"` : "";
@@ -57,7 +98,7 @@
           : taglinePanel();
 
     return `
-      ${brandLogo()}
+      ${brandLogo(logoSrc, logoAlt)}
       <div class="title">
         <h1>${title}</h1>
         <p class="page-season"${subtitleAttr}>${subtitle}</p>
@@ -74,10 +115,27 @@
     </div>`;
   }
 
+  function applyHeaderLogo(settings) {
+    const img = document.querySelector(".brand-logo");
+    if (!img) return;
+    img.src = resolveHeaderLogoDisplayUrl(settings);
+    img.alt = resolveHeaderLogoAlt(settings);
+  }
+
+  async function loadHeaderLogoFromSettings() {
+    try {
+      const res = await fetch("/api/settings");
+      if (!res.ok) return;
+      const settings = await res.json();
+      applyHeaderLogo(settings);
+    } catch (_) {}
+  }
+
   function init(options) {
     const header = document.querySelector("header.topbar");
     if (!header) return;
     header.innerHTML = renderHeader(options);
+    loadHeaderLogoFromSettings();
   }
 
   function initFooter() {
@@ -88,7 +146,16 @@
     footer.innerHTML = renderFooter();
   }
 
-  window.BPPublicNav = { init, initFooter, renderHeader, renderFooter, NAV_ITEMS };
+  window.BPPublicNav = {
+    init,
+    initFooter,
+    renderHeader,
+    renderFooter,
+    applyHeaderLogo,
+    resolveHeaderLogoDisplayUrl,
+    NAV_ITEMS,
+    DEFAULT_LOGO_SRC,
+  };
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", initFooter);

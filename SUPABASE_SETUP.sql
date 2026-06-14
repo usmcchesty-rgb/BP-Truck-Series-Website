@@ -6,12 +6,19 @@ create table if not exists site_settings (
   "scheduleUrl" text,
   "playoffCut" int,
   "refreshSeconds" int,
-  "raceStartTime" text
+  "raceStartTime" text,
+  "raceCompletionBufferMinutes" int,
+  "headerLogoUrl" text,
+  "headerLogoAltText" text,
+  "headerLogoUpdatedAt" timestamptz
 );
 
 -- If upgrading an existing site_settings table, run once:
 alter table site_settings add column if not exists "raceStartTime" text;
 alter table site_settings add column if not exists "raceCompletionBufferMinutes" int;
+alter table site_settings add column if not exists "headerLogoUrl" text;
+alter table site_settings add column if not exists "headerLogoAltText" text;
+alter table site_settings add column if not exists "headerLogoUpdatedAt" timestamptz;
 
 insert into site_settings (id, "seriesName", "seasonName", "standingsUrl", "scheduleUrl", "playoffCut", "refreshSeconds")
 values (1, 'Blazing Pedals Truck Series', 'Season 11', 'https://www.simracerhub.com/scoring/season_standings.php?season_id=27987', 'https://www.simracerhub.com/scoring/season_schedule.php?season_id=27987', 16, 60)
@@ -30,6 +37,15 @@ on conflict (id) do nothing;
 -- create policy "Public read driver photos"
 -- on storage.objects for select
 -- using (bucket_id = 'driver-photos');
+--
+-- Public site assets (header logo)
+-- insert into storage.buckets (id, name, public)
+-- values ('site-assets', 'site-assets', true)
+-- on conflict (id) do update set public = true;
+--
+-- create policy "Public read site assets"
+-- on storage.objects for select
+-- using (bucket_id = 'site-assets');
 
 create table if not exists driver_profiles (
   driver_id text primary key,

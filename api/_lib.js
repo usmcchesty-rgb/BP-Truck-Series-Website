@@ -11,7 +11,10 @@ export const DEFAULTS = {
   playoffCut: 16,
   refreshSeconds: 60,
   raceStartTime: '9:00 PM EST',
-  raceCompletionBufferMinutes: 180
+  raceCompletionBufferMinutes: 180,
+  headerLogoUrl: '',
+  headerLogoAltText: 'Blazing Pedals Truck Series',
+  headerLogoUpdatedAt: null
 };
 
 export function supabase() {
@@ -64,6 +67,25 @@ export function withPhotoCacheBust(photoUrl, version) {
   if (!clean) return clean;
   if (version == null || version === '') return clean;
   return `${clean}?v=${encodeURIComponent(version)}`;
+}
+
+export const DEFAULT_HEADER_LOGO_URL = '/assets/logos/New%20Clean%20Logo.png';
+
+export function resolveHeaderLogoUrl(settings = {}) {
+  const custom = stripPhotoUrlQuery(settings.headerLogoUrl || '');
+  return custom || DEFAULT_HEADER_LOGO_URL;
+}
+
+export function resolveHeaderLogoAlt(settings = {}) {
+  const alt = String(settings.headerLogoAltText || '').trim();
+  return alt || DEFAULTS.headerLogoAltText;
+}
+
+export function resolveHeaderLogoDisplayUrl(settings = {}) {
+  const url = resolveHeaderLogoUrl(settings);
+  if (!settings.headerLogoUrl) return url;
+  const version = photoCacheVersion(settings.headerLogoUpdatedAt) || Date.now();
+  return withPhotoCacheBust(url, version);
 }
 
 export function num(v) {
