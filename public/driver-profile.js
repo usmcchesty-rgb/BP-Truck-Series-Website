@@ -38,7 +38,7 @@ function formatStatValue(value) {
   return text || null;
 }
 
-function statItem(label, value, options = {}) {
+function statTile(label, value, options = {}) {
   const formatted = formatStatValue(value);
   if (formatted === null && !options.allowZero) return "";
   if (formatted === null && options.allowZero && value !== 0) return "";
@@ -49,13 +49,29 @@ function statItem(label, value, options = {}) {
   </div>`;
 }
 
-function optionalHeroField(label, value) {
+function metaItem(label, value) {
   const text = String(value || "").trim();
   if (!text) return "";
-  return `<div class="driver-profile-field">
-    <span>${escapeHtml(label)}</span>
-    <strong>${escapeHtml(text)}</strong>
+  return `<div class="driver-profile-meta-item">
+    <span class="driver-profile-meta-label">${escapeHtml(label)}</span>
+    <span class="driver-profile-meta-value">${escapeHtml(text)}</span>
   </div>`;
+}
+
+function renderMetaRow(profile) {
+  const items = [
+    metaItem("Date of Birth", profile.dateOfBirth || profile.date_of_birth),
+    metaItem("Hometown", profile.hometown),
+    metaItem("Team", profile.team),
+  ].filter(Boolean);
+
+  if (!items.length) return "";
+  return `<div class="driver-profile-meta-row">${items.join("")}</div>`;
+}
+
+function formatCellValue(value, formatter) {
+  if (value === null || value === undefined || value === "") return "—";
+  return formatter ? formatter(value) : String(value);
 }
 
 function formatOrdinal(value) {
@@ -278,12 +294,6 @@ function computeBestFinish(driverId, schedules) {
   return best;
 }
 
-function formatLast3Finishes(recentRaces) {
-  const last3 = (recentRaces || []).slice(-3);
-  if (!last3.length) return null;
-  return last3.map((race) => formatOrdinal(race.finish)).join(" · ");
-}
-
 function buildStats(profile, standingsRow, schedules, scheduleRaces) {
   const leader = standingsRow?.leader || null;
   const pointsBehind =
@@ -309,72 +319,90 @@ function buildStats(profile, standingsRow, schedules, scheduleRaces) {
     lapsLed: standingsRow?.lapsLed ?? null,
     incidents: standingsRow?.incidents ?? null,
     bestFinish,
-    last3Finishes: formatLast3Finishes(recentRaces),
     recentRaces: [...recentRaces].reverse(),
   };
 }
 
-function renderStatsGrid(stats) {
+function renderStatsBar(stats, seasonLabel) {
   const items = [
-    statItem("Points Position", stats.position ? formatOrdinal(stats.position) : null),
-    statItem("Points", stats.points, { allowZero: true }),
-    statItem("Points Behind Leader", stats.pointsBehind, { allowZero: true }),
-    statItem("Races", stats.races, { allowZero: true }),
-    statItem("Wins", stats.wins, { allowZero: true }),
-    statItem("Top 5s", stats.top5, { allowZero: true }),
-    statItem("Top 10s", stats.top10, { allowZero: true }),
-    statItem("Average Finish", stats.avgFinish),
-    statItem("Laps Led", stats.lapsLed, { allowZero: true }),
-    statItem("Incidents", stats.incidents, { allowZero: true }),
-    statItem("Best Finish", stats.bestFinish ? formatOrdinal(stats.bestFinish) : null),
-    statItem("Last 3 Finishes", stats.last3Finishes),
+    statTile("Points Position", stats.position ? formatOrdinal(stats.position) : null),
+    statTile("Points", stats.points, { allowZero: true }),
+    statTile("Points Behind Leader", stats.pointsBehind, { allowZero: true }),
+    statTile("Races", stats.races, { allowZero: true }),
+    statTile("Wins", stats.wins, { allowZero: true }),
+    statTile("Top 5s", stats.top5, { allowZero: true }),
+    statTile("Top 10s", stats.top10, { allowZero: true }),
+    statTile("Average Finish", stats.avgFinish),
+    statTile("Best Finish", stats.bestFinish ? formatOrdinal(stats.bestFinish) : null),
+    statTile("Incidents", stats.incidents, { allowZero: true }),
+    statTile("Laps Led", stats.lapsLed, { allowZero: true }),
   ].filter(Boolean);
 
+  const title = seasonLabel ? `${seasonLabel} Season` : "Season Stats";
+
   if (!items.length) {
-    return `<p class="muted">Season stats are not available yet.</p>`;
+    return `<section class="driver-profile-stats-section">
+      <div class="driver-profile-section-head">
+        <h2>${escapeHtml(title)}</h2>
+      </div>
+      <p class="driver-profile-empty">Season stats are not available yet.</p>
+    </section>`;
   }
 
-  return `<div class="driver-profile-stats-grid">${items.join("")}</div>`;
+  return `<section class="driver-profile-stats-section">
+    <div class="driver-profile-section-head">
+      <h2>${escapeHtml(title)}</h2>
+    </div>
+    <div class="driver-profile-stats-bar">${items.join("")}</div>
+  </section>`;
 }
 
 function renderRecentResults(recentRaces) {
   if (!recentRaces?.length) {
-    return `<p class="muted">No completed race results yet.</p>`;
+    return `<section class="driver-profile-results-section">
+      <div class="driver-profile-section-head">
+        <h2>Recent Results</h2>
+      </div>
+      <p class="driver-profile-empty">No completed race results yet.</p>
+    </section>`;
   }
 
   const rows = recentRaces
-    .map((race) => {
-      const detailParts = [
-        race.startingPos ? `Start ${formatOrdinal(race.startingPos)}` : "",
-        race.lapsLed != null ? `Led ${race.lapsLed}` : "",
-        race.incidents != null ? `${race.incidents} inc.` : "",
-      ].filter(Boolean);
-
-      return `<tr>
+    .map(
+      (race) => `<tr>
         <td>Race ${escapeHtml(race.raceNumber)}</td>
         <td>${escapeHtml(race.track || "—")}</td>
         <td class="driver-profile-finish">${formatFinish(race.finish)}</td>
-        <td>${detailParts.length ? escapeHtml(detailParts.join(" · ")) : "—"}</td>
-      </tr>`;
-    })
+        <td>${formatCellValue(race.startingPos, formatOrdinal)}</td>
+        <td>${formatCellValue(race.lapsLed)}</td>
+        <td>${formatCellValue(race.incidents)}</td>
+      </tr>`
+    )
     .join("");
 
-  return `<div class="table-wrap">
-    <table class="driver-profile-results-table">
-      <thead>
-        <tr>
-          <th>Race</th>
-          <th>Track</th>
-          <th>Finish</th>
-          <th>Details</th>
-        </tr>
-      </thead>
-      <tbody>${rows}</tbody>
-    </table>
-  </div>`;
+  return `<section class="driver-profile-results-section">
+    <div class="driver-profile-section-head">
+      <h2>Recent Results</h2>
+    </div>
+    <div class="driver-profile-results-wrap">
+      <table class="driver-profile-results-table">
+        <thead>
+          <tr>
+            <th>Race</th>
+            <th>Track</th>
+            <th>Finish</th>
+            <th>Start Position</th>
+            <th>Laps Led</th>
+            <th>Incidents</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  </section>`;
 }
 
-function renderProfile(profile, stats) {
+function renderProfile(profile, stats, seasonLabel) {
   const panel = $("#driverProfilePanel");
   if (!panel || !profile) return;
 
@@ -389,7 +417,7 @@ function renderProfile(profile, stats) {
     <a class="driver-profile-back" href="/drivers.html">← Back to Drivers</a>
 
     <section class="driver-profile-hero">
-      <div class="driver-profile-photo-wrap">
+      <div class="driver-profile-hero-media">
         <img
           class="driver-profile-photo"
           src="${escapeHtml(photo)}"
@@ -397,31 +425,28 @@ function renderProfile(profile, stats) {
           onerror="this.onerror=null;this.src='${PLACEHOLDER_PHOTO}'"
         />
       </div>
-      <div class="driver-profile-hero-copy">
-        ${number ? `<div class="driver-profile-number">#${escapeHtml(number)}</div>` : ""}
-        <h1 class="driver-profile-name">${escapeHtml(name)}</h1>
-        ${
-          profile.iracing_name && profile.iracing_name !== name
-            ? `<p class="driver-profile-alias">${escapeHtml(profile.iracing_name)}</p>`
-            : ""
-        }
-        <div class="driver-profile-meta-grid">
-          ${optionalHeroField("Date of Birth", profile.dateOfBirth || profile.date_of_birth)}
-          ${optionalHeroField("Hometown", profile.hometown)}
-          ${optionalHeroField("Team", profile.team)}
+      <div class="driver-profile-hero-info">
+        <div class="driver-profile-identity">
+          ${
+            number
+              ? `<div class="driver-profile-number" aria-hidden="true">${escapeHtml(number)}</div>`
+              : ""
+          }
+          <div class="driver-profile-identity-text">
+            <h1 class="driver-profile-name">${escapeHtml(name)}</h1>
+            ${
+              profile.iracing_name && profile.iracing_name !== name
+                ? `<p class="driver-profile-alias">${escapeHtml(profile.iracing_name)}</p>`
+                : ""
+            }
+          </div>
         </div>
+        ${renderMetaRow(profile)}
       </div>
     </section>
 
-    <section class="driver-profile-section">
-      <h2>Season Stats</h2>
-      ${renderStatsGrid(stats)}
-    </section>
-
-    <section class="driver-profile-section">
-      <h2>Recent Results</h2>
-      ${renderRecentResults(stats.recentRaces)}
-    </section>
+    ${renderStatsBar(stats, seasonLabel)}
+    ${renderRecentResults(stats.recentRaces)}
   `;
 }
 
@@ -471,7 +496,10 @@ async function loadDriverProfile() {
       scheduleData.races || []
     );
 
-    renderProfile(profile, stats);
+    const seasonLabel =
+      standingsData.settings?.seasonName || scheduleData.settings?.seasonName || "Season 11";
+
+    renderProfile(profile, stats, seasonLabel);
   } catch (e) {
     console.error("Failed to load driver profile:", e);
     panel.innerHTML = `
