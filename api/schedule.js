@@ -1,5 +1,12 @@
 import * as cheerio from "cheerio";
 import { fetchHtml, getSettings } from "./_lib.js";
+import { enrichScheduleRaces } from "./_schedule-points-races.js";
+import {
+  buildRaceProgressionDiagnostics,
+  countEffectiveCompletedScheduleRaces,
+  findEffectiveNextScheduleRace,
+  getEffectivePointsRaceProgression,
+} from "./_race-date-status.js";
 
 function cleanText(value) {
   return String(value || "")
@@ -46,14 +53,21 @@ function parseRaceRow($, row) {
   };
 }
 
-function findNextRace(races) {
-  const now = new Date();
-  return (
-    races.find((race) => {
-      const date = new Date(race.date);
-      return !Number.isNaN(date.getTime()) && date >= now && !race.winner;
-    }) || null
-  );
+function mapEnrichedRaceToApiShape(race) {
+  if (!race) return null;
+
+  return {
+    raceNumber: race.scheduleRow ?? race.raceNumber,
+    date: race.date,
+    points: race.points,
+    status: race.status,
+    track: race.track,
+    length: race.length,
+    winner: race.winner,
+    link: race.link,
+    officialPointsRaceNumber: race.officialPointsRaceNumber,
+    nonPoints: race.nonPoints === true,
+  };
 }
 
 export default async function handler(req, res) {
@@ -77,9 +91,15 @@ export default async function handler(req, res) {
       });
     });
 
-    const completed = races.filter((race) => race.winner).length;
+    const now = new Date();
+    const enrichedRaces = enrichScheduleRaces(races);
+    const progression = getEffectivePointsRaceProgression(enrichedRaces, { now });
+    const raceProgression = buildRaceProgressionDiagnostics(enrichedRaces, { now });
+    const { race: nextRaw } = findEffectiveNextScheduleRace(races, { now });
+    const nextPointsRace = progression.currentUpcomingPointsRace;
+    const next = mapEnrichedRaceToApiShape(nextPointsRace) || nextRaw;
+    const completed = countEffectiveCompletedScheduleRaces(races, { now });
     const totalPointsRaces = races.filter((race) => race.points?.toLowerCase() === "yes").length;
-    const next = findNextRace(races);
 
     console.log("[schedule] htmlLength:", html.length);
     console.log("[schedule] tableCount:", tables.length);
@@ -92,6 +112,7 @@ export default async function handler(req, res) {
       completed,
       totalPointsRaces,
       next,
+      raceProgression,
       updatedAt: new Date().toISOString(),
     };
 

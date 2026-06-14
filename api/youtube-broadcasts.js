@@ -1,5 +1,9 @@
 import * as cheerio from "cheerio";
 import { buildPointsRaceIndex, isNonPointsRace } from "./_schedule-points-races.js";
+import {
+  findEffectiveNextPointsRace,
+  getEffectiveRaceDateStatus,
+} from "./_race-date-status.js";
 
 const PLAYLIST_ID = "PL4aFms0YBw6_uE-yoYgOFDtaNcN9ozPIO";
 const RSS_URL = `https://www.youtube.com/feeds/videos.xml?playlist_id=${PLAYLIST_ID}`;
@@ -42,14 +46,6 @@ function parsePlaylistRss(xml) {
   );
 }
 
-function sameCalendarDay(a, b) {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
-}
-
 function parseVideoRaceNumber(title) {
   // Green Flag TV titles use official points race numbers (e.g. S11R12).
   // Do not apply schedule non-points adjustments to these values.
@@ -59,17 +55,13 @@ function parseVideoRaceNumber(title) {
   return Number.isFinite(raceNumber) && raceNumber > 0 ? raceNumber : null;
 }
 
-function parseRaceDate(value) {
-  const raw = String(value || "").trim();
-  if (!raw) return null;
-  const date = new Date(raw);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function isRaceDay(raceDateStr) {
-  const raceDate = parseRaceDate(raceDateStr);
-  if (!raceDate) return false;
-  return sameCalendarDay(raceDate, new Date());
+function isRaceDay(raceDateStr, now = new Date()) {
+  const status = getEffectiveRaceDateStatus({
+    raceDate: raceDateStr,
+    hasResults: false,
+    now,
+  });
+  return status.isRaceDay;
 }
 
 function videoMatchesRaceTrack(video, race) {
@@ -167,57 +159,40 @@ function selectFeaturedVideo(videos, nextRace) {
   return { featured: videos[0], selectionReason: "newest-fallback" };
 }
 
-function findUpcomingPointsRace(enrichedRaces) {
-  const now = new Date();
-  return (
-    enrichedRaces.find((race) => {
-      if (race.nonPoints) return false;
-      const date = parseRaceDate(race.date);
-      if (!date || Number.isNaN(date.getTime())) return false;
-      return date >= now && !String(race.winner ?? "").trim();
-    }) || null
-  );
-}
-
-function buildScheduleContext(scheduleData) {
+function buildScheduleContext(scheduleData, now = new Date()) {
   const { races: enriched, excludedNonPointsCount, excludedNonPointsRaces } =
     buildPointsRaceIndex(scheduleData?.races || []);
-  const rawNext = scheduleData?.next || null;
+  const effectiveNext = findEffectiveNextPointsRace(enriched, { now });
+  const row = effectiveNext.race;
+  const nextStatus = effectiveNext.status;
 
   const debug = {
     rawScheduleIndex: null,
     officialPointsRaceNumber: null,
     excludedNonPointsCount,
     excludedNonPointsRaces,
+    currentEasternTime: nextStatus?.currentEasternTime ?? null,
+    raceDate: nextStatus?.raceDate ?? row?.date ?? null,
+    raceStatus: nextStatus?.raceStatus ?? null,
+    canAdvanceToNextRace: nextStatus?.canAdvanceToNextRace ?? null,
+    advanceReason: nextStatus?.advanceReason ?? null,
   };
-
-  if (!rawNext) {
-    return { nextRace: null, debug };
-  }
-
-  let row =
-    enriched.find((race) => race.raceNumber === rawNext.raceNumber) ||
-    enriched.find((race) => race.track === rawNext.track && race.date === rawNext.date) ||
-    null;
-
-  if (row?.nonPoints) {
-    row = findUpcomingPointsRace(enriched);
-  }
 
   if (!row || row.nonPoints || row.officialPointsRaceNumber == null) {
     return { nextRace: null, debug };
   }
 
-  debug.rawScheduleIndex = rawNext.raceNumber;
+  debug.rawScheduleIndex = row.scheduleRow ?? row.raceNumber ?? null;
   debug.officialPointsRaceNumber = row.officialPointsRaceNumber;
 
   const nextRace = {
-    ...rawNext,
-    rawScheduleIndex: rawNext.raceNumber,
+    rawScheduleIndex: row.scheduleRow ?? row.raceNumber,
     officialPointsRaceNumber: row.officialPointsRaceNumber,
     raceNumber: row.officialPointsRaceNumber,
-    track: row.track || rawNext.track,
-    date: row.date || rawNext.date,
+    track: row.track,
+    date: row.date,
+    points: row.points,
+    winner: row.winner,
     nonPoints: false,
   };
 

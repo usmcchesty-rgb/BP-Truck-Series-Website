@@ -1,3 +1,9 @@
+import {
+  buildRaceProgressionDiagnostics,
+  getEffectiveRaceDateStatus,
+  hasRaceResults,
+} from './_race-date-status.js';
+
 const NON_POINTS_LABEL_PATTERN = /\b(duel|duels|non-points|exhibition|clash)\b/i;
 
 export function getScheduleRow(race) {
@@ -101,11 +107,24 @@ export function getPointsRaceByScheduleId(scheduleRaces, scheduleId) {
   );
 }
 
-export function getLatestCompletedPointsRace(scheduleRaces) {
-  const completed = (scheduleRaces || []).filter(
-    (race) => !race.nonPoints && race.winner && race.officialPointsRaceNumber != null
-  );
-  return completed.length ? completed[completed.length - 1] : null;
+export function getLatestCompletedPointsRace(scheduleRaces, { now = new Date() } = {}) {
+  let latest = null;
+
+  for (const race of scheduleRaces || []) {
+    if (race.nonPoints || race.officialPointsRaceNumber == null) continue;
+
+    const status = getEffectiveRaceDateStatus({
+      raceDate: race.date,
+      hasResults: hasRaceResults(race),
+      now,
+    });
+
+    if (status.isCompleted) {
+      latest = race;
+    }
+  }
+
+  return latest;
 }
 
 export function resolveStandingsSnapshotRace(scheduleRaces, requestedRaceNumber) {
@@ -127,14 +146,22 @@ export function resolveStandingsSnapshotRace(scheduleRaces, requestedRaceNumber)
   return completedBefore.length ? completedBefore[completedBefore.length - 1] : null;
 }
 
-export function buildRaceNumberDebug(scheduleRaces, requestedRaceNumber) {
+export function buildRaceNumberDebug(scheduleRaces, requestedRaceNumber, { now = new Date() } = {}) {
   const requested = Number(requestedRaceNumber);
   const currentRace = getPointsRaceByNumber(scheduleRaces, requested);
   const previousRace = getPointsRaceByNumber(scheduleRaces, requested - 1);
   const recentResults = getRecentPointsRaceResults(scheduleRaces, requested, 3);
-  const latestCompleted = getLatestCompletedPointsRace(scheduleRaces);
+  const latestCompleted = getLatestCompletedPointsRace(scheduleRaces, { now });
   const standingsRace = resolveStandingsSnapshotRace(scheduleRaces, requested);
   const standingsRaceNumber = standingsRace?.officialPointsRaceNumber ?? null;
+  const requestedRaceStatus = currentRace
+    ? getEffectiveRaceDateStatus({
+        raceDate: currentRace.date,
+        hasResults: hasRaceResults(currentRace),
+        now,
+      })
+    : null;
+  const raceProgression = buildRaceProgressionDiagnostics(scheduleRaces, { now });
 
   return {
     requestedRaceNumber: requested,
@@ -159,5 +186,14 @@ export function buildRaceNumberDebug(scheduleRaces, requestedRaceNumber) {
       : standingsRace
         ? 'latest-completed-before-requested'
         : 'none',
+    currentEasternTime: raceProgression.currentEasternTime,
+    raceDate: requestedRaceStatus?.raceDate ?? currentRace?.date ?? raceProgression.raceDate,
+    raceStatus: requestedRaceStatus?.raceStatus ?? raceProgression.raceStatus,
+    canAdvanceToNextRace:
+      requestedRaceStatus?.canAdvanceToNextRace ?? raceProgression.canAdvanceToNextRace,
+    advanceReason: requestedRaceStatus?.advanceReason ?? raceProgression.advanceReason,
+    suggestedPointsRaceNumber: raceProgression.suggestedPointsRaceNumber,
+    effectiveCompletedPointsCount: raceProgression.effectiveCompletedPointsCount,
+    currentUpcomingPointsRaceNumber: raceProgression.currentUpcomingPointsRaceNumber,
   };
 }

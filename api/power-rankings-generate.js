@@ -1768,6 +1768,11 @@ function buildGenerationSources({
     prophetTakeVerifiedFactsUsedCount: draft.prophetTakeVerifiedFactsUsedCount ?? 0,
     prophetTakeWordCount: draft.prophetTakeWordCount ?? null,
     prophetTakeParagraphCount: draft.prophetTakeParagraphCount ?? null,
+    currentEasternTime: raceNumberDebug?.currentEasternTime ?? null,
+    raceDate: raceNumberDebug?.raceDate ?? null,
+    raceStatus: raceNumberDebug?.raceStatus ?? null,
+    canAdvanceToNextRace: raceNumberDebug?.canAdvanceToNextRace ?? null,
+    advanceReason: raceNumberDebug?.advanceReason ?? null,
   };
 }
 

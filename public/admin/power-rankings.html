@@ -342,8 +342,15 @@
         const res = await fetch('/api/schedule');
         const data = await res.json();
         const completed = (data.races || []).filter((race) => race.winner).length;
-        if (completed > 0) {
-          suggestedRaceNumber = Math.max(suggestedRaceNumber, completed + 1);
+        if (completed > 0 || data.raceProgression?.suggestedPointsRaceNumber) {
+          const progressionSuggested = Number(data.raceProgression?.suggestedPointsRaceNumber);
+          const completedSuggested = completed > 0 ? completed + 1 : 1;
+          suggestedRaceNumber = Math.max(
+            suggestedRaceNumber,
+            Number.isFinite(progressionSuggested) && progressionSuggested > 0
+              ? progressionSuggested
+              : completedSuggested
+          );
         }
       } catch {}
     }
@@ -546,6 +553,14 @@
           nested?.repairAttemptDetails ?? data?.repairAttemptDetails ?? {},
         writeupWarnings: nested?.writeupWarnings ?? data?.writeupWarnings ?? {},
         raceNumberDebug: nested?.raceNumberDebug ?? data?.raceNumberDebug ?? null,
+        currentEasternTime:
+          nested?.currentEasternTime ?? nested?.raceNumberDebug?.currentEasternTime ?? null,
+        raceDate: nested?.raceDate ?? nested?.raceNumberDebug?.raceDate ?? null,
+        raceStatus: nested?.raceStatus ?? nested?.raceNumberDebug?.raceStatus ?? null,
+        canAdvanceToNextRace:
+          nested?.canAdvanceToNextRace ?? nested?.raceNumberDebug?.canAdvanceToNextRace ?? null,
+        advanceReason:
+          nested?.advanceReason ?? nested?.raceNumberDebug?.advanceReason ?? null,
         recentWinners: nested?.recentWinners ?? [],
         backToBackWinners: nested?.backToBackWinners ?? [],
         backToBackPodiumDrivers: nested?.backToBackPodiumDrivers ?? [],
@@ -744,6 +759,13 @@
         `Confidence reason: ${sources.confidenceReason ?? 'none'}`,
         `Data quality score: ${sources.dataQualityScore ?? 'unknown'}/100`,
         '',
+        'Race progression:',
+        `  currentEasternTime: ${sources.currentEasternTime ?? 'null'}`,
+        `  raceDate: ${sources.raceDate ?? 'none'}`,
+        `  raceStatus: ${sources.raceStatus ?? 'null'}`,
+        `  canAdvanceToNextRace: ${sources.canAdvanceToNextRace ?? 'null'}`,
+        `  advanceReason: ${sources.advanceReason ?? 'none'}`,
+        '',
         ...(raceDebug
           ? [
               'Race number resolution:',
@@ -760,6 +782,12 @@
               `  standingsSnapshotDate: ${raceDebug.standingsSnapshotDate ?? 'none'}`,
               `  statsRaceNumber: ${raceDebug.statsRaceNumber ?? 'null'}`,
               `  latestCompletedRaceNumber: ${raceDebug.latestCompletedRaceNumber ?? 'null'}`,
+              `  currentEasternTime: ${raceDebug.currentEasternTime ?? 'null'}`,
+              `  raceDate: ${raceDebug.raceDate ?? 'none'}`,
+              `  raceStatus: ${raceDebug.raceStatus ?? 'null'}`,
+              `  canAdvanceToNextRace: ${raceDebug.canAdvanceToNextRace ?? 'null'}`,
+              `  advanceReason: ${raceDebug.advanceReason ?? 'none'}`,
+              `  suggestedPointsRaceNumber: ${raceDebug.suggestedPointsRaceNumber ?? 'null'}`,
               `  standingsScheduleId: ${raceDebug.standingsScheduleIdUsed ?? raceDebug.standingsScheduleId ?? 'null'}`,
               `  standingsDataRaceNumber: ${raceDebug.standingsDataRaceNumber ?? 'null'}`,
               `  standingsFrozenToRequestedRace: ${raceDebug.standingsFrozenToRequestedRace === true}`,
