@@ -128,6 +128,30 @@ export function getLatestCompletedPointsRace(scheduleRaces, { now = new Date(), 
   return latest;
 }
 
+export function getCompletedPointsRaces(
+  scheduleRaces,
+  { now = new Date(), settings = null } = {}
+) {
+  const completed = [];
+
+  for (const race of scheduleRaces || []) {
+    if (race.nonPoints || race.officialPointsRaceNumber == null) continue;
+
+    const status = getEffectiveRaceDateStatus({
+      raceDate: race.date,
+      hasResults: hasRaceResults(race),
+      now,
+      settings,
+    });
+
+    if (status.isCompleted) {
+      completed.push(race);
+    }
+  }
+
+  return completed;
+}
+
 export function resolveStandingsSnapshotRace(scheduleRaces, requestedRaceNumber) {
   const requested = Number(requestedRaceNumber);
   const currentRace = getPointsRaceByNumber(scheduleRaces, requested);

@@ -78,12 +78,14 @@ export function normalizeDriverRaceResult(result) {
   const incidents = Number(result.incidents);
   const avgPos = Number(result.avg_pos);
   const arp = Number(result.arp);
+  const totalPoints = Number(result.total_points ?? result.points ?? result.race_points);
 
   return {
     finish,
     startingPos: Number.isFinite(startingPos) && startingPos > 0 ? startingPos : null,
     lapsLed: Number.isFinite(lapsLed) ? lapsLed : null,
     incidents: Number.isFinite(incidents) ? incidents : null,
+    points: Number.isFinite(totalPoints) ? totalPoints : null,
     averageRunningPosition: Number.isFinite(arp) ? arp : Number.isFinite(avgPos) ? avgPos : null,
     avgPos: Number.isFinite(avgPos) ? avgPos : null,
     session: result.session ?? null,

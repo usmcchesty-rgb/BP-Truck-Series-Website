@@ -10,13 +10,9 @@
     <div class="page-bg"></div>
     <header class="topbar"></header>
 
-    <main>
-      <section class="panel full-panel placeholder-panel">
-        <h2>RACE RESULTS</h2>
-        <p>
-          Full race results and finish reports are coming soon. Until then, view completed races and winners on the
-          <a href="/schedule.html" style="color:var(--red);font-weight:900;">schedule page</a>.
-        </p>
+    <main class="results-main">
+      <section class="results-page" id="resultsPage">
+        <p class="muted">Loading race results...</p>
       </section>
     </main>
 
@@ -31,5 +27,6 @@
         right: "tagline",
       });
     </script>
+    <script src="/results.js"></script>
   </body>
 </html>

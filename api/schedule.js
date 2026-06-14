@@ -1,5 +1,6 @@
 import { fetchHtml, getSettings } from "./_lib.js";
 import { enrichScheduleRaces } from "./_schedule-points-races.js";
+import { buildRaceResultsPayload } from "./_race-results-page.js";
 import {
   computeSeasonCautionStatsFromRaces,
   parseScheduleRacesFromHtml,
@@ -53,6 +54,34 @@ export default async function handler(req, res) {
     const totalPointsRaces = races.filter((race) => race.points?.toLowerCase() === "yes").length;
     const cautionStats = await computeSeasonCautionStatsFromRaces(races, progressionOptions);
 
+    const requestedRaceNumber = req.query?.raceNumber ?? req.query?.pointsRaceNumber ?? null;
+    let raceResults = null;
+    try {
+      raceResults = await buildRaceResultsPayload({
+        enrichedRaces,
+        scheduleHtml: html,
+        settings,
+        requestedRaceNumber: requestedRaceNumber ? Number(requestedRaceNumber) : null,
+        progressionOptions,
+      });
+    } catch (raceResultsError) {
+      raceResults = {
+        resultsAvailable: false,
+        selectedRaceNumber: null,
+        selectedScheduleId: null,
+        selectedRaceName: null,
+        selectedRaceDate: null,
+        selectedRaceWinner: null,
+        resultRowsCount: 0,
+        dataSource: 'error',
+        alignmentMethod: 'none',
+        latestCompletedRaceNumber: null,
+        completedRaces: [],
+        rows: [],
+        error: raceResultsError.message || 'Race results unavailable',
+      };
+    }
+
     console.log("[schedule] htmlLength:", html.length);
     console.log("[schedule] parsedRaceCount:", races.length);
 
@@ -64,6 +93,7 @@ export default async function handler(req, res) {
       next,
       raceProgression,
       cautionStats,
+      raceResults,
       updatedAt: new Date().toISOString(),
     };
 
