@@ -39,7 +39,7 @@ function renderDrivers(drivers) {
   grid.innerHTML = drivers
     .map((d) => {
       const name = d.display_name || d.iracing_name || "Unknown";
-      const photo = d.photo_url || driverImage(name);
+      const photo = d.photoUrl || d.photo_url || driverImage(name);
       const number = d.car_number
         ? `<span class="num">${escapeHtml(d.car_number)}</span>`
         : "";

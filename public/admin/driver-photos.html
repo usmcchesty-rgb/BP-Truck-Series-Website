@@ -1042,6 +1042,19 @@
 
       let drivers = []; // [{ driver_id, display_name, car_number, photo_url }]
 
+      function stripPhotoUrlQuery(photoUrl) {
+        return String(photoUrl || "")
+          .trim()
+          .split("?")[0]
+          .split("#")[0];
+      }
+
+      function withPhotoCacheBust(photoUrl, version) {
+        const clean = stripPhotoUrlQuery(photoUrl);
+        if (!clean || version == null || version === "") return clean;
+        return `${clean}?v=${encodeURIComponent(version)}`;
+      }
+
       // Same merge the Admin > Drivers page uses:
       // standings rows + saved Supabase profiles.
       function buildDriverList(standingsRows, profiles) {
@@ -1055,7 +1068,7 @@
             iracing_name: profile?.iracing_name || row.driver,
             display_name: profile?.display_name || row.driver,
             car_number: profile?.car_number || "",
-            photo_url: profile?.photo_url || row.photoUrl || "",
+            photo_url: stripPhotoUrlQuery(profile?.photo_url || row.photoUrl || ""),
           };
         });
       }
@@ -1172,12 +1185,13 @@
           }
 
           if (data.storage === "supabase") {
+            const storedUrl = data.photoUrlStored || stripPhotoUrlQuery(data.publicUrl || data.photoUrl);
+            driver.photo_url = storedUrl;
+            photoUrlInput.value = storedUrl;
             setMsg(
-              `Saved to Supabase Storage\nUpdated driver profile\nPublic image URL:\n${data.publicUrl || data.photoUrl}`,
+              `Saved to Supabase Storage\nUpdated driver profile\nPublic image URL:\n${storedUrl}`,
               "success",
             );
-            driver.photo_url = data.publicUrl || data.photoUrl;
-            photoUrlInput.value = driver.photo_url;
           } else {
             setMsg(
               `Saved locally: ${data.filename}\nPath: ${data.savedTo}\n(Development mode — Supabase not configured)`,
@@ -1185,10 +1199,15 @@
             );
           }
 
-          const previewUrl = data.publicUrl || data.photoUrl;
-          savedPreview.src = previewUrl.startsWith("http")
-            ? `${previewUrl}?t=${Date.now()}`
-            : `/${String(previewUrl).replace(/^\/+/, "")}?t=${Date.now()}`;
+          const previewUrl =
+            data.publicUrl ||
+            withPhotoCacheBust(
+              data.photoUrlStored || data.photoUrl,
+              data.cacheVersion || Date.now(),
+            );
+          savedPreview.src = previewUrl.startsWith("http") || previewUrl.startsWith("/")
+            ? previewUrl
+            : `/${String(previewUrl).replace(/^\/+/, "")}`;
           savedPreviewWrap.hidden = false;
         } catch (e) {
           setSaveError({ error: e.message || "Save failed." });

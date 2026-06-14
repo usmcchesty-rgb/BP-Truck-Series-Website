@@ -1,4 +1,4 @@
-import { getSettings, getDriverProfiles, slugify } from './_lib.js';
+import { getSettings, getDriverProfiles, slugify, withPhotoCacheBust, photoCacheVersion } from './_lib.js';
 import * as cheerio from "cheerio";
 
 
@@ -145,7 +145,12 @@ const avgFinish =
           incidents: Number(r.inc || 0),
           avgFinish,
           profile,
-          photoUrl: profile?.photo_url || `/assets/drivers/${slug}.png`,
+          photoUrl: profile?.photo_url
+            ? withPhotoCacheBust(
+                profile.photo_url,
+                photoCacheVersion(profile.updated_at)
+              )
+            : `/assets/drivers/${slug}.png`,
           active: profile?.active ?? true
         };
       })

@@ -1,7 +1,13 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { slugify, supabase } from "./_lib.js";
+import {
+  photoCacheVersion,
+  slugify,
+  stripPhotoUrlQuery,
+  supabase,
+  withPhotoCacheBust,
+} from "./_lib.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
@@ -49,7 +55,7 @@ function readUploadBuffer(body) {
 }
 
 function safeFilenameFromPhotoUrl(photoUrl) {
-  const clean = String(photoUrl || "").split("?")[0].split("#")[0];
+  const clean = stripPhotoUrlQuery(photoUrl);
   const last = path.basename(clean);
   if (!last.toLowerCase().endsWith(".png")) {
     throw new Error("Photo URL must end with .png");
@@ -98,6 +104,10 @@ function isBucketNotFoundMessage(message = "") {
   );
 }
 
+function isStorageObjectMissingMessage(message = "") {
+  return /not found|does not exist|object not found/i.test(message);
+}
+
 async function verifyStorageBucket(sb) {
   const { data, error } = await sb.storage.listBuckets();
   if (error) {
@@ -129,7 +139,7 @@ async function assertSupabaseReady(sb) {
 // Turn the driver's Photo URL (e.g. "assets/drivers/mark-arthur.png")
 // into a safe absolute path inside public/.
 function resolvePhotoOutputPath(photoUrl) {
-  let rel = String(photoUrl || "").trim();
+  let rel = stripPhotoUrlQuery(photoUrl);
   if (!rel) {
     throw new Error("Driver has no Photo URL set.");
   }
@@ -139,7 +149,6 @@ function resolvePhotoOutputPath(photoUrl) {
     );
   }
 
-  rel = rel.split("?")[0].split("#")[0];
   rel = rel.replace(/^\/+/, "");
 
   if (!rel.toLowerCase().endsWith(".png")) {
@@ -189,7 +198,7 @@ async function upsertDriverPhotoUrl(sb, driverId, publicUrl, body) {
     slug: slugify(displayName || iracingName || id),
     car_number: carNumber,
     truck_number: carNumber,
-    photo_url: publicUrl,
+    photo_url: stripPhotoUrlQuery(publicUrl),
     active: existing?.active !== false,
     updated_at: new Date().toISOString(),
   };
@@ -207,13 +216,22 @@ async function upsertDriverPhotoUrl(sb, driverId, publicUrl, body) {
   return data;
 }
 
+async function removeExistingStorageObject(sb, filename) {
+  const { error } = await sb.storage.from(STORAGE_BUCKET).remove([filename]);
+  if (error && !isStorageObjectMissingMessage(error.message)) {
+    console.warn("[save-driver-photo] remove before upload:", error.message);
+  }
+}
+
 async function saveToSupabaseStorage(sb, uploadBuffer, filename, driverId, body) {
+  await removeExistingStorageObject(sb, filename);
+
   const { error: uploadError } = await sb.storage
     .from(STORAGE_BUCKET)
     .upload(filename, uploadBuffer, {
       contentType: "image/png",
       upsert: true,
-      cacheControl: "3600",
+      cacheControl: "60",
     });
 
   if (uploadError) {
@@ -226,14 +244,19 @@ async function saveToSupabaseStorage(sb, uploadBuffer, filename, driverId, body)
     throw new Error(`Storage upload failed: ${uploadError.message}`);
   }
 
-  const publicUrl = publicStorageUrl(filename);
-  await upsertDriverPhotoUrl(sb, driverId, publicUrl, body);
+  const storedUrl = stripPhotoUrlQuery(publicStorageUrl(filename));
+  const profile = await upsertDriverPhotoUrl(sb, driverId, storedUrl, body);
+  const cacheVersion = photoCacheVersion(profile?.updated_at) || Date.now();
+  const displayUrl = withPhotoCacheBust(storedUrl, cacheVersion);
 
   return {
     filename,
     savedTo: `Supabase Storage (${STORAGE_BUCKET}/${filename})`,
-    photoUrl: publicUrl,
-    publicUrl,
+    photoUrl: displayUrl,
+    publicUrl: displayUrl,
+    photoUrlStored: storedUrl,
+    cacheVersion,
+    updatedAt: profile?.updated_at || null,
     profileUpdated: true,
     storage: "supabase",
   };
@@ -244,11 +267,17 @@ function saveToLocalFile(uploadBuffer, photoUrl) {
   const filename = path.basename(resolved);
   fs.mkdirSync(path.dirname(resolved), { recursive: true });
   fs.writeFileSync(resolved, uploadBuffer);
+  const storedUrl = `/${rel.replace(/^\/+/, "")}`;
+  const cacheVersion = Date.now();
+  const displayUrl = withPhotoCacheBust(storedUrl, cacheVersion);
   return {
     filename,
     savedTo: `public/${rel}`,
-    photoUrl: rel,
-    publicUrl: `/${rel.replace(/^\/+/, "")}`,
+    photoUrl: displayUrl,
+    publicUrl: displayUrl,
+    photoUrlStored: storedUrl,
+    cacheVersion,
+    updatedAt: new Date(cacheVersion).toISOString(),
     profileUpdated: false,
     storage: "local",
   };

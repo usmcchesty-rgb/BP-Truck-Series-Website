@@ -1,4 +1,4 @@
-import { getDriverProfiles, supabase, slugify } from './_lib.js';
+import { getDriverProfiles, supabase, slugify, stripPhotoUrlQuery, withPhotoCacheBust, photoCacheVersion } from './_lib.js';
 
 function parseBody(req) {
   if (!req.body) return {};
@@ -14,12 +14,16 @@ function parseBody(req) {
 
 function normalizeDriverProfile(row) {
   if (!row) return null;
+  const photo_url = stripPhotoUrlQuery(row.photo_url || '');
   return {
     driver_id: String(row.driver_id || row.iracing_id || row.slug || ''),
     iracing_name: row.iracing_name || row.driver_name || '',
     display_name: row.display_name || row.driver_name || '',
     car_number: row.car_number || row.truck_number || '',
-    photo_url: row.photo_url || '',
+    photo_url,
+    photoUrl: photo_url
+      ? withPhotoCacheBust(photo_url, photoCacheVersion(row.updated_at))
+      : '',
     active: row.active !== false
   };
 }
@@ -36,7 +40,7 @@ function buildUpsertRow(b) {
     slug: slugify(displayName || b.iracing_name || b.driver_id),
     car_number: carNumber,
     truck_number: carNumber,
-    photo_url: b.photo_url || '',
+    photo_url: stripPhotoUrlQuery(b.photo_url || ''),
     active: b.active !== false,
     updated_at: new Date().toISOString()
   };

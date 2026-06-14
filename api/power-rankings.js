@@ -1,4 +1,4 @@
-import { slugify, supabase } from './_lib.js';
+import { slugify, supabase, withPhotoCacheBust, photoCacheVersion } from './_lib.js';
 import {
   formatMovementDisplay,
   MOVEMENT_NEW_SENTINEL,
@@ -48,7 +48,12 @@ function profileMap(profiles) {
 }
 
 function driverPhoto(profile, name) {
-  if (profile?.photo_url) return profile.photo_url;
+  if (profile?.photo_url) {
+    return withPhotoCacheBust(
+      profile.photo_url,
+      photoCacheVersion(profile.updated_at)
+    );
+  }
   const slug = slugify(profile?.display_name || profile?.iracing_name || name || '');
   return slug ? `/assets/drivers/${slug}.png` : '/assets/drivers/placeholder.png';
 }

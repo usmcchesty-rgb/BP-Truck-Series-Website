@@ -47,6 +47,25 @@ export function slugify(name='') {
   return String(name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 }
 
+export function stripPhotoUrlQuery(photoUrl) {
+  const url = String(photoUrl || '').trim();
+  if (!url) return '';
+  return url.split('?')[0].split('#')[0];
+}
+
+export function photoCacheVersion(updatedAt) {
+  if (!updatedAt) return null;
+  const ms = new Date(updatedAt).getTime();
+  return Number.isFinite(ms) ? ms : null;
+}
+
+export function withPhotoCacheBust(photoUrl, version) {
+  const clean = stripPhotoUrlQuery(photoUrl);
+  if (!clean) return clean;
+  if (version == null || version === '') return clean;
+  return `${clean}?v=${encodeURIComponent(version)}`;
+}
+
 export function num(v) {
   if (v === undefined || v === null) return null;
   const s = String(v).replace(/,/g,'').trim();
