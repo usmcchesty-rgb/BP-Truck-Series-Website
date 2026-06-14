@@ -8,6 +8,26 @@ function escapeHtml(s) {
     .replace(/"/g, "&quot;");
 }
 
+function escapeAttr(s) {
+  return escapeHtml(s).replace(/'/g, "&#39;");
+}
+
+function driverImage(name) {
+  const slug = String(name || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+  return `/assets/drivers/${slug}.png`;
+}
+
+function inferPlatform(url) {
+  const value = String(url || "").toLowerCase();
+  if (value.includes("twitch.tv")) return "Twitch";
+  if (value.includes("youtube.com") || value.includes("youtu.be")) return "YouTube";
+  if (value.includes("kick.com")) return "Kick";
+  return "Live Stream";
+}
+
 function streamerBadgeHtml() {
   return `<span class="streamer-badge">STREAMER</span>`;
 }
@@ -17,19 +37,23 @@ function renderStreamers(streamers) {
   if (!grid) return;
 
   if (!streamers.length) {
-    grid.innerHTML = `<p class="muted">No streamers listed yet.</p>`;
+    grid.innerHTML = `<p class="muted">No streamers have been added yet.</p>`;
     return;
   }
 
   grid.innerHTML = streamers
-    .map((s) => {
-      const name = s.driver || "Unknown";
-      const photo = s.photo || "/assets/drivers/placeholder.png";
-      const number = s.carNumber
-        ? `<span class="num">${escapeHtml(s.carNumber)}</span>`
+    .map((driver) => {
+      const name = driver.display_name || driver.iracing_name || "Unknown";
+      const photo =
+        driver.photoUrl || driver.photo_url || driverImage(name);
+      const number = driver.car_number
+        ? `<span class="num">${escapeHtml(driver.car_number)}</span>`
         : "";
-      const platform = escapeHtml(s.platform || "Stream");
-      const streamUrl = escapeHtml(s.streamUrl || "#");
+      const streamUrl = String(driver.stream_url || "").trim();
+      const platform = streamUrl ? inferPlatform(streamUrl) : "Stream link pending";
+      const watchBtn = streamUrl
+        ? `<a class="streamer-link-btn" href="${escapeAttr(streamUrl)}" target="_blank" rel="noopener noreferrer">WATCH STREAM</a>`
+        : "";
 
       return `<article class="streamer-card">
         <div class="streamer-card-media">
@@ -38,20 +62,37 @@ function renderStreamers(streamers) {
         </div>
         <div class="streamer-card-body">
           <h2>${number}${escapeHtml(name)}</h2>
-          <p class="streamer-platform">${platform}</p>
-          <a class="streamer-link-btn" href="${streamUrl}" target="_blank" rel="noopener noreferrer">WATCH STREAM</a>
+          <p class="streamer-platform">${escapeHtml(platform)}</p>
+          ${watchBtn}
         </div>
       </article>`;
     })
     .join("");
 }
 
-function loadStreamers() {
+async function loadStreamers() {
   const grid = $("#streamersGrid");
   if (!grid) return;
 
-  const streamers = window.BP_STREAMERS_DATA?.STREAMERS || [];
-  renderStreamers(streamers);
+  grid.innerHTML = `<p class="muted">Loading streamers...</p>`;
+
+  try {
+    const res = await fetch("/api/drivers");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const streamers = (Array.isArray(data) ? data : [])
+      .filter((driver) => driver.is_streamer === true)
+      .sort((a, b) =>
+        String(a.display_name || a.iracing_name || "").localeCompare(
+          b.display_name || b.iracing_name || ""
+        )
+      );
+
+    renderStreamers(streamers);
+  } catch (e) {
+    console.error("Failed to load streamers:", e);
+    grid.innerHTML = `<p class="muted">Failed to load streamers.</p>`;
+  }
 }
 
 loadStreamers();
