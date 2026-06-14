@@ -11,28 +11,6 @@
         max-width: 1100px;
         margin: 0 auto;
       }
-      .nav {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 12px 18px;
-        border-bottom: 1px solid #333;
-        background: #0a0a0a;
-      }
-      .nav .brand {
-        font-weight: 900;
-        font-size: 18px;
-      }
-      .nav .brand span {
-        color: var(--red);
-      }
-      .nav a {
-        color: #fff;
-        text-decoration: none;
-        font-size: 12px;
-        font-weight: 900;
-        margin-left: 14px;
-      }
       .sub {
         color: var(--muted);
         font-size: 12px;
@@ -207,13 +185,8 @@
     </style>
   </head>
   <body>
-    <header class="nav">
-      <div class="brand">BP ADMIN <span>DRIVER PHOTOS</span></div>
-      <nav>
-        <a href="/admin/">Admin</a>
-        <a href="/">Site</a>
-      </nav>
-    </header>
+    <div id="admin-nav-root"></div>
+    <script src="/admin/admin-nav.js"></script>
 
     <main class="wrap">
       <h1>Driver Photo Processor</h1>
@@ -411,6 +384,7 @@
       async function updateLoginStatus() {
         const pw = getSessionPw();
         if (!pw) {
+          if (window.AdminNav) AdminNav.setLoggedIn(false);
           loginStatus.innerHTML =
             'Logged in: <span style="color:#ff6060">no</span> — ' +
             '<a href="/admin/">log in on the Admin page</a>, then come back ' +
@@ -419,11 +393,13 @@
         }
         try {
           if (await verifyPassword(pw)) {
+            if (window.AdminNav) AdminNav.setLoggedIn(true);
             loginStatus.innerHTML =
               'Logged in: <span style="color:#45d65a">yes</span>';
             return;
           }
         } catch {}
+        if (window.AdminNav) AdminNav.setLoggedIn(false);
         loginStatus.innerHTML =
           'Logged in: <span style="color:#ff6060">no</span> (saved password ' +
           'was rejected) — <a href="/admin/">log in again</a>.';

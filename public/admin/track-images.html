@@ -11,28 +11,6 @@
         max-width: 1100px;
         margin: 0 auto;
       }
-      .nav {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 12px 18px;
-        border-bottom: 1px solid #333;
-        background: #0a0a0a;
-      }
-      .nav .brand {
-        font-weight: 900;
-        font-size: 18px;
-      }
-      .nav .brand span {
-        color: var(--red);
-      }
-      .nav a {
-        color: #fff;
-        text-decoration: none;
-        font-size: 12px;
-        font-weight: 900;
-        margin-left: 14px;
-      }
       .sub {
         color: var(--muted);
         font-size: 12px;
@@ -138,13 +116,9 @@
     </style>
   </head>
   <body>
-    <header class="nav">
-      <div class="brand">BP ADMIN <span>TRACK IMAGES</span></div>
-      <nav>
-        <a href="/admin/">Admin</a>
-        <a href="/">Site</a>
-      </nav>
-    </header>
+    <div id="admin-nav-root"></div>
+    <script src="/admin/admin-nav.js"></script>
+
     <main class="wrap">
       <h1>Track Map Processor</h1>
       <p class="sub">
@@ -215,6 +189,9 @@
 
       if (!getSessionPw()) {
         $("#sessionNotice").hidden = false;
+        if (window.AdminNav) AdminNav.setLoggedIn(false);
+      } else if (window.AdminNav) {
+        AdminNav.setLoggedIn(true);
       }
 
       function setMsg(text, type = "") {

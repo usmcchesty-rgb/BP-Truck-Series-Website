@@ -7,10 +7,6 @@
   <link rel="stylesheet" href="/styles.css">
   <style>
     .wrap { padding: 18px; max-width: 1200px; margin: 0 auto; }
-    .nav { display: flex; justify-content: space-between; align-items: center; padding: 12px 18px; border-bottom: 1px solid #333; background: #0a0a0a; }
-    .nav .brand { font-weight: 900; font-size: 18px; }
-    .nav .brand span { color: var(--red); }
-    .nav a { color: #fff; text-decoration: none; font-size: 12px; font-weight: 900; margin-left: 14px; }
     .sub { color: var(--muted); font-size: 12px; margin-bottom: 16px; line-height: 1.45; }
     .panel { padding: 14px; margin-bottom: 14px; }
     .panel h2 { margin: 0 0 12px; font-size: 18px; color: #ff3030; }
@@ -196,14 +192,8 @@
   </style>
 </head>
 <body>
-  <header class="nav">
-    <div class="brand">BP ADMIN <span>POWER RANKINGS</span></div>
-    <nav>
-      <a href="/admin">Admin Home</a>
-      <a href="/">Site</a>
-      <button id="logoutBtn" class="btn" type="button" hidden onclick="logout()">Logout</button>
-    </nav>
-  </header>
+  <div id="admin-nav-root"></div>
+  <script src="/admin/admin-nav.js"></script>
 
   <main id="loginView" class="wrap" hidden>
     <h1>Admin Login</h1>
@@ -990,14 +980,16 @@
     function showLogin() {
       $('#loginView').hidden = false;
       $('#adminView').hidden = true;
-      $('#logoutBtn').hidden = true;
+      if (window.AdminNav) AdminNav.setLoggedIn(false);
+      else if ($('#logoutBtn')) $('#logoutBtn').hidden = true;
       $('#loginPw').focus();
     }
 
     function showAdmin() {
       $('#loginView').hidden = true;
       $('#adminView').hidden = false;
-      $('#logoutBtn').hidden = false;
+      if (window.AdminNav) AdminNav.setLoggedIn(true);
+      else if ($('#logoutBtn')) $('#logoutBtn').hidden = false;
       initAdmin();
     }
 

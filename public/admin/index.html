@@ -7,10 +7,6 @@
   <link rel="stylesheet" href="/styles.css">
   <style>
     .wrap { padding: 18px; max-width: 1200px; margin: 0 auto; }
-    .nav { display: flex; justify-content: space-between; align-items: center; padding: 12px 18px; border-bottom: 1px solid #333; background: #0a0a0a; }
-    .nav .brand { font-weight: 900; font-size: 18px; }
-    .nav .brand span { color: var(--red); }
-    .nav a { color: #fff; text-decoration: none; font-size: 12px; font-weight: 900; }
     .sub { color: var(--muted); font-size: 12px; margin-bottom: 16px; }
     .admin-tabs { display: flex; gap: 0; margin-bottom: 14px; flex-wrap: wrap; }
     .admin-tabs button,
@@ -55,8 +51,6 @@
     .btn { margin-top: 4px; }
     #adminMsg, #driversMsg, #loginMsg { margin-top: 10px; font-size: 12px; color: #ccc; white-space: pre-wrap; }
     #driversMsg.error, #loginMsg.error { color: #ff6060; }
-    .nav nav { display: flex; align-items: center; gap: 12px; }
-    .nav #logoutBtn { margin: 0; padding: 5px 12px; font-size: 10px; }
     .table-wrap { overflow-x: auto; }
     .drivers-table input[type="text"] { width: 100%; min-width: 80px; padding: 4px 6px; background: #111; color: #fff; border: 1px solid #444; font-size: 11px; }
     .drivers-table input[type="checkbox"] { width: 16px; height: 16px; }
@@ -100,13 +94,8 @@
   </style>
 </head>
 <body>
-  <header class="nav">
-    <div class="brand">BP ADMIN <span>PANEL</span></div>
-    <nav>
-      <a href="/">Site</a>
-      <button id="logoutBtn" class="btn" type="button" hidden onclick="logout()">Logout</button>
-    </nav>
-  </header>
+  <div id="admin-nav-root"></div>
+  <script src="/admin/admin-nav.js"></script>
 
   <main id="loginView" class="wrap" hidden>
     <h1>Admin Login</h1>
@@ -233,15 +222,24 @@
     function showLogin() {
       $('#loginView').hidden = false;
       $('#adminView').hidden = true;
-      $('#logoutBtn').hidden = true;
+      if (window.AdminNav) AdminNav.setLoggedIn(false);
+      else if ($('#logoutBtn')) $('#logoutBtn').hidden = true;
       $('#loginPw').focus();
     }
 
     function showAdmin() {
       $('#loginView').hidden = true;
       $('#adminView').hidden = false;
-      $('#logoutBtn').hidden = false;
+      if (window.AdminNav) AdminNav.setLoggedIn(true);
+      else if ($('#logoutBtn')) $('#logoutBtn').hidden = false;
+      applyAdminHash();
       loadSettings();
+    }
+
+    function applyAdminHash() {
+      if (location.hash !== '#drivers') return;
+      const btn = document.querySelector('.admin-tabs button[data-section="driversSection"]');
+      if (btn && !btn.classList.contains('active')) btn.click();
     }
 
     async function login() {
@@ -305,8 +303,11 @@
         btn.classList.add('active');
         $(`#${btn.dataset.section}`).classList.add('active');
         if (btn.dataset.section === 'driversSection') loadDrivers();
+        if (window.AdminNav) AdminNav.refreshActive();
       });
     });
+
+    window.addEventListener('hashchange', applyAdminHash);
 
     async function saveSettings() {
       const msg = $('#adminMsg');
