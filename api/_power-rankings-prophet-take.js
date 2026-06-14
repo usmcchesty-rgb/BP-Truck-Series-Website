@@ -92,7 +92,10 @@ function summarizeGroundingForProphet(factualGrounding, draftEntries = []) {
       );
     }
     if (grounding.last3RaceAverageFinish != null) {
-      parts.push(`Last 3 avg: ${grounding.last3RaceAverageFinish}`);
+      parts.push(`Last 3 avg: ${grounding.last3RaceAverageFinish} (${grounding.last3RaceStarts ?? '?'}/${grounding.last3RaceWindowSize ?? '?'} starts)`);
+    }
+    if (grounding.missedRecentRaceNames?.length) {
+      parts.push(`Missed: ${grounding.missedRecentRaceNames.join(', ')}`);
     }
     lines.push(parts.join(' — '));
   }

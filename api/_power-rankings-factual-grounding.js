@@ -3,7 +3,7 @@ import { getAlignedRaceFinishes } from './_power-rankings-results-audit.js';
 import {
   SIMRACERHUB_DATA_AUDIT,
   extractFinishRacesFromSchedules,
-  summarizeLast3Finishes,
+  summarizeLast3RaceWindow,
 } from './_simracerhub-schedule-results.js';
 
 function normalizeText(value) {
@@ -119,7 +119,7 @@ function buildDriverGrounding(driverId, alignedRaces, standingsRow, recentResult
     finish: race.finishPosition,
   }));
 
-  const last3Summary = summarizeLast3Finishes(recentRaceFinishes);
+  const last3Summary = summarizeLast3RaceWindow(recentRaceFinishes, alignedRaces, driverId);
 
   return {
     allowedSeasonStats: standingsRow
@@ -230,6 +230,10 @@ export function buildRecentRaceFinishDiagnostics(factualGrounding, rankedEntries
       driverName: grounding.driverName,
       recentRaceFinishes: grounding.recentRaceFinishes || [],
       last3RaceAverageFinish: grounding.last3RaceAverageFinish ?? null,
+      last3RaceStarts: grounding.last3RaceStarts ?? null,
+      last3RaceWindowSize: grounding.last3RaceWindowSize ?? null,
+      last3RaceDnpCount: grounding.last3RaceDnpCount ?? null,
+      missedRecentRaceNames: grounding.missedRecentRaceNames || [],
       bestFinishLast3: grounding.bestFinishLast3 ?? null,
       worstFinishLast3: grounding.worstFinishLast3 ?? null,
     };
@@ -901,9 +905,19 @@ function matchRecentRaceFinishReference(text, race) {
   return false;
 }
 
-function matchLast3AverageFinishReference(text, averageFinish) {
+function matchLast3AverageFinishReference(text, averageFinish, grounding = null) {
   const avg = Number(averageFinish);
   if (!Number.isFinite(avg)) return false;
+
+  const starts =
+    grounding?.last3RaceStarts ?? grounding?.recentRaceFinishes?.length ?? null;
+  const window = grounding?.last3RaceWindowSize ?? 3;
+  const partialWindow =
+    Number.isFinite(starts) && starts > 0 && Number.isFinite(window) && starts < window;
+
+  if (partialWindow) {
+    return matchCorrectPartialLast3AverageWording(text, grounding);
+  }
 
   const escaped = String(avg).replace('.', '\\.');
   const patterns = [
@@ -931,6 +945,163 @@ function matchLast3AverageFinishReference(text, averageFinish) {
     new RegExp(`\\b${escaped}\\s+average\\b`, 'i').test(text) ||
     new RegExp(`\\bavg(?:erage)?\\.?\\s*(?:finish\\s*)?(?:of\\s*)?${escaped}\\b`, 'i').test(text)
   );
+}
+
+function matchCorrectPartialLast3AverageWording(text, grounding) {
+  const avg = Number(grounding?.last3RaceAverageFinish);
+  const starts = grounding?.last3RaceStarts ?? 0;
+  const window = grounding?.last3RaceWindowSize ?? 3;
+  if (!Number.isFinite(avg) || starts <= 0 || starts >= window) return false;
+
+  const escaped = String(avg).replace('.', '\\.');
+  const startPattern = starts === 1 ? '1\\s+start' : `${starts}\\s+starts?`;
+  const windowPattern = window === 3 ? '3\\s+races|three\\s+races' : `${window}\\s+races`;
+
+  const patterns = [
+    new RegExp(
+      `\\baverage finish of ${escaped}\\s+across ${startPattern}\\s+in the last (?:${windowPattern})\\b`,
+      'i'
+    ),
+    new RegExp(`\\b${escaped}\\s+across ${startPattern}\\s+in the last (?:${windowPattern})\\b`, 'i'),
+    new RegExp(
+      `\\baverage finish of ${escaped}\\b[\\s\\S]{0,80}\\b${startPattern}\\s+in the last (?:${windowPattern})\\b`,
+      'i'
+    ),
+  ];
+
+  return patterns.some((pattern) => pattern.test(text));
+}
+
+function writeupReferencesLast3Average(text, averageFinish) {
+  const avg = Number(averageFinish);
+  if (!Number.isFinite(avg)) return false;
+  const escaped = String(avg).replace('.', '\\.');
+  return (
+    new RegExp(`\\baverage finish of ${escaped}\\b`, 'i').test(text) ||
+    new RegExp(`\\b${escaped}\\s+average\\b`, 'i').test(text) ||
+    new RegExp(`\\b${escaped}\\s+across\\b`, 'i').test(text) ||
+    new RegExp(`\\b${escaped}\\s+over\\b`, 'i').test(text)
+  );
+}
+
+export function formatLast3AverageFinishGuidance(grounding) {
+  if (grounding?.last3RaceAverageFinish == null) return null;
+
+  const starts = grounding.last3RaceStarts ?? grounding.recentRaceFinishes?.length ?? 0;
+  const window = grounding.last3RaceWindowSize ?? 3;
+  const avg = grounding.last3RaceAverageFinish;
+  const missed = grounding.missedRecentRaceNames || [];
+
+  if (starts > 0 && starts < window) {
+    const missedNote = missed.length ? ` Missed: ${missed.join(', ')}.` : '';
+    return `Use wording like "average finish of ${avg} across ${starts} start${starts === 1 ? '' : 's'} in the last ${window} races" — not "over the last three races".${missedNote}`;
+  }
+
+  return `Average finish of ${avg} across ${window} verified starts in the last ${window} races.`;
+}
+
+export function validateLast3AverageFinishWording(writeup, context = {}) {
+  const grounding = context.driverGrounding || context.factualGrounding || null;
+  if (grounding?.last3RaceAverageFinish == null) {
+    return { error: null, errorType: null };
+  }
+
+  const text = String(writeup || '');
+  const starts = grounding.last3RaceStarts ?? grounding.recentRaceFinishes?.length ?? 0;
+  const window = grounding.last3RaceWindowSize ?? 3;
+  const avg = grounding.last3RaceAverageFinish;
+
+  if (starts >= window || !writeupReferencesLast3Average(text, avg)) {
+    return { error: null, errorType: null };
+  }
+
+  if (matchCorrectPartialLast3AverageWording(text, grounding)) {
+    return { error: null, errorType: null };
+  }
+
+  const misleadingPatterns = [
+    /\baverage finish of [\d.]+\s+over the last three races\b/i,
+    /\baverage finish of [\d.]+\s+over the last 3 races\b/i,
+    /\baverage finish of [\d.]+\s+across the last three races\b/i,
+    /\baverage finish of [\d.]+\s+across the last 3 races\b/i,
+    /\b[\d.]+\s+over the last three races\b/i,
+    /\b[\d.]+\s+over the last 3 races\b/i,
+    /\b[\d.]+\s+across the last three races\b/i,
+    /\b[\d.]+\s+across the last 3 races\b/i,
+  ];
+
+  if (misleadingPatterns.some((pattern) => pattern.test(text))) {
+    return {
+      error: `Writeup implies a full last-${window} average, but this driver has only ${starts} verified start${starts === 1 ? '' : 's'} in that window. Use "average finish of ${avg} across ${starts} starts in the last ${window} races".`,
+      errorType: 'misleading-last3-average-wording',
+    };
+  }
+
+  if (/\b(?:over|across)\s+the last three races\b/i.test(text)) {
+    return {
+      error: `Writeup references the last three races without noting only ${starts} verified start${starts === 1 ? '' : 's'}. Use "average finish of ${avg} across ${starts} starts in the last ${window} races".`,
+      errorType: 'misleading-last3-average-wording',
+    };
+  }
+
+  return { error: null, errorType: null };
+}
+
+function extractMissedTrackClaim(rawClaim) {
+  let claim = String(rawClaim || '').trim();
+  const stopMatch = claim.match(
+    /\s+(?:produced|still|keeps|an average|the driver|this week|enough to|has|have|was|were|is|are)\b/i
+  );
+  if (stopMatch?.index > 0) {
+    claim = claim.slice(0, stopMatch.index).trim();
+  }
+  return claim.replace(/[,.]$/, '').trim();
+}
+
+function trackMentionSupported(claimText, missedTrackNames = []) {
+  const claim = normalizeText(extractMissedTrackClaim(claimText));
+  if (!claim) return false;
+
+  return missedTrackNames.some((trackName) => {
+    const track = normalizeText(trackName);
+    if (!track) return false;
+    if (claim.includes(track) || track.includes(claim)) return true;
+
+    const claimTokens = claim.split(' ').filter((token) => token.length > 2);
+    const trackTokens = track.split(' ').filter((token) => token.length > 2);
+    if (claimTokens.some((token) => trackTokens.includes(token))) return true;
+
+    return trackTokens.length > 0 && trackTokens.every((token) => claim.includes(token));
+  });
+}
+
+export function validateMissedRaceMentions(writeup, context = {}) {
+  const grounding = context.driverGrounding || context.factualGrounding || null;
+  const missed = grounding?.missedRecentRaceNames || [];
+  const text = String(writeup || '');
+
+  for (const match of text.matchAll(
+    /\b(?:despite|after|even with|with)?\s*(?:missing|missed|skipping|skipped|sat out|did not race|dnp(?:'d)?(?: at)?)\s+([^.!?]+)/gi
+  )) {
+    const claim = extractMissedTrackClaim(match[1]);
+    if (!claim) continue;
+    if (!trackMentionSupported(claim, missed)) {
+      if (
+        missed.length === 0 ||
+        !/\b(speedway|motor|raceway|mile|oval|superspeedway|international|bristol|rockingham|charlotte|iowa|daytona|atlanta|darlington|dover|kentucky|michigan|phoenix|talladega|indianapolis)\b/i.test(
+          claim
+        )
+      ) {
+        continue;
+      }
+      return {
+        error: `Unsupported missed-race mention "${claim}". Verified missed races in the last-${grounding?.last3RaceWindowSize ?? 3} window: ${missed.length ? missed.join(', ') : 'none'}.`,
+        errorType: 'unsupported-missed-race-mention',
+      };
+    }
+  }
+
+  return { error: null, errorType: null };
 }
 
 function matchExtremeLast3FinishReference(text, finish, kind) {
@@ -968,7 +1139,7 @@ export function analyzeRecentFormReferences(writeup, context = {}) {
     }
   }
 
-  if (matchLast3AverageFinishReference(text, grounding?.last3RaceAverageFinish)) {
+  if (matchLast3AverageFinishReference(text, grounding?.last3RaceAverageFinish, grounding)) {
     averageFinishReferenced = true;
     recentFormReferenced = true;
   }
@@ -1118,10 +1289,15 @@ export function analyzeVerifiedFactsUsed(writeup, context = {}) {
     }
   }
 
-  if (matchLast3AverageFinishReference(text, grounding?.last3RaceAverageFinish)) {
+  if (matchLast3AverageFinishReference(text, grounding?.last3RaceAverageFinish, grounding)) {
     pushFact({
       type: 'last3-average-finish',
-      label: `Last 3 average finish ${grounding.last3RaceAverageFinish}`,
+      label:
+        grounding.last3RaceStarts != null &&
+        grounding.last3RaceWindowSize != null &&
+        grounding.last3RaceStarts < grounding.last3RaceWindowSize
+          ? `Last 3 average finish ${grounding.last3RaceAverageFinish} (${grounding.last3RaceStarts}/${grounding.last3RaceWindowSize} starts)`
+          : `Last 3 average finish ${grounding.last3RaceAverageFinish}`,
       value: grounding.last3RaceAverageFinish,
     });
   }
@@ -1259,6 +1435,24 @@ export function validateWriteupVerifiedEvidence(writeup, context = {}) {
     };
   }
 
+  const last3WordingValidation = validateLast3AverageFinishWording(writeup, context);
+  if (last3WordingValidation.error) {
+    return {
+      error: last3WordingValidation.error,
+      errorType: last3WordingValidation.errorType,
+      ...analysis,
+    };
+  }
+
+  const missedRaceValidation = validateMissedRaceMentions(writeup, context);
+  if (missedRaceValidation.error) {
+    return {
+      error: missedRaceValidation.error,
+      errorType: missedRaceValidation.errorType,
+      ...analysis,
+    };
+  }
+
   return {
     error: null,
     errorType: null,
@@ -1295,9 +1489,13 @@ export function formatVerifiedFactsForRepair(grounding, rank) {
     );
   }
   if (grounding.last3RaceAverageFinish != null) {
-    lines.push(
-      `Last 3 average finish: ${grounding.last3RaceAverageFinish} (best P${grounding.bestFinishLast3}, worst P${grounding.worstFinishLast3}).`
-    );
+    const guidance = formatLast3AverageFinishGuidance(grounding);
+    lines.push(guidance || `Last 3 average finish: ${grounding.last3RaceAverageFinish}.`);
+    if (grounding.last3RaceStarts != null && grounding.last3RaceWindowSize != null) {
+      lines.push(
+        `Last 3 window: ${grounding.last3RaceStarts} verified starts in ${grounding.last3RaceWindowSize} races${grounding.missedRecentRaceNames?.length ? `; missed ${grounding.missedRecentRaceNames.join(', ')}` : ''}.`
+      );
+    }
   }
   if (Number(rank) >= 1 && Number(rank) <= 5 && grounding.recentRaceFinishes?.length) {
     lines.push(

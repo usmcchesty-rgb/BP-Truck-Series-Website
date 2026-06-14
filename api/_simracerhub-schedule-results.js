@@ -167,3 +167,33 @@ export function summarizeLast3Finishes(recentRaceFinishes) {
     worstFinishLast3: Math.max(...finishes),
   };
 }
+
+export function summarizeLast3RaceWindow(recentRaceFinishes, alignedWindowRaces = [], driverId = null) {
+  const finishSummary = summarizeLast3Finishes(recentRaceFinishes);
+  const window = Array.isArray(alignedWindowRaces) ? alignedWindowRaces : [];
+  const last3RaceWindowSize = window.length;
+  const missedRecentRaces = window
+    .filter((race) => {
+      if (!driverId) return false;
+      const finish = race.finishes?.[String(driverId)];
+      return !Number.isFinite(finish);
+    })
+    .map((race) => ({
+      raceNumber: race.pointsRaceNumber,
+      track: race.track,
+    }));
+  const last3RaceStarts = (recentRaceFinishes || []).length;
+  const last3RaceDnpCount = missedRecentRaces.length;
+  const missedRecentRaceNames = missedRecentRaces
+    .map((race) => race.track)
+    .filter(Boolean);
+
+  return {
+    ...finishSummary,
+    last3RaceStarts,
+    last3RaceWindowSize,
+    last3RaceDnpCount,
+    missedRecentRaceNames,
+    missedRecentRaces,
+  };
+}

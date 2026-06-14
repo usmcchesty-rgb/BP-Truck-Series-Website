@@ -1008,6 +1008,8 @@ const EVIDENCE_REPAIR_ERROR_TYPES = new Set([
   'generic-language',
   'too-generic',
   'missing-recent-finish-evidence',
+  'misleading-last3-average-wording',
+  'unsupported-missed-race-mention',
 ]);
 
 const REPAIRABLE_WRITEUP_ERROR_TYPES = new Set([
@@ -1020,6 +1022,8 @@ const REPAIRABLE_WRITEUP_ERROR_TYPES = new Set([
   'too-generic',
   'unsupported-facts',
   'missing-recent-finish-evidence',
+  'misleading-last3-average-wording',
+  'unsupported-missed-race-mention',
 ]);
 
 function countWriteupEvidencePoints(text) {

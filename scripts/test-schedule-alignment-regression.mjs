@@ -171,6 +171,27 @@ async function runRegression() {
   const iowaFinish = finishForDriver(justinGrounding, iowaPointsRace);
   assert(iowaFinish?.finish === 1, `Justin Levine Iowa should be P1, got ${JSON.stringify(iowaFinish)}`);
 
+  assert(
+    justinGrounding.last3RaceStarts === 2,
+    `Justin Levine should have 2 starts in last-3 window, got ${justinGrounding.last3RaceStarts}`
+  );
+  assert(
+    justinGrounding.last3RaceWindowSize === 3,
+    `Justin Levine last-3 window size should be 3, got ${justinGrounding.last3RaceWindowSize}`
+  );
+  assert(
+    justinGrounding.last3RaceDnpCount === 1,
+    `Justin Levine should have 1 DNP in last-3 window, got ${justinGrounding.last3RaceDnpCount}`
+  );
+  assert(
+    (justinGrounding.missedRecentRaceNames || []).some((name) => /rockingham/i.test(name)),
+    `Justin Levine missed races should include Rockingham, got ${JSON.stringify(justinGrounding.missedRecentRaceNames)}`
+  );
+  assert(
+    justinGrounding.last3RaceAverageFinish === 1.0,
+    `Justin Levine average should be 1.0 from 2 starts, got ${justinGrounding.last3RaceAverageFinish}`
+  );
+
   const alignedLatest = alignFinishRacesWithTrace(
     getRecentPointsRaceResults(scheduleRaces, raceNumber, 3),
     finishRaces,

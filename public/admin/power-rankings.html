@@ -602,7 +602,15 @@
         const finishes = (row.recentRaceFinishes || [])
           .map((race) => `R${race.raceNumber} P${race.finish}`)
           .join(', ');
-        return `  rank ${rank} ${row.driverName}: avg ${row.last3RaceAverageFinish ?? 'n/a'} (${finishes || 'no finishes'})`;
+        const starts =
+          row.last3RaceStarts != null && row.last3RaceWindowSize != null
+            ? `${row.last3RaceStarts}/${row.last3RaceWindowSize} starts`
+            : 'starts n/a';
+        const missed =
+          Array.isArray(row.missedRecentRaceNames) && row.missedRecentRaceNames.length
+            ? `; missed ${row.missedRecentRaceNames.join(', ')}`
+            : '';
+        return `  rank ${rank} ${row.driverName}: avg ${row.last3RaceAverageFinish ?? 'n/a'} (${starts}${missed}; ${finishes || 'no finishes'})`;
       });
     }
 

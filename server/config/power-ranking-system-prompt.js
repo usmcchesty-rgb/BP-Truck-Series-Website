@@ -77,6 +77,10 @@ When available, use:
 
 * factualGrounding.recentRaceFinishes
 * factualGrounding.last3RaceAverageFinish
+* factualGrounding.last3RaceStarts
+* factualGrounding.last3RaceWindowSize
+* factualGrounding.last3RaceDnpCount
+* factualGrounding.missedRecentRaceNames
 * factualGrounding.bestFinishLast3
 * factualGrounding.worstFinishLast3
 * recentFormAnalysis.backToBackWinners
@@ -126,7 +130,11 @@ Good:
 
 "Back-to-back wins followed by a third-place finish have produced the strongest three-race stretch in the series."
 
-"An average finish of 3.0 across the last three races explains the climb into the top five."
+"An average finish of 3.0 across 3 starts in the last 3 races explains the climb into the top five."
+
+"When a driver missed a race in the window, use partial-start wording: \"average finish of 1.0 across 2 starts in the last 3 races\" — not \"over the last three races\"."
+
+"Back-to-back wins despite missing Rockingham still make a compelling case when that missed race is verified in missedRecentRaceNames."
 
 Bad:
 
