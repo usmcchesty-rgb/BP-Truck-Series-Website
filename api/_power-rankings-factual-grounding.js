@@ -472,6 +472,115 @@ export function validateWriteupFactualGrounding(writeup, context = {}) {
   return { unsupported };
 }
 
+function claimSupportedByAnyRankedDriver(item, context = {}) {
+  const {
+    rankedDriverIds = [],
+    factualGrounding,
+    alignedRaces = [],
+    recentResults = [],
+    driverLookup,
+    manualRaceNotes = '',
+    transcriptSummary = '',
+  } = context;
+
+  if (claimSupportedInNotes(item.claim || '', manualRaceNotes, transcriptSummary)) {
+    return true;
+  }
+
+  const race =
+    item.race
+      ? alignedRaces.find((entry) => entry.track === item.race) ||
+        alignedRaces.find((entry) => Number(entry.pointsRaceNumber) === Number(item.race))
+      : matchRaceByContext(item.claim || '', alignedRaces);
+
+  if (item.type === 'points-position') {
+    const match = String(item.claim || item.message || '').match(
+      /\b(\d+(?:st|nd|rd|th)|#(\d+))\s+in\s+(?:the\s+)?points\b/i
+    );
+    const claimed = parseNumeric(match?.[1] || match?.[2]);
+    if (Number.isFinite(claimed)) {
+      return rankedDriverIds.some((driverId) => {
+        const grounding = factualGrounding?.drivers?.[String(driverId)];
+        return grounding?.allowedSeasonStats?.pointsPosition === claimed;
+      });
+    }
+  }
+
+  if (item.type === 'points-total') {
+    const match = String(item.claim || item.message || '').match(/\b(\d[\d,]*)\s+points\b/i);
+    const claimed = parseNumeric(match?.[1]);
+    if (Number.isFinite(claimed)) {
+      return rankedDriverIds.some((driverId) => {
+        const grounding = factualGrounding?.drivers?.[String(driverId)];
+        return grounding?.allowedSeasonStats?.pointsTotal === claimed;
+      });
+    }
+  }
+
+  if (item.type === 'wins-total') {
+    const match = String(item.claim || item.message || '').match(/\b(\d+)\s+wins?\b/i);
+    const claimed = parseNumeric(match?.[1]);
+    if (Number.isFinite(claimed)) {
+      return rankedDriverIds.some((driverId) => {
+        const grounding = factualGrounding?.drivers?.[String(driverId)];
+        return grounding?.allowedSeasonStats?.winsTotal === claimed;
+      });
+    }
+  }
+
+  if (item.type === 'exact-finish' && race && Number.isFinite(item.claimedFinish)) {
+    return rankedDriverIds.some((driverId) => {
+      const finish = getVerifiedFinishForDriver(String(driverId), race);
+      return finish === item.claimedFinish;
+    });
+  }
+
+  if ((item.type === 'podium' || item.type === 'top5' || item.type === 'top10') && race) {
+    const maxFinish = item.type === 'podium' ? 3 : item.type === 'top5' ? 5 : 10;
+    return rankedDriverIds.some((driverId) => {
+      const finish = getVerifiedFinishForDriver(String(driverId), race);
+      return Number.isFinite(finish) && finish <= maxFinish;
+    });
+  }
+
+  if (item.type === 'win' && race) {
+    return rankedDriverIds.some((driverId) =>
+      isVerifiedWinner(String(driverId), race, recentResults, driverLookup)
+    );
+  }
+
+  return false;
+}
+
+export function validateProphetTakeFactualGrounding(text, context = {}) {
+  const rankedDriverIds = (context.rankedDriverIds || []).map(String);
+  const drivers = context.factualGrounding?.drivers || {};
+  const merged = new Map();
+
+  for (const driverId of rankedDriverIds) {
+    const grounding = drivers[driverId];
+    const { unsupported } = validateWriteupFactualGrounding(text, {
+      ...context,
+      driverId,
+      driverGrounding: grounding,
+      factualGrounding: grounding,
+    });
+    for (const item of unsupported) {
+      const key = `${item.type}:${item.claim || item.message}:${item.race || ''}:${item.claimedFinish || ''}`;
+      if (!merged.has(key)) merged.set(key, item);
+    }
+  }
+
+  const final = [];
+  for (const item of merged.values()) {
+    if (!claimSupportedByAnyRankedDriver(item, { ...context, rankedDriverIds })) {
+      final.push(item);
+    }
+  }
+
+  return { unsupported: final };
+}
+
 const ORDINAL_BY_NUMBER = {
   1: 'first',
   2: 'second',

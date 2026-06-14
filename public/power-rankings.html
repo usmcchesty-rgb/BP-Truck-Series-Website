@@ -12,9 +12,12 @@
 
     <main>
       <section class="panel full-panel power-rankings-page">
-        <h2>POWER RANKINGS</h2>
+        <div class="power-rankings-page-title">
+          <h2>POWER RANKINGS</h2>
+          <p class="power-rankings-byline">By The Pedal Prophet</p>
+        </div>
         <p class="page-intro" id="prIntro">
-          Weekly power rankings based on recent form, consistency, and race performance.
+          The Pedal Prophet's weekly look at the hottest drivers, biggest movers, championship contenders, and emerging storylines across the Blazing Pedals Truck Series.
         </p>
 
         <div class="power-rankings-layout">
@@ -30,11 +33,24 @@
               <p>No power rankings have been published yet. Check back after the next race.</p>
             </div>
 
+            <section id="prProphetTake" class="power-rankings-prophet-take" hidden>
+              <h3 class="power-rankings-prophet-heading">THE PEDAL PROPHET'S TAKE</h3>
+              <div id="prProphetTakeBody" class="power-rankings-prophet-body"></div>
+            </section>
+
             <div id="prList" class="power-rankings-list"></div>
 
             <section id="prHonorableSection" class="power-rankings-honorable" hidden>
               <h3>HONORABLE MENTIONS</h3>
               <div id="prHonorableList" class="power-rankings-honorable-list"></div>
+            </section>
+
+            <section id="prProphetAbout" class="power-rankings-prophet-about" hidden>
+              <div class="power-rankings-prophet-badge" aria-hidden="true">PP</div>
+              <div>
+                <h3>ABOUT THE PEDAL PROPHET</h3>
+                <p>The Pedal Prophet follows every lap, every rivalry, and every momentum swing across the Blazing Pedals Truck Series. Combining race results, championship standings, recent form, and race-day storylines, The Pedal Prophet delivers weekly Power Rankings and championship insight from around the garage.</p>
+              </div>
             </section>
           </div>
 

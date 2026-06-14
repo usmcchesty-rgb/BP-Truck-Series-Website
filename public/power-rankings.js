@@ -106,6 +106,33 @@ function renderArchive(archive, activeId) {
   panel.hidden = false;
 }
 
+function renderProphetTake(week) {
+  const section = $("#prProphetTake");
+  const body = $("#prProphetTakeBody");
+  const about = $("#prProphetAbout");
+  const text = String(week?.prophetTake || "").trim();
+
+  if (section && body) {
+    if (!text) {
+      section.hidden = true;
+      body.innerHTML = "";
+    } else {
+      const paragraphs = text
+        .split(/\n\s*\n/)
+        .map((part) => part.trim())
+        .filter(Boolean);
+
+      body.innerHTML = paragraphs.length
+        ? paragraphs.map((part) => `<p>${escapeHtml(part)}</p>`).join("")
+        : `<p>${escapeHtml(text)}</p>`;
+
+      section.hidden = false;
+    }
+  }
+
+  if (about) about.hidden = !week;
+}
+
 function renderWeek(week, archive) {
   const listEl = $("#prList");
   const emptyEl = $("#prEmpty");
@@ -116,6 +143,7 @@ function renderWeek(week, archive) {
     if (listEl) listEl.innerHTML = "";
     if (emptyEl) emptyEl.hidden = false;
     if (honorableSection) honorableSection.hidden = true;
+    renderProphetTake(null);
     renderHeader(null);
     renderArchive(archive, null);
     return;
@@ -123,6 +151,7 @@ function renderWeek(week, archive) {
 
   if (emptyEl) emptyEl.hidden = true;
   renderHeader(week);
+  renderProphetTake(week);
   if (listEl) listEl.innerHTML = week.entries.map(renderEntry).join("");
 
   const mentions = week.honorableMentions || [];
@@ -164,7 +193,7 @@ async function loadPowerRankings() {
     const intro = $("#prIntro");
     if (intro) {
       intro.textContent =
-        "Weekly power rankings based on recent form, consistency, and race performance. Rankings are not available right now.";
+        "The Pedal Prophet's weekly look at the hottest drivers, biggest movers, championship contenders, and emerging storylines across the Blazing Pedals Truck Series. Rankings are not available right now.";
     }
   }
 }

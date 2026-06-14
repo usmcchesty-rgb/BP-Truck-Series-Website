@@ -31,6 +31,11 @@ import {
   validateWriteupFactualGrounding,
   validateWriteupVerifiedEvidence,
 } from './_power-rankings-factual-grounding.js';
+import {
+  computeMovement,
+  formatMovementForRepair,
+} from './_power-rankings-movement.js';
+import { generateProphetTake } from './_power-rankings-prophet-take.js';
 
 function parseBody(req) {
   if (!req.body) return {};
@@ -1243,11 +1248,7 @@ export function formatDriverStatsForRepair(driver, entry, previousRank) {
   const parts = [];
   if (entry?.rank) parts.push(`Power rank: ${entry.rank}`);
   if (previousRank) parts.push(`Previous power rank: ${previousRank}`);
-  if (Number.isFinite(entry?.movement)) {
-    if (entry.movement > 0) parts.push(`Movement: up ${entry.movement}`);
-    else if (entry.movement < 0) parts.push(`Movement: down ${Math.abs(entry.movement)}`);
-    else parts.push('Movement: unchanged');
-  }
+  parts.push(formatMovementForRepair(entry, previousRank));
   if (driver?.position) parts.push(`Points position: ${driver.position}`);
   if (driver?.previousPosition && driver.previousPosition !== driver.position) {
     parts.push(`Previous points position: ${driver.previousPosition}`);
@@ -1256,6 +1257,7 @@ export function formatDriverStatsForRepair(driver, entry, previousRank) {
   if (Number.isFinite(driver?.top5)) parts.push(`Top 5s: ${driver.top5}`);
   if (Number.isFinite(driver?.top10)) parts.push(`Top 10s: ${driver.top10}`);
   if (Number.isFinite(driver?.points)) parts.push(`Points: ${driver.points}`);
+  parts.push(formatMovementForRepair(entry, previousRank));
   return parts.join('\n');
 }
 
@@ -1698,6 +1700,7 @@ function buildGenerationSources({
     selectedVideoRaceNumber: contextMeta.selectedVideoRaceNumber ?? null,
     transcriptDebugReason: contextMeta.transcriptDebugReason ?? null,
     movementSource: previousRankings?.entries?.length ? 'previous rankings' : 'defaulted',
+    movementDiagnostics: draft.movementDiagnostics ?? {},
     repairedWriteupsCount: draft.repairedWriteupsCount ?? 0,
     repairedRanks: draft.repairedRanks ?? [],
     repairAttempted: draft.repairAttempted === true,
@@ -1750,6 +1753,17 @@ function buildGenerationSources({
     recentFormReferencedRanks: draft.recentFormReferencedRanks ?? [],
     averageFinishReferencedRanks: draft.averageFinishReferencedRanks ?? [],
     recentFinishReferencedRanks: draft.recentFinishReferencedRanks ?? [],
+    prophetTakeGenerated: draft.prophetTakeGenerated === true,
+    prophetTakeValidationError: draft.prophetTakeValidationError ?? null,
+    prophetTakeValidationErrorType: draft.prophetTakeValidationErrorType ?? null,
+    prophetTakeWarnings: draft.prophetTakeWarnings ?? [],
+    prophetTakeRepairAttempted: draft.prophetTakeRepairAttempted === true,
+    prophetTakeRepairAttempts: draft.prophetTakeRepairAttempts ?? 0,
+    prophetTakeRepairReasons: draft.prophetTakeRepairReasons ?? [],
+    prophetTakeVerifiedFactsUsed: draft.prophetTakeVerifiedFactsUsed ?? [],
+    prophetTakeVerifiedFactsUsedCount: draft.prophetTakeVerifiedFactsUsedCount ?? 0,
+    prophetTakeWordCount: draft.prophetTakeWordCount ?? null,
+    prophetTakeParagraphCount: draft.prophetTakeParagraphCount ?? null,
   };
 }
 
@@ -1809,6 +1823,9 @@ async function normalizeDraft(aiDraft, driverLookup, previousRankings, generatio
     driverLookup: generationContext.driverLookup,
   });
 
+  const hasPreviousRankings = Boolean(previousRankings?.entries?.length);
+  const movementDiagnostics = {};
+
   for (let expectedRank = 1; expectedRank <= 10; expectedRank += 1) {
     const raw =
       entries.find((entry) => Number(entry.rank) === expectedRank) || entries[expectedRank - 1];
@@ -1824,20 +1841,27 @@ async function normalizeDraft(aiDraft, driverLookup, previousRankings, generatio
     usedDrivers.add(driverId);
     const driver = driverLookup.get(driverId);
     const previousRank = previousRankByDriver[driverId];
-    let movement = Number(raw?.movement);
-    if (!Number.isFinite(movement)) movement = 0;
+    const movementResult = computeMovement({
+      previousRank,
+      currentRank: expectedRank,
+      hasPreviousRankings,
+    });
 
-    if (previousRank) {
-      movement = previousRank - expectedRank;
-    } else if (previousRankings) {
-      movement = movement || 0;
-    }
+    movementDiagnostics[String(expectedRank)] = {
+      movementSource: movementResult.movementSource,
+      previousRank: movementResult.previousRank,
+      currentRank: movementResult.currentRank,
+      movementType: movementResult.movementType,
+    };
 
     normalizedEntries.push({
       rank: expectedRank,
       driverId,
       driverName: driver.driverName,
-      movement,
+      movement: movementResult.movement,
+      movementType: movementResult.movementType,
+      movementText: movementResult.movementText,
+      movementClass: movementResult.movementClass,
       subtitle: String(raw?.subtitle || '').trim(),
       writeup: String(raw?.writeup || '').trim(),
     });
@@ -2020,6 +2044,7 @@ async function normalizeDraft(aiDraft, driverLookup, previousRankings, generatio
     recentFormReferencedRanks,
     averageFinishReferencedRanks,
     recentFinishReferencedRanks,
+    movementDiagnostics,
   };
 }
 
@@ -2157,6 +2182,36 @@ export default async function handler(req, res) {
       recentResults: recentResultsForGrounding,
       driverLookup,
     });
+
+    const prophetTakeResult = await generateProphetTake(
+      {
+        raceNumber,
+        standings,
+        recentFormAnalysis,
+        factualGrounding,
+        alignedRaces,
+        manualRaceNotes,
+        transcriptSummary: contextMeta.broadcastContext?.summary || '',
+        recentResultsForGrounding,
+        driverLookup,
+        transcriptUsed: contextMeta.transcriptUsed,
+      },
+      draft.entries
+    );
+
+    Object.assign(draft, prophetTakeResult);
+
+    if (prophetTakeResult.prophetTakeValidationError) {
+      console.log(
+        '[power-rankings-generate] prophet take validation',
+        JSON.stringify({
+          error: prophetTakeResult.prophetTakeValidationError,
+          errorType: prophetTakeResult.prophetTakeValidationErrorType,
+          repairAttempts: prophetTakeResult.prophetTakeRepairAttempts,
+          verifiedFactsUsedCount: prophetTakeResult.prophetTakeVerifiedFactsUsedCount,
+        })
+      );
+    }
 
     resultsAudit.rankedDriverFinishTrace = buildRankedDriverFinishTrace(
       draft.entries,

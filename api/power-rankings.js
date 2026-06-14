@@ -1,4 +1,10 @@
 import { slugify, supabase } from './_lib.js';
+import {
+  formatMovementDisplay,
+  MOVEMENT_NEW_SENTINEL,
+  movementTypeFromStored,
+  parseMovementInput,
+} from './_power-rankings-movement.js';
 
 function parseBody(req) {
   if (!req.body) return {};
@@ -57,28 +63,30 @@ function enrichDriver(profile, driverId, fallbackName = '') {
   };
 }
 
-function formatMovement(movement) {
-  const n = Number(movement);
-  if (!Number.isFinite(n) || n === 0) return { text: '—', class: '' };
-  if (n > 0) return { text: `▲${n}`, class: 'positive' };
-  return { text: `▼${Math.abs(n)}`, class: 'negative' };
-}
-
-function weekLabel(week) {
-  return `Race ${week.race_number} Rankings`;
+function formatMovement(movement, movementType = null) {
+  return formatMovementDisplay(movement, movementType);
 }
 
 function normalizeEntry(row, profiles) {
   const profile = profiles[String(row.driver_id)] || null;
   const driver = enrichDriver(profile, row.driver_id);
-  const movement = formatMovement(row.movement);
+  const movementType = movementTypeFromStored(row.movement);
+  const movement = formatMovement(row.movement, movementType);
+  const storedMovement = Number(row.movement);
+
   return {
     rank: row.rank,
     driverId: driver.driverId,
     driverName: driver.driverName,
     carNumber: driver.carNumber,
     photoUrl: driver.photoUrl,
-    movement: Number(row.movement) || 0,
+    movement:
+      storedMovement === MOVEMENT_NEW_SENTINEL
+        ? null
+        : Number.isFinite(storedMovement)
+          ? storedMovement
+          : 0,
+    movementType,
     movementText: movement.text,
     movementClass: movement.class,
     subtitle: row.subtitle || '',
@@ -99,6 +107,20 @@ function normalizeHonorable(row, profiles) {
   };
 }
 
+function weekLabel(week) {
+  return `Race ${week.race_number} Rankings`;
+}
+
+function parseEntryMovement(entry, rank) {
+  const parsed = parseMovementInput(entry.movement ?? entry.movementInput);
+  if (!parsed) {
+    return {
+      error: `Rank ${rank} movement must be a number, 0, NEW, or NR.`,
+    };
+  }
+  return { parsed };
+}
+
 function normalizeWeek(week, entries, honorable, profiles) {
   const byId = profileMap(profiles);
   return {
@@ -107,6 +129,7 @@ function normalizeWeek(week, entries, honorable, profiles) {
     publishedDate: week.published_date || null,
     published: week.published === true,
     label: weekLabel(week),
+    prophetTake: week.prophet_take || '',
     entries: (entries || [])
       .filter((e) => e.week_id === week.id)
       .sort((a, b) => a.rank - b.rank)
@@ -176,6 +199,8 @@ function validateEntries(entries) {
     if (!String(entry.writeup || '').trim()) {
       return `Rank ${rank} writeup is required.`;
     }
+    const movementError = parseEntryMovement(entry, rank);
+    if (movementError?.error) return movementError.error;
     if (ranks.has(rank)) return `Duplicate rank: ${rank}`;
     if (drivers.has(driverId)) return `Duplicate driver at rank ${rank}.`;
     ranks.add(rank);
@@ -226,6 +251,7 @@ async function saveWeekBundle(body, publish = false) {
   const weekRow = {
     race_number: raceNumber,
     published_date: body.publishedDate || body.published_date || null,
+    prophet_take: String(body.prophetTake ?? body.prophet_take ?? ''),
     updated_at: new Date().toISOString(),
   };
 
@@ -256,14 +282,17 @@ async function saveWeekBundle(body, publish = false) {
   await sb.from('power_rankings_entries').delete().eq('week_id', weekId);
   await sb.from('power_rankings_honorable_mentions').delete().eq('week_id', weekId);
 
-  const entryRows = body.entries.map((entry) => ({
-    week_id: weekId,
-    rank: Number(entry.rank),
-    driver_id: String(entry.driverId || entry.driver_id),
-    movement: Number(entry.movement) || 0,
-    subtitle: String(entry.subtitle || ''),
-    writeup: String(entry.writeup || ''),
-  }));
+  const entryRows = body.entries.map((entry) => {
+    const { parsed } = parseEntryMovement(entry, Number(entry.rank));
+    return {
+      week_id: weekId,
+      rank: Number(entry.rank),
+      driver_id: String(entry.driverId || entry.driver_id),
+      movement: parsed.movement,
+      subtitle: String(entry.subtitle || ''),
+      writeup: String(entry.writeup || ''),
+    };
+  });
 
   const { error: entriesError } = await sb.from('power_rankings_entries').insert(entryRows);
   if (entriesError) return { error: `Supabase error: ${entriesError.message}`, status: 500 };

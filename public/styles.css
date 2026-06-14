@@ -782,6 +782,70 @@ footer{
   gap:20px;
   align-items:start;
 }
+.power-rankings-page-title{margin-bottom:4px}
+.power-rankings-page-title h2{margin:0}
+.power-rankings-byline{
+  margin:4px 0 0;
+  color:var(--red);
+  font-size:15px;
+  font-style:italic;
+  font-weight:700;
+  letter-spacing:.3px;
+}
+.power-rankings-prophet-take{
+  margin:0 0 22px;
+  padding:16px 18px;
+  border:1px solid var(--line);
+  border-left:3px solid var(--red);
+  background:rgba(255,255,255,.02);
+}
+.power-rankings-prophet-heading{
+  margin:0 0 12px;
+  font-size:16px;
+  color:#ff3030;
+  letter-spacing:.4px;
+}
+.power-rankings-prophet-body p{
+  margin:0 0 12px;
+  color:#ddd;
+  font-size:14px;
+  line-height:1.55;
+}
+.power-rankings-prophet-body p:last-child{margin-bottom:0}
+.power-rankings-prophet-about{
+  display:grid;
+  grid-template-columns:52px minmax(0,1fr);
+  gap:14px;
+  align-items:start;
+  margin-top:32px;
+  padding-top:22px;
+  border-top:1px solid var(--line);
+}
+.power-rankings-prophet-badge{
+  width:44px;
+  height:44px;
+  border:2px solid var(--red);
+  border-radius:50%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:var(--red);
+  font:900 14px Impact, sans-serif;
+  letter-spacing:.5px;
+}
+.power-rankings-prophet-about h3{
+  margin:0 0 8px;
+  font-size:14px;
+  color:#ff3030;
+  letter-spacing:.3px;
+}
+.power-rankings-prophet-about p{
+  margin:0;
+  color:#aaa;
+  font-size:13px;
+  line-height:1.5;
+  max-width:720px;
+}
 .power-rankings-header{margin-bottom:18px}
 .power-rankings-header h3{margin:0;font-size:24px;font-style:italic;color:#fff}
 .power-rankings-date{margin:6px 0 0;color:#888;font-size:12px;font-weight:700}
@@ -849,6 +913,8 @@ footer{
 }
 .power-ranking-movement.positive{color:var(--green)}
 .power-ranking-movement.negative{color:#ff2323}
+.power-ranking-movement.new{color:#60a5fa;font-weight:700;letter-spacing:.04em}
+.home-rank-move.new{color:#60a5fa;font-weight:700;letter-spacing:.04em}
 .power-ranking-subtitle{
   margin:8px 0 0;
   color:var(--gold);

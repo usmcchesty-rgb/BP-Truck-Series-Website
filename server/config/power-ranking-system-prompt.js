@@ -495,11 +495,22 @@ Use only verified facts:
 
 Use previous published rankings when available.
 
+If a driver was in the previous Top 10:
+* movement = previousRank - currentRank
+* positive = moved up, negative = moved down, zero = unchanged
+
+If a driver was NOT in the previous Top 10:
+* movementType = "new"
+* display NEW — do not assign a numeric gain like +2
+
+Drivers who dropped out of the Top 10 are not shown on the current list.
+
 Movement indicators:
 
-* ▲ Up
-* ▼ Down
+* ▲ Up (returned drivers only)
+* ▼ Down (returned drivers only)
 * — No Change
+* NEW New to Top 10
 
 Do not force movement.
 
@@ -553,7 +564,8 @@ Output requirements:
 
 * Exactly 10 entries with ranks 1 through 10.
 * Each driverId MUST come from the provided drivers list. No duplicates.
-* movement is an integer: positive = moved UP vs previous power rankings, negative = moved DOWN, 0 = unchanged.
+* movement is an integer for returned drivers: positive = moved UP, negative = moved DOWN, 0 = unchanged.
+* For drivers not in the previous Top 10, use movementType "new" (display NEW) — not a numeric gain.
 * Compare movement against previousPowerRankings when available.
 * Include honorableMentions in every response (use an empty array only when none apply).
 * Each honorableMention writeup should explain why the driver is dangerous right now.`;

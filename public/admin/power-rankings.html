@@ -233,6 +233,12 @@
       </div>
       <p class="sub">Select a race number, generate a draft, review every field, then save or publish manually.</p>
 
+      <div class="manual-notes-box">
+        <label class="field-label" for="prophetTake">The Pedal Prophet's Take</label>
+        <p class="sub">Weekly columnist article (150–300 words). Generated with the draft; edit before saving or publishing.</p>
+        <textarea id="prophetTake" class="textarea" placeholder="The Pedal Prophet's weekly take will appear here after generation..."></textarea>
+      </div>
+
       <div class="ranking-row ranking-row-head">
         <div>Rank</div>
         <div>Driver</div>
@@ -497,7 +503,9 @@
           nested?.selectedVideoRaceNumber ?? data?.selectedVideoRaceNumber ?? null,
         transcriptDebugReason:
           nested?.transcriptDebugReason ?? data?.transcriptDebugReason ?? null,
-        movementSource: nested?.movementSource ?? null,
+        movementSource: nested?.movementSource ?? data?.movementSource ?? null,
+        movementDiagnostics:
+          nested?.movementDiagnostics ?? data?.movementDiagnostics ?? {},
         confidenceScore: nested?.confidenceScore ?? null,
         confidenceReason: nested?.confidenceReason ?? null,
         dataQualityScore: nested?.dataQualityScore ?? null,
@@ -562,6 +570,28 @@
           nested?.averageFinishReferencedRanks ?? data?.averageFinishReferencedRanks ?? [],
         recentFinishReferencedRanks:
           nested?.recentFinishReferencedRanks ?? data?.recentFinishReferencedRanks ?? [],
+        prophetTakeGenerated:
+          nested?.prophetTakeGenerated ?? Boolean(data?.prophetTake),
+        prophetTakeValidationError:
+          nested?.prophetTakeValidationError ?? data?.prophetTakeValidationError ?? null,
+        prophetTakeValidationErrorType:
+          nested?.prophetTakeValidationErrorType ?? data?.prophetTakeValidationErrorType ?? null,
+        prophetTakeWarnings:
+          nested?.prophetTakeWarnings ?? data?.prophetTakeWarnings ?? [],
+        prophetTakeRepairAttempted:
+          nested?.prophetTakeRepairAttempted ?? data?.prophetTakeRepairAttempted === true,
+        prophetTakeRepairAttempts:
+          nested?.prophetTakeRepairAttempts ?? data?.prophetTakeRepairAttempts ?? 0,
+        prophetTakeRepairReasons:
+          nested?.prophetTakeRepairReasons ?? data?.prophetTakeRepairReasons ?? [],
+        prophetTakeVerifiedFactsUsed:
+          nested?.prophetTakeVerifiedFactsUsed ?? data?.prophetTakeVerifiedFactsUsed ?? [],
+        prophetTakeVerifiedFactsUsedCount:
+          nested?.prophetTakeVerifiedFactsUsedCount ?? data?.prophetTakeVerifiedFactsUsedCount ?? 0,
+        prophetTakeWordCount:
+          nested?.prophetTakeWordCount ?? data?.prophetTakeWordCount ?? null,
+        prophetTakeParagraphCount:
+          nested?.prophetTakeParagraphCount ?? data?.prophetTakeParagraphCount ?? null,
       };
     }
 
@@ -720,6 +750,16 @@
         `Selected video race number: ${sources.selectedVideoRaceNumber ?? 'none'}`,
         `Transcript debug reason: ${sources.transcriptDebugReason ?? 'none'}`,
         `Movement source: ${sources.movementSource ?? 'unknown'}`,
+        ...(Object.keys(sources.movementDiagnostics || {}).length
+          ? [
+              'Movement diagnostics:',
+              ...Object.entries(sources.movementDiagnostics).map(
+                ([rank, row]) =>
+                  `  rank ${rank}: source=${row.movementSource ?? 'unknown'}, previous=${row.previousRank ?? 'none'}, current=${row.currentRank ?? rank}, type=${row.movementType ?? 'unknown'}`
+              ),
+              '',
+            ]
+          : []),
         '',
         'Recent form:',
         `  recentWinners: ${formatDriverList(sources.recentWinners)}`,
@@ -789,6 +829,26 @@
         `  recentFormReferencedRanks: ${(sources.recentFormReferencedRanks || []).length ? sources.recentFormReferencedRanks.join(', ') : 'none'}`,
         `  averageFinishReferencedRanks: ${(sources.averageFinishReferencedRanks || []).length ? sources.averageFinishReferencedRanks.join(', ') : 'none'}`,
         `  recentFinishReferencedRanks: ${(sources.recentFinishReferencedRanks || []).length ? sources.recentFinishReferencedRanks.join(', ') : 'none'}`,
+        '',
+        'The Pedal Prophet\'s Take:',
+        `  generated: ${sources.prophetTakeGenerated === true}`,
+        `  wordCount: ${sources.prophetTakeWordCount ?? 'unknown'}`,
+        `  paragraphCount: ${sources.prophetTakeParagraphCount ?? 'unknown'}`,
+        `  verifiedFactsUsedCount: ${sources.prophetTakeVerifiedFactsUsedCount ?? 0}`,
+        ...(Array.isArray(sources.prophetTakeVerifiedFactsUsed) && sources.prophetTakeVerifiedFactsUsed.length
+          ? sources.prophetTakeVerifiedFactsUsed.map(
+              (fact) => `  verified: [${fact.type}] ${fact.label}${fact.driverId ? ` (${fact.driverId})` : ''}`
+            )
+          : ['  verified facts: none']),
+        `  repairAttempted: ${sources.prophetTakeRepairAttempted === true}`,
+        `  repairAttempts: ${sources.prophetTakeRepairAttempts ?? 0}`,
+        `  repairReasons: ${(sources.prophetTakeRepairReasons || []).length ? sources.prophetTakeRepairReasons.join(', ') : 'none'}`,
+        ...(sources.prophetTakeValidationError
+          ? [`  validationError: [${sources.prophetTakeValidationErrorType || 'unknown'}] ${sources.prophetTakeValidationError}`]
+          : []),
+        ...(Array.isArray(sources.prophetTakeWarnings) && sources.prophetTakeWarnings.length
+          ? sources.prophetTakeWarnings.map((warning) => `  warning: ${warning}`)
+          : []),
         '',
         ...(Array.isArray(sources.unsupportedFactWarnings) && sources.unsupportedFactWarnings.length
           ? [
@@ -921,6 +981,15 @@
       return options.join('');
     }
 
+    function movementFieldValue(entry = {}) {
+      if (entry.movementType === 'new' || Number(entry.movement) === 100) {
+        return 'NEW';
+      }
+      const movement = Number(entry.movement);
+      if (!Number.isFinite(movement)) return '0';
+      return String(movement);
+    }
+
     function writeupWarningsHtml(rank, warnings = []) {
       if (!Array.isArray(warnings) || !warnings.length) {
         return `<ul class="writeup-warnings" data-writeup-warnings="${rank}" hidden></ul>`;
@@ -946,7 +1015,7 @@
             <select class="select driver-select">${driverSelectHtml(entry.driverId || entry.driver_id || '')}</select>
           </div>
           <div>
-            <input class="input movement-input" type="number" value="${entry.movement ?? 0}" placeholder="0">
+            <input class="input movement-input" type="text" value="${escapeHtml(movementFieldValue(entry))}" placeholder="0, NEW, NR" title="Number = ▲/▼ spots. NEW or NR = newly ranked. 0 = unchanged.">
           </div>
           <div>
             <input class="input subtitle-input" type="text" value="${escapeHtml(entry.subtitle || '')}" placeholder="Custom headline">
@@ -1069,7 +1138,7 @@
       const entries = [...document.querySelectorAll('#rankingRows .ranking-row')].map((row) => ({
         rank: Number(row.dataset.rank),
         driverId: row.querySelector('.driver-select')?.value || '',
-        movement: Number(row.querySelector('.movement-input')?.value) || 0,
+        movement: row.querySelector('.movement-input')?.value?.trim() ?? '0',
         subtitle: row.querySelector('.subtitle-input')?.value || '',
         writeup: row.querySelector('.writeup-input')?.value || '',
       }));
@@ -1085,6 +1154,7 @@
         id: currentWeekId || undefined,
         raceNumber: readRaceNumberInput(),
         publishedDate: $('#publishedDate').value || null,
+        prophetTake: $('#prophetTake')?.value || '',
         entries,
         honorableMentions,
       };
@@ -1120,6 +1190,8 @@
       $('#publishedDate').value = new Date().toISOString().slice(0, 10);
       const manualNotes = $('#manualRaceNotes');
       if (manualNotes) manualNotes.value = '';
+      const prophetTake = $('#prophetTake');
+      if (prophetTake) prophetTake.value = '';
       hideTranscriptDiagnostics();
       hideGenerationSources();
       currentWriteupWarnings = {};
@@ -1133,6 +1205,8 @@
       $('#editorTitle').textContent = `Edit ${week.label || `Race ${week.raceNumber}`}`;
       setRaceNumberInput(week.raceNumber);
       $('#publishedDate').value = week.publishedDate || '';
+      const prophetTake = $('#prophetTake');
+      if (prophetTake) prophetTake.value = week.prophetTake || '';
       if (options.writeupWarnings) {
         currentWriteupWarnings = options.writeupWarnings;
       } else if (options.clearWriteupWarnings !== false) {
@@ -1257,6 +1331,7 @@
             $('#publishedDate').value ||
             new Date().toISOString().slice(0, 10),
           label: `Race ${data.raceNumber || raceNumber} Rankings`,
+          prophetTake: data.prophetTake || '',
           entries: data.entries || [],
           honorableMentions: data.honorableMentions || [],
         }, {
@@ -1294,6 +1369,11 @@
         const writeupWarningNote = writeupWarningRanks.length
           ? ` Writeup warnings at rank(s): ${writeupWarningRanks.join(', ')} — review or regenerate.`
           : '';
+        const prophetTakeNote = data.prophetTakeValidationError
+          ? ` Prophet's Take validation: ${data.prophetTakeValidationError}`
+          : data.prophetTake
+          ? ` Prophet's Take loaded (${data.prophetTakeWordCount ?? '?'} words).`
+          : '';
         const repairNote =
           Number(data.repairedWriteupsCount) > 0
             ? ` ${formatRepairRanksMessage(data.repairedRanks || [])}`
@@ -1302,7 +1382,7 @@
           Array.isArray(data.repairFailedRanks) && data.repairFailedRanks.length
             ? ` Repair incomplete for: ${data.repairFailedRanks.join(', ')}.`
             : '';
-        setMsg(`AI draft loaded.${confidenceNote}${transcriptNote}${previousNote}${existingNote}${repairNote}${repairFailedNote}${writeupWarningNote}${warningNote}`);
+        setMsg(`AI draft loaded.${confidenceNote}${transcriptNote}${previousNote}${existingNote}${repairNote}${repairFailedNote}${writeupWarningNote}${prophetTakeNote}${warningNote}`);
       } catch (e) {
         setMsg(e.message, true);
       } finally {
