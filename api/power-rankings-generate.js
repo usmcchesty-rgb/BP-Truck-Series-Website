@@ -789,13 +789,14 @@ function validateWriteup(writeup, driver) {
   const warnings = [];
 
   if (!text) {
-    return { error: 'Writeup is required.', warnings };
+    return { error: 'Writeup is required.', errorType: 'required', warnings };
   }
 
   const words = countWords(text);
   if (words < 30) {
     return {
       error: `Writeup is too short (${words} words; minimum 30).`,
+      errorType: 'too-short',
       warnings,
     };
   }
@@ -818,13 +819,18 @@ function validateWriteup(writeup, driver) {
   if (/^driver\s+\w+\s+(is|continues|has|remains|sits|enters)\b/i.test(firstSentence)) {
     return {
       error: 'Writeup cannot start with "Driver X is/continues/has/remains/sits/enters".',
+      errorType: 'name-first-opening',
       warnings,
     };
   }
 
   for (const token of getDriverNameTokens(driver?.driverName)) {
     if (new RegExp(`^${token}\\b`, 'i').test(firstLower.replace(/[^a-z0-9\s']/g, ' '))) {
-      return { error: 'Writeup should not start with the driver\'s name.', warnings };
+      return {
+        error: 'Writeup should not start with the driver\'s name.',
+        errorType: 'name-first-opening',
+        warnings,
+      };
     }
     if (
       new RegExp(`\\b${token}\\s+(is|continues|has|remains|sits|enters)\\b`, 'i').test(
@@ -833,6 +839,7 @@ function validateWriteup(writeup, driver) {
     ) {
       return {
         error: 'Writeup cannot open with "[Name] is/continues/has/remains/sits/enters".',
+        errorType: 'name-first-opening',
         warnings,
       };
     }
@@ -849,16 +856,17 @@ function validateWriteup(writeup, driver) {
     warnings.push('Writeup opening is generic.');
   }
 
-  return { error: null, warnings };
+  return { error: null, errorType: null, warnings };
 }
 
-function isNameFirstOpeningError(error) {
-  const text = String(error || '');
+function isNameFirstOpeningError(error, errorType) {
+  if (errorType === 'name-first-opening') return true;
+  const text = String(error || '').toLowerCase();
   if (!text) return false;
   return (
-    text.includes('should not start with the driver\'s name') ||
-    text.includes('cannot start with "Driver X') ||
-    text.includes('cannot open with "[Name]')
+    text.includes('should not start with the driver') ||
+    text.includes('cannot start with "driver x') ||
+    text.includes('cannot open with')
   );
 }
 
@@ -916,28 +924,69 @@ ${writeup}`,
 async function repairWriteupOpening(entry, driver) {
   let writeup = String(entry.writeup || '').trim();
   let repairAttempts = 0;
+  let repairAttempted = false;
   let writeupResult = validateWriteup(writeup, driver);
 
-  while (
-    writeupResult.error &&
-    isNameFirstOpeningError(writeupResult.error) &&
-    repairAttempts < 2
-  ) {
-    writeup = await callOpenAiWriteupRepair({
-      writeup,
-      driverName: driver.driverName,
-      rank: entry.rank,
-      subtitle: entry.subtitle,
-    });
-    writeup = String(writeup || '').trim();
-    repairAttempts += 1;
-    writeupResult = validateWriteup(writeup, driver);
+  if (writeupResult.error && isNameFirstOpeningError(writeupResult.error, writeupResult.errorType)) {
+    repairAttempted = true;
+    while (
+      writeupResult.error &&
+      isNameFirstOpeningError(writeupResult.error, writeupResult.errorType) &&
+      repairAttempts < 2
+    ) {
+      writeup = await callOpenAiWriteupRepair({
+        writeup,
+        driverName: driver.driverName,
+        rank: entry.rank,
+        subtitle: entry.subtitle,
+      });
+      writeup = String(writeup || '').trim();
+      repairAttempts += 1;
+      writeupResult = validateWriteup(writeup, driver);
+    }
   }
 
   return {
     writeup,
     writeupResult,
     repairAttempts,
+    repairAttempted,
+  };
+}
+
+function buildGenerationSources({
+  raceNumber,
+  standings,
+  profiles,
+  previousRankings,
+  scheduleRaces,
+  contextMeta,
+  draft,
+}) {
+  const recentResultsRaceNumbers = scheduleRaces
+    .filter((race) => race.winner && race.raceNumber <= raceNumber)
+    .slice(-3)
+    .map((race) => race.raceNumber);
+
+  return {
+    promptVersion: POWER_RANKING_PROMPT_VERSION,
+    standingsUsed: standings.length > 0,
+    driverProfilesUsed: profiles.length > 0,
+    previousRankingsUsed: Boolean(previousRankings?.entries?.length),
+    previousRankingsRaceNumber: previousRankings?.raceNumber ?? null,
+    recentResultsUsed: recentResultsRaceNumbers.length > 0,
+    recentResultsRaceNumbers,
+    manualRaceNotesUsed: contextMeta.manualRaceNotesUsed === true,
+    manualRaceNotesLength: contextMeta.manualRaceNotesLength ?? 0,
+    youtubeTranscriptUsed:
+      contextMeta.transcriptMode === 'youtube' && contextMeta.transcriptUsed === true,
+    transcriptMode: contextMeta.transcriptMode ?? 'none',
+    selectedVideoTitle: contextMeta.selectedVideoTitle ?? null,
+    selectedVideoRaceNumber: contextMeta.selectedVideoRaceNumber ?? null,
+    transcriptDebugReason: contextMeta.transcriptDebugReason ?? null,
+    movementSource: previousRankings?.entries?.length ? 'previous rankings' : 'defaulted',
+    repairedWriteupsCount: draft.repairedWriteupsCount ?? 0,
+    repairedRanks: draft.repairedRanks ?? [],
   };
 }
 
@@ -959,6 +1008,9 @@ async function normalizeDraft(aiDraft, driverLookup, previousRankings) {
   const normalizedEntries = [];
   const warnings = [];
   const repairedRanks = [];
+  const repairFailedRanks = [];
+  const repairFailureReasons = {};
+  let repairAttempted = false;
 
   for (let expectedRank = 1; expectedRank <= 10; expectedRank += 1) {
     const raw =
@@ -1000,7 +1052,29 @@ async function normalizeDraft(aiDraft, driverLookup, previousRankings) {
     const repaired = await repairWriteupOpening(entry, driver);
     entry.writeup = repaired.writeup;
 
+    if (repaired.repairAttempted) {
+      repairAttempted = true;
+    }
+
     if (repaired.writeupResult.error) {
+      if (
+        repaired.repairAttempted &&
+        isNameFirstOpeningError(repaired.writeupResult.error, repaired.writeupResult.errorType)
+      ) {
+        repairFailedRanks.push(entry.rank);
+        repairFailureReasons[String(entry.rank)] = repaired.writeupResult.error;
+        const repairError = new Error(
+          `Rank ${entry.rank} writeup repair failed after ${repaired.repairAttempts} attempts.`
+        );
+        repairError.repairDiagnostics = {
+          repairAttempted: true,
+          repairedWriteupsCount: repairedRanks.length,
+          repairedRanks: [...repairedRanks],
+          repairFailedRanks: [...repairFailedRanks],
+          repairFailureReasons: { ...repairFailureReasons },
+        };
+        throw repairError;
+      }
       throw new Error(
         `AI draft rank ${entry.rank} writeup rejected: ${repaired.writeupResult.error}`
       );
@@ -1043,8 +1117,11 @@ async function normalizeDraft(aiDraft, driverLookup, previousRankings) {
     entries: normalizedEntries,
     honorableMentions,
     warnings,
+    repairAttempted,
     repairedWriteupsCount: repairedRanks.length,
     repairedRanks,
+    repairFailedRanks,
+    repairFailureReasons,
   };
 }
 
@@ -1108,6 +1185,15 @@ export default async function handler(req, res) {
     const aiDraft = await callOpenAi(contextPayload);
     const driverLookup = buildDriverLookup(standings, profiles);
     const draft = await normalizeDraft(aiDraft, driverLookup, previousRankings);
+    const generationSources = buildGenerationSources({
+      raceNumber,
+      standings,
+      profiles,
+      previousRankings,
+      scheduleRaces,
+      contextMeta,
+      draft,
+    });
 
     console.log(
       '[power-rankings-generate] transcript diagnostics',
@@ -1134,6 +1220,7 @@ export default async function handler(req, res) {
       existingPublishedDate: existingWeek?.published_date || null,
       existingPublished: existingWeek?.published === true,
       ...draft,
+      generationSources,
       transcriptDiagnostics: contextMeta.transcriptDiagnostics,
       transcriptUsed: contextMeta.transcriptUsed,
       transcriptMode: contextMeta.transcriptMode ?? null,
@@ -1150,6 +1237,10 @@ export default async function handler(req, res) {
     });
   } catch (error) {
     console.error('[power-rankings-generate]', error);
-    return res.status(500).json({ error: error.message || 'AI draft generation failed.' });
+    const payload = { error: error.message || 'AI draft generation failed.' };
+    if (error.repairDiagnostics) {
+      Object.assign(payload, error.repairDiagnostics);
+    }
+    return res.status(500).json(payload);
   }
 }

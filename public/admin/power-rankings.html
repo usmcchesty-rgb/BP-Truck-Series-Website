@@ -40,6 +40,24 @@
       color: #ccc;
       white-space: pre-wrap;
     }
+    .generation-sources {
+      margin-top: 12px;
+      padding: 10px 12px;
+      border: 1px solid #334;
+      border-radius: 6px;
+      background: #121820;
+    }
+    .generation-sources h3 {
+      margin: 0 0 8px;
+      font-size: 13px;
+      color: #6ec6ff;
+    }
+    .generation-sources pre {
+      margin: 0;
+      font-size: 12px;
+      color: #ccc;
+      white-space: pre-wrap;
+    }
     .pw-row { max-width: 320px; margin-bottom: 14px; }
     .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; max-width: 520px; }
     .ranking-row {
@@ -203,6 +221,10 @@
         <button class="btn btn-danger" type="button" onclick="deleteWeek()">Delete Week</button>
       </div>
       <pre id="adminMsg"></pre>
+      <div id="generationSourcesPanel" class="generation-sources" hidden>
+        <h3>Generation Sources</h3>
+        <pre id="generationSources"></pre>
+      </div>
       <div id="transcriptDiagnosticsPanel" class="transcript-diagnostics" hidden>
         <h3>Transcript Diagnostics</h3>
         <pre id="transcriptDiagnostics"></pre>
@@ -410,6 +432,87 @@
       if (panel) panel.hidden = true;
     }
 
+    function formatRaceList(raceNumbers) {
+      if (!Array.isArray(raceNumbers) || !raceNumbers.length) return 'none';
+      return raceNumbers.map((race) => `Race ${race}`).join(', ');
+    }
+
+    function formatPreviousRankingsRace(raceNumber) {
+      return raceNumber ? `Race ${raceNumber}` : 'none';
+    }
+
+    function buildGenerationSourcesView(data) {
+      const nested = data?.generationSources;
+      return {
+        promptVersion: nested?.promptVersion ?? data?.promptVersion ?? null,
+        standingsUsed: nested?.standingsUsed ?? false,
+        driverProfilesUsed: nested?.driverProfilesUsed ?? false,
+        previousRankingsUsed: nested?.previousRankingsUsed ?? false,
+        previousRankingsRaceNumber:
+          nested?.previousRankingsRaceNumber ?? data?.previousRaceNumber ?? null,
+        recentResultsUsed: nested?.recentResultsUsed ?? false,
+        recentResultsRaceNumbers: nested?.recentResultsRaceNumbers ?? [],
+        manualRaceNotesUsed:
+          nested?.manualRaceNotesUsed ?? data?.manualRaceNotesUsed === true,
+        manualRaceNotesLength:
+          nested?.manualRaceNotesLength ?? data?.manualRaceNotesLength ?? 0,
+        youtubeTranscriptUsed: nested?.youtubeTranscriptUsed ?? false,
+        transcriptMode: nested?.transcriptMode ?? data?.transcriptMode ?? 'none',
+        selectedVideoTitle:
+          nested?.selectedVideoTitle ?? data?.selectedVideoTitle ?? null,
+        selectedVideoRaceNumber:
+          nested?.selectedVideoRaceNumber ?? data?.selectedVideoRaceNumber ?? null,
+        transcriptDebugReason:
+          nested?.transcriptDebugReason ?? data?.transcriptDebugReason ?? null,
+        movementSource: nested?.movementSource ?? null,
+        repairAttempted: data?.repairAttempted === true,
+        repairedWriteupsCount:
+          nested?.repairedWriteupsCount ?? data?.repairedWriteupsCount ?? 0,
+        repairedRanks: nested?.repairedRanks ?? data?.repairedRanks ?? [],
+        repairFailedRanks: data?.repairFailedRanks ?? [],
+        repairFailureReasons: data?.repairFailureReasons ?? {},
+      };
+    }
+
+    function renderGenerationSources(data) {
+      const panel = $('#generationSourcesPanel');
+      const pre = $('#generationSources');
+      if (!panel || !pre) return;
+
+      const sources = buildGenerationSourcesView(data);
+      console.log('[power-rankings-admin] generation sources', sources);
+
+      const repairedRanksText = sources.repairedRanks.length
+        ? sources.repairedRanks.join(', ')
+        : 'none';
+
+      pre.textContent = [
+        `Prompt version: ${sources.promptVersion ?? 'unknown'}`,
+        `Standings used: ${sources.standingsUsed}`,
+        `Driver profiles used: ${sources.driverProfilesUsed}`,
+        `Previous rankings used: ${sources.previousRankingsUsed}`,
+        `Previous rankings race: ${formatPreviousRankingsRace(sources.previousRankingsRaceNumber)}`,
+        `Recent results used: ${sources.recentResultsUsed}`,
+        `Recent results races: ${formatRaceList(sources.recentResultsRaceNumbers)}`,
+        `Manual race notes used: ${sources.manualRaceNotesUsed}`,
+        `Manual race notes length: ${sources.manualRaceNotesLength}`,
+        `YouTube transcript used: ${sources.youtubeTranscriptUsed}`,
+        `Transcript mode: ${sources.transcriptMode}`,
+        `Selected video: ${sources.selectedVideoTitle || 'none'}`,
+        `Selected video race number: ${sources.selectedVideoRaceNumber ?? 'none'}`,
+        `Transcript debug reason: ${sources.transcriptDebugReason ?? 'none'}`,
+        `Movement source: ${sources.movementSource ?? 'unknown'}`,
+        `Repaired writeups: ${sources.repairedWriteupsCount} (${repairedRanksText})`,
+      ].join('\n');
+
+      panel.hidden = false;
+    }
+
+    function hideGenerationSources() {
+      const panel = $('#generationSourcesPanel');
+      if (panel) panel.hidden = true;
+    }
+
     async function verifyPassword(pw) {
       const res = await fetch('/api/settings', {
         method: 'POST',
@@ -608,6 +711,7 @@
       const manualNotes = $('#manualRaceNotes');
       if (manualNotes) manualNotes.value = '';
       hideTranscriptDiagnostics();
+      hideGenerationSources();
       renderRankingRows();
       renderMentionRows([]);
       setMsg('');
@@ -622,6 +726,7 @@
       renderMentionRows(week.honorableMentions || []);
       if (options.clearStatus !== false) {
         hideTranscriptDiagnostics();
+        hideGenerationSources();
         setMsg('');
       }
     }
@@ -708,7 +813,18 @@
         });
 
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'AI draft generation failed.');
+        if (!res.ok) {
+          if (data.repairAttempted) {
+            console.log('[power-rankings-admin] repair diagnostics', {
+              repairAttempted: data.repairAttempted,
+              repairedWriteupsCount: data.repairedWriteupsCount,
+              repairedRanks: data.repairedRanks,
+              repairFailedRanks: data.repairFailedRanks,
+              repairFailureReasons: data.repairFailureReasons,
+            });
+          }
+          throw new Error(data.error || 'AI draft generation failed.');
+        }
 
         const existingWeek = savedWeeks.find(
           (week) => Number(week.raceNumber) === Number(data.raceNumber || raceNumber)
@@ -728,6 +844,7 @@
           honorableMentions: data.honorableMentions || [],
         }, { clearStatus: false });
 
+        renderGenerationSources(data);
         renderTranscriptDiagnostics(data);
 
         const diagnostics = buildTranscriptDiagnosticsView(data);
