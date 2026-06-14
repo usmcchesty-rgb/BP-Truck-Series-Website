@@ -199,6 +199,8 @@ async function upsertDriverPhotoUrl(sb, driverId, publicUrl, body) {
     car_number: carNumber,
     truck_number: carNumber,
     photo_url: stripPhotoUrlQuery(publicUrl),
+    is_streamer: existing?.is_streamer === true,
+    stream_url: String(existing?.stream_url || "").trim(),
     active: existing?.active !== false,
     updated_at: new Date().toISOString(),
   };

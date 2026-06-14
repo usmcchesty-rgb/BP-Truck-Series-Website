@@ -1291,6 +1291,16 @@ footer{
   box-shadow:0 0 8px rgba(229,9,20,.25);
   line-height:1.2;
 }
+.streamer-badge-link{
+  position:absolute;
+  top:6px;
+  right:6px;
+  z-index:2;
+  text-decoration:none;
+}
+.streamer-badge-link:hover .streamer-badge{
+  filter:brightness(1.08);
+}
 .driver-card h2,.streamer-card h2{margin:0;font-size:15px;font-style:italic}
 .driver-card-body p,.streamer-card-body p{margin:6px 0 0}
 .streamer-grid{

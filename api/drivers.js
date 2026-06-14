@@ -12,6 +12,16 @@ function parseBody(req) {
   return req.body;
 }
 
+function normalizeBoolean(value, fallback = false) {
+  if (value === true || value === 'true' || value === 1 || value === '1') return true;
+  if (value === false || value === 'false' || value === 0 || value === '0') return false;
+  return fallback;
+}
+
+function normalizeStreamUrl(value) {
+  return String(value ?? '').trim();
+}
+
 function normalizeDriverProfile(row) {
   if (!row) return null;
   const photo_url = stripPhotoUrlQuery(row.photo_url || '');
@@ -24,6 +34,8 @@ function normalizeDriverProfile(row) {
     photoUrl: photo_url
       ? withPhotoCacheBust(photo_url, photoCacheVersion(row.updated_at))
       : '',
+    is_streamer: normalizeBoolean(row.is_streamer, false),
+    stream_url: normalizeStreamUrl(row.stream_url),
     active: row.active !== false
   };
 }
@@ -41,6 +53,8 @@ function buildUpsertRow(b) {
     car_number: carNumber,
     truck_number: carNumber,
     photo_url: stripPhotoUrlQuery(b.photo_url || ''),
+    is_streamer: normalizeBoolean(b.is_streamer, false),
+    stream_url: normalizeStreamUrl(b.stream_url),
     active: b.active !== false,
     updated_at: new Date().toISOString()
   };

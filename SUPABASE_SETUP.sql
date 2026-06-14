@@ -38,8 +38,14 @@ create table if not exists driver_profiles (
   car_number text,
   photo_url text,
   active boolean default true,
+  is_streamer boolean default false,
+  stream_url text,
   updated_at timestamptz default now()
 );
+
+-- Existing deployments: run once (safe to re-run)
+alter table driver_profiles add column if not exists is_streamer boolean default false;
+alter table driver_profiles add column if not exists stream_url text;
 
 -- Power Rankings (weekly Top 10 + optional honorable mentions)
 create table if not exists power_rankings_weeks (

@@ -16,15 +16,20 @@ function escapeHtml(s) {
     .replace(/"/g, "&quot;");
 }
 
-function streamerBadgeHtml() {
-  return `<span class="streamer-badge">STREAMER</span>`;
+function escapeAttr(s) {
+  return escapeHtml(s).replace(/'/g, "&#39;");
 }
 
 function isMarkedStreamer(driver) {
-  const isStreamer = window.BP_STREAMERS_DATA?.isStreamer;
-  if (typeof isStreamer !== "function") return false;
-  const name = driver.display_name || driver.iracing_name || "";
-  return isStreamer(name);
+  return driver?.is_streamer === true;
+}
+
+function streamerBadgeHtml(streamUrl) {
+  const badge = `<span class="streamer-badge">STREAMER</span>`;
+  const url = String(streamUrl || "").trim();
+  if (!url) return badge;
+
+  return `<a class="streamer-badge-link" href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer" aria-label="Watch stream">${badge}</a>`;
 }
 
 function renderDrivers(drivers) {
@@ -44,7 +49,7 @@ function renderDrivers(drivers) {
         ? `<span class="num">${escapeHtml(d.car_number)}</span>`
         : "";
       const showStreamerBadge = isMarkedStreamer(d);
-      const badge = showStreamerBadge ? streamerBadgeHtml() : "";
+      const badge = showStreamerBadge ? streamerBadgeHtml(d.stream_url) : "";
 
       return `<article class="driver-card${showStreamerBadge ? " is-streamer" : ""}">
         <div class="driver-card-media">

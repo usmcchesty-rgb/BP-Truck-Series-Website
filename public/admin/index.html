@@ -60,6 +60,7 @@
     .table-wrap { overflow-x: auto; }
     .drivers-table input[type="text"] { width: 100%; min-width: 80px; padding: 4px 6px; background: #111; color: #fff; border: 1px solid #444; font-size: 11px; }
     .drivers-table input[type="checkbox"] { width: 16px; height: 16px; }
+    .drivers-table .center { text-align: center; }
     .drivers-table .readonly { color: #aaa; font-size: 11px; }
     .drivers-table .btn-save { padding: 4px 10px; font-size: 9px; }
     .pw-row { max-width: 320px; margin-bottom: 14px; }
@@ -142,6 +143,8 @@
                 <th>Display Name</th>
                 <th>Car #</th>
                 <th>Photo URL</th>
+                <th>Streamer</th>
+                <th>Stream Link</th>
                 <th>Active</th>
                 <th></th>
               </tr>
@@ -305,6 +308,8 @@
           display_name: profile?.display_name || row.driver,
           car_number: profile?.car_number || '',
           photo_url: profile?.photo_url || row.photoUrl || '',
+          is_streamer: profile?.is_streamer === true,
+          stream_url: profile?.stream_url || '',
           active: profile?.active !== false
         };
       });
@@ -322,6 +327,8 @@
         display_name: rowInput(rowEl, 'display_name')?.value ?? '',
         car_number: rowInput(rowEl, 'car_number')?.value ?? '',
         photo_url: rowInput(rowEl, 'photo_url')?.value ?? '',
+        is_streamer: rowInput(rowEl, 'is_streamer')?.checked ?? false,
+        stream_url: rowInput(rowEl, 'stream_url')?.value ?? '',
         active: rowInput(rowEl, 'active')?.checked ?? true
       };
     }
@@ -388,7 +395,9 @@
           <td><input type="text" name="display_name" value="${escapeAttr(d.display_name || '')}"></td>
           <td><input type="text" name="car_number" value="${escapeAttr(d.car_number || '')}"></td>
           <td><input type="text" name="photo_url" value="${escapeAttr(d.photo_url || '')}"></td>
-          <td><input type="checkbox" name="active"${d.active !== false ? ' checked' : ''}></td>
+          <td class="center"><input type="checkbox" name="is_streamer"${d.is_streamer === true ? ' checked' : ''}></td>
+          <td><input type="url" name="stream_url" value="${escapeAttr(d.stream_url || '')}" placeholder="https://twitch.tv/username or YouTube/Kick/etc."></td>
+          <td class="center"><input type="checkbox" name="active"${d.active !== false ? ' checked' : ''}></td>
           <td><button type="button" class="btn btn-save">Save</button></td>
         </tr>`;
       }).join('');
