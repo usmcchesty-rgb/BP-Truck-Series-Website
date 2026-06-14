@@ -852,7 +852,96 @@ function validateWriteup(writeup, driver) {
   return { error: null, warnings };
 }
 
-function normalizeDraft(aiDraft, driverLookup, previousRankings) {
+function isNameFirstOpeningError(error) {
+  const text = String(error || '');
+  if (!text) return false;
+  return (
+    text.includes('should not start with the driver\'s name') ||
+    text.includes('cannot start with "Driver X') ||
+    text.includes('cannot open with "[Name]')
+  );
+}
+
+async function callOpenAiWriteupRepair({ writeup, driverName, rank, subtitle }) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error('OPENAI_API_KEY is not configured in Vercel environment variables.');
+  }
+
+  const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      temperature: 0.4,
+      max_tokens: 280,
+      messages: [
+        {
+          role: 'user',
+          content: `Rewrite this Power Rankings writeup. Do not start with the driver's name. Keep 50-100 words. Keep the same meaning. Return only the rewritten paragraph.
+
+Driver: ${driverName}
+Rank: ${rank}
+Subtitle: ${subtitle}
+
+Original writeup:
+${writeup}`,
+        },
+      ],
+    }),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data?.error?.message || `OpenAI writeup repair failed (${response.status})`);
+  }
+
+  const content = String(data?.choices?.[0]?.message?.content || '')
+    .trim()
+    .replace(/^["']|["']$/g, '');
+
+  if (!content) {
+    throw new Error('OpenAI writeup repair returned an empty response.');
+  }
+
+  return content;
+}
+
+async function repairWriteupOpening(entry, driver) {
+  let writeup = String(entry.writeup || '').trim();
+  let repairAttempts = 0;
+  let writeupResult = validateWriteup(writeup, driver);
+
+  while (
+    writeupResult.error &&
+    isNameFirstOpeningError(writeupResult.error) &&
+    repairAttempts < 2
+  ) {
+    writeup = await callOpenAiWriteupRepair({
+      writeup,
+      driverName: driver.driverName,
+      rank: entry.rank,
+      subtitle: entry.subtitle,
+    });
+    writeup = String(writeup || '').trim();
+    repairAttempts += 1;
+    writeupResult = validateWriteup(writeup, driver);
+  }
+
+  return {
+    writeup,
+    writeupResult,
+    repairAttempts,
+  };
+}
+
+async function normalizeDraft(aiDraft, driverLookup, previousRankings) {
   const previousRankByDriver = Object.fromEntries(
     (previousRankings?.entries || []).map((entry) => [
       String(entry.driverId),
@@ -869,6 +958,7 @@ function normalizeDraft(aiDraft, driverLookup, previousRankings) {
   const usedSubtitles = new Set();
   const normalizedEntries = [];
   const warnings = [];
+  const repairedRanks = [];
 
   for (let expectedRank = 1; expectedRank <= 10; expectedRank += 1) {
     const raw =
@@ -907,11 +997,20 @@ function normalizeDraft(aiDraft, driverLookup, previousRankings) {
   for (const entry of normalizedEntries) {
     const driver = driverLookup.get(entry.driverId);
 
-    const writeupResult = validateWriteup(entry.writeup, driver);
-    if (writeupResult.error) {
-      throw new Error(`AI draft rank ${entry.rank} writeup rejected: ${writeupResult.error}`);
+    const repaired = await repairWriteupOpening(entry, driver);
+    entry.writeup = repaired.writeup;
+
+    if (repaired.writeupResult.error) {
+      throw new Error(
+        `AI draft rank ${entry.rank} writeup rejected: ${repaired.writeupResult.error}`
+      );
     }
-    for (const warning of writeupResult.warnings) {
+
+    if (repaired.repairAttempts > 0) {
+      repairedRanks.push(entry.rank);
+    }
+
+    for (const warning of repaired.writeupResult.warnings) {
       warnings.push(`Rank ${entry.rank}: ${warning}`);
     }
 
@@ -944,6 +1043,8 @@ function normalizeDraft(aiDraft, driverLookup, previousRankings) {
     entries: normalizedEntries,
     honorableMentions,
     warnings,
+    repairedWriteupsCount: repairedRanks.length,
+    repairedRanks,
   };
 }
 
@@ -1006,7 +1107,7 @@ export default async function handler(req, res) {
 
     const aiDraft = await callOpenAi(contextPayload);
     const driverLookup = buildDriverLookup(standings, profiles);
-    const draft = normalizeDraft(aiDraft, driverLookup, previousRankings);
+    const draft = await normalizeDraft(aiDraft, driverLookup, previousRankings);
 
     console.log(
       '[power-rankings-generate] transcript diagnostics',

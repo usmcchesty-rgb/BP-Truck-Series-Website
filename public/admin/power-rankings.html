@@ -744,7 +744,11 @@
           Array.isArray(data.warnings) && data.warnings.length
             ? ` Warnings: ${data.warnings.join(' ')}`
             : '';
-        setMsg(`AI draft loaded.${transcriptNote}${previousNote}${existingNote}${warningNote}`);
+        const repairNote =
+          Number(data.repairedWriteupsCount) > 0
+            ? ` Repaired ${data.repairedWriteupsCount} writeup opening(s) at rank(s) ${(data.repairedRanks || []).join(', ')}.`
+            : '';
+        setMsg(`AI draft loaded.${transcriptNote}${previousNote}${existingNote}${repairNote}${warningNote}`);
       } catch (e) {
         setMsg(e.message, true);
       } finally {
