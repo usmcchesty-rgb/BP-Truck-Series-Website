@@ -1458,7 +1458,7 @@ export async function loadPowerRankingsGenerationContext(raceNumber, manualRaceN
   ]);
 
   const scheduleRaces = parseScheduleRaces(scheduleHtml);
-  const raceNumberDebug = buildRaceNumberDebug(scheduleRaces, raceNumber);
+  const raceNumberDebug = buildRaceNumberDebug(scheduleRaces, raceNumber, { settings });
   const standingsResult = await fetchStandingsRows(settings, raceNumberDebug.standingsScheduleId);
   const standings = standingsResult.rows;
 
@@ -1770,6 +1770,9 @@ function buildGenerationSources({
     prophetTakeParagraphCount: draft.prophetTakeParagraphCount ?? null,
     currentEasternTime: raceNumberDebug?.currentEasternTime ?? null,
     raceDate: raceNumberDebug?.raceDate ?? null,
+    configuredRaceStartTime: raceNumberDebug?.configuredRaceStartTime ?? null,
+    completionBufferMinutes: raceNumberDebug?.completionBufferMinutes ?? null,
+    effectiveAdvanceTime: raceNumberDebug?.effectiveAdvanceTime ?? null,
     raceStatus: raceNumberDebug?.raceStatus ?? null,
     canAdvanceToNextRace: raceNumberDebug?.canAdvanceToNextRace ?? null,
     advanceReason: raceNumberDebug?.advanceReason ?? null,

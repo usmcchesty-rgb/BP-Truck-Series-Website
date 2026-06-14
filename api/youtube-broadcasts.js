@@ -55,11 +55,12 @@ function parseVideoRaceNumber(title) {
   return Number.isFinite(raceNumber) && raceNumber > 0 ? raceNumber : null;
 }
 
-function isRaceDay(raceDateStr, now = new Date()) {
+function isRaceDay(raceDateStr, now = new Date(), settings = null) {
   const status = getEffectiveRaceDateStatus({
     raceDate: raceDateStr,
     hasResults: false,
     now,
+    settings,
   });
   return status.isRaceDay;
 }
@@ -160,9 +161,11 @@ function selectFeaturedVideo(videos, nextRace) {
 }
 
 function buildScheduleContext(scheduleData, now = new Date()) {
+  const settings = scheduleData?.settings || {};
+  const progressionOptions = { now, settings };
   const { races: enriched, excludedNonPointsCount, excludedNonPointsRaces } =
     buildPointsRaceIndex(scheduleData?.races || []);
-  const effectiveNext = findEffectiveNextPointsRace(enriched, { now });
+  const effectiveNext = findEffectiveNextPointsRace(enriched, progressionOptions);
   const row = effectiveNext.race;
   const nextStatus = effectiveNext.status;
 
@@ -173,6 +176,9 @@ function buildScheduleContext(scheduleData, now = new Date()) {
     excludedNonPointsRaces,
     currentEasternTime: nextStatus?.currentEasternTime ?? null,
     raceDate: nextStatus?.raceDate ?? row?.date ?? null,
+    configuredRaceStartTime: nextStatus?.configuredRaceStartTime ?? null,
+    completionBufferMinutes: nextStatus?.completionBufferMinutes ?? null,
+    effectiveAdvanceTime: nextStatus?.effectiveAdvanceTime ?? null,
     raceStatus: nextStatus?.raceStatus ?? null,
     canAdvanceToNextRace: nextStatus?.canAdvanceToNextRace ?? null,
     advanceReason: nextStatus?.advanceReason ?? null,
@@ -196,7 +202,7 @@ function buildScheduleContext(scheduleData, now = new Date()) {
     nonPoints: false,
   };
 
-  return { nextRace, debug };
+  return { nextRace, debug, settings };
 }
 
 async function getScheduleContext(req) {
@@ -206,11 +212,11 @@ async function getScheduleContext(req) {
     const res = await fetch(`${proto}://${host}/api/schedule`, {
       headers: { "user-agent": "BP-Truck-Series-Website/1.0" },
     });
-    if (!res.ok) return { nextRace: null, debug: null };
+    if (!res.ok) return { nextRace: null, debug: null, settings: null };
     const data = await res.json();
     return buildScheduleContext(data);
   } catch {
-    return { nextRace: null, debug: null };
+    return { nextRace: null, debug: null, settings: null };
   }
 }
 
@@ -234,6 +240,7 @@ export default async function handler(req, res) {
 
     const nextRace = scheduleContext.nextRace;
     const raceDebug = scheduleContext.debug;
+    const scheduleSettings = scheduleContext.settings || {};
 
     if (!rssRes.ok) {
       res.setHeader("Cache-Control", "s-maxage=60, stale-while-revalidate=120");
@@ -271,7 +278,7 @@ export default async function handler(req, res) {
             raceNumber: nextRace.officialPointsRaceNumber,
             track: nextRace.track,
             date: nextRace.date,
-            isRaceDay: isRaceDay(nextRace.date),
+            isRaceDay: isRaceDay(nextRace.date, new Date(), scheduleSettings),
           }
         : null,
       debug: raceDebug,

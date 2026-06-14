@@ -10,7 +10,8 @@ export const DEFAULTS = {
   scheduleId: '346493',
   playoffCut: 16,
   refreshSeconds: 60,
-  raceStartTime: '9:00 PM EST'
+  raceStartTime: '9:00 PM EST',
+  raceCompletionBufferMinutes: 180
 };
 
 export function supabase() {

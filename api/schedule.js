@@ -92,13 +92,14 @@ export default async function handler(req, res) {
     });
 
     const now = new Date();
+    const progressionOptions = { now, settings };
     const enrichedRaces = enrichScheduleRaces(races);
-    const progression = getEffectivePointsRaceProgression(enrichedRaces, { now });
-    const raceProgression = buildRaceProgressionDiagnostics(enrichedRaces, { now });
-    const { race: nextRaw } = findEffectiveNextScheduleRace(races, { now });
+    const progression = getEffectivePointsRaceProgression(enrichedRaces, progressionOptions);
+    const raceProgression = buildRaceProgressionDiagnostics(enrichedRaces, progressionOptions);
+    const { race: nextRaw } = findEffectiveNextScheduleRace(races, progressionOptions);
     const nextPointsRace = progression.currentUpcomingPointsRace;
     const next = mapEnrichedRaceToApiShape(nextPointsRace) || nextRaw;
-    const completed = countEffectiveCompletedScheduleRaces(races, { now });
+    const completed = countEffectiveCompletedScheduleRaces(races, progressionOptions);
     const totalPointsRaces = races.filter((race) => race.points?.toLowerCase() === "yes").length;
 
     console.log("[schedule] htmlLength:", html.length);

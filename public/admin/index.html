@@ -116,7 +116,11 @@
           <input id="playoffCut" class="input" type="number" placeholder="16" min="1">
 
           <label class="field-label" for="raceStartTime">Race Time</label>
-          <input id="raceStartTime" class="input" type="text" placeholder="9:00 PM EST">
+          <input id="raceStartTime" class="input" type="text" placeholder="6:30 PM ET">
+
+          <label class="field-label" for="raceCompletionBufferMinutes">Race Completion Buffer (minutes)</label>
+          <input id="raceCompletionBufferMinutes" class="input" type="number" min="0" step="1" placeholder="180">
+          <p class="sub">Race progression unlocks after race start plus this buffer. Default: 180 minutes (3 hours).</p>
         </div>
         <button class="btn" type="button" onclick="saveSettings()">Save Settings</button>
         <pre id="adminMsg"></pre>
@@ -257,7 +261,9 @@
           standingsUrl: $('#standingsUrl').value,
           scheduleUrl: $('#scheduleUrl').value,
           playoffCut: Number($('#playoffCut').value) || undefined,
-          raceStartTime: $('#raceStartTime').value
+          raceStartTime: $('#raceStartTime').value,
+          raceCompletionBufferMinutes:
+            Number($('#raceCompletionBufferMinutes').value) || undefined
         };
         const res = await fetch('/api/settings', {
           method: 'POST',
@@ -282,6 +288,8 @@
         $('#scheduleUrl').value = data.scheduleUrl || '';
         $('#playoffCut').value = data.playoffCut ?? '';
         $('#raceStartTime').value = data.raceStartTime || '';
+        $('#raceCompletionBufferMinutes').value =
+          data.raceCompletionBufferMinutes ?? '';
       } catch (e) {
         $('#adminMsg').textContent = 'Failed to load settings: ' + e.message;
       }

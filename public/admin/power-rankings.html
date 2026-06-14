@@ -556,6 +556,18 @@
         currentEasternTime:
           nested?.currentEasternTime ?? nested?.raceNumberDebug?.currentEasternTime ?? null,
         raceDate: nested?.raceDate ?? nested?.raceNumberDebug?.raceDate ?? null,
+        configuredRaceStartTime:
+          nested?.configuredRaceStartTime ??
+          nested?.raceNumberDebug?.configuredRaceStartTime ??
+          null,
+        completionBufferMinutes:
+          nested?.completionBufferMinutes ??
+          nested?.raceNumberDebug?.completionBufferMinutes ??
+          null,
+        effectiveAdvanceTime:
+          nested?.effectiveAdvanceTime ??
+          nested?.raceNumberDebug?.effectiveAdvanceTime ??
+          null,
         raceStatus: nested?.raceStatus ?? nested?.raceNumberDebug?.raceStatus ?? null,
         canAdvanceToNextRace:
           nested?.canAdvanceToNextRace ?? nested?.raceNumberDebug?.canAdvanceToNextRace ?? null,
@@ -762,6 +774,9 @@
         'Race progression:',
         `  currentEasternTime: ${sources.currentEasternTime ?? 'null'}`,
         `  raceDate: ${sources.raceDate ?? 'none'}`,
+        `  configuredRaceStartTime: ${sources.configuredRaceStartTime ?? 'none'}`,
+        `  completionBufferMinutes: ${sources.completionBufferMinutes ?? 'null'}`,
+        `  effectiveAdvanceTime: ${sources.effectiveAdvanceTime ?? 'none'}`,
         `  raceStatus: ${sources.raceStatus ?? 'null'}`,
         `  canAdvanceToNextRace: ${sources.canAdvanceToNextRace ?? 'null'}`,
         `  advanceReason: ${sources.advanceReason ?? 'none'}`,
@@ -784,6 +799,9 @@
               `  latestCompletedRaceNumber: ${raceDebug.latestCompletedRaceNumber ?? 'null'}`,
               `  currentEasternTime: ${raceDebug.currentEasternTime ?? 'null'}`,
               `  raceDate: ${raceDebug.raceDate ?? 'none'}`,
+              `  configuredRaceStartTime: ${raceDebug.configuredRaceStartTime ?? 'none'}`,
+              `  completionBufferMinutes: ${raceDebug.completionBufferMinutes ?? 'null'}`,
+              `  effectiveAdvanceTime: ${raceDebug.effectiveAdvanceTime ?? 'none'}`,
               `  raceStatus: ${raceDebug.raceStatus ?? 'null'}`,
               `  canAdvanceToNextRace: ${raceDebug.canAdvanceToNextRace ?? 'null'}`,
               `  advanceReason: ${raceDebug.advanceReason ?? 'none'}`,

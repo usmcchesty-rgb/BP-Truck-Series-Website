@@ -107,7 +107,7 @@ export function getPointsRaceByScheduleId(scheduleRaces, scheduleId) {
   );
 }
 
-export function getLatestCompletedPointsRace(scheduleRaces, { now = new Date() } = {}) {
+export function getLatestCompletedPointsRace(scheduleRaces, { now = new Date(), settings = null } = {}) {
   let latest = null;
 
   for (const race of scheduleRaces || []) {
@@ -117,6 +117,7 @@ export function getLatestCompletedPointsRace(scheduleRaces, { now = new Date() }
       raceDate: race.date,
       hasResults: hasRaceResults(race),
       now,
+      settings,
     });
 
     if (status.isCompleted) {
@@ -146,12 +147,16 @@ export function resolveStandingsSnapshotRace(scheduleRaces, requestedRaceNumber)
   return completedBefore.length ? completedBefore[completedBefore.length - 1] : null;
 }
 
-export function buildRaceNumberDebug(scheduleRaces, requestedRaceNumber, { now = new Date() } = {}) {
+export function buildRaceNumberDebug(
+  scheduleRaces,
+  requestedRaceNumber,
+  { now = new Date(), settings = null } = {}
+) {
   const requested = Number(requestedRaceNumber);
   const currentRace = getPointsRaceByNumber(scheduleRaces, requested);
   const previousRace = getPointsRaceByNumber(scheduleRaces, requested - 1);
   const recentResults = getRecentPointsRaceResults(scheduleRaces, requested, 3);
-  const latestCompleted = getLatestCompletedPointsRace(scheduleRaces, { now });
+  const latestCompleted = getLatestCompletedPointsRace(scheduleRaces, { now, settings });
   const standingsRace = resolveStandingsSnapshotRace(scheduleRaces, requested);
   const standingsRaceNumber = standingsRace?.officialPointsRaceNumber ?? null;
   const requestedRaceStatus = currentRace
@@ -159,9 +164,11 @@ export function buildRaceNumberDebug(scheduleRaces, requestedRaceNumber, { now =
         raceDate: currentRace.date,
         hasResults: hasRaceResults(currentRace),
         now,
+        settings,
       })
     : null;
-  const raceProgression = buildRaceProgressionDiagnostics(scheduleRaces, { now });
+  const raceProgression = buildRaceProgressionDiagnostics(scheduleRaces, { now, settings });
+  const progressionSource = requestedRaceStatus || raceProgression;
 
   return {
     requestedRaceNumber: requested,
@@ -188,6 +195,12 @@ export function buildRaceNumberDebug(scheduleRaces, requestedRaceNumber, { now =
         : 'none',
     currentEasternTime: raceProgression.currentEasternTime,
     raceDate: requestedRaceStatus?.raceDate ?? currentRace?.date ?? raceProgression.raceDate,
+    configuredRaceStartTime:
+      progressionSource?.configuredRaceStartTime ?? raceProgression.configuredRaceStartTime,
+    completionBufferMinutes:
+      progressionSource?.completionBufferMinutes ?? raceProgression.completionBufferMinutes,
+    effectiveAdvanceTime:
+      progressionSource?.effectiveAdvanceTime ?? raceProgression.effectiveAdvanceTime,
     raceStatus: requestedRaceStatus?.raceStatus ?? raceProgression.raceStatus,
     canAdvanceToNextRace:
       requestedRaceStatus?.canAdvanceToNextRace ?? raceProgression.canAdvanceToNextRace,
