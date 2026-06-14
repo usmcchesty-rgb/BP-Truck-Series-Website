@@ -107,6 +107,26 @@
     .manual-notes-box {
       margin-top: 14px;
     }
+    .manual-notes-box.prophet-take-editor {
+      margin-top: 18px;
+      padding-top: 16px;
+      border-top: 1px solid #2a2a2a;
+    }
+    .manual-notes-box.prophet-take-editor .textarea {
+      min-height: 200px;
+    }
+    .rankings-editor-divider {
+      margin: 22px 0 10px;
+      padding-top: 18px;
+      border-top: 1px solid #2a2a2a;
+    }
+    .rankings-editor-divider h3 {
+      margin: 0 0 4px;
+      font-size: 14px;
+      color: #fff;
+      font-style: italic;
+      letter-spacing: .04em;
+    }
     .manual-notes-box .textarea {
       min-height: 160px;
       width: 100%;
@@ -233,12 +253,16 @@
       </div>
       <p class="sub">Select a race number, generate a draft, review every field, then save or publish manually.</p>
 
-      <div class="manual-notes-box">
+      <div class="manual-notes-box prophet-take-editor">
         <label class="field-label" for="prophetTake">The Pedal Prophet's Take</label>
         <p class="sub">Weekly columnist article (150–300 words). Generated with the draft; edit before saving or publishing.</p>
         <textarea id="prophetTake" class="textarea" placeholder="The Pedal Prophet's weekly take will appear here after generation..."></textarea>
       </div>
 
+      <div class="rankings-editor-divider">
+        <h3>Top 10 Rankings</h3>
+        <p class="sub" style="margin-bottom: 10px;">Review movement, subtitles, and writeups for each ranked driver.</p>
+      </div>
       <div class="ranking-row ranking-row-head">
         <div>Rank</div>
         <div>Driver</div>

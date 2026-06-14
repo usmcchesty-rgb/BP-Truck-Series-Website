@@ -782,83 +782,242 @@ footer{
   gap:20px;
   align-items:start;
 }
-.power-rankings-page-title{margin-bottom:4px}
-.power-rankings-page-title h2{margin:0}
-.power-rankings-byline{
-  margin:4px 0 0;
-  color:var(--red);
-  font-size:15px;
+.pedal-prophet-logo{
+  display:block;
+  width:auto;
+  height:auto;
+  max-width:100%;
+  object-fit:contain;
+  object-position:center;
+}
+.pedal-prophet-hero{
+  text-align:center;
+  margin:0 0 36px;
+  padding:40px 28px 36px;
+  border:1px solid #3a3a3a;
+  border-radius:8px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.05) 0%, rgba(0,0,0,.42) 100%),
+    radial-gradient(ellipse at 50% 0%, rgba(229,9,20,.14) 0%, transparent 62%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.07),
+    inset 0 -12px 32px rgba(0,0,0,.25),
+    0 12px 32px rgba(0,0,0,.38);
+}
+.pedal-prophet-hero::before{
+  content:"";
+  display:block;
+  width:min(120px, 28vw);
+  height:3px;
+  margin:0 auto 24px;
+  border-radius:999px;
+  background:linear-gradient(90deg, transparent, var(--red), transparent);
+}
+.pedal-prophet-hero-logo-wrap{
+  display:flex;
+  justify-content:center;
+  width:100%;
+  padding:8px 0 4px;
+  margin:0 0 12px;
+}
+.pedal-prophet-logo-hero{
+  display:block;
+  width:100%;
+  max-width:560px;
+  height:auto;
+  margin:0 auto;
+  object-fit:contain;
+  object-position:center;
+}
+.pedal-prophet-season{
+  margin:20px 0 12px;
+  font-size:clamp(17px, 2.2vw, 22px);
   font-style:italic;
-  font-weight:700;
-  letter-spacing:.3px;
+  font-weight:900;
+  letter-spacing:.08em;
+  color:#fff;
+  text-transform:uppercase;
+}
+.pedal-prophet-season span{
+  color:var(--gold);
+}
+.pedal-prophet-tagline{
+  margin:0 auto;
+  max-width:560px;
+  color:#b8b8b8;
+  font-size:clamp(13px, 1.6vw, 15px);
+  line-height:1.6;
+  font-weight:600;
+}
+.pedal-prophet-logo-sm{
+  width:72px;
+  max-height:32px;
+  margin:0 auto 10px;
+}
+.pedal-prophet-logo-icon{
+  width:36px;
+  max-height:16px;
+  filter:drop-shadow(0 0 6px rgba(229,9,20,.25));
 }
 .power-rankings-prophet-take{
-  margin:0 0 22px;
-  padding:16px 18px;
-  border:1px solid var(--line);
-  border-left:3px solid var(--red);
-  background:rgba(255,255,255,.02);
+  position:relative;
+  overflow:hidden;
+  margin:0;
+  padding:0;
+  border:1px solid #404040;
+  border-radius:8px;
+  background:
+    linear-gradient(160deg, rgba(22,22,22,.98) 0%, rgba(6,6,6,.98) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.06),
+    0 10px 28px rgba(0,0,0,.32);
 }
-.power-rankings-prophet-heading{
-  margin:0 0 12px;
-  font-size:16px;
-  color:#ff3030;
-  letter-spacing:.4px;
-}
-.power-rankings-prophet-body p{
-  margin:0 0 12px;
-  color:#ddd;
-  font-size:14px;
-  line-height:1.55;
-}
-.power-rankings-prophet-body p:last-child{margin-bottom:0}
-.power-rankings-prophet-about{
-  display:grid;
-  grid-template-columns:52px minmax(0,1fr);
-  gap:14px;
-  align-items:start;
+.power-rankings-prophet-take + .power-rankings-block{
   margin-top:32px;
-  padding-top:22px;
-  border-top:1px solid var(--line);
+  padding-top:28px;
+  border-top:1px solid #2e2e2e;
 }
-.power-rankings-prophet-badge{
-  width:44px;
-  height:44px;
-  border:2px solid var(--red);
-  border-radius:50%;
+.prophet-take-watermark{
+  position:absolute;
+  inset:0;
   display:flex;
   align-items:center;
   justify-content:center;
-  color:var(--red);
-  font:900 14px Impact, sans-serif;
-  letter-spacing:.5px;
+  pointer-events:none;
+  z-index:0;
 }
-.power-rankings-prophet-about h3{
-  margin:0 0 8px;
+.prophet-take-watermark .pedal-prophet-logo{
+  width:min(320px, 70%);
+  max-height:140px;
+  opacity:.05;
+  filter:grayscale(1);
+}
+.prophet-take-inner{
+  position:relative;
+  z-index:1;
+  padding:22px 24px 24px;
+}
+.prophet-take-head{
+  display:flex;
+  flex-direction:row;
+  align-items:center;
+  gap:14px;
+  flex-wrap:wrap;
+}
+.prophet-take-head .pedal-prophet-logo-sm{
+  margin:0;
+  width:68px;
+  max-height:30px;
+  flex-shrink:0;
+}
+.prophet-take-divider{
+  height:1px;
+  margin:16px 0 18px;
+  background:linear-gradient(90deg, var(--red) 0%, rgba(229,9,20,.2) 38%, transparent 100%);
+}
+.power-rankings-prophet-heading{
+  margin:0;
   font-size:14px;
   color:#ff3030;
-  letter-spacing:.3px;
+  letter-spacing:.16em;
+  font-weight:900;
+  text-transform:uppercase;
 }
-.power-rankings-prophet-about p{
+.power-rankings-prophet-body p{
+  margin:0 0 16px;
+  color:#e8e8e8;
+  font-size:15px;
+  line-height:1.7;
+  font-weight:500;
+  max-width:72ch;
+}
+.power-rankings-prophet-body p:last-child{margin-bottom:0}
+.power-rankings-block{margin-top:0}
+.power-rankings-presented-ribbon{
+  display:inline-block;
+  margin:0 0 16px;
+  padding:8px 16px;
+  border:1px solid rgba(229,9,20,.4);
+  border-radius:4px;
+  background:linear-gradient(135deg, rgba(229,9,20,.16), rgba(0,0,0,.5));
+  color:#ccc;
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.05);
+}
+.power-rankings-section-head{
+  display:flex;
+  align-items:flex-end;
+  gap:12px;
+  margin:0 0 18px;
+  padding-bottom:12px;
+  border-bottom:1px solid #333;
+}
+.power-rankings-section-meta{min-width:0}
+.power-rankings-section-title{
   margin:0;
-  color:#aaa;
-  font-size:13px;
-  line-height:1.5;
-  max-width:720px;
+  font-size:clamp(20px, 2.4vw, 26px);
+  font-style:italic;
+  font-weight:900;
+  letter-spacing:.3px;
+  color:#fff;
+  line-height:1.15;
 }
-.power-rankings-header{margin-bottom:18px}
-.power-rankings-header h3{margin:0;font-size:24px;font-style:italic;color:#fff}
-.power-rankings-date{margin:6px 0 0;color:#888;font-size:12px;font-weight:700}
-.power-rankings-list{display:grid;gap:14px}
+.power-rankings-date{
+  margin:6px 0 0;
+  color:#888;
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+}
+.pedal-prophet-signature{
+  text-align:center;
+  margin-top:40px;
+  padding:12px 16px 8px;
+}
+.pedal-prophet-signature-rule{
+  border:0;
+  border-top:1px solid #3a3a3a;
+  margin:0 0 24px;
+}
+.pedal-prophet-signature .pedal-prophet-logo-sm{
+  margin:0 auto;
+}
+.pedal-prophet-signature-name{
+  margin:14px 0 4px;
+  font-size:12px;
+  font-weight:900;
+  letter-spacing:.18em;
+  color:#ff3030;
+}
+.pedal-prophet-signature-role{
+  margin:0 0 12px;
+  color:#999;
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+}
+.pedal-prophet-signature-signoff{
+  margin:0;
+  color:#777;
+  font-size:14px;
+  font-style:italic;
+  font-weight:600;
+}
+.power-rankings-list{display:grid;gap:16px}
 .power-ranking-card{
   display:grid;
   grid-template-columns:56px 120px minmax(0,1fr);
   gap:16px;
   align-items:start;
-  padding:16px;
-  border:1px solid #333;
-  background:rgba(8,8,8,.92);
-  border-radius:5px;
+  padding:18px;
+  border:1px solid #353535;
+  background:linear-gradient(180deg, rgba(12,12,12,.95) 0%, rgba(6,6,6,.95) 100%);
+  border-radius:6px;
 }
 .power-ranking-card-first{
   border-color:var(--gold);
@@ -906,15 +1065,38 @@ footer{
   clip-path:polygon(5px 0,100% 0,calc(100% - 5px) 100%,0 100%);
 }
 .power-ranking-movement{
-  font-size:13px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:46px;
+  padding:3px 9px;
+  border-radius:4px;
+  font-size:12px;
   font-weight:900;
   color:#aaa;
   white-space:nowrap;
+  border:1px solid rgba(255,255,255,.08);
+  background:rgba(255,255,255,.03);
+  flex-shrink:0;
 }
-.power-ranking-movement.positive{color:var(--green)}
-.power-ranking-movement.negative{color:#ff2323}
-.power-ranking-movement.new{color:#60a5fa;font-weight:700;letter-spacing:.04em}
-.home-rank-move.new{color:#60a5fa;font-weight:700;letter-spacing:.04em}
+.power-ranking-movement.positive{
+  color:var(--green);
+  border-color:rgba(0,200,83,.28);
+  background:rgba(0,200,83,.08);
+}
+.power-ranking-movement.negative{
+  color:#ff2323;
+  border-color:rgba(255,35,35,.28);
+  background:rgba(255,35,35,.08);
+}
+.power-ranking-movement.new{
+  color:#93c5fd;
+  border-color:rgba(96,165,250,.35);
+  background:rgba(96,165,250,.1);
+  font-weight:800;
+  letter-spacing:.08em;
+}
+.home-rank-move.new{color:#93c5fd;font-weight:800;letter-spacing:.08em}
 .power-ranking-subtitle{
   margin:8px 0 0;
   color:var(--gold);
@@ -1085,10 +1267,25 @@ footer{
   .home-hero h2{font-size:30px}
   .power-rankings-page .power-rankings-layout{grid-template-columns:1fr}
   .power-ranking-card{grid-template-columns:56px 96px minmax(0,1fr)}
+  .pedal-prophet-hero{padding:32px 20px 28px}
+  .pedal-prophet-hero-logo-wrap{padding:6px 0 2px;margin-bottom:10px}
+  .pedal-prophet-logo-hero{max-width:min(520px, 78vw)}
+  .prophet-take-inner{padding:16px 14px 18px}
+  .prophet-take-head{gap:10px}
 }
 @media(max-width:700px){
   .power-ranking-card,.power-ranking-honorable-card{grid-template-columns:1fr}
   .power-ranking-photo,.power-ranking-honorable-photo{margin:0 auto}
+  .power-ranking-title-row{align-items:center}
+  .power-ranking-movement{font-size:11px;min-width:42px;padding:3px 8px}
+  .power-rankings-section-head{align-items:flex-start}
+  .power-rankings-prophet-take + .power-rankings-block{margin-top:24px;padding-top:22px}
+  .pedal-prophet-hero{padding:28px 16px 24px}
+  .pedal-prophet-hero::before{margin-bottom:18px}
+  .pedal-prophet-hero-logo-wrap{padding:4px 0 0;margin-bottom:8px}
+  .pedal-prophet-logo-hero{max-width:clamp(280px, 92vw, 320px)}
+  .pedal-prophet-season{margin-top:16px}
+  .pedal-prophet-tagline{font-size:13px}
 }
 @media(max-width:900px){
   .home-magazine-grid{grid-template-columns:1fr}

@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Blazing Pedals Truck Series — Power Rankings</title>
+    <title>Blazing Pedals Truck Series — The Pedal Prophet Power Rankings</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
@@ -12,46 +12,88 @@
 
     <main>
       <section class="panel full-panel power-rankings-page">
-        <div class="power-rankings-page-title">
-          <h2>POWER RANKINGS</h2>
-          <p class="power-rankings-byline">By The Pedal Prophet</p>
-        </div>
-        <p class="page-intro" id="prIntro">
-          The Pedal Prophet's weekly look at the hottest drivers, biggest movers, championship contenders, and emerging storylines across the Blazing Pedals Truck Series.
-        </p>
+        <header class="pedal-prophet-hero">
+          <div class="pedal-prophet-hero-logo-wrap">
+            <img
+              class="pedal-prophet-logo pedal-prophet-logo-hero"
+              src="/assets/logos/pedal-prophet-logo.png"
+              alt="The Pedal Prophet"
+              width="1024"
+              height="1024"
+              decoding="async"
+              fetchpriority="high"
+            />
+          </div>
+          <p class="pedal-prophet-season"><span>Season 11</span> Power Rankings</p>
+          <p class="pedal-prophet-tagline" id="prIntro">
+            Weekly rankings, race analysis, and championship insight from The Pedal Prophet.
+          </p>
+        </header>
 
         <div class="power-rankings-layout">
           <div class="power-rankings-main">
-            <div class="power-rankings-header" id="prHeader" hidden>
-              <div>
-                <h3 id="prWeekTitle">Race Rankings</h3>
-                <p class="power-rankings-date" id="prPublishedDate"></p>
-              </div>
-            </div>
-
             <div id="prEmpty" class="placeholder-panel" hidden>
               <p>No power rankings have been published yet. Check back after the next race.</p>
             </div>
 
             <section id="prProphetTake" class="power-rankings-prophet-take" hidden>
-              <h3 class="power-rankings-prophet-heading">THE PEDAL PROPHET'S TAKE</h3>
-              <div id="prProphetTakeBody" class="power-rankings-prophet-body"></div>
+              <div class="prophet-take-watermark" aria-hidden="true">
+                <img
+                  class="pedal-prophet-logo"
+                  src="/assets/logos/pedal-prophet-logo.png"
+                  alt=""
+                  width="320"
+                  height="120"
+                  decoding="async"
+                />
+              </div>
+              <div class="prophet-take-inner">
+                <div class="prophet-take-head">
+                  <img
+                    class="pedal-prophet-logo pedal-prophet-logo-sm"
+                    src="/assets/logos/pedal-prophet-logo.png"
+                    alt=""
+                    width="72"
+                    height="28"
+                    decoding="async"
+                  />
+                  <h3 class="power-rankings-prophet-heading">THE PEDAL PROPHET'S TAKE</h3>
+                </div>
+                <div class="prophet-take-divider" aria-hidden="true"></div>
+                <div id="prProphetTakeBody" class="power-rankings-prophet-body"></div>
+              </div>
             </section>
 
-            <div id="prList" class="power-rankings-list"></div>
+            <div id="prRankingsBlock" class="power-rankings-block" hidden>
+              <p class="power-rankings-presented-ribbon">Presented by The Pedal Prophet</p>
+              <div class="power-rankings-section-head">
+                <div class="power-rankings-section-meta">
+                  <h3 class="power-rankings-section-title" id="prWeekTitle">Race Rankings</h3>
+                  <p class="power-rankings-date" id="prPublishedDate"></p>
+                </div>
+              </div>
+              <div id="prList" class="power-rankings-list"></div>
+            </div>
 
             <section id="prHonorableSection" class="power-rankings-honorable" hidden>
               <h3>HONORABLE MENTIONS</h3>
               <div id="prHonorableList" class="power-rankings-honorable-list"></div>
             </section>
 
-            <section id="prProphetAbout" class="power-rankings-prophet-about" hidden>
-              <div class="power-rankings-prophet-badge" aria-hidden="true">PP</div>
-              <div>
-                <h3>ABOUT THE PEDAL PROPHET</h3>
-                <p>The Pedal Prophet follows every lap, every rivalry, and every momentum swing across the Blazing Pedals Truck Series. Combining race results, championship standings, recent form, and race-day storylines, The Pedal Prophet delivers weekly Power Rankings and championship insight from around the garage.</p>
-              </div>
-            </section>
+            <footer id="prProphetSignature" class="pedal-prophet-signature" hidden>
+              <hr class="pedal-prophet-signature-rule" />
+              <img
+                class="pedal-prophet-logo pedal-prophet-logo-sm"
+                src="/assets/logos/pedal-prophet-logo.png"
+                alt="The Pedal Prophet"
+                width="72"
+                height="28"
+                decoding="async"
+              />
+              <p class="pedal-prophet-signature-name">THE PEDAL PROPHET</p>
+              <p class="pedal-prophet-signature-role">Power Rankings &amp; Race Analysis</p>
+              <p class="pedal-prophet-signature-signoff">See you after the next green flag.</p>
+            </footer>
           </div>
 
           <aside class="power-rankings-sidebar panel" id="prArchivePanel" hidden>

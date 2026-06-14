@@ -22,10 +22,10 @@ function formatPublishedDate(value) {
 function renderHeader(week) {
   const titleEl = $("#prWeekTitle");
   const dateEl = $("#prPublishedDate");
-  const headerEl = $("#prHeader");
 
   if (!week) {
-    if (headerEl) headerEl.hidden = true;
+    if (titleEl) titleEl.textContent = "Race Rankings";
+    if (dateEl) dateEl.textContent = "";
     return;
   }
 
@@ -34,7 +34,6 @@ function renderHeader(week) {
     const formatted = formatPublishedDate(week.publishedDate);
     dateEl.textContent = formatted ? `Published ${formatted}` : "";
   }
-  if (headerEl) headerEl.hidden = false;
 }
 
 function renderEntry(entry) {
@@ -56,7 +55,7 @@ function renderEntry(entry) {
     <div class="power-ranking-body">
       <div class="power-ranking-title-row">
         <h3>${escapeHtml(entry.driverName)}${num}</h3>
-        <span class="power-ranking-movement${movementClass}">${escapeHtml(entry.movementText)}</span>
+        <span class="power-ranking-movement${movementClass}" aria-label="Rank movement">${escapeHtml(entry.movementText)}</span>
       </div>
       <p class="power-ranking-subtitle">${escapeHtml(entry.subtitle)}</p>
       <p class="power-ranking-writeup">${escapeHtml(entry.writeup)}</p>
@@ -109,7 +108,7 @@ function renderArchive(archive, activeId) {
 function renderProphetTake(week) {
   const section = $("#prProphetTake");
   const body = $("#prProphetTakeBody");
-  const about = $("#prProphetAbout");
+  const signature = $("#prProphetSignature");
   const text = String(week?.prophetTake || "").trim();
 
   if (section && body) {
@@ -130,17 +129,19 @@ function renderProphetTake(week) {
     }
   }
 
-  if (about) about.hidden = !week;
+  if (signature) signature.hidden = !week?.entries?.length;
 }
 
 function renderWeek(week, archive) {
   const listEl = $("#prList");
+  const rankingsBlock = $("#prRankingsBlock");
   const emptyEl = $("#prEmpty");
   const honorableSection = $("#prHonorableSection");
   const honorableList = $("#prHonorableList");
 
   if (!week?.entries?.length) {
     if (listEl) listEl.innerHTML = "";
+    if (rankingsBlock) rankingsBlock.hidden = true;
     if (emptyEl) emptyEl.hidden = false;
     if (honorableSection) honorableSection.hidden = true;
     renderProphetTake(null);
@@ -150,6 +151,7 @@ function renderWeek(week, archive) {
   }
 
   if (emptyEl) emptyEl.hidden = true;
+  if (rankingsBlock) rankingsBlock.hidden = false;
   renderHeader(week);
   renderProphetTake(week);
   if (listEl) listEl.innerHTML = week.entries.map(renderEntry).join("");
@@ -193,7 +195,7 @@ async function loadPowerRankings() {
     const intro = $("#prIntro");
     if (intro) {
       intro.textContent =
-        "The Pedal Prophet's weekly look at the hottest drivers, biggest movers, championship contenders, and emerging storylines across the Blazing Pedals Truck Series. Rankings are not available right now.";
+        "Weekly rankings, race analysis, and championship insight from The Pedal Prophet. Rankings are not available right now.";
     }
   }
 }
