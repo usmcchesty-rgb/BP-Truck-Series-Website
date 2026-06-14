@@ -11,6 +11,7 @@ import {  fetchGreenFlagPlaylistVideos,
 import {
   buildRaceNumberDebug,
   enrichScheduleRaces,
+  getPointsRaceByScheduleId,
   getRecentPointsRaceResults,
 } from './_schedule-points-races.js';
 
@@ -52,8 +53,18 @@ function parseScheduleRaces(html) {
           cells.eq(6).find('a').first().text() || cells.eq(6).text()
         );
 
+        let scheduleId = null;
+        $(row)
+          .find("a[href*='race']")
+          .each((_idx, anchor) => {
+            const href = String($(anchor).attr('href') || '');
+            const match = href.match(/schedule_id=(\d+)/);
+            if (match?.[1]) scheduleId = match[1];
+          });
+
         races.push({
           scheduleRow: Number(raceNumber),
+          scheduleId,
           date: cleanText(cells.eq(1).text()),
           points,
           status: points?.toLowerCase() === 'yes' ? 'points' : 'non-points',
@@ -114,12 +125,12 @@ async function detectLatestScheduleId(settings) {
   }
 }
 
-async function fetchStandingsRows(settings) {
+async function fetchStandingsRows(settings, scheduleId = null) {
   const seasonId = settings.seasonId || '27987';
-  const scheduleId = await detectLatestScheduleId(settings);
+  const resolvedScheduleId = scheduleId || (await detectLatestScheduleId(settings));
 
   const response = await fetch(
-    `https://www.simracerhub.com/scoring/get_standings.php?season_id=${seasonId}&schedule_id=${scheduleId}`,
+    `https://www.simracerhub.com/scoring/get_standings.php?season_id=${seasonId}&schedule_id=${resolvedScheduleId}`,
     { headers: { 'user-agent': 'BP-Truck-Series-Website/1.0' } }
   );
 
@@ -133,7 +144,7 @@ async function fetchStandingsRows(settings) {
     profiles.map((p) => [String(p.driver_id), p])
   );
 
-  return Object.values(data.rps || {})
+  const rows = Object.values(data.rps || {})
     .map((r) => {
       const driver = data.drivers?.[r.drid] || {};
       const rawName = driver.name || r.name || `Driver ${r.drid}`;
@@ -163,6 +174,12 @@ async function fetchStandingsRows(settings) {
     })
     .filter((r) => r.position >= 1)
     .sort((a, b) => a.position - b.position);
+
+  return {
+    rows,
+    scheduleId: resolvedScheduleId,
+    seasonName: data.lss?.season_name || null,
+  };
 }
 
 async function loadPreviousPowerRankings(beforeRaceNumber) {
@@ -586,6 +603,7 @@ function buildContextPayload({
   transcriptUsed,
   transcriptMode,
   manualRaceNotes,
+  standingsSnapshot,
 }) {
   const completedRaces = getRecentPointsRaceResults(scheduleRaces, raceNumber, 3);
 
@@ -600,6 +618,7 @@ function buildContextPayload({
   return {
     raceNumber,
     season: 'Blazing Pedals Truck Series',
+    standingsSnapshot: standingsSnapshot || null,
     standings: standings.slice(0, 20).map((row) => ({
       driverId: row.driverId,
       driverName: row.driverName,
@@ -655,6 +674,9 @@ async function callOpenAi(contextPayload) {  const apiKey = process.env.OPENAI_A
           content: `Generate Race ${contextPayload.raceNumber} power rankings using this data.
 
 Use prompt version ${POWER_RANKING_PROMPT_VERSION} rules: ranking justifications with at least two evidence points, no season summaries, no generic filler, NASCAR.com editorial tone.
+
+Standings and driver stats in this payload are frozen to standingsSnapshot.raceNumber. Do not reference wins, points, or results from races after Race ${contextPayload.raceNumber}.
+Only use recentResults and transcript/manual notes for race context through Race ${contextPayload.raceNumber}.
 
 transcriptMode: ${contextPayload.transcriptMode || 'none'}
 transcriptUsed: ${contextPayload.transcriptUsed === true}
@@ -1544,16 +1566,52 @@ export default async function handler(req, res) {
     }
 
     const settings = await getSettings();
-    const [standings, scheduleHtml, previousRankings, profiles, existingWeek] = await Promise.all([
-      fetchStandingsRows(settings),
+    const [scheduleHtml, previousRankings, profiles, existingWeek] = await Promise.all([
       fetchHtml(settings.scheduleUrl),
       loadPreviousPowerRankings(raceNumber),
       getDriverProfiles(),
       loadExistingWeekForRace(raceNumber),
     ]);
 
+    const scheduleRaces = parseScheduleRaces(scheduleHtml);
+    const raceNumberDebug = buildRaceNumberDebug(scheduleRaces, raceNumber);
+
+    const standingsResult = await fetchStandingsRows(
+      settings,
+      raceNumberDebug.standingsScheduleId
+    );
+    const standings = standingsResult.rows;
+
     if (!standings.length) {
       return res.status(400).json({ error: 'No standings data available for AI generation.' });
+    }
+
+    raceNumberDebug.standingsScheduleIdUsed =
+      standingsResult.scheduleId || raceNumberDebug.standingsScheduleId;
+    raceNumberDebug.standingsUsedLatestCompletedFallback =
+      !raceNumberDebug.standingsScheduleId && Boolean(standingsResult.scheduleId);
+
+    const actualStandingsRace = getPointsRaceByScheduleId(
+      scheduleRaces,
+      raceNumberDebug.standingsScheduleIdUsed
+    );
+    raceNumberDebug.standingsDataRaceNumber =
+      actualStandingsRace?.officialPointsRaceNumber ?? null;
+    raceNumberDebug.usingFutureStandings =
+      raceNumberDebug.standingsDataRaceNumber != null &&
+      raceNumberDebug.standingsDataRaceNumber > raceNumber;
+
+    if (raceNumberDebug.usingFutureStandings) {
+      console.warn(
+        '[power-rankings-generate] standings snapshot includes future race data',
+        JSON.stringify({
+          requestedRaceNumber: raceNumberDebug.requestedRaceNumber,
+          standingsRaceNumber: raceNumberDebug.standingsRaceNumber,
+          standingsDataRaceNumber: raceNumberDebug.standingsDataRaceNumber,
+          latestCompletedRaceNumber: raceNumberDebug.latestCompletedRaceNumber,
+          standingsScheduleIdUsed: raceNumberDebug.standingsScheduleIdUsed,
+        })
+      );
     }
 
     const drivers = standings.map((row) => ({
@@ -1562,8 +1620,6 @@ export default async function handler(req, res) {
       carNumber: row.carNumber,
     }));
 
-    const scheduleRaces = parseScheduleRaces(scheduleHtml);
-    const raceNumberDebug = buildRaceNumberDebug(scheduleRaces, raceNumber);
     const manualRaceNotes = normalizeManualRaceNotes(
       body.manualRaceNotes ?? body.manual_race_notes
     );
@@ -1582,6 +1638,13 @@ export default async function handler(req, res) {
       transcriptUsed: contextMeta.transcriptUsed,
       transcriptMode: contextMeta.transcriptMode,
       manualRaceNotes: manualRaceNotes || null,
+      standingsSnapshot: {
+        raceNumber: raceNumberDebug.standingsRaceNumber,
+        snapshotDate: raceNumberDebug.standingsSnapshotDate,
+        scheduleId: raceNumberDebug.standingsScheduleIdUsed,
+        track: raceNumberDebug.standingsTrack,
+        frozenToRequestedRace: raceNumberDebug.standingsFrozenToRequestedRace === true,
+      },
     });
 
     const aiDraft = await callOpenAi(contextPayload);
@@ -1604,6 +1667,22 @@ export default async function handler(req, res) {
     console.log(
       '[power-rankings-generate] race number debug',
       JSON.stringify(raceNumberDebug)
+    );
+
+    console.log(
+      '[power-rankings-generate] standings snapshot debug',
+      JSON.stringify({
+        requestedRaceNumber: raceNumberDebug.requestedRaceNumber,
+        standingsRaceNumber: raceNumberDebug.standingsRaceNumber,
+        standingsSnapshotDate: raceNumberDebug.standingsSnapshotDate,
+        statsRaceNumber: raceNumberDebug.statsRaceNumber,
+        latestCompletedRaceNumber: raceNumberDebug.latestCompletedRaceNumber,
+        currentRaceName: raceNumberDebug.currentRaceName,
+        standingsScheduleId: raceNumberDebug.standingsScheduleIdUsed,
+        standingsFrozenToRequestedRace: raceNumberDebug.standingsFrozenToRequestedRace === true,
+        standingsDataRaceNumber: raceNumberDebug.standingsDataRaceNumber,
+        usingFutureStandings: raceNumberDebug.usingFutureStandings === true,
+      })
     );
 
     console.log(

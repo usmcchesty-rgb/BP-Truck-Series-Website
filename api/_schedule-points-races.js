@@ -89,11 +89,52 @@ export function getRecentPointsRaceResults(scheduleRaces, upToPointsRaceNumber, 
     .slice(-limit);
 }
 
+export function getPointsRaceByScheduleId(scheduleRaces, scheduleId) {
+  if (!scheduleId) return null;
+  return (
+    scheduleRaces.find(
+      (race) =>
+        !race.nonPoints &&
+        race.scheduleId != null &&
+        String(race.scheduleId) === String(scheduleId)
+    ) || null
+  );
+}
+
+export function getLatestCompletedPointsRace(scheduleRaces) {
+  const completed = (scheduleRaces || []).filter(
+    (race) => !race.nonPoints && race.winner && race.officialPointsRaceNumber != null
+  );
+  return completed.length ? completed[completed.length - 1] : null;
+}
+
+export function resolveStandingsSnapshotRace(scheduleRaces, requestedRaceNumber) {
+  const requested = Number(requestedRaceNumber);
+  const currentRace = getPointsRaceByNumber(scheduleRaces, requested);
+
+  if (currentRace?.winner) {
+    return currentRace;
+  }
+
+  const completedBefore = (scheduleRaces || []).filter(
+    (race) =>
+      !race.nonPoints &&
+      race.winner &&
+      race.officialPointsRaceNumber != null &&
+      race.officialPointsRaceNumber < requested
+  );
+
+  return completedBefore.length ? completedBefore[completedBefore.length - 1] : null;
+}
+
 export function buildRaceNumberDebug(scheduleRaces, requestedRaceNumber) {
   const requested = Number(requestedRaceNumber);
   const currentRace = getPointsRaceByNumber(scheduleRaces, requested);
   const previousRace = getPointsRaceByNumber(scheduleRaces, requested - 1);
   const recentResults = getRecentPointsRaceResults(scheduleRaces, requested, 3);
+  const latestCompleted = getLatestCompletedPointsRace(scheduleRaces);
+  const standingsRace = resolveStandingsSnapshotRace(scheduleRaces, requested);
+  const standingsRaceNumber = standingsRace?.officialPointsRaceNumber ?? null;
 
   return {
     requestedRaceNumber: requested,
@@ -104,5 +145,19 @@ export function buildRaceNumberDebug(scheduleRaces, requestedRaceNumber) {
     recentResultsRaceNumbers: recentResults.map((race) => race.officialPointsRaceNumber),
     recentResultsTracks: recentResults.map((race) => race.track),
     excludedNonPointsCount: scheduleRaces.filter((race) => race.nonPoints).length,
+    standingsRaceNumber,
+    standingsSnapshotDate: standingsRace?.date ?? null,
+    statsRaceNumber: standingsRaceNumber,
+    latestCompletedRaceNumber: latestCompleted?.officialPointsRaceNumber ?? null,
+    standingsScheduleId: standingsRace?.scheduleId ?? null,
+    standingsScheduleRow: standingsRace?.scheduleRow ?? null,
+    standingsTrack: standingsRace?.track ?? null,
+    standingsFrozenToRequestedRace: standingsRaceNumber === requested,
+    usingFutureStandings: false,
+    standingsSnapshotSource: currentRace?.winner
+      ? 'requested-race-completed'
+      : standingsRace
+        ? 'latest-completed-before-requested'
+        : 'none',
   };
 }

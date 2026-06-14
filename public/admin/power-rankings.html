@@ -530,6 +530,14 @@
               ...(raceDebug.recentResultsTracks?.length
                 ? [`  recentResultsTracks: ${raceDebug.recentResultsTracks.join(', ')}`]
                 : []),
+              `  standingsRaceNumber: ${raceDebug.standingsRaceNumber ?? 'null'}`,
+              `  standingsSnapshotDate: ${raceDebug.standingsSnapshotDate ?? 'none'}`,
+              `  statsRaceNumber: ${raceDebug.statsRaceNumber ?? 'null'}`,
+              `  latestCompletedRaceNumber: ${raceDebug.latestCompletedRaceNumber ?? 'null'}`,
+              `  standingsScheduleId: ${raceDebug.standingsScheduleIdUsed ?? raceDebug.standingsScheduleId ?? 'null'}`,
+              `  standingsDataRaceNumber: ${raceDebug.standingsDataRaceNumber ?? 'null'}`,
+              `  standingsFrozenToRequestedRace: ${raceDebug.standingsFrozenToRequestedRace === true}`,
+              `  usingFutureStandings: ${raceDebug.usingFutureStandings === true}`,
               '',
             ]
           : []),
