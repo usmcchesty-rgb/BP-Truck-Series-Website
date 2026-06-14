@@ -764,7 +764,16 @@ footer{
   border:1px solid #2b2b2b;
   background:rgba(0,0,0,.28);
   border-radius:4px;
+  color:inherit;
+  text-decoration:none;
+  transition:border-color .15s ease,background .15s ease;
 }
+a.home-news-item:hover{
+  border-color:#5a1010;
+  background:rgba(0,0,0,.38);
+}
+a.home-news-item:hover h4{color:#fff}
+.home-news-item--placeholder{pointer-events:none}
 .home-news-thumb{
   width:92px;
   height:62px;
@@ -774,9 +783,51 @@ footer{
   background:rgba(255,255,255,.04);
   border:1px solid #333;
   font-size:22px;
+  flex-shrink:0;
 }
-.home-news-item h4{margin:0 0 6px;font-size:14px;font-style:italic}
-.home-news-item p{margin:0;color:#aaa;font-size:11px;line-height:1.4}
+.home-news-thumb-wrap{
+  --img-zoom:1;
+  --img-x:50;
+  --img-y:50;
+  width:92px;
+  height:62px;
+  border:1px solid #333;
+  background:linear-gradient(135deg,#151515,#0a0a0a 60%,#220707);
+  overflow:hidden;
+  position:relative;
+}
+.home-news-thumb-wrap img,.home-news-thumb-img{
+  width:100%;
+  height:100%;
+  min-height:0;
+}
+.home-news-thumb--placeholder{
+  background:linear-gradient(135deg,#151515,#0a0a0a 60%,#220707);
+  font:900 18px Impact,sans-serif;
+  color:var(--red);
+  letter-spacing:.06em;
+}
+.home-news-copy{display:grid;gap:4px;min-width:0}
+.home-news-item .news-type-badge{
+  font-size:8px;
+  padding:2px 7px;
+  margin:0;
+  width:fit-content;
+}
+.home-news-item h4{margin:0;font-size:14px;font-style:italic;line-height:1.25}
+.home-news-item p{margin:0;color:#aaa;font-size:11px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.home-news-meta{
+  display:flex;
+  flex-wrap:wrap;
+  gap:4px 6px;
+  margin-top:2px;
+  color:#777;
+  font-size:9px;
+  font-weight:700;
+  line-height:1.3;
+}
+.home-news-meta span{color:#999}
+.home-news-meta .home-news-meta-sep{color:#555}
 .home-news-item time{display:block;margin-top:6px;color:#777;font-size:9px;font-weight:700}
 .home-spotlight-card img{
   width:100%;
@@ -1452,7 +1503,7 @@ footer{
 .news-featured-image-wrap{min-height:320px;height:100%}
 .news-card-image-wrap{min-height:180px;border-bottom:1px solid #222}
 .news-article-hero-wrap{margin:18px 0;border:1px solid #333;aspect-ratio:16/10;max-height:420px;width:100%}
-.news-featured-image-wrap img,.news-card-image-wrap img,.news-article-hero-wrap img,.article-image-preview img{
+.news-featured-image-wrap img,.news-card-image-wrap img,.news-article-hero-wrap img,.article-image-preview img,.home-news-thumb-wrap img{
   width:100%;
   height:100%;
   min-height:inherit;

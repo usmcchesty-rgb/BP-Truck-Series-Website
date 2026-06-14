@@ -311,6 +311,117 @@ async function loadPowerRankingsWidget() {
   }
 }
 
+const HOME_NEWS_PLACEHOLDER_HTML = `
+  <div class="home-news-item home-news-item--placeholder">
+    <div class="home-news-thumb" aria-hidden="true">📰</div>
+    <div class="home-news-copy">
+      <h4>Season 11 Playoff Picture Heating Up</h4>
+      <p>News content coming soon. Check back for race reports, driver interviews, and championship coverage.</p>
+      <time>Coming Soon</time>
+    </div>
+  </div>
+  <div class="home-news-item home-news-item--placeholder">
+    <div class="home-news-thumb" aria-hidden="true">🏁</div>
+    <div class="home-news-copy">
+      <h4>Weekly Race Recaps</h4>
+      <p>Full race results, highlights, and standings updates will publish here after each event.</p>
+      <time>Coming Soon</time>
+    </div>
+  </div>
+  <div class="home-news-item home-news-item--placeholder">
+    <div class="home-news-thumb" aria-hidden="true">🎙️</div>
+    <div class="home-news-copy">
+      <h4>League Announcements</h4>
+      <p>Schedule changes, rule updates, and community news will appear in this feed.</p>
+      <time>Coming Soon</time>
+    </div>
+  </div>
+`;
+
+function articleUrl(slug) {
+  return `/news/${encodeURIComponent(slug)}`;
+}
+
+function renderHomeNewsThumb(article) {
+  if (!NewsArticleImage.hasImage(article)) {
+    return `<div class="home-news-thumb home-news-thumb--placeholder" aria-hidden="true"><span>BP</span></div>`;
+  }
+  return NewsArticleImage.renderImageHtml(article, {
+    wrapClass: "home-news-thumb-wrap",
+    imgClass: "home-news-thumb-img",
+    alt: article.headline || "Article image",
+  });
+}
+
+function renderHomeNewsMeta(article) {
+  const author = escapeHtml(article.author || "Miles Apex");
+  const date = MilesApexAvatar.formatShortDate(article.publishedAt);
+  const readTime = MilesApexAvatar.formatReadTime(
+    MilesApexAvatar.articleReadMinutes(article)
+  );
+  const parts = [
+    `<span>${author}</span>`,
+    date ? `<span>${escapeHtml(date)}</span>` : "",
+    readTime ? `<span>${escapeHtml(readTime)}</span>` : "",
+  ].filter(Boolean);
+  return `<div class="home-news-meta">${parts.join('<span class="home-news-meta-sep" aria-hidden="true">·</span>')}</div>`;
+}
+
+function renderHomeNewsItem(article) {
+  const dek = article.subheadline || article.summary || "";
+  const typeLabel = escapeHtml(article.articleTypeLabel || article.articleType || "News");
+  return `
+    <a class="home-news-item" href="${articleUrl(article.slug)}">
+      ${renderHomeNewsThumb(article)}
+      <div class="home-news-copy">
+        <span class="news-type-badge">${typeLabel}</span>
+        <h4>${escapeHtml(article.headline)}</h4>
+        ${dek ? `<p>${escapeHtml(dek)}</p>` : ""}
+        ${renderHomeNewsMeta(article)}
+      </div>
+    </a>
+  `;
+}
+
+function renderHomeNewsPlaceholder() {
+  const list = $("#homeNewsList");
+  if (!list) return;
+  list.innerHTML = HOME_NEWS_PLACEHOLDER_HTML;
+}
+
+function renderHomeNews(articles) {
+  const list = $("#homeNewsList");
+  if (!list) return;
+
+  const published = (articles || [])
+    .filter((a) => a.published)
+    .sort((a, b) => {
+      const aTime = new Date(a.publishedAt || 0).getTime();
+      const bTime = new Date(b.publishedAt || 0).getTime();
+      return bTime - aTime;
+    })
+    .slice(0, 3);
+
+  if (!published.length) {
+    renderHomeNewsPlaceholder();
+    return;
+  }
+
+  list.innerHTML = published.map((article) => renderHomeNewsItem(article)).join("");
+}
+
+async function loadHomeNews() {
+  try {
+    const res = await fetch("/api/news");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    renderHomeNews(data.articles || []);
+  } catch (e) {
+    console.warn("Home news load failed:", e);
+    renderHomeNewsPlaceholder();
+  }
+}
+
 async function loadHome() {
   let leader = null;
   let rows = [];
@@ -362,4 +473,5 @@ async function loadHome() {
 renderHomeSponsors();
 loadGreenFlagBroadcast();
 loadPowerRankingsWidget();
+loadHomeNews();
 loadHome();
