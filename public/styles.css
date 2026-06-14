@@ -793,7 +793,7 @@ footer{
 .pedal-prophet-hero{
   text-align:center;
   margin:0 0 36px;
-  padding:40px 28px 36px;
+  padding:28px 24px 26px;
   border:1px solid #3a3a3a;
   border-radius:8px;
   background:
@@ -809,7 +809,7 @@ footer{
   display:block;
   width:min(120px, 28vw);
   height:3px;
-  margin:0 auto 24px;
+  margin:0 auto 16px;
   border-radius:999px;
   background:linear-gradient(90deg, transparent, var(--red), transparent);
 }
@@ -817,20 +817,20 @@ footer{
   display:flex;
   justify-content:center;
   width:100%;
-  padding:8px 0 4px;
-  margin:0 0 12px;
+  padding:2px 0 0;
+  margin:0 0 8px;
 }
 .pedal-prophet-logo-hero{
   display:block;
   width:100%;
-  max-width:560px;
+  max-width:435px;
   height:auto;
   margin:0 auto;
   object-fit:contain;
   object-position:center;
 }
 .pedal-prophet-season{
-  margin:20px 0 12px;
+  margin:12px 0 10px;
   font-size:clamp(17px, 2.2vw, 22px);
   font-style:italic;
   font-weight:900;
@@ -885,17 +885,22 @@ footer{
   justify-content:center;
   pointer-events:none;
   z-index:0;
+  overflow:hidden;
 }
 .prophet-take-watermark .pedal-prophet-logo{
-  width:min(320px, 70%);
-  max-height:140px;
-  opacity:.05;
+  width:auto;
+  height:65%;
+  max-width:88%;
+  max-height:none;
+  opacity:.025;
   filter:grayscale(1);
+  object-fit:contain;
+  object-position:center;
 }
 .prophet-take-inner{
   position:relative;
   z-index:1;
-  padding:22px 24px 24px;
+  padding:22px 28px 26px;
 }
 .prophet-take-head{
   display:flex;
@@ -923,13 +928,23 @@ footer{
   font-weight:900;
   text-transform:uppercase;
 }
+.power-rankings-prophet-body{
+  width:100%;
+}
 .power-rankings-prophet-body p{
   margin:0 0 16px;
   color:#e8e8e8;
   font-size:15px;
   line-height:1.7;
   font-weight:500;
-  max-width:72ch;
+  max-width:none;
+  break-inside:avoid;
+}
+@media(min-width:860px){
+  .power-rankings-prophet-body{
+    column-count:2;
+    column-gap:2.25rem;
+  }
 }
 .power-rankings-prophet-body p:last-child{margin-bottom:0}
 .power-rankings-block{margin-top:0}
@@ -1267,11 +1282,17 @@ footer{
   .home-hero h2{font-size:30px}
   .power-rankings-page .power-rankings-layout{grid-template-columns:1fr}
   .power-ranking-card{grid-template-columns:56px 96px minmax(0,1fr)}
-  .pedal-prophet-hero{padding:32px 20px 28px}
-  .pedal-prophet-hero-logo-wrap{padding:6px 0 2px;margin-bottom:10px}
-  .pedal-prophet-logo-hero{max-width:min(520px, 78vw)}
+  .pedal-prophet-hero{padding:24px 18px 22px}
+  .pedal-prophet-hero-logo-wrap{padding:0;margin-bottom:6px}
+  .pedal-prophet-logo-hero{max-width:min(400px, 72vw)}
   .prophet-take-inner{padding:16px 14px 18px}
   .prophet-take-head{gap:10px}
+}
+@media(max-width:859px){
+  .prophet-take-watermark .pedal-prophet-logo{
+    height:58%;
+    max-width:92%;
+  }
 }
 @media(max-width:700px){
   .power-ranking-card,.power-ranking-honorable-card{grid-template-columns:1fr}
@@ -1280,11 +1301,11 @@ footer{
   .power-ranking-movement{font-size:11px;min-width:42px;padding:3px 8px}
   .power-rankings-section-head{align-items:flex-start}
   .power-rankings-prophet-take + .power-rankings-block{margin-top:24px;padding-top:22px}
-  .pedal-prophet-hero{padding:28px 16px 24px}
-  .pedal-prophet-hero::before{margin-bottom:18px}
-  .pedal-prophet-hero-logo-wrap{padding:4px 0 0;margin-bottom:8px}
+  .pedal-prophet-hero{padding:22px 14px 20px}
+  .pedal-prophet-hero::before{margin-bottom:14px}
+  .pedal-prophet-hero-logo-wrap{margin-bottom:4px}
   .pedal-prophet-logo-hero{max-width:clamp(280px, 92vw, 320px)}
-  .pedal-prophet-season{margin-top:16px}
+  .pedal-prophet-season{margin-top:10px}
   .pedal-prophet-tagline{font-size:13px}
 }
 @media(max-width:900px){
