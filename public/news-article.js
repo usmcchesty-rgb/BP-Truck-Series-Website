@@ -11,17 +11,6 @@ function escapeHtml(s) {
     .replace(/"/g, "&quot;");
 }
 
-function formatDate(value) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-}
-
 function getSlugFromPath() {
   const params = new URLSearchParams(window.location.search);
   const fromQuery = params.get("slug");
@@ -41,27 +30,34 @@ function renderBody(body) {
     .join("");
 }
 
-function renderArticle(article) {
+function renderArticle(article, settings) {
   const panel = $("#articlePanel");
   if (!panel || !article) return;
 
   document.title = `${article.headline} — Blazing Pedals Truck Series News`;
+
+  const readMinutes = MilesApexAvatar.articleReadMinutes(article);
+  const author = article.author || "Miles Apex";
 
   panel.innerHTML = `
     <a class="news-back-link" href="/news.html">← Back to News</a>
     <span class="news-type-badge">${escapeHtml(article.articleTypeLabel || article.articleType)}</span>
     <h1 class="news-article-headline">${escapeHtml(article.headline)}</h1>
     ${article.subheadline ? `<p class="news-article-subheadline">${escapeHtml(article.subheadline)}</p>` : ""}
-    <div class="news-meta news-article-meta">
-      <span class="news-author">${escapeHtml(article.author || "Miles Apex")}</span>
-      <time>${escapeHtml(formatDate(article.publishedAt))}</time>
-    </div>
+    ${MilesApexAvatar.renderAuthorRow(settings, {
+      author,
+      date: article.publishedAt,
+      readMinutes,
+    })}
     ${article.featuredImageUrl ? `<img class="news-article-image" src="${escapeHtml(article.featuredImageUrl)}" alt="">` : ""}
     <div class="news-article-body">${renderBody(article.body)}</div>
     <aside class="news-author-card">
-      <strong>${escapeHtml(article.author || "Miles Apex")}</strong>
-      <span>Motorsports Journalist</span>
-      <p>${escapeHtml(AUTHOR_BIO)}</p>
+      ${MilesApexAvatar.renderAvatarHtml(settings, { size: "lg", alt: author })}
+      <div class="news-author-card-copy">
+        <strong>${escapeHtml(author)}</strong>
+        <span>Motorsports Journalist</span>
+        <p>${escapeHtml(AUTHOR_BIO)}</p>
+      </div>
     </aside>
   `;
 }
@@ -77,10 +73,11 @@ async function loadArticle() {
   }
 
   try {
+    const settings = await MilesApexAvatar.loadSettings();
     const res = await fetch(`/api/news?slug=${encodeURIComponent(slug)}`);
     const data = await res.json();
     if (!res.ok || !data.article) throw new Error("Not found");
-    renderArticle(data.article);
+    renderArticle(data.article, settings);
   } catch (e) {
     panel.innerHTML = `<p class="muted">Article not found. <a href="/news.html">Return to News</a></p>`;
   }

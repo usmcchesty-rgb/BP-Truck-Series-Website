@@ -14,7 +14,12 @@ export const DEFAULTS = {
   raceCompletionBufferMinutes: 180,
   headerLogoUrl: '',
   headerLogoAltText: 'Blazing Pedals Truck Series',
-  headerLogoUpdatedAt: null
+  headerLogoUpdatedAt: null,
+  milesApexImageUrl: '',
+  milesApexImageUpdatedAt: null,
+  milesApexImageZoom: 1,
+  milesApexImageX: 50,
+  milesApexImageY: 50,
 };
 
 export function supabase() {
@@ -85,6 +90,28 @@ export function resolveHeaderLogoDisplayUrl(settings = {}) {
   const url = resolveHeaderLogoUrl(settings);
   if (!settings.headerLogoUrl) return url;
   const version = photoCacheVersion(settings.headerLogoUpdatedAt) || Date.now();
+  return withPhotoCacheBust(url, version);
+}
+
+export function resolveMilesApexImageUrl(settings = {}) {
+  return stripPhotoUrlQuery(settings.milesApexImageUrl || '');
+}
+
+export function resolveMilesApexCrop(settings = {}) {
+  const zoom = Number(settings.milesApexImageZoom);
+  const x = Number(settings.milesApexImageX);
+  const y = Number(settings.milesApexImageY);
+  return {
+    zoom: Number.isFinite(zoom) && zoom > 0 ? zoom : 1,
+    x: Number.isFinite(x) ? Math.min(100, Math.max(0, x)) : 50,
+    y: Number.isFinite(y) ? Math.min(100, Math.max(0, y)) : 50,
+  };
+}
+
+export function resolveMilesApexImageDisplayUrl(settings = {}) {
+  const url = resolveMilesApexImageUrl(settings);
+  if (!url) return '';
+  const version = photoCacheVersion(settings.milesApexImageUpdatedAt) || Date.now();
   return withPhotoCacheBust(url, version);
 }
 

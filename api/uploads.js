@@ -1,5 +1,6 @@
 import { uploadDriverPhoto } from "./_upload-driver-photo.js";
 import { uploadHeaderLogo } from "./_upload-header-logo.js";
+import { uploadReporterImage } from "./_upload-reporter-image.js";
 
 function json(res, status, body) {
   res.status(status);
@@ -39,7 +40,7 @@ export default async function handler(req, res) {
 
     const action = resolveAction(body);
     if (!action) {
-      json(res, 400, { error: 'Missing action. Use "driver-photo" or "header-logo".' });
+      json(res, 400, { error: 'Missing action. Use "driver-photo", "header-logo", or "reporter-image".' });
       return;
     }
 
@@ -48,6 +49,8 @@ export default async function handler(req, res) {
       result = await uploadDriverPhoto(body);
     } else if (action === "header-logo") {
       result = await uploadHeaderLogo(body);
+    } else if (action === "reporter-image") {
+      result = await uploadReporterImage(body);
     } else {
       json(res, 400, { error: `Unknown action: ${action}` });
       return;

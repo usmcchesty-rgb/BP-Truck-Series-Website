@@ -18,6 +18,22 @@ export default async function handler(req, res) {
   if (body.headerLogoAltText !== undefined) {
     patch.headerLogoAltText = String(body.headerLogoAltText || '').trim();
   }
+  if (body.milesApexImageUrl !== undefined) {
+    patch.milesApexImageUrl = stripPhotoUrlQuery(String(body.milesApexImageUrl || '').trim());
+    patch.milesApexImageUpdatedAt = new Date().toISOString();
+  }
+  if (body.milesApexImageZoom !== undefined) {
+    const zoom = Number(body.milesApexImageZoom);
+    patch.milesApexImageZoom = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+  }
+  if (body.milesApexImageX !== undefined) {
+    const x = Number(body.milesApexImageX);
+    patch.milesApexImageX = Number.isFinite(x) ? Math.min(100, Math.max(0, x)) : 50;
+  }
+  if (body.milesApexImageY !== undefined) {
+    const y = Number(body.milesApexImageY);
+    patch.milesApexImageY = Number.isFinite(y) ? Math.min(100, Math.max(0, y)) : 50;
+  }
   const { data, error } = await sb.from('site_settings').upsert(patch).select().single();
   if (error) return res.status(500).json({ error: error.message });
   res.status(200).json(data);

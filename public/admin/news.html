@@ -17,8 +17,8 @@
     .btn-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
     .btn-secondary { background: linear-gradient(#1c1c1c, #080808); }
     .btn-danger { background: linear-gradient(#5a1010, #2a0505); border-color: #733; }
-    #adminMsg, #loginMsg { margin-top: 10px; font-size: 12px; color: #ccc; white-space: pre-wrap; }
-    #adminMsg.error, #loginMsg.error { color: #ff6060; }
+    #adminMsg, #loginMsg, #reporterMsg { margin-top: 10px; font-size: 12px; color: #ccc; white-space: pre-wrap; }
+    #adminMsg.error, #loginMsg.error, #reporterMsg.error { color: #ff6060; }
     .pw-row { max-width: 320px; margin-bottom: 14px; }
     .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
     .article-list { display: grid; gap: 8px; margin-bottom: 16px; }
@@ -39,6 +39,15 @@
     .generation-sources h3 { margin: 0 0 8px; font-size: 13px; color: #6ec6ff; }
     .transcript-diagnostics pre, .generation-sources pre { margin: 0; font-size: 12px; color: #ccc; white-space: pre-wrap; }
     .preview-link { font-size: 11px; color: #8fd3ff; }
+    .reporter-preview-row { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start; margin: 12px 0; }
+    .reporter-preview-frame { width: 120px; height: 120px; }
+    .reporter-controls { flex: 1 1 280px; max-width: 520px; }
+    .slider-row { display: grid; gap: 6px; margin: 10px 0; }
+    .slider-row label { font-size: 11px; color: #999; font-weight: 900; text-transform: uppercase; }
+    .slider-row input[type="range"] { width: 100%; }
+    .slider-value { font-size: 11px; color: #ccc; }
+    .editor-reporter-preview { display: flex; align-items: center; gap: 12px; margin: 0 0 14px; padding: 10px 12px; border: 1px solid #333; background: #0a0a0a; }
+    .editor-reporter-preview .miles-apex-avatar { width: 48px; height: 48px; }
   </style>
 </head>
 <body>
@@ -59,6 +68,35 @@
     <h1>News — Miles Apex</h1>
     <p class="sub">Generate, edit, and publish Blazing Pedals Truck Series news articles. All public articles appear under byline Miles Apex.</p>
 
+    <div class="panel" id="reporterImagePanel">
+      <h2>Reporter Image — Miles Apex</h2>
+      <p class="sub">Upload and crop the Miles Apex avatar used on news cards and article pages.</p>
+      <div class="reporter-preview-row">
+        <div id="reporterPreview" class="miles-apex-avatar miles-apex-avatar--lg reporter-preview-frame miles-apex-avatar--initials">MA</div>
+        <div class="reporter-controls">
+          <label class="field-label" for="reporterImageFile">Upload Reporter Image (PNG)</label>
+          <input id="reporterImageFile" type="file" accept="image/png,.png">
+          <div class="slider-row">
+            <label for="reporterZoom">Zoom <span class="slider-value" id="reporterZoomValue">1.00</span></label>
+            <input id="reporterZoom" type="range" min="0.5" max="3" step="0.05" value="1">
+          </div>
+          <div class="slider-row">
+            <label for="reporterX">Horizontal Position <span class="slider-value" id="reporterXValue">50</span></label>
+            <input id="reporterX" type="range" min="0" max="100" step="1" value="50">
+          </div>
+          <div class="slider-row">
+            <label for="reporterY">Vertical Position <span class="slider-value" id="reporterYValue">50</span></label>
+            <input id="reporterY" type="range" min="0" max="100" step="1" value="50">
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-secondary" type="button" onclick="resetReporterCrop()">Reset Crop</button>
+            <button class="btn" type="button" onclick="saveReporterSettings()">Save Reporter Image Settings</button>
+          </div>
+          <pre id="reporterMsg"></pre>
+        </div>
+      </div>
+    </div>
+
     <div class="panel">
       <h2>Saved Articles</h2>
       <div id="articleList" class="article-list"></div>
@@ -67,6 +105,14 @@
 
     <div class="panel">
       <h2>Article Editor</h2>
+      <div class="editor-reporter-preview">
+        <div id="editorReporterPreview" class="miles-apex-avatar miles-apex-avatar--initials">MA</div>
+        <div>
+          <strong style="display:block;font-size:13px;color:#fff;">Miles Apex</strong>
+          <span class="sub" style="margin:0;">Public byline avatar preview</span>
+          <a class="preview-link" href="#reporterImagePanel">Edit Reporter Image</a>
+        </div>
+      </div>
       <input type="hidden" id="articleId">
       <div class="meta-grid">
         <div>
@@ -137,10 +183,12 @@
     </div>
   </main>
 
+  <script src="/miles-apex-avatar.js"></script>
   <script>
     const $ = (s) => document.querySelector(s);
     const SESSION_KEY = 'bp_admin_pw';
     let drivers = [];
+    let reporterSettings = MilesApexAvatar.normalizeSettings({});
 
     function getSessionPw() { return sessionStorage.getItem(SESSION_KEY) || ''; }
 
@@ -165,9 +213,125 @@
       $('#adminView').hidden = false;
       if (window.AdminNav) AdminNav.setLoggedIn(true);
       else if ($('#logoutBtn')) $('#logoutBtn').hidden = false;
+      loadReporterSettings();
       loadDrivers();
       loadArticles();
     }
+
+    function readReporterCropFromForm() {
+      return {
+        milesApexImageZoom: Number($('#reporterZoom').value) || 1,
+        milesApexImageX: Number($('#reporterX').value),
+        milesApexImageY: Number($('#reporterY').value),
+      };
+    }
+
+    function updateReporterSliderLabels() {
+      $('#reporterZoomValue').textContent = Number($('#reporterZoom').value).toFixed(2);
+      $('#reporterXValue').textContent = $('#reporterX').value;
+      $('#reporterYValue').textContent = $('#reporterY').value;
+    }
+
+    function updateReporterPreview() {
+      reporterSettings = MilesApexAvatar.normalizeSettings({
+        ...reporterSettings,
+        ...readReporterCropFromForm(),
+      });
+      updateReporterSliderLabels();
+      MilesApexAvatar.applyPreview($('#reporterPreview'), reporterSettings);
+      MilesApexAvatar.applyPreview($('#editorReporterPreview'), reporterSettings);
+    }
+
+    async function loadReporterSettings() {
+      try {
+        const res = await fetch('/api/settings');
+        const data = await res.json();
+        reporterSettings = MilesApexAvatar.normalizeSettings(data);
+        $('#reporterZoom').value = reporterSettings.milesApexImageZoom;
+        $('#reporterX').value = reporterSettings.milesApexImageX;
+        $('#reporterY').value = reporterSettings.milesApexImageY;
+        updateReporterPreview();
+      } catch (e) {
+        setReporterMsg(e.message, true);
+      }
+    }
+
+    function setReporterMsg(text, isError = false) {
+      const msg = $('#reporterMsg');
+      if (!msg) return;
+      msg.textContent = text;
+      msg.classList.toggle('error', isError);
+    }
+
+    function readFileAsDataUrl(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(new Error('Could not read file.'));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function saveReporterSettings() {
+      setReporterMsg('Saving reporter image settings...');
+      try {
+        const file = $('#reporterImageFile')?.files?.[0];
+        if (file) {
+          const imageBase64 = await readFileAsDataUrl(file);
+          const uploadRes = await fetch('/api/uploads', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'reporter-image',
+              password: getSessionPw(),
+              imageBase64,
+            }),
+          });
+          const uploadData = await uploadRes.json();
+          if (!uploadRes.ok) throw new Error(uploadData.error || 'Image upload failed.');
+          reporterSettings.milesApexImageUrl =
+            uploadData.milesApexImageUrlStored || uploadData.milesApexImageUrl || reporterSettings.milesApexImageUrl;
+          reporterSettings.milesApexImageUpdatedAt =
+            uploadData.milesApexImageUpdatedAt || new Date().toISOString();
+          $('#reporterImageFile').value = '';
+        }
+
+        const crop = readReporterCropFromForm();
+        const settingsPayload = {
+          password: getSessionPw(),
+          milesApexImageZoom: crop.milesApexImageZoom,
+          milesApexImageX: crop.milesApexImageX,
+          milesApexImageY: crop.milesApexImageY,
+        };
+        if (file) {
+          settingsPayload.milesApexImageUrl = reporterSettings.milesApexImageUrl;
+        }
+        const res = await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(settingsPayload),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Save failed.');
+        reporterSettings = MilesApexAvatar.normalizeSettings(data);
+        updateReporterPreview();
+        setReporterMsg('Reporter image settings saved.');
+      } catch (e) {
+        setReporterMsg(e.message, true);
+      }
+    }
+
+    function resetReporterCrop() {
+      $('#reporterZoom').value = '1';
+      $('#reporterX').value = '50';
+      $('#reporterY').value = '50';
+      updateReporterPreview();
+      setReporterMsg('Crop reset to defaults. Click Save Reporter Image Settings to persist.');
+    }
+
+    ['reporterZoom', 'reporterX', 'reporterY'].forEach((id) => {
+      $('#' + id)?.addEventListener('input', updateReporterPreview);
+    });
 
     async function login() {
       const msg = $('#loginMsg');

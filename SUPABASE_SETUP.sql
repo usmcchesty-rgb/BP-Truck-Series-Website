@@ -10,7 +10,12 @@ create table if not exists site_settings (
   "raceCompletionBufferMinutes" int,
   "headerLogoUrl" text,
   "headerLogoAltText" text,
-  "headerLogoUpdatedAt" timestamptz
+  "headerLogoUpdatedAt" timestamptz,
+  "milesApexImageUrl" text,
+  "milesApexImageUpdatedAt" timestamptz,
+  "milesApexImageZoom" numeric default 1,
+  "milesApexImageX" numeric default 50,
+  "milesApexImageY" numeric default 50
 );
 
 -- If upgrading an existing site_settings table, run once:
@@ -19,6 +24,11 @@ alter table site_settings add column if not exists "raceCompletionBufferMinutes"
 alter table site_settings add column if not exists "headerLogoUrl" text;
 alter table site_settings add column if not exists "headerLogoAltText" text;
 alter table site_settings add column if not exists "headerLogoUpdatedAt" timestamptz;
+alter table site_settings add column if not exists "milesApexImageUrl" text;
+alter table site_settings add column if not exists "milesApexImageUpdatedAt" timestamptz;
+alter table site_settings add column if not exists "milesApexImageZoom" numeric default 1;
+alter table site_settings add column if not exists "milesApexImageX" numeric default 50;
+alter table site_settings add column if not exists "milesApexImageY" numeric default 50;
 
 insert into site_settings (id, "seriesName", "seasonName", "standingsUrl", "scheduleUrl", "playoffCut", "refreshSeconds")
 values (1, 'Blazing Pedals Truck Series', 'Season 11', 'https://www.simracerhub.com/scoring/season_standings.php?season_id=27987', 'https://www.simracerhub.com/scoring/season_schedule.php?season_id=27987', 16, 60)
