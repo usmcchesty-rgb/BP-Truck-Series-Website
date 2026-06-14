@@ -75,7 +75,10 @@
         <div id="reporterPreview" class="miles-apex-avatar miles-apex-avatar--lg reporter-preview-frame miles-apex-avatar--initials">MA</div>
         <div class="reporter-controls">
           <label class="field-label" for="reporterImageFile">Upload Reporter Image (PNG)</label>
-          <input id="reporterImageFile" type="file" accept="image/png,.png">
+          <div class="btn-row" style="margin-top:0;">
+            <input id="reporterImageFile" type="file" accept="image/png,.png" style="max-width:100%;">
+            <button id="uploadReporterBtn" class="btn btn-secondary" type="button" onclick="uploadReporterImage()" disabled>Upload Reporter Image</button>
+          </div>
           <div class="slider-row">
             <label for="reporterZoom">Zoom <span class="slider-value" id="reporterZoomValue">1.00</span></label>
             <input id="reporterZoom" type="range" min="0.5" max="3" step="0.05" value="1">
@@ -189,8 +192,40 @@
     const SESSION_KEY = 'bp_admin_pw';
     let drivers = [];
     let reporterSettings = MilesApexAvatar.normalizeSettings({});
+    let pendingReporterPreviewUrl = null;
 
     function getSessionPw() { return sessionStorage.getItem(SESSION_KEY) || ''; }
+
+    function revokePendingReporterPreview() {
+      if (pendingReporterPreviewUrl) {
+        URL.revokeObjectURL(pendingReporterPreviewUrl);
+        pendingReporterPreviewUrl = null;
+      }
+    }
+
+    async function parseJsonResponse(res) {
+      const raw = await res.text();
+      let data = {};
+      if (raw) {
+        try {
+          data = JSON.parse(raw);
+        } catch {
+          if (!res.ok) throw new Error(raw.trim() || `Request failed (${res.status})`);
+          throw new Error('Server returned invalid JSON.');
+        }
+      }
+      if (!res.ok) {
+        const detail = data.setupSql ? `\n\n${data.setupSql}` : '';
+        throw new Error((data.error || raw.trim() || `Request failed (${res.status})`) + detail);
+      }
+      return data;
+    }
+
+    function syncUploadButtonState() {
+      const btn = $('#uploadReporterBtn');
+      const file = $('#reporterImageFile')?.files?.[0];
+      if (btn) btn.disabled = !file;
+    }
 
     async function verifyPassword(pw) {
       const res = await fetch('/api/settings', {
@@ -232,25 +267,34 @@
       $('#reporterYValue').textContent = $('#reporterY').value;
     }
 
+    function currentReporterSettings() {
+      return MilesApexAvatar.mergeSettings(reporterSettings, readReporterCropFromForm());
+    }
+
     function updateReporterPreview() {
-      reporterSettings = MilesApexAvatar.normalizeSettings({
-        ...reporterSettings,
-        ...readReporterCropFromForm(),
-      });
+      reporterSettings = currentReporterSettings();
       updateReporterSliderLabels();
-      MilesApexAvatar.applyPreview($('#reporterPreview'), reporterSettings);
-      MilesApexAvatar.applyPreview($('#editorReporterPreview'), reporterSettings);
+      const previewUrl = pendingReporterPreviewUrl || MilesApexAvatar.displayUrl(reporterSettings);
+      MilesApexAvatar.applyPreview($('#reporterPreview'), reporterSettings, { previewUrl });
+      MilesApexAvatar.applyPreview($('#editorReporterPreview'), reporterSettings, { previewUrl });
     }
 
     async function loadReporterSettings() {
       try {
+        MilesApexAvatar.clearCache();
         const res = await fetch('/api/settings');
-        const data = await res.json();
-        reporterSettings = MilesApexAvatar.normalizeSettings(data);
+        const data = await parseJsonResponse(res);
+        reporterSettings = MilesApexAvatar.mergeSettings(reporterSettings, data);
         $('#reporterZoom').value = reporterSettings.milesApexImageZoom;
         $('#reporterX').value = reporterSettings.milesApexImageX;
         $('#reporterY').value = reporterSettings.milesApexImageY;
+        revokePendingReporterPreview();
+        $('#reporterImageFile').value = '';
+        syncUploadButtonState();
         updateReporterPreview();
+        if (reporterSettings.milesApexImageUrl) {
+          setReporterMsg('Loaded saved Miles Apex reporter image.');
+        }
       } catch (e) {
         setReporterMsg(e.message, true);
       }
@@ -272,30 +316,96 @@
       });
     }
 
-    async function saveReporterSettings() {
-      setReporterMsg('Saving reporter image settings...');
-      try {
-        const file = $('#reporterImageFile')?.files?.[0];
-        if (file) {
-          const imageBase64 = await readFileAsDataUrl(file);
-          const uploadRes = await fetch('/api/uploads', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              action: 'reporter-image',
-              password: getSessionPw(),
-              imageBase64,
-            }),
-          });
-          const uploadData = await uploadRes.json();
-          if (!uploadRes.ok) throw new Error(uploadData.error || 'Image upload failed.');
-          reporterSettings.milesApexImageUrl =
-            uploadData.milesApexImageUrlStored || uploadData.milesApexImageUrl || reporterSettings.milesApexImageUrl;
-          reporterSettings.milesApexImageUpdatedAt =
-            uploadData.milesApexImageUpdatedAt || new Date().toISOString();
-          $('#reporterImageFile').value = '';
-        }
+    function onReporterFileSelected() {
+      const file = $('#reporterImageFile')?.files?.[0];
+      revokePendingReporterPreview();
+      syncUploadButtonState();
+      if (!file) {
+        updateReporterPreview();
+        return;
+      }
+      if (!/\.png$/i.test(file.name) && file.type !== 'image/png') {
+        setReporterMsg('Only PNG files are supported.', true);
+        $('#reporterImageFile').value = '';
+        syncUploadButtonState();
+        updateReporterPreview();
+        return;
+      }
+      pendingReporterPreviewUrl = URL.createObjectURL(file);
+      updateReporterPreview();
+      setReporterMsg(`Selected ${file.name}. Preview updated — click Upload Reporter Image to save.`);
+    }
 
+    async function uploadReporterImage() {
+      const file = $('#reporterImageFile')?.files?.[0];
+      if (!file) {
+        setReporterMsg('Choose a PNG file first.', true);
+        return;
+      }
+
+      const uploadBtn = $('#uploadReporterBtn');
+      if (uploadBtn) uploadBtn.disabled = true;
+      setReporterMsg('Uploading reporter image...');
+
+      try {
+        const imageBase64 = await readFileAsDataUrl(file);
+        const uploadRes = await fetch('/api/uploads', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'reporter-image',
+            password: getSessionPw(),
+            imageBase64,
+          }),
+        });
+        const uploadData = await parseJsonResponse(uploadRes);
+        const storedUrl = String(
+          uploadData.milesApexImageUrlStored || uploadData.milesApexImageUrl || ''
+        ).split('?')[0];
+        if (!storedUrl) throw new Error('Upload succeeded but no image URL was returned.');
+
+        reporterSettings = MilesApexAvatar.mergeSettings(reporterSettings, {
+          milesApexImageUrl: storedUrl,
+          milesApexImageUpdatedAt: uploadData.milesApexImageUpdatedAt || new Date().toISOString(),
+          ...readReporterCropFromForm(),
+        });
+
+        const settingsRes = await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            password: getSessionPw(),
+            milesApexImageUrl: storedUrl,
+            milesApexImageZoom: reporterSettings.milesApexImageZoom,
+            milesApexImageX: reporterSettings.milesApexImageX,
+            milesApexImageY: reporterSettings.milesApexImageY,
+          }),
+        });
+        const settingsData = await parseJsonResponse(settingsRes);
+        reporterSettings = MilesApexAvatar.mergeSettings(reporterSettings, settingsData);
+        MilesApexAvatar.clearCache();
+
+        revokePendingReporterPreview();
+        $('#reporterImageFile').value = '';
+        syncUploadButtonState();
+        updateReporterPreview();
+        setReporterMsg(
+          `Reporter image uploaded to ${uploadData.savedTo || 'site-assets/miles-apex.png'}.`
+        );
+      } catch (e) {
+        setReporterMsg(e.message, true);
+        syncUploadButtonState();
+      }
+    }
+
+    async function saveReporterSettings() {
+      if ($('#reporterImageFile')?.files?.[0]) {
+        setReporterMsg('Upload the selected PNG first, then save crop settings.', true);
+        return;
+      }
+
+      setReporterMsg('Saving crop settings...');
+      try {
         const crop = readReporterCropFromForm();
         const settingsPayload = {
           password: getSessionPw(),
@@ -303,19 +413,16 @@
           milesApexImageX: crop.milesApexImageX,
           milesApexImageY: crop.milesApexImageY,
         };
-        if (file) {
-          settingsPayload.milesApexImageUrl = reporterSettings.milesApexImageUrl;
-        }
         const res = await fetch('/api/settings', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(settingsPayload),
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Save failed.');
-        reporterSettings = MilesApexAvatar.normalizeSettings(data);
+        const data = await parseJsonResponse(res);
+        reporterSettings = MilesApexAvatar.mergeSettings(reporterSettings, data);
+        MilesApexAvatar.clearCache();
         updateReporterPreview();
-        setReporterMsg('Reporter image settings saved.');
+        setReporterMsg('Reporter crop settings saved.');
       } catch (e) {
         setReporterMsg(e.message, true);
       }
@@ -332,6 +439,8 @@
     ['reporterZoom', 'reporterX', 'reporterY'].forEach((id) => {
       $('#' + id)?.addEventListener('input', updateReporterPreview);
     });
+
+    $('#reporterImageFile')?.addEventListener('change', onReporterFileSelected);
 
     async function login() {
       const msg = $('#loginMsg');

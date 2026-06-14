@@ -137,10 +137,11 @@
     `;
   }
 
-  function applyPreview(target, settings = {}) {
+  function applyPreview(target, settings = {}, options = {}) {
     if (!target) return;
-    const url = displayUrl(settings);
-    const crop = normalizeSettings(settings);
+    const previewUrl = String(options.previewUrl || "").trim();
+    const url = previewUrl || displayUrl(settings);
+    const crop = normalizeSettings({ ...settings, ...options.settings });
     target.style.setProperty("--avatar-zoom", String(crop.milesApexImageZoom));
     target.style.setProperty("--avatar-x", String(crop.milesApexImageX));
     target.style.setProperty("--avatar-y", String(crop.milesApexImageY));
@@ -153,11 +154,28 @@
         img.alt = "Miles Apex";
         target.appendChild(img);
       }
-      img.src = url;
+      if (img.src !== url) img.src = url;
     } else {
+      const img = target.querySelector("img");
+      if (img) img.remove();
       target.classList.add("miles-apex-avatar--initials");
       target.textContent = "MA";
     }
+  }
+
+  function mergeSettings(base = {}, patch = {}) {
+    const merged = normalizeSettings({ ...DEFAULTS, ...base, ...patch });
+    const url = stripUrlQuery(patch.milesApexImageUrl || base.milesApexImageUrl || "");
+    if (url) merged.milesApexImageUrl = url;
+    if (patch.milesApexImageUpdatedAt || base.milesApexImageUpdatedAt) {
+      merged.milesApexImageUpdatedAt =
+        patch.milesApexImageUpdatedAt || base.milesApexImageUpdatedAt;
+    }
+    return merged;
+  }
+
+  function clearCache() {
+    cachedSettings = null;
   }
 
   async function loadSettings(force = false) {
@@ -175,12 +193,14 @@
   window.MilesApexAvatar = {
     loadSettings,
     normalizeSettings,
+    mergeSettings,
     displayUrl,
     cropStyle,
     renderAvatarHtml,
     renderByline,
     renderAuthorRow,
     applyPreview,
+    clearCache,
     readTimeMinutes,
     formatShortDate,
     formatReadTime,
