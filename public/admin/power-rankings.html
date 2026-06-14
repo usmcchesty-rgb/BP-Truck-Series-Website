@@ -486,7 +486,63 @@
         hotDriversOutsideTop10: nested?.hotDriversOutsideTop10 ?? [],
         honorableMentionsGeneratedCount:
           nested?.honorableMentionsGeneratedCount ?? data?.honorableMentions?.length ?? 0,
+        recentResultsSentToModel:
+          nested?.recentResultsSentToModel ?? data?.resultsAudit?.recentResultsSentToModel ?? null,
+        recentRaceResultsUsed:
+          nested?.recentRaceResultsUsed ?? data?.resultsAudit?.recentRaceResultsUsed ?? [],
+        auditDriverTrace:
+          nested?.auditDriverTrace ?? data?.resultsAudit?.auditDriverTrace ?? [],
+        rankedDriverFinishTrace:
+          nested?.rankedDriverFinishTrace ?? data?.resultsAudit?.rankedDriverFinishTrace ?? [],
+        promptDataGap: nested?.promptDataGap ?? data?.resultsAudit?.promptDataGap ?? null,
+        alignedRaceTrace:
+          nested?.alignedRaceTrace ?? data?.resultsAudit?.alignedRaceTrace ?? [],
       };
+    }
+
+    function formatRecentRaceResultRow(row) {
+      const finish =
+        row.finishPosition == null ? 'none' : `P${row.finishPosition}`;
+      const sent = row.sentToModel ? 'yes' : 'no';
+      return `  ${row.driver} | ${finish} | ${row.raceName} | ${row.dataSource} | sentToModel: ${sent}`;
+    }
+
+    function formatAuditDriverTrace(trace) {
+      if (!trace?.perRace?.length) return ['  (no race data)'];
+      return trace.perRace.map((race) => {
+        const schedulesFinish =
+          race.finishPositionFromSchedulesApi == null
+            ? 'none'
+            : `P${race.finishPositionFromSchedulesApi}`;
+        const modelFinish =
+          race.finishPositionSentToModel == null
+            ? 'none'
+            : `P${race.finishPositionSentToModel}`;
+        return [
+          `  ${trace.driverName} @ ${race.raceName}`,
+          `    schedules API finish: ${schedulesFinish}`,
+          `    sent to model finish: ${modelFinish}`,
+          `    data source: ${race.dataSource}`,
+          `    prompt exposure: ${race.promptExposure}`,
+          ...(race.promptReferences?.length
+            ? [`    prompt references: ${race.promptReferences.map((ref) => ref.location).join(', ')}`]
+            : []),
+        ].join('\n');
+      });
+    }
+
+    function formatRankedDriverFinishTrace(rows) {
+      if (!Array.isArray(rows) || !rows.length) return ['  (none)'];
+      return rows.map((row) => {
+        const label = row.rank ? `Rank ${row.rank}` : row.role;
+        const finishes = (row.recentRaceFinishes || [])
+          .map(
+            (finish) =>
+              `${finish.raceName}: P${finish.finishPosition} (${finish.dataSource}, sentToModel=${finish.sentToModel ? 'yes' : 'no'})`
+          )
+          .join('; ');
+        return `  ${label} ${row.driverName}: ${finishes || 'no traced finishes'}`;
+      });
     }
 
     function formatDriverList(names) {
@@ -520,6 +576,14 @@
 
       const sources = buildGenerationSourcesView(data);
       console.log('[power-rankings-admin] generation sources', sources);
+      console.log(
+        '[power-rankings-admin] recent-results payload sent to model',
+        sources.recentResultsSentToModel
+      );
+      console.log(
+        '[power-rankings-admin] ranked driver finish trace',
+        sources.rankedDriverFinishTrace
+      );
 
       const repairedRanksText = sources.repairedRanks.length
         ? sources.repairedRanks.join(', ')
@@ -579,6 +643,36 @@
         `  hotDriversOutsideTop10: ${formatDriverList(sources.hotDriversOutsideTop10)}`,
         `  honorableMentionsGeneratedCount: ${sources.honorableMentionsGeneratedCount ?? 0}`,
         '',
+        'Recent Race Results Used:',
+        ...(sources.promptDataGap ? [`  note: ${sources.promptDataGap}`, ''] : []),
+        ...(sources.recentResultsSentToModel
+          ? [
+              '  recentResults payload sent to model:',
+              `  ${JSON.stringify(sources.recentResultsSentToModel)}`,
+              '',
+            ]
+          : []),
+        ...(Array.isArray(sources.auditDriverTrace) && sources.auditDriverTrace.length
+          ? [
+              '  audit drivers:',
+              ...sources.auditDriverTrace.flatMap((trace) => formatAuditDriverTrace(trace)),
+              '',
+            ]
+          : []),
+        ...(Array.isArray(sources.recentRaceResultsUsed) && sources.recentRaceResultsUsed.length
+          ? [
+              '  all traced finishes (last 3 races):',
+              ...sources.recentRaceResultsUsed.map((row) => formatRecentRaceResultRow(row)),
+              '',
+            ]
+          : ['  all traced finishes (last 3 races): none', '']),
+        ...(Array.isArray(sources.rankedDriverFinishTrace) && sources.rankedDriverFinishTrace.length
+          ? [
+              '  ranked driver finish trace:',
+              ...formatRankedDriverFinishTrace(sources.rankedDriverFinishTrace),
+              '',
+            ]
+          : []),
         `Repair attempted: ${sources.repairAttempted}`,
         `Repaired writeups: ${sources.repairedWriteupsCount} (${repairedRanksText})`,
         `Repair reasons: ${formatRepairReasons(sources.repairedWriteupReasons)}`,

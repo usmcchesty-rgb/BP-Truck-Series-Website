@@ -18,6 +18,10 @@ import {
   buildRecentFormAnalysis,
   validateRecentFormCoverage,
 } from './_power-rankings-recent-form.js';
+import {
+  buildRankedDriverFinishTrace,
+  buildRecentResultsAudit,
+} from './_power-rankings-results-audit.js';
 
 function parseBody(req) {
   if (!req.body) return {};
@@ -1372,6 +1376,7 @@ function buildGenerationSources({
   draft,
   raceNumberDebug,
   recentFormAnalysis,
+  resultsAudit,
 }) {
   const recentResultsRaceNumbers = getRecentPointsRaceResults(
     scheduleRaces,
@@ -1433,6 +1438,12 @@ function buildGenerationSources({
       (driver) => driver.driverName
     ),
     honorableMentionsGeneratedCount: draft.honorableMentions?.length ?? 0,
+    recentResultsSentToModel: resultsAudit?.recentResultsSentToModel ?? null,
+    recentRaceResultsUsed: resultsAudit?.recentRaceResultsUsed ?? [],
+    auditDriverTrace: resultsAudit?.auditDriverTrace ?? [],
+    rankedDriverFinishTrace: resultsAudit?.rankedDriverFinishTrace ?? [],
+    promptDataGap: resultsAudit?.promptDataGap ?? null,
+    alignedRaceTrace: resultsAudit?.alignedRaceTrace ?? [],
   };
 }
 
@@ -1689,12 +1700,51 @@ export default async function handler(req, res) {
       recentFormAnalysis,
     });
 
+    const resultsAudit = buildRecentResultsAudit({
+      scheduleRaces,
+      raceNumber,
+      standings,
+      schedules: standingsResult.schedules,
+      driverLookup,
+      recentResults: contextPayload.recentResults,
+      recentFormAnalysis,
+      contextPayload,
+      standingsScheduleId: raceNumberDebug.standingsScheduleIdUsed,
+    });
+
+    console.log(
+      '[power-rankings-generate] recent-results payload sent to model',
+      JSON.stringify(resultsAudit.recentResultsSentToModel)
+    );
+    console.log(
+      '[power-rankings-generate] recent-results audit summary',
+      JSON.stringify({
+        standingsScheduleIdUsed: resultsAudit.standingsScheduleIdUsed,
+        schedulesApiRaceCount: resultsAudit.schedulesApiRaceCount,
+        alignedRaceTrace: resultsAudit.alignedRaceTrace,
+        promptDataGap: resultsAudit.promptDataGap,
+        auditDriverTrace: resultsAudit.auditDriverTrace,
+      })
+    );
+
     const aiDraft = await callOpenAi(contextPayload);
     const draft = await normalizeDraft(aiDraft, driverLookup, previousRankings, {
       transcriptUsed: contextMeta.transcriptUsed,
       transcriptMode: contextMeta.transcriptMode,
       recentFormAnalysis,
     });
+
+    resultsAudit.rankedDriverFinishTrace = buildRankedDriverFinishTrace(
+      draft.entries,
+      draft.honorableMentions,
+      resultsAudit
+    );
+
+    console.log(
+      '[power-rankings-generate] ranked driver finish trace',
+      JSON.stringify(resultsAudit.rankedDriverFinishTrace)
+    );
+
     const generationSources = buildGenerationSources({
       raceNumber,
       standings,
@@ -1705,6 +1755,7 @@ export default async function handler(req, res) {
       draft,
       raceNumberDebug,
       recentFormAnalysis,
+      resultsAudit,
     });
 
     console.log(
@@ -1755,6 +1806,7 @@ export default async function handler(req, res) {
       ...draft,
       generationSources,
       raceNumberDebug,
+      resultsAudit,
       confidenceScore: generationSources.confidenceScore,
       confidenceReason: generationSources.confidenceReason,
       dataQualityScore: generationSources.dataQualityScore,
