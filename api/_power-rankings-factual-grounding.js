@@ -5,6 +5,7 @@ import {
   extractFinishRacesFromSchedules,
   summarizeLast3RaceWindow,
 } from './_simracerhub-schedule-results.js';
+import { buildDriverCareerHistory, validateCareerTenureClaims } from './_driver-career-history.js';
 
 function normalizeText(value) {
   return String(value || '')
@@ -89,7 +90,14 @@ function claimSupportedInNotes(claimText, manualRaceNotes, transcriptSummary) {
   return sources.some((source) => source.includes(claim) || claim.split(' ').filter((word) => word.length > 3 && source.includes(word)).length >= 2);
 }
 
-function buildDriverGrounding(driverId, alignedRaces, standingsRow, recentResults, driverLookup) {
+function buildDriverGrounding(
+  driverId,
+  alignedRaces,
+  standingsRow,
+  recentResults,
+  driverLookup,
+  options = {}
+) {
   const verifiedRaceFinishes = alignedRaces
     .map((race) => {
       const finish = getVerifiedFinishForDriver(driverId, race);
@@ -120,6 +128,13 @@ function buildDriverGrounding(driverId, alignedRaces, standingsRow, recentResult
   }));
 
   const last3Summary = summarizeLast3RaceWindow(recentRaceFinishes, alignedRaces, driverId);
+  const careerHistory = buildDriverCareerHistory({
+    driverId,
+    standingsRow,
+    seasonCatalog: options.seasonCatalog || null,
+    manualRaceNotes: options.manualRaceNotes || '',
+    transcriptSummary: options.transcriptSummary || '',
+  });
 
   return {
     allowedSeasonStats: standingsRow
@@ -135,6 +150,9 @@ function buildDriverGrounding(driverId, alignedRaces, standingsRow, recentResult
     verifiedRaceFinishes,
     verifiedRaceWins: verifiedWins,
     recentRaceFinishes,
+    careerHistory,
+    truckSeriesCareerHistory: careerHistory.truckSeriesCareerHistory,
+    overallLeagueCareerHistory: careerHistory.overallLeagueCareerHistory,
     ...last3Summary,
   };
 }
@@ -148,6 +166,7 @@ export function buildFactualGroundingContext({
   recentResults,
   manualRaceNotes,
   transcriptSummary,
+  seasonCatalog = null,
 }) {
   const alignedRaces = getAlignedRaceFinishes(
     scheduleRaces,
@@ -174,7 +193,12 @@ export function buildFactualGroundingContext({
         alignedRaces,
         standingsRow,
         recentResults,
-        driverLookup
+        driverLookup,
+        {
+          seasonCatalog,
+          manualRaceNotes,
+          transcriptSummary,
+        }
       ),
     };
 
@@ -186,9 +210,12 @@ export function buildFactualGroundingContext({
 
   return {
     rules:
-      'Every writeup must use 1-3 verified facts from this object to explain the ranking. Do not invent race-specific facts. Only cite exact finishes, wins, podiums, incidents, laps led, strategy, or points facts listed here or in manualRaceNotes/transcript summary.',
+      'Every writeup must use 1-3 verified facts from this object to explain the ranking. Do not invent race-specific facts. Only cite exact finishes, wins, podiums, incidents, laps led, strategy, or points facts listed here or in manualRaceNotes/transcript summary. Do not claim rookie/newcomer/first-season/veteran/longtime-driver/returning-driver status unless truckSeriesCareerHistory.tenureClaimsAllowed is true and the specific claim is supported by that history.',
     manualNotesAvailable: Boolean(String(manualRaceNotes || '').trim()),
     transcriptSummaryAvailable: Boolean(String(transcriptSummary || '').trim()),
+    careerHistoryAudit: seasonCatalog?.diagnostics
+      ? { ...seasonCatalog, ...seasonCatalog.diagnostics }
+      : seasonCatalog,
     recentResultsWinnersOnly: recentResults,
     simRacerHubDataAudit: SIMRACERHUB_DATA_AUDIT,
     schedulesResultsSummary: {
@@ -474,6 +501,15 @@ export function validateWriteupFactualGrounding(writeup, context = {}) {
         claim: match[0].trim(),
       });
     }
+  }
+
+  for (const item of validateCareerTenureClaims(text, {
+    truckSeriesCareerHistory: grounding?.truckSeriesCareerHistory || grounding?.careerHistory?.truckSeriesCareerHistory,
+    careerHistory: grounding?.careerHistory,
+    manualRaceNotes,
+    transcriptSummary,
+  })) {
+    pushUnsupported(unsupported, item);
   }
 
   return { unsupported };

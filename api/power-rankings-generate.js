@@ -26,6 +26,7 @@ import {
   validateWriteupFactualGrounding,
   validateWriteupVerifiedEvidence,
 } from './_power-rankings-factual-grounding.js';
+import { discoverSimRacerHubSeasonCatalog } from './_driver-career-history.js';
 import { loadRaceTranscript } from './_race-transcripts.js';
 import {
   buildRankedDriverFinishTrace,
@@ -203,6 +204,7 @@ async function fetchStandingsRows(settings, scheduleId = null) {
     scheduleId: resolvedScheduleId,
     seasonName: data.lss?.season_name || null,
     schedules: data.schedules || {},
+    lss: data.lss || null,
   };
 }
 
@@ -1570,6 +1572,8 @@ export async function loadPowerRankingsGenerationContext(
     })
   );
 
+  const seasonCatalog = await discoverSimRacerHubSeasonCatalog(settings, standingsResult.lss);
+
   const factualGrounding = buildFactualGroundingContext({
     standings,
     scheduleRaces,
@@ -1579,6 +1583,7 @@ export async function loadPowerRankingsGenerationContext(
     recentResults: recentResultsForGrounding,
     manualRaceNotes,
     transcriptSummary: contextMeta.broadcastContext?.summary || '',
+    seasonCatalog,
   });
 
   const alignedRaces = getAlignedRaceFinishes(

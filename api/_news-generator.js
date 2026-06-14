@@ -38,6 +38,7 @@ function parseJsonContent(content) {
 function buildValidationContext(generationContext, articleType) {
   return {
     articleType,
+    spotlightDriverId: generationContext.spotlightDriverId || null,
     standings: generationContext.standings || [],
     factualGrounding: generationContext.factualGrounding,
     alignedRaces: generationContext.alignedRaces || [],
@@ -78,6 +79,22 @@ function buildNewsUserPrompt(generationContext, options = {}) {
     (race) => race.officialPointsRaceNumber === raceNumber
   );
 
+  const spotlightCareerHistory =
+    spotlightDriverId &&
+    (generationContext.factualGrounding?.drivers?.[String(spotlightDriverId)]?.truckSeriesCareerHistory ||
+      generationContext.factualGrounding?.drivers?.[String(spotlightDriverId)]?.careerHistory
+        ?.truckSeriesCareerHistory);
+
+  const careerTenureSection =
+    articleType === 'driver-spotlight' && spotlightCareerHistory
+      ? `
+
+Spotlight driver truckSeriesCareerHistory (default career scope for Driver Spotlight — do NOT claim rookie/newcomer/first-season/veteran/longtime-driver/returning-driver unless tenureClaimsAllowed is true and the history supports that specific claim):
+${JSON.stringify(spotlightCareerHistory, null, 2)}
+
+overallLeagueCareerHistory is available in factualGrounding for broader league context, but tenure language must follow truckSeriesCareerHistory unless manual notes explicitly verify otherwise.`
+      : '';
+
   return `Write a ${typeConfig.label} article for the Blazing Pedals Truck Series.
 
 Article type: ${typeConfig.label}
@@ -104,7 +121,7 @@ Manual race notes:
 ${generationContext.manualRaceNotes || '(none)'}
 
 Transcript / broadcast summary:
-${generationContext.contextMeta?.broadcastContext?.summary || '(none)'}
+${generationContext.contextMeta?.broadcastContext?.summary || '(none)'}${careerTenureSection}
 
 Return JSON only with headline, subheadline, summary, and body.`;
 }
@@ -326,6 +343,16 @@ function buildGenerationSources(generationContext, articleType, repaired) {
     raceNumberDebug: generationContext.raceNumberDebug,
     alignedRaces: generationContext.alignedRaces,
     factualGroundingDiagnostics: grounding.diagnostics || null,
+    careerHistoryDiagnostics: grounding.careerHistoryAudit
+      ? {
+          seasonsScanned: grounding.careerHistoryAudit.seasonsScanned,
+          seriesScanned: grounding.careerHistoryAudit.seriesScanned,
+          firstTruckSeason: grounding.careerHistoryAudit.firstTruckSeason,
+          firstBpSeasonOverall: grounding.careerHistoryAudit.firstBpSeasonOverall,
+          classificationReliable: grounding.careerHistoryAudit.classificationReliable,
+          classificationIssues: grounding.careerHistoryAudit.classificationIssues || [],
+        }
+      : null,
   };
 }
 

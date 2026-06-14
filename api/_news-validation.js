@@ -1,4 +1,5 @@
 import { validateWriteupFactualGrounding } from './_power-rankings-factual-grounding.js';
+import { validateCareerTenureClaims } from './_driver-career-history.js';
 import { ARTICLE_TYPES } from '../server/config/news-system-prompt.js';
 
 function normalizeText(value) {
@@ -144,6 +145,38 @@ export function validateNewsArticle(article, context = {}) {
   const transcriptSummary =
     context.broadcastContext?.summary || context.transcriptSummary || '';
 
+  function pushCareerTenureError(err, driverName = null) {
+    unsupportedFacts.push({
+      type: err.type,
+      claim: err.claim || err.message,
+      driverName,
+      message: err.message,
+    });
+    errors.push({
+      type: err.type,
+      message: driverName ? `${driverName}: ${err.message}` : err.message,
+      claim: err.claim,
+    });
+  }
+
+  if (articleType === 'driver-spotlight' && context.spotlightDriverId) {
+    const spotlightGrounding =
+      context.factualGrounding?.drivers?.[String(context.spotlightDriverId)] || null;
+    const truckHistory =
+      spotlightGrounding?.truckSeriesCareerHistory ||
+      spotlightGrounding?.careerHistory?.truckSeriesCareerHistory ||
+      spotlightGrounding?.careerHistory ||
+      null;
+    for (const err of validateCareerTenureClaims(fullText, {
+      truckSeriesCareerHistory: truckHistory,
+      careerHistory: spotlightGrounding?.careerHistory,
+      manualRaceNotes: manualNotes,
+      transcriptSummary,
+    })) {
+      pushCareerTenureError(err, spotlightGrounding?.driverName || null);
+    }
+  }
+
   for (const rule of FORBIDDEN_CLAIM_PATTERNS) {
     const match = fullText.match(rule.pattern);
     if (!match) continue;
@@ -234,6 +267,7 @@ export const REPAIRABLE_NEWS_ERROR_TYPES = new Set([
   'unsupported-rivalry',
   'unsupported-quote',
   'unsupported-facts',
+  'unsupported-career-tenure',
   'forbidden-meta',
 ]);
 
