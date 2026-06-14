@@ -605,6 +605,9 @@
       $('#editorTitle').textContent = 'Create Rankings';
       setRaceNumberInput(suggestedRaceNumber);
       $('#publishedDate').value = new Date().toISOString().slice(0, 10);
+      const manualNotes = $('#manualRaceNotes');
+      if (manualNotes) manualNotes.value = '';
+      hideTranscriptDiagnostics();
       renderRankingRows();
       renderMentionRows([]);
       setMsg('');
