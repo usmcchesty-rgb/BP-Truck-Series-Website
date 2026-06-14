@@ -24,7 +24,9 @@ import {
   getAlignedRaceFinishes,
 } from './_power-rankings-results-audit.js';
 import {
+  analyzeRecentFormReferences,
   buildFactualGroundingContext,
+  buildRecentRaceFinishDiagnostics,
   formatVerifiedFactsForRepair,
   validateWriteupFactualGrounding,
   validateWriteupVerifiedEvidence,
@@ -693,13 +695,15 @@ async function callOpenAi(contextPayload) {  const apiKey = process.env.OPENAI_A
           role: 'user',
           content: `Generate Race ${contextPayload.raceNumber} power rankings using this data.
 
-Use prompt version ${POWER_RANKING_PROMPT_VERSION} rules: ranking justifications with at least two evidence points, no season summaries, no generic filler, NASCAR.com editorial tone.
+Use prompt version ${POWER_RANKING_PROMPT_VERSION} rules: ranking justifications with 1-3 verified facts, recent form heavily weighted, no season summaries, no generic filler, NASCAR.com editorial tone.
 
 Standings and driver stats in this payload are frozen to standingsSnapshot.raceNumber. Do not reference wins, points, or results from races after Race ${contextPayload.raceNumber}.
 Only use recentResults and transcript/manual notes for race context through Race ${contextPayload.raceNumber}.
 
-Power Rankings are NOT points standings. Use recentFormAnalysis heavily. Do not simply mirror points order.
+Power Rankings are NOT points standings. Recent form is one of the strongest ranking factors — use factualGrounding.recentRaceFinishes, last3RaceAverageFinish, and recentFormAnalysis. Do not simply mirror points order.
+A driver on P1, P1, P3 may outrank a higher-points driver on P8, P9, P11.
 Back-to-back winners should almost always be Top 10. Recent winners and hot drivers left out of the Top 10 should usually appear in honorableMentions (0-3).
+For ranks 1-5, writeups should cite recent-race finishes or last-3 average when recentRaceFinishes are available.
 
 Use factualGrounding only for verified facts. Do not invent exact race finishes, podiums, wins, incidents, laps led, strategy, or points totals unless listed in factualGrounding or manualRaceNotes.
 
@@ -974,8 +978,10 @@ const WRITEUP_EVIDENCE_PATTERNS = [
 
 const GENERIC_WRITEUP_PHRASES = [
   'building momentum',
-  'showing promise',
+  'showing momentum',
+  'building confidence',
   'finding speed',
+  'showing promise',
   'staying competitive',
   'looking for a breakthrough',
   'room to grow',
@@ -996,6 +1002,7 @@ const EVIDENCE_REPAIR_ERROR_TYPES = new Set([
   'weak-ranking-explanation',
   'generic-language',
   'too-generic',
+  'missing-recent-finish-evidence',
 ]);
 
 const REPAIRABLE_WRITEUP_ERROR_TYPES = new Set([
@@ -1007,6 +1014,7 @@ const REPAIRABLE_WRITEUP_ERROR_TYPES = new Set([
   'season-summary',
   'too-generic',
   'unsupported-facts',
+  'missing-recent-finish-evidence',
 ]);
 
 function countWriteupEvidencePoints(text) {
@@ -1289,7 +1297,8 @@ Rules:
 - Explain WHY this driver is ranked here THIS week (not a season summary or biography).
 - Use 1-3 verified facts from the list below (rank tier limits apply).
 - Use those facts to explain WHY this driver is ranked here THIS week — do not simply list statistics.
-- Avoid generic filler like "building momentum", "finding speed", or "stays competitive" unless immediately backed by verified facts in the same paragraph.
+- When recentRaceFinishes are available, prefer citing them or last3RaceAverageFinish over generic momentum language.
+- Avoid generic filler like "building momentum", "showing momentum", "building confidence", or "finding speed" unless immediately backed by verified facts in the same paragraph.
 - Do not use unsupported phrases like "shows promise" or "steady performer".
 - Do NOT invent race facts. Only use verified facts listed below or manual/transcript notes.
 ${transcriptUsed ? '- Transcript/manual race notes were available — use only facts supported by those notes or verified facts below.' : ''}
@@ -1442,6 +1451,7 @@ function buildGenerationSources({
   raceNumberDebug,
   recentFormAnalysis,
   resultsAudit,
+  recentRaceFinishDiagnostics,
 }) {
   const recentResultsRaceNumbers = getRecentPointsRaceResults(
     scheduleRaces,
@@ -1516,6 +1526,14 @@ function buildGenerationSources({
     verifiedFactsUsedCount: draft.verifiedFactsUsedCount ?? {},
     evidenceBasedWriteupsCount: draft.evidenceBasedWriteupsCount ?? 0,
     evidenceRepairRanks: draft.evidenceRepairRanks ?? [],
+    recentRaceFinishesUsed: recentRaceFinishDiagnostics?.recentRaceFinishesUsed === true,
+    last3RaceAverageFinish: recentRaceFinishDiagnostics?.last3RaceAverageFinish ?? {},
+    recentRaceFinishCoverage: recentRaceFinishDiagnostics?.coverage ?? null,
+    schedulesResultsSummary: recentRaceFinishDiagnostics?.schedulesResultsSummary ?? null,
+    simRacerHubDataAudit: recentRaceFinishDiagnostics?.simRacerHubDataAudit ?? null,
+    recentFormReferencedRanks: draft.recentFormReferencedRanks ?? [],
+    averageFinishReferencedRanks: draft.averageFinishReferencedRanks ?? [],
+    recentFinishReferencedRanks: draft.recentFinishReferencedRanks ?? [],
   };
 }
 
@@ -1548,6 +1566,9 @@ async function normalizeDraft(aiDraft, driverLookup, previousRankings, generatio
   const verifiedFactsUsed = {};
   const verifiedFactsUsedCount = {};
   const evidenceRepairRanks = [];
+  const recentFormReferencedRanks = [];
+  const averageFinishReferencedRanks = [];
+  const recentFinishReferencedRanks = [];
   let evidenceBasedWriteupsCount = 0;
 
   const buildWriteupContext = (entry, driver, previousRank) => ({
@@ -1669,6 +1690,11 @@ async function normalizeDraft(aiDraft, driverLookup, previousRankings, generatio
       evidenceBasedWriteupsCount += 1;
     }
 
+    const recentFormRefs = analyzeRecentFormReferences(entry.writeup, writeupContext);
+    if (recentFormRefs.recentFormReferenced) recentFormReferencedRanks.push(entry.rank);
+    if (recentFormRefs.averageFinishReferenced) averageFinishReferencedRanks.push(entry.rank);
+    if (recentFormRefs.recentFinishReferenced) recentFinishReferencedRanks.push(entry.rank);
+
     for (const warning of repaired.writeupResult.warnings) {
       warnings.push(`Rank ${entry.rank}: ${warning}`);
     }
@@ -1758,6 +1784,9 @@ async function normalizeDraft(aiDraft, driverLookup, previousRankings, generatio
     verifiedFactsUsedCount,
     evidenceBasedWriteupsCount,
     evidenceRepairRanks,
+    recentFormReferencedRanks,
+    averageFinishReferencedRanks,
+    recentFinishReferencedRanks,
   };
 }
 
@@ -1970,6 +1999,20 @@ export default async function handler(req, res) {
       })
     );
 
+    const recentRaceFinishDiagnostics = buildRecentRaceFinishDiagnostics(
+      factualGrounding,
+      draft.entries
+    );
+
+    console.log(
+      '[power-rankings-generate] recent race finish diagnostics',
+      JSON.stringify({
+        recentRaceFinishesUsed: recentRaceFinishDiagnostics.recentRaceFinishesUsed,
+        coverage: recentRaceFinishDiagnostics.coverage,
+        schedulesResultsSummary: recentRaceFinishDiagnostics.schedulesResultsSummary,
+      })
+    );
+
     const generationSources = buildGenerationSources({
       raceNumber,
       standings,
@@ -1981,6 +2024,7 @@ export default async function handler(req, res) {
       raceNumberDebug,
       recentFormAnalysis,
       resultsAudit,
+      recentRaceFinishDiagnostics,
     });
 
     console.log(
@@ -2030,6 +2074,8 @@ export default async function handler(req, res) {
       existingPublished: existingWeek?.published === true,
       ...draft,
       generationSources,
+      recentRaceFinishesUsed: recentRaceFinishDiagnostics.recentRaceFinishesUsed,
+      last3RaceAverageFinish: recentRaceFinishDiagnostics.last3RaceAverageFinish,
       raceNumberDebug,
       resultsAudit,
       confidenceScore: generationSources.confidenceScore,

@@ -1,5 +1,10 @@
 import { matchDriverIdByName } from './_power-rankings-recent-form.js';
 import { getAlignedRaceFinishes } from './_power-rankings-results-audit.js';
+import {
+  SIMRACERHUB_DATA_AUDIT,
+  extractFinishRacesFromSchedules,
+  summarizeLast3Finishes,
+} from './_simracerhub-schedule-results.js';
 
 function normalizeText(value) {
   return String(value || '')
@@ -108,6 +113,14 @@ function buildDriverGrounding(driverId, alignedRaces, standingsRow, recentResult
         : 'parsed schedule page (winner only)',
     }));
 
+  const recentRaceFinishes = verifiedRaceFinishes.map((race) => ({
+    raceNumber: race.pointsRaceNumber,
+    track: race.track,
+    finish: race.finishPosition,
+  }));
+
+  const last3Summary = summarizeLast3Finishes(recentRaceFinishes);
+
   return {
     allowedSeasonStats: standingsRow
       ? {
@@ -121,6 +134,8 @@ function buildDriverGrounding(driverId, alignedRaces, standingsRow, recentResult
       : null,
     verifiedRaceFinishes,
     verifiedRaceWins: verifiedWins,
+    recentRaceFinishes,
+    ...last3Summary,
   };
 }
 
@@ -141,10 +156,18 @@ export function buildFactualGroundingContext({
     driverLookup
   );
 
+  const finishRaces = extractFinishRacesFromSchedules(schedules);
+  const alignedRacesWithFinishes = alignedRaces.filter(
+    (race) => Object.keys(race.finishes || {}).length > 0
+  ).length;
+
   const drivers = {};
+  let driversWithRecentRaceFinishes = 0;
+  let driversWithLast3Average = 0;
+
   for (const [driverId, driver] of driverLookup.entries()) {
     const standingsRow = standings.find((row) => String(row.driverId) === String(driverId));
-    drivers[String(driverId)] = {
+    const grounding = {
       driverName: driver.driverName,
       ...buildDriverGrounding(
         driverId,
@@ -154,6 +177,11 @@ export function buildFactualGroundingContext({
         driverLookup
       ),
     };
+
+    if (grounding.recentRaceFinishes?.length) driversWithRecentRaceFinishes += 1;
+    if (grounding.last3RaceAverageFinish != null) driversWithLast3Average += 1;
+
+    drivers[String(driverId)] = grounding;
   }
 
   return {
@@ -162,12 +190,54 @@ export function buildFactualGroundingContext({
     manualNotesAvailable: Boolean(String(manualRaceNotes || '').trim()),
     transcriptSummaryAvailable: Boolean(String(transcriptSummary || '').trim()),
     recentResultsWinnersOnly: recentResults,
+    simRacerHubDataAudit: SIMRACERHUB_DATA_AUDIT,
+    schedulesResultsSummary: {
+      totalSchedules: Object.keys(schedules || {}).length,
+      schedulesWithOfficialResults: finishRaces.length,
+      alignedRecentRaces: alignedRaces.length,
+      alignedRacesWithFinishes,
+      extractionMethod: SIMRACERHUB_DATA_AUDIT.officialSession,
+    },
+    diagnostics: {
+      recentRaceFinishesUsed: driversWithRecentRaceFinishes > 0,
+      driversWithRecentRaceFinishes,
+      driversWithLast3Average,
+      driversTotal: driverLookup.size,
+    },
     alignedRaces: alignedRaces.map((race) => ({
       pointsRaceNumber: race.pointsRaceNumber,
       track: race.track,
       winner: race.winner,
+      schedulesApiFinishesCount: Object.keys(race.finishes || {}).length,
+      alignmentMethod: race.alignmentMethod,
     })),
     drivers,
+  };
+}
+
+export function buildRecentRaceFinishDiagnostics(factualGrounding, rankedEntries = []) {
+  const drivers = factualGrounding?.drivers || {};
+  const rankedLast3 = {};
+
+  for (const entry of rankedEntries) {
+    const grounding = drivers[String(entry.driverId)];
+    if (!grounding) continue;
+    rankedLast3[String(entry.rank)] = {
+      driverId: String(entry.driverId),
+      driverName: grounding.driverName,
+      recentRaceFinishes: grounding.recentRaceFinishes || [],
+      last3RaceAverageFinish: grounding.last3RaceAverageFinish ?? null,
+      bestFinishLast3: grounding.bestFinishLast3 ?? null,
+      worstFinishLast3: grounding.worstFinishLast3 ?? null,
+    };
+  }
+
+  return {
+    recentRaceFinishesUsed: factualGrounding?.diagnostics?.recentRaceFinishesUsed === true,
+    last3RaceAverageFinish: rankedLast3,
+    schedulesResultsSummary: factualGrounding?.schedulesResultsSummary ?? null,
+    simRacerHubDataAudit: factualGrounding?.simRacerHubDataAudit ?? null,
+    coverage: factualGrounding?.diagnostics ?? null,
   };
 }
 
@@ -433,8 +503,10 @@ const NUMBER_WORDS = {
 
 const GENERIC_EVIDENCE_PHRASES = [
   'building momentum',
-  'showing promise',
+  'showing momentum',
+  'building confidence',
   'finding speed',
+  'showing promise',
   'staying competitive',
   'looking for a breakthrough',
   'room to grow',
@@ -681,6 +753,171 @@ function matchPowerRankPosition(text, rank) {
   return null;
 }
 
+function matchRecentRaceFinishReference(text, race) {
+  const finish = Number(race.finish);
+  if (!Number.isFinite(finish)) return false;
+
+  if (textIncludesTrack(text, race.track)) {
+    const finishFact = matchVerifiedRaceFinish(text, {
+      pointsRaceNumber: race.raceNumber,
+      track: race.track,
+      finishPosition: finish,
+    });
+    if (finishFact) return true;
+  }
+
+  const finishTokens = [
+    `P${finish}`,
+    getOrdinalSuffix(finish),
+    ORDINAL_BY_NUMBER[finish],
+    `${finish}(?:st|nd|rd|th)`,
+  ]
+    .filter(Boolean)
+    .join('|');
+
+  if (
+    new RegExp(`\\b(?:${finishTokens})\\b`, 'i').test(text) &&
+    /\b(last|recent|latest|past|three|3)\b/i.test(text)
+  ) {
+    return true;
+  }
+
+  if (new RegExp(`\\brace\\s*${race.raceNumber}\\b`, 'i').test(text)) {
+    return new RegExp(`\\b(?:${finishTokens})\\b`, 'i').test(text);
+  }
+
+  return false;
+}
+
+function matchLast3AverageFinishReference(text, averageFinish) {
+  const avg = Number(averageFinish);
+  if (!Number.isFinite(avg)) return false;
+
+  const escaped = String(avg).replace('.', '\\.');
+  const patterns = [
+    new RegExp(`\\baverage finish of ${escaped}\\b`, 'i'),
+    new RegExp(`\\b${escaped}\\s+average\\b`, 'i'),
+    new RegExp(`\\bavg(?:erage)?\\.?\\s*(?:finish\\s*)?(?:of\\s*)?${escaped}\\b`, 'i'),
+    /\baverage finish of [\d.]+\s+across the last three races\b/i,
+    /\b[\d.]+\s+across the last three races\b/i,
+  ];
+
+  if (!patterns.some((pattern) => pattern.test(text))) return false;
+
+  if (/\baverage finish of ([\d.]+)\s+across the last three races\b/i.test(text)) {
+    const cited = Number(text.match(/\baverage finish of ([\d.]+)\s+across the last three races\b/i)?.[1]);
+    return Number.isFinite(cited) && Math.abs(cited - avg) <= 0.15;
+  }
+
+  if (/\b[\d.]+\s+across the last three races\b/i.test(text)) {
+    const cited = Number(text.match(/\b([\d.]+)\s+across the last three races\b/i)?.[1]);
+    return Number.isFinite(cited) && Math.abs(cited - avg) <= 0.15;
+  }
+
+  return (
+    new RegExp(`\\baverage finish of ${escaped}\\b`, 'i').test(text) ||
+    new RegExp(`\\b${escaped}\\s+average\\b`, 'i').test(text) ||
+    new RegExp(`\\bavg(?:erage)?\\.?\\s*(?:finish\\s*)?(?:of\\s*)?${escaped}\\b`, 'i').test(text)
+  );
+}
+
+function matchExtremeLast3FinishReference(text, finish, kind) {
+  const value = Number(finish);
+  if (!Number.isFinite(value)) return false;
+
+  const finishTokens = [`P${value}`, getOrdinalSuffix(value), ORDINAL_BY_NUMBER[value]]
+    .filter(Boolean)
+    .join('|');
+  const scopePattern =
+    kind === 'best'
+      ? /\b(best|strongest|top|lowest)\b/i
+      : /\b(worst|weakest|highest|rough|toughest)\b/i;
+
+  return (
+    scopePattern.test(text) &&
+    new RegExp(`\\b(?:${finishTokens})\\b`, 'i').test(text) &&
+    /\b(last|recent|three|3)\b/i.test(text)
+  );
+}
+
+export function analyzeRecentFormReferences(writeup, context = {}) {
+  const text = String(writeup || '');
+  const grounding = context.driverGrounding || context.factualGrounding || null;
+  const recentRaceFinishes = grounding?.recentRaceFinishes || [];
+
+  let recentFinishReferenced = false;
+  let averageFinishReferenced = false;
+  let recentFormReferenced = false;
+
+  for (const race of recentRaceFinishes) {
+    if (matchRecentRaceFinishReference(text, race)) {
+      recentFinishReferenced = true;
+      recentFormReferenced = true;
+    }
+  }
+
+  if (matchLast3AverageFinishReference(text, grounding?.last3RaceAverageFinish)) {
+    averageFinishReferenced = true;
+    recentFormReferenced = true;
+  }
+
+  if (matchExtremeLast3FinishReference(text, grounding?.bestFinishLast3, 'best')) {
+    recentFormReferenced = true;
+  }
+
+  if (matchExtremeLast3FinishReference(text, grounding?.worstFinishLast3, 'worst')) {
+    recentFormReferenced = true;
+  }
+
+  const winsInLast3 = recentRaceFinishes.filter((race) => Number(race.finish) === 1).length;
+  const podiumsInLast3 = recentRaceFinishes.filter((race) => Number(race.finish) <= 3).length;
+
+  if (winsInLast3 >= 2 && /\bback-to-back wins?\b/i.test(text)) {
+    recentFormReferenced = true;
+  }
+
+  if (podiumsInLast3 >= 2 && /\bback-to-back (?:podium|top\s*-?\s*three|top\s*-?\s*3)\b/i.test(text)) {
+    recentFormReferenced = true;
+  }
+
+  if (
+    recentFinishReferenced &&
+    /\b(three-race|3-race)\s+stretch\b|\blast three races\b|\bpast three races\b/i.test(text)
+  ) {
+    recentFormReferenced = true;
+  }
+
+  return {
+    recentFinishReferenced,
+    averageFinishReferenced,
+    recentFormReferenced,
+  };
+}
+
+export function validateWriteupRecentFormPreference(writeup, context = {}) {
+  const rank = Number(context.rank ?? context.entry?.rank);
+  const grounding = context.driverGrounding || context.factualGrounding || null;
+  const refs = analyzeRecentFormReferences(writeup, context);
+
+  if (!Number.isFinite(rank) || rank < 1 || rank > 5) {
+    return { error: null, errorType: null, ...refs };
+  }
+
+  if (!(grounding?.recentRaceFinishes?.length > 0)) {
+    return { error: null, errorType: null, ...refs };
+  }
+
+  if (!refs.recentFinishReferenced && !refs.averageFinishReferenced) {
+    return {
+      error: `Rank ${rank} writeup should cite at least one recent-race finish or last-3 average finish when recentRaceFinishes are available.`,
+      errorType: 'missing-recent-finish-evidence',
+      ...refs,
+    };
+  }
+
+  return { error: null, errorType: null, ...refs };
+}
+
 export function getVerifiedFactsLimits(rank) {
   if (rank === 'HM') return { min: 1, max: 2 };
   const numericRank = Number(rank);
@@ -758,11 +995,32 @@ export function analyzeVerifiedFactsUsed(writeup, context = {}) {
   const powerRankFact = matchPowerRankPosition(text, context.rank ?? context.entry?.rank);
   if (powerRankFact) pushFact(powerRankFact);
 
+  for (const race of grounding?.recentRaceFinishes || []) {
+    if (matchRecentRaceFinishReference(text, race)) {
+      pushFact({
+        type: 'recent-race-finish',
+        label: `Race ${race.raceNumber} P${race.finish}`,
+        raceNumber: race.raceNumber,
+        finish: race.finish,
+      });
+    }
+  }
+
+  if (matchLast3AverageFinishReference(text, grounding?.last3RaceAverageFinish)) {
+    pushFact({
+      type: 'last3-average-finish',
+      label: `Last 3 average finish ${grounding.last3RaceAverageFinish}`,
+      value: grounding.last3RaceAverageFinish,
+    });
+  }
+
   const rankingSupportTypes = new Set([
     'points-position',
     'movement',
     'verified-race-finish',
     'verified-race-win',
+    'recent-race-finish',
+    'last3-average-finish',
     'power-rank',
     'top5-total',
     'top10-total',
@@ -780,8 +1038,17 @@ export function analyzeVerifiedFactsUsed(writeup, context = {}) {
   );
 
   const distinctiveFactCount = used.filter((fact) =>
-    ['verified-race-finish', 'verified-race-win', 'movement', 'points-position'].includes(fact.type)
+    [
+      'verified-race-finish',
+      'verified-race-win',
+      'recent-race-finish',
+      'last3-average-finish',
+      'movement',
+      'points-position',
+    ].includes(fact.type)
   ).length;
+
+  const recentFormRefs = analyzeRecentFormReferences(writeup, context);
 
   return {
     verifiedFactsUsed: used,
@@ -790,6 +1057,7 @@ export function analyzeVerifiedFactsUsed(writeup, context = {}) {
     hasJustificationLanguage,
     genericPhraseHits,
     distinctiveFactCount,
+    ...recentFormRefs,
   };
 }
 
@@ -855,7 +1123,7 @@ export function validateWriteupVerifiedEvidence(writeup, context = {}) {
   if (analysis.distinctiveFactCount === 0 && count <= 1 && analysis.genericPhraseHits.length === 0) {
     const lower = normalizeText(writeup);
     if (
-      /\b(competitive|improving|potential|promising|contender|consistent|dangerous|threat|talented|momentum|speed)\b/.test(
+      /\b(competitive|improving|potential|promising|contender|consistent|dangerous|threat|talented|momentum|speed|confidence)\b/.test(
         lower
       )
     ) {
@@ -865,6 +1133,18 @@ export function validateWriteupVerifiedEvidence(writeup, context = {}) {
         ...analysis,
       };
     }
+  }
+
+  const recentFormValidation = validateWriteupRecentFormPreference(writeup, context);
+  if (recentFormValidation.error) {
+    return {
+      error: recentFormValidation.error,
+      errorType: recentFormValidation.errorType,
+      ...analysis,
+      recentFinishReferenced: recentFormValidation.recentFinishReferenced,
+      averageFinishReferenced: recentFormValidation.averageFinishReferenced,
+      recentFormReferenced: recentFormValidation.recentFormReferenced,
+    };
   }
 
   return {
@@ -894,6 +1174,23 @@ export function formatVerifiedFactsForRepair(grounding, rank) {
   }
   for (const race of grounding.verifiedRaceWins || []) {
     lines.push(`Verified win: Race ${race.pointsRaceNumber} (${race.track}).`);
+  }
+  if (grounding.recentRaceFinishes?.length) {
+    lines.push(
+      `Recent race finishes: ${grounding.recentRaceFinishes
+        .map((race) => `Race ${race.raceNumber} P${race.finish}`)
+        .join(', ')}.`
+    );
+  }
+  if (grounding.last3RaceAverageFinish != null) {
+    lines.push(
+      `Last 3 average finish: ${grounding.last3RaceAverageFinish} (best P${grounding.bestFinishLast3}, worst P${grounding.worstFinishLast3}).`
+    );
+  }
+  if (Number(rank) >= 1 && Number(rank) <= 5 && grounding.recentRaceFinishes?.length) {
+    lines.push(
+      'Prefer citing at least one recent-race finish or the last-3 average finish — not generic momentum language.'
+    );
   }
   if (lines.length <= 2) {
     lines.push('No verified race finishes available — use season stats only and avoid exact race-result claims.');

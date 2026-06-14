@@ -1,4 +1,5 @@
 import { getRecentPointsRaceResults } from './_schedule-points-races.js';
+import { extractFinishRacesFromSchedules } from './_simracerhub-schedule-results.js';
 
 function normalizeName(value) {
   return String(value || '')
@@ -49,32 +50,6 @@ function summarizeDriver(driverLookup, driverId) {
     driverName: driver.driverName,
     pointsPosition: driver.position ?? null,
   };
-}
-
-function extractFinishRacesFromSchedules(schedules) {
-  const races = [];
-
-  for (const schedule of Object.values(schedules || {})) {
-    const finishes = {};
-    for (const [driverId, result] of Object.entries(schedule?.drivers || {})) {
-      const finishPosition = Number(result?.finish_pos ?? result?.finish);
-      if (Number.isFinite(finishPosition) && finishPosition >= 1) {
-        finishes[String(driverId)] = finishPosition;
-      }
-    }
-
-    if (!Object.keys(finishes).length) continue;
-
-    const winnerEntry = Object.entries(finishes).find(([, finishPosition]) => finishPosition === 1);
-    races.push({
-      finishes,
-      winnerDriverId: winnerEntry?.[0] || null,
-      track: schedule.track || schedule.race_name || schedule.name || null,
-      date: schedule.race_date || schedule.date || null,
-    });
-  }
-
-  return races;
 }
 
 function alignFinishRacesToRecentPointsRaces(recentPointsRaces, finishRaces, driverLookup) {

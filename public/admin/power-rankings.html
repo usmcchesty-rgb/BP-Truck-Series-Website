@@ -510,7 +510,34 @@
           nested?.evidenceBasedWriteupsCount ?? data?.evidenceBasedWriteupsCount ?? 0,
         evidenceRepairRanks:
           nested?.evidenceRepairRanks ?? data?.evidenceRepairRanks ?? [],
+        recentRaceFinishesUsed:
+          nested?.recentRaceFinishesUsed ?? data?.recentRaceFinishesUsed === true,
+        last3RaceAverageFinish:
+          nested?.last3RaceAverageFinish ?? data?.last3RaceAverageFinish ?? {},
+        recentRaceFinishCoverage:
+          nested?.recentRaceFinishCoverage ?? data?.recentRaceFinishCoverage ?? null,
+        schedulesResultsSummary:
+          nested?.schedulesResultsSummary ?? data?.schedulesResultsSummary ?? null,
+        simRacerHubDataAudit:
+          nested?.simRacerHubDataAudit ?? data?.simRacerHubDataAudit ?? null,
+        recentFormReferencedRanks:
+          nested?.recentFormReferencedRanks ?? data?.recentFormReferencedRanks ?? [],
+        averageFinishReferencedRanks:
+          nested?.averageFinishReferencedRanks ?? data?.averageFinishReferencedRanks ?? [],
+        recentFinishReferencedRanks:
+          nested?.recentFinishReferencedRanks ?? data?.recentFinishReferencedRanks ?? [],
       };
+    }
+
+    function formatLast3RaceAverageFinish(last3Map) {
+      const entries = Object.entries(last3Map || {});
+      if (!entries.length) return ['  (none)'];
+      return entries.map(([rank, row]) => {
+        const finishes = (row.recentRaceFinishes || [])
+          .map((race) => `R${race.raceNumber} P${race.finish}`)
+          .join(', ');
+        return `  rank ${rank} ${row.driverName}: avg ${row.last3RaceAverageFinish ?? 'n/a'} (${finishes || 'no finishes'})`;
+      });
     }
 
     function formatVerifiedFactsSummary(verifiedFactsUsed, verifiedFactsUsedCount) {
@@ -704,6 +731,28 @@
           sources.verifiedFactsUsed,
           sources.verifiedFactsUsedCount
         ),
+        '',
+        'Recent race finishes (SimRacerHub):',
+        `  recentRaceFinishesUsed: ${sources.recentRaceFinishesUsed === true}`,
+        ...(sources.schedulesResultsSummary
+          ? [
+              `  schedulesWithOfficialResults: ${sources.schedulesResultsSummary.schedulesWithOfficialResults ?? 0}/${sources.schedulesResultsSummary.totalSchedules ?? 0}`,
+              `  alignedRacesWithFinishes: ${sources.schedulesResultsSummary.alignedRacesWithFinishes ?? 0}/${sources.schedulesResultsSummary.alignedRecentRaces ?? 0}`,
+              `  extractionMethod: ${sources.schedulesResultsSummary.extractionMethod ?? 'unknown'}`,
+            ]
+          : []),
+        ...(sources.recentRaceFinishCoverage
+          ? [
+              `  driversWithRecentRaceFinishes: ${sources.recentRaceFinishCoverage.driversWithRecentRaceFinishes ?? 0}/${sources.recentRaceFinishCoverage.driversTotal ?? 0}`,
+            ]
+          : []),
+        '  last3RaceAverageFinish (ranked top 10):',
+        ...formatLast3RaceAverageFinish(sources.last3RaceAverageFinish),
+        '',
+        'Recent form writeup references:',
+        `  recentFormReferencedRanks: ${(sources.recentFormReferencedRanks || []).length ? sources.recentFormReferencedRanks.join(', ') : 'none'}`,
+        `  averageFinishReferencedRanks: ${(sources.averageFinishReferencedRanks || []).length ? sources.averageFinishReferencedRanks.join(', ') : 'none'}`,
+        `  recentFinishReferencedRanks: ${(sources.recentFinishReferencedRanks || []).length ? sources.recentFinishReferencedRanks.join(', ') : 'none'}`,
         '',
         ...(Array.isArray(sources.unsupportedFactWarnings) && sources.unsupportedFactWarnings.length
           ? [

@@ -1,5 +1,6 @@
 import { getRecentPointsRaceResults } from './_schedule-points-races.js';
 import { matchDriverIdByName } from './_power-rankings-recent-form.js';
+import { extractFinishRacesFromSchedules } from './_simracerhub-schedule-results.js';
 
 export const DEFAULT_AUDIT_DRIVER_NAMES = [
   'Mark Arthur',
@@ -17,33 +18,6 @@ export const DATA_SOURCES = {
   NOT_IN_SOURCE: 'not present in source data',
   MODEL_INFERRED: 'not in prompt payload (model-inferred)',
 };
-
-function extractFinishRacesFromSchedules(schedules) {
-  const races = [];
-
-  for (const [scheduleKey, schedule] of Object.entries(schedules || {})) {
-    const finishes = {};
-    for (const [driverId, result] of Object.entries(schedule?.drivers || {})) {
-      const finishPosition = Number(result?.finish_pos ?? result?.finish);
-      if (Number.isFinite(finishPosition) && finishPosition >= 1) {
-        finishes[String(driverId)] = finishPosition;
-      }
-    }
-
-    if (!Object.keys(finishes).length) continue;
-
-    const winnerEntry = Object.entries(finishes).find(([, finishPosition]) => finishPosition === 1);
-    races.push({
-      scheduleKey,
-      finishes,
-      winnerDriverId: winnerEntry?.[0] || null,
-      track: schedule.track || schedule.race_name || schedule.name || null,
-      date: schedule.race_date || schedule.date || null,
-    });
-  }
-
-  return races;
-}
 
 function alignFinishRacesWithTrace(recentPointsRaces, finishRaces, driverLookup) {
   const aligned = recentPointsRaces.map((race) => {

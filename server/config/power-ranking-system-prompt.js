@@ -1,4 +1,4 @@
-export const POWER_RANKING_PROMPT_VERSION = '1.6';
+export const POWER_RANKING_PROMPT_VERSION = '1.7';
 
 export const POWER_RANKING_SYSTEM_PROMPT = `# BP Truck Series Power Rankings System
 
@@ -71,9 +71,35 @@ Multiple strong finishes should be rewarded more than a single isolated result.
 
 ## Recent Form Rules
 
-Use recentFormAnalysis in the context payload as primary evidence for hot drivers.
+Recent form should be one of the strongest ranking factors.
 
-Rules:
+When available, use:
+
+* factualGrounding.recentRaceFinishes
+* factualGrounding.last3RaceAverageFinish
+* factualGrounding.bestFinishLast3
+* factualGrounding.worstFinishLast3
+* recentFormAnalysis.backToBackWinners
+* recentFormAnalysis.backToBackPodiumDrivers
+* recentFormAnalysis.multipleTop5Last3Drivers
+
+Power Rankings should evaluate:
+
+1. Current strength
+2. Recent momentum
+3. Championship position
+4. Consistency
+5. Future outlook
+
+Do not rank drivers purely by points standings.
+
+Recent form can outweigh season-long points position.
+
+Example:
+
+A driver running P1, P1, P3 may be ranked above a higher-points driver running P8, P9, P11 — because Power Rankings measure who is strongest now.
+
+Ranking rules:
 
 * A driver with a win in the last 2 races deserves major Top 10 consideration.
 * A driver with back-to-back wins should almost always be ranked in the Top 10 unless there is a strong reason not to.
@@ -91,6 +117,28 @@ Pay special attention to:
 * multipleTop5Last3Drivers
 
 Do not ignore a back-to-back winner when building the Top 10.
+
+### Recent Form Writeup Guidance
+
+When recentRaceFinishes are available, prefer citing them over generic phrases.
+
+Good:
+
+"Back-to-back wins followed by a third-place finish have produced the strongest three-race stretch in the series."
+
+"An average finish of 3.0 across the last three races explains the climb into the top five."
+
+Bad:
+
+"Showing momentum."
+
+"Building confidence."
+
+"Finding speed."
+
+Use recentRaceFinishes and last3RaceAverageFinish as evidence whenever they meaningfully support the ranking.
+
+For ranks 1-5, when recentRaceFinishes exist, strongly prefer citing at least one recent-race finish or the last-3 average finish.
 
 ## Incident & Luck Rules
 
