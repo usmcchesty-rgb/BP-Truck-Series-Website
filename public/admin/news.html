@@ -48,6 +48,30 @@
     .slider-value { font-size: 11px; color: #ccc; }
     .editor-reporter-preview { display: flex; align-items: center; gap: 12px; margin: 0 0 14px; padding: 10px 12px; border: 1px solid #333; background: #0a0a0a; }
     .editor-reporter-preview .miles-apex-avatar { width: 48px; height: 48px; }
+    .article-image-panel { margin-top: 14px; padding: 14px; border: 1px solid #333; background: #0a0a0a; }
+    .article-image-panel h3 { margin: 0 0 6px; font-size: 14px; color: #fff; }
+    .article-image-preview-row { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start; margin: 12px 0 0; }
+    .article-image-preview {
+      width: 320px;
+      max-width: 100%;
+      aspect-ratio: 16 / 10;
+      min-height: 180px;
+      border: 1px solid #333;
+      background: linear-gradient(135deg, #151515, #0a0a0a 60%, #220707);
+      overflow: hidden;
+    }
+    .article-image-preview.is-empty {
+      display: grid;
+      place-items: center;
+      color: #777;
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .article-image-controls { flex: 1 1 280px; max-width: 520px; }
+    #articleImageMsg { margin-top: 10px; font-size: 12px; color: #ccc; white-space: pre-wrap; }
+    #articleImageMsg.error { color: #ff6060; }
   </style>
 </head>
 <body>
@@ -137,9 +161,40 @@
           <label class="field-label" for="spotlightDriverId">Driver (optional)</label>
           <select id="spotlightDriverId" class="select"><option value="">—</option></select>
         </div>
-        <div>
-          <label class="field-label" for="featuredImageUrl">Featured Image URL</label>
-          <input id="featuredImageUrl" class="input" type="url" placeholder="https://...">
+      </div>
+
+      <div class="article-image-panel" id="articleImagePanel">
+        <h3>Article Image</h3>
+        <p class="sub">Featured image for this article on the News page and article detail.</p>
+        <input type="hidden" id="articleDraftKey">
+        <input type="hidden" id="featuredImageUpdatedAt">
+        <div class="article-image-preview-row">
+          <div id="articleImagePreview" class="article-image-preview is-empty">No image</div>
+          <div class="article-image-controls">
+            <label class="field-label" for="featuredImageUrl">Featured Image URL</label>
+            <input id="featuredImageUrl" class="input" type="url" placeholder="https://...">
+            <label class="field-label" for="articleImageFile">Upload Article Image (PNG)</label>
+            <div class="btn-row" style="margin-top:0;">
+              <input id="articleImageFile" type="file" accept="image/png,.png" style="max-width:100%;">
+              <button id="uploadArticleImageBtn" class="btn btn-secondary" type="button" disabled>Upload Article Image</button>
+            </div>
+            <div class="slider-row">
+              <label for="articleImageZoom">Zoom <span class="slider-value" id="articleImageZoomValue">1.00</span></label>
+              <input id="articleImageZoom" type="range" min="0.5" max="3" step="0.05" value="1">
+            </div>
+            <div class="slider-row">
+              <label for="articleImageX">Horizontal Position <span class="slider-value" id="articleImageXValue">50</span></label>
+              <input id="articleImageX" type="range" min="0" max="100" step="1" value="50">
+            </div>
+            <div class="slider-row">
+              <label for="articleImageY">Vertical Position <span class="slider-value" id="articleImageYValue">50</span></label>
+              <input id="articleImageY" type="range" min="0" max="100" step="1" value="50">
+            </div>
+            <div class="btn-row" style="margin-top:0;">
+              <button class="btn btn-secondary" type="button" onclick="resetArticleImageCrop()">Reset Crop</button>
+            </div>
+            <pre id="articleImageMsg"></pre>
+          </div>
         </div>
       </div>
 
@@ -187,12 +242,15 @@
   </main>
 
   <script src="/miles-apex-avatar.js"></script>
+  <script src="/news-article-image.js"></script>
   <script>
     const $ = (s) => document.querySelector(s);
     const SESSION_KEY = 'bp_admin_pw';
     let drivers = [];
     let reporterSettings = MilesApexAvatar.normalizeSettings({});
     let pendingReporterPreviewUrl = null;
+    let articleImageState = NewsArticleImage.normalize({});
+    let pendingArticlePreviewUrl = null;
 
     function getSessionPw() { return sessionStorage.getItem(SESSION_KEY) || ''; }
 
@@ -201,6 +259,21 @@
         URL.revokeObjectURL(pendingReporterPreviewUrl);
         pendingReporterPreviewUrl = null;
       }
+    }
+
+    function revokePendingArticlePreview() {
+      if (pendingArticlePreviewUrl) {
+        URL.revokeObjectURL(pendingArticlePreviewUrl);
+        pendingArticlePreviewUrl = null;
+      }
+    }
+
+    function ensureArticleDraftKey() {
+      const field = $('#articleDraftKey');
+      if (!field.value) {
+        field.value = `draft-${Date.now()}`;
+      }
+      return field.value;
     }
 
     async function parseJsonResponse(res) {
@@ -248,6 +321,8 @@
       $('#adminView').hidden = false;
       if (window.AdminNav) AdminNav.setLoggedIn(true);
       else if ($('#logoutBtn')) $('#logoutBtn').hidden = false;
+      ensureArticleDraftKey();
+      updateArticleImagePreview();
       loadReporterSettings();
       loadDrivers();
       loadArticles();
@@ -442,6 +517,169 @@
 
     $('#reporterImageFile')?.addEventListener('change', onReporterFileSelected);
 
+    function readArticleImageFromForm() {
+      return {
+        featuredImageUrl: $('#featuredImageUrl').value.trim(),
+        featuredImageZoom: Number($('#articleImageZoom').value) || 1,
+        featuredImageX: Number($('#articleImageX').value),
+        featuredImageY: Number($('#articleImageY').value),
+        featuredImageUpdatedAt: $('#featuredImageUpdatedAt').value || null,
+      };
+    }
+
+    function updateArticleImageSliderLabels() {
+      $('#articleImageZoomValue').textContent = Number($('#articleImageZoom').value).toFixed(2);
+      $('#articleImageXValue').textContent = $('#articleImageX').value;
+      $('#articleImageYValue').textContent = $('#articleImageY').value;
+    }
+
+    function updateArticleImagePreview() {
+      articleImageState = NewsArticleImage.normalize({
+        ...articleImageState,
+        ...readArticleImageFromForm(),
+      });
+      const previewUrl =
+        pendingArticlePreviewUrl || NewsArticleImage.displayUrl(articleImageState);
+      NewsArticleImage.applyPreview($('#articleImagePreview'), articleImageState, { previewUrl });
+      updateArticleImageSliderLabels();
+    }
+
+    function syncArticleUploadButtonState() {
+      const btn = $('#uploadArticleImageBtn');
+      if (btn) btn.disabled = !$('#articleImageFile')?.files?.[0];
+    }
+
+    function setArticleImageMsg(text, isError = false) {
+      const msg = $('#articleImageMsg');
+      if (!msg) return;
+      msg.textContent = text;
+      msg.classList.toggle('error', isError);
+    }
+
+    function resetArticleImageFields() {
+      revokePendingArticlePreview();
+      articleImageState = NewsArticleImage.normalize({});
+      $('#featuredImageUrl').value = '';
+      $('#featuredImageUpdatedAt').value = '';
+      $('#articleImageZoom').value = '1';
+      $('#articleImageX').value = '50';
+      $('#articleImageY').value = '50';
+      $('#articleImageFile').value = '';
+      $('#articleDraftKey').value = `draft-${Date.now()}`;
+      syncArticleUploadButtonState();
+      updateArticleImagePreview();
+      setArticleImageMsg('');
+    }
+
+    function loadArticleImageFields(article = {}) {
+      revokePendingArticlePreview();
+      articleImageState = NewsArticleImage.normalize(article);
+      $('#featuredImageUrl').value = articleImageState.featuredImageUrl || '';
+      $('#featuredImageUpdatedAt').value = articleImageState.featuredImageUpdatedAt || '';
+      $('#articleImageZoom').value = articleImageState.featuredImageZoom;
+      $('#articleImageX').value = articleImageState.featuredImageX;
+      $('#articleImageY').value = articleImageState.featuredImageY;
+      $('#articleImageFile').value = '';
+      if (article.id) {
+        $('#articleDraftKey').value = `article-${article.id}`;
+      } else {
+        ensureArticleDraftKey();
+      }
+      syncArticleUploadButtonState();
+      updateArticleImagePreview();
+    }
+
+    function resetArticleImageCrop() {
+      $('#articleImageZoom').value = '1';
+      $('#articleImageX').value = '50';
+      $('#articleImageY').value = '50';
+      updateArticleImagePreview();
+      setArticleImageMsg('Crop reset to defaults. Save the article to persist.');
+    }
+
+    function onArticleImageFileSelected() {
+      const file = $('#articleImageFile')?.files?.[0];
+      revokePendingArticlePreview();
+      syncArticleUploadButtonState();
+      if (!file) {
+        updateArticleImagePreview();
+        return;
+      }
+      if (!/\.png$/i.test(file.name) && file.type !== 'image/png') {
+        setArticleImageMsg('Only PNG files are supported.', true);
+        $('#articleImageFile').value = '';
+        syncArticleUploadButtonState();
+        updateArticleImagePreview();
+        return;
+      }
+      pendingArticlePreviewUrl = URL.createObjectURL(file);
+      updateArticleImagePreview();
+      setArticleImageMsg(`Selected ${file.name}. Preview updated — click Upload Article Image to save.`);
+    }
+
+    async function uploadArticleImage() {
+      const file = $('#articleImageFile')?.files?.[0];
+      if (!file) {
+        setArticleImageMsg('Choose a PNG file first.', true);
+        return;
+      }
+
+      const uploadBtn = $('#uploadArticleImageBtn');
+      if (uploadBtn) uploadBtn.disabled = true;
+      setArticleImageMsg('Uploading article image...');
+
+      try {
+        const imageBase64 = await readFileAsDataUrl(file);
+        const payload = {
+          action: 'news-article-image',
+          password: getSessionPw(),
+          imageBase64,
+          draftKey: ensureArticleDraftKey(),
+        };
+        const articleId = Number($('#articleId').value);
+        if (articleId) payload.articleId = articleId;
+
+        const uploadRes = await fetch('/api/uploads', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const uploadData = await parseJsonResponse(uploadRes);
+        const storedUrl = String(
+          uploadData.featuredImageUrlStored || uploadData.featuredImageUrl || ''
+        ).split('?')[0];
+        if (!storedUrl) throw new Error('Upload succeeded but no image URL was returned.');
+
+        const updatedAt = uploadData.featuredImageUpdatedAt || new Date().toISOString();
+        $('#featuredImageUrl').value = storedUrl;
+        $('#featuredImageUpdatedAt').value = updatedAt;
+        if (uploadData.storageKey && !articleId) {
+          $('#articleDraftKey').value = uploadData.storageKey;
+        }
+
+        revokePendingArticlePreview();
+        articleImageState = NewsArticleImage.normalize({
+          ...readArticleImageFromForm(),
+          featuredImageUrl: storedUrl,
+          featuredImageUpdatedAt: updatedAt,
+        });
+        updateArticleImagePreview();
+        $('#articleImageFile').value = '';
+        syncArticleUploadButtonState();
+        setArticleImageMsg('Article image uploaded. Save the article to persist crop settings.');
+      } catch (e) {
+        setArticleImageMsg(e.message, true);
+        syncArticleUploadButtonState();
+      }
+    }
+
+    ['articleImageZoom', 'articleImageX', 'articleImageY'].forEach((id) => {
+      $('#' + id)?.addEventListener('input', updateArticleImagePreview);
+    });
+    $('#featuredImageUrl')?.addEventListener('input', updateArticleImagePreview);
+    $('#articleImageFile')?.addEventListener('change', onArticleImageFileSelected);
+    $('#uploadArticleImageBtn')?.addEventListener('click', uploadArticleImage);
+
     async function login() {
       const msg = $('#loginMsg');
       const pw = $('#loginPw').value;
@@ -522,7 +760,7 @@
       $('#summary').value = '';
       $('#body').value = '';
       $('#headlineOverride').value = '';
-      $('#featuredImageUrl').value = '';
+      resetArticleImageFields();
       $('#previewLink').hidden = true;
       setMsg('');
     }
@@ -541,7 +779,7 @@
         $('#subheadline').value = a.subheadline || '';
         $('#summary').value = a.summary || '';
         $('#body').value = a.body || '';
-        $('#featuredImageUrl').value = a.featuredImageUrl || '';
+        loadArticleImageFields(a);
         const preview = $('#previewLink');
         if (a.slug) {
           preview.href = `/news/${encodeURIComponent(a.slug)}`;
@@ -566,7 +804,11 @@
         subheadline: $('#subheadline').value,
         summary: $('#summary').value,
         body: $('#body').value,
-        featuredImageUrl: $('#featuredImageUrl').value
+        featuredImageUrl: $('#featuredImageUrl').value.trim(),
+        featuredImageZoom: Number($('#articleImageZoom').value) || 1,
+        featuredImageX: Number($('#articleImageX').value),
+        featuredImageY: Number($('#articleImageY').value),
+        featuredImageUpdatedAt: $('#featuredImageUpdatedAt').value || undefined,
       };
     }
 
@@ -677,6 +919,9 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Save failed');
         $('#articleId').value = data.id;
+        if (data.id) {
+          loadArticleImageFields(data);
+        }
         if (data.slug) {
           const preview = $('#previewLink');
           preview.href = `/news/${encodeURIComponent(data.slug)}`;

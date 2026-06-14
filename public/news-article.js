@@ -49,7 +49,7 @@ function renderArticle(article, settings) {
       date: article.publishedAt,
       readMinutes,
     })}
-    ${article.featuredImageUrl ? `<img class="news-article-image" src="${escapeHtml(article.featuredImageUrl)}" alt="">` : ""}
+    ${NewsArticleImage.renderArticleHero(article)}
     <div class="news-article-body">${renderBody(article.body)}</div>
     <aside class="news-author-card">
       ${MilesApexAvatar.renderAvatarHtml(settings, { size: "lg", alt: author })}

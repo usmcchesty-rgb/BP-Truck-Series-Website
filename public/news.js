@@ -31,11 +31,7 @@ function renderFeatured(article, settings) {
   wrap.innerHTML = `
     <a class="news-featured-card" href="${articleUrl(article.slug)}">
       <div class="news-featured-media">
-        ${
-          article.featuredImageUrl
-            ? `<img class="news-featured-image" src="${escapeHtml(article.featuredImageUrl)}" alt="">`
-            : `<div class="news-featured-placeholder" aria-hidden="true"></div>`
-        }
+        ${NewsArticleImage.renderFeaturedMedia(article)}
         <span class="news-type-badge news-type-badge--overlay">${escapeHtml(article.articleTypeLabel || article.articleType)}</span>
       </div>
       <div class="news-featured-content">
@@ -61,11 +57,7 @@ function renderCard(article, settings) {
   return `
     <article class="news-card-v2">
       <a class="news-card-v2-link" href="${articleUrl(article.slug)}">
-        ${
-          article.featuredImageUrl
-            ? `<img class="news-card-image" src="${escapeHtml(article.featuredImageUrl)}" alt="">`
-            : `<div class="news-card-thumb" aria-hidden="true"><span>BP</span></div>`
-        }
+        ${NewsArticleImage.renderCardMedia(article)}
         <div class="news-card-body">
           <span class="news-type-badge">${escapeHtml(article.articleTypeLabel || article.articleType)}</span>
           <h3 class="news-card-headline">${escapeHtml(article.headline)}</h3>

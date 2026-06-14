@@ -124,6 +124,10 @@ create table if not exists news_articles (
   spotlight_driver_id text,
   published boolean default false,
   featured_image_url text,
+  featured_image_zoom numeric default 1,
+  featured_image_x numeric default 50,
+  featured_image_y numeric default 50,
+  featured_image_updated_at timestamptz,
   created_at timestamptz default now(),
   updated_at timestamptz default now(),
   published_at timestamptz
@@ -131,6 +135,10 @@ create table if not exists news_articles (
 
 -- Existing deployments: run once
 -- alter table news_articles add column if not exists spotlight_driver_id text;
+alter table news_articles add column if not exists featured_image_zoom numeric default 1;
+alter table news_articles add column if not exists featured_image_x numeric default 50;
+alter table news_articles add column if not exists featured_image_y numeric default 50;
+alter table news_articles add column if not exists featured_image_updated_at timestamptz;
 
 create table if not exists race_transcripts (
   id bigint generated always as identity primary key,

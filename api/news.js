@@ -1,4 +1,4 @@
-import { slugify, supabase } from './_lib.js';
+import { slugify, stripPhotoUrlQuery, supabase } from './_lib.js';
 import { ARTICLE_TYPES } from '../server/config/news-system-prompt.js';
 import { generateNewsArticle } from './_news-generator.js';
 import {
@@ -33,6 +33,32 @@ function buildSlug(headline, id = null) {
   return id ? `${base}-${id}` : base;
 }
 
+function normalizeFeaturedImageCrop(body = {}, existing = {}) {
+  const zoom = Number(
+    body.featuredImageZoom ??
+      body.featured_image_zoom ??
+      existing.featured_image_zoom ??
+      1
+  );
+  const x = Number(
+    body.featuredImageX ??
+      body.featured_image_x ??
+      existing.featured_image_x ??
+      50
+  );
+  const y = Number(
+    body.featuredImageY ??
+      body.featured_image_y ??
+      existing.featured_image_y ??
+      50
+  );
+  return {
+    featured_image_zoom: Number.isFinite(zoom) && zoom > 0 ? zoom : 1,
+    featured_image_x: Number.isFinite(x) ? Math.min(100, Math.max(0, x)) : 50,
+    featured_image_y: Number.isFinite(y) ? Math.min(100, Math.max(0, y)) : 50,
+  };
+}
+
 function normalizeArticle(row) {
   if (!row) return null;
   return {
@@ -48,7 +74,11 @@ function normalizeArticle(row) {
     raceNumber: row.race_number,
     spotlightDriverId: row.spotlight_driver_id || null,
     published: row.published === true,
-    featuredImageUrl: row.featured_image_url || '',
+    featuredImageUrl: stripPhotoUrlQuery(row.featured_image_url || ''),
+    featuredImageZoom: Number(row.featured_image_zoom) || 1,
+    featuredImageX: Number(row.featured_image_x ?? 50),
+    featuredImageY: Number(row.featured_image_y ?? 50),
+    featuredImageUpdatedAt: row.featured_image_updated_at || null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     publishedAt: row.published_at,
@@ -163,6 +193,7 @@ async function saveArticle(body, publish = false) {
 
   const now = new Date().toISOString();
   const id = body.id ? Number(body.id) : null;
+  const crop = normalizeFeaturedImageCrop(body);
   const row = {
     article_type: articleType,
     headline,
@@ -172,9 +203,24 @@ async function saveArticle(body, publish = false) {
     author: String(body.author || 'Miles Apex').trim() || 'Miles Apex',
     race_number: body.raceNumber ?? body.race_number ?? null,
     spotlight_driver_id: body.spotlightDriverId ?? body.spotlight_driver_id ?? null,
-    featured_image_url: String(body.featuredImageUrl ?? body.featured_image_url ?? '').trim(),
+    featured_image_url: stripPhotoUrlQuery(
+      String(body.featuredImageUrl ?? body.featured_image_url ?? '').trim()
+    ),
+    featured_image_zoom: crop.featured_image_zoom,
+    featured_image_x: crop.featured_image_x,
+    featured_image_y: crop.featured_image_y,
     updated_at: now,
   };
+
+  if (body.featuredImageUpdatedAt || body.featured_image_updated_at) {
+    row.featured_image_updated_at =
+      body.featuredImageUpdatedAt || body.featured_image_updated_at;
+  } else if (body.featuredImageUrl !== undefined || body.featured_image_url !== undefined) {
+    const nextUrl = row.featured_image_url;
+    if (nextUrl && !id) {
+      row.featured_image_updated_at = now;
+    }
+  }
 
   if (publish) {
     row.published = true;
