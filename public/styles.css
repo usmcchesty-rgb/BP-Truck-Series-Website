@@ -1337,11 +1337,27 @@ a.home-news-item:hover h4{color:#fff}
   gap:16px;
 }
 .driver-card,.streamer-card{
+  position:relative;
   padding:14px;
   text-align:center;
   background:rgba(12,12,12,.92);
   border:1px solid #333;
   border-radius:5px;
+  transition:border-color .15s ease,transform .15s ease;
+}
+.driver-card:hover{border-color:#5a1010;transform:translateY(-1px)}
+.driver-card-link{
+  display:block;
+  color:inherit;
+  text-decoration:none;
+}
+.driver-card-link:hover h2{color:#fff}
+.driver-card.is-streamer .streamer-badge-link,
+.driver-card.is-streamer .streamer-badge{
+  position:absolute;
+  top:20px;
+  right:20px;
+  z-index:2;
 }
 .driver-card-media,.streamer-card-media{
   position:relative;
@@ -1387,6 +1403,121 @@ a.home-news-item:hover h4{color:#fff}
 }
 .driver-card h2,.streamer-card h2{margin:0;font-size:15px;font-style:italic}
 .driver-card-body p,.streamer-card-body p{margin:6px 0 0}
+
+.driver-profile-main{padding:0 18px 24px;max-width:980px;margin:0 auto;width:100%}
+.driver-profile-panel{padding:20px 22px;border:1px solid #2a2a2a;background:linear-gradient(180deg,#101010 0%,#070707 100%)}
+.driver-profile-back{display:inline-block;margin-bottom:14px;color:#8fd3ff;text-decoration:none;font-size:12px;font-weight:900}
+.driver-profile-back:hover{color:#fff}
+.driver-profile-hero{
+  display:grid;
+  grid-template-columns:220px 1fr;
+  gap:22px;
+  align-items:start;
+  padding:18px 0 22px;
+  border-bottom:1px solid #2a2a2a;
+}
+.driver-profile-photo-wrap{
+  border:1px solid #333;
+  background:linear-gradient(180deg,#151515,#090909);
+  padding:12px;
+  box-shadow:0 10px 24px rgba(0,0,0,.35);
+}
+.driver-profile-photo{
+  width:100%;
+  max-height:260px;
+  object-fit:contain;
+  display:block;
+  filter:drop-shadow(0 0 10px #000);
+}
+.driver-profile-number{
+  font:900 clamp(42px,6vw,64px)/1 Impact,sans-serif;
+  color:var(--gold);
+  letter-spacing:.02em;
+  margin-bottom:6px;
+}
+.driver-profile-name{
+  margin:0;
+  font-size:clamp(28px,4vw,42px);
+  line-height:1.05;
+  font-weight:900;
+  letter-spacing:-.02em;
+  text-transform:uppercase;
+}
+.driver-profile-alias{margin:6px 0 0;color:#999;font-size:13px}
+.driver-profile-meta-grid{display:grid;gap:10px;margin-top:16px}
+.driver-profile-field{
+  display:grid;
+  gap:2px;
+  padding:10px 12px;
+  border:1px solid #2b2b2b;
+  background:rgba(0,0,0,.28);
+}
+.driver-profile-field span{
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:.55px;
+  text-transform:uppercase;
+  color:var(--red);
+}
+.driver-profile-field strong{font-size:14px;color:#fff;font-weight:700}
+.driver-profile-section{padding:20px 0 0}
+.driver-profile-section h2{
+  margin:0 0 14px;
+  font-size:18px;
+  font-weight:900;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+  color:#fff;
+}
+.driver-profile-section h2::after{
+  content:"";
+  display:block;
+  width:56px;
+  height:3px;
+  margin-top:8px;
+  background:linear-gradient(90deg,var(--red),transparent);
+}
+.driver-profile-stats-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
+  gap:10px;
+}
+.driver-profile-stat{
+  padding:12px;
+  border:1px solid #2b2b2b;
+  background:rgba(0,0,0,.28);
+}
+.driver-profile-stat-label{
+  display:block;
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:.45px;
+  text-transform:uppercase;
+  color:#888;
+  margin-bottom:6px;
+}
+.driver-profile-stat-value{
+  display:block;
+  font-size:22px;
+  line-height:1.1;
+  color:#fff;
+  font-weight:900;
+}
+.driver-profile-results-table{width:100%;font-size:12px}
+.driver-profile-results-table th{
+  font-size:10px;
+  letter-spacing:.45px;
+  text-transform:uppercase;
+  color:#aaa;
+}
+.driver-profile-results-table td{padding:10px 8px;border-top:1px solid #252525;vertical-align:top}
+.driver-profile-finish{font-weight:900;color:var(--gold);white-space:nowrap}
+@media (max-width:720px){
+  .driver-profile-hero{grid-template-columns:1fr}
+  .driver-profile-photo-wrap{max-width:220px;margin:0 auto}
+  .driver-profile-hero-copy{text-align:center}
+  .driver-profile-meta-grid{max-width:360px;margin-left:auto;margin-right:auto}
+}
 .streamer-grid{
   display:grid;
   grid-template-columns:repeat(auto-fill,minmax(240px,1fr));

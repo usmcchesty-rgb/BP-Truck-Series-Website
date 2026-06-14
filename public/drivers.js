@@ -32,6 +32,10 @@ function streamerBadgeHtml(streamUrl) {
   return `<a class="streamer-badge-link" href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer" aria-label="Watch stream">${badge}</a>`;
 }
 
+function driverProfileUrl(driverId) {
+  return `/drivers/${encodeURIComponent(String(driverId || ""))}`;
+}
+
 function renderDrivers(drivers) {
   const grid = $("#driversGrid");
   if (!grid) return;
@@ -50,16 +54,19 @@ function renderDrivers(drivers) {
         : "";
       const showStreamerBadge = isMarkedStreamer(d);
       const badge = showStreamerBadge ? streamerBadgeHtml(d.stream_url) : "";
+      const profileUrl = driverProfileUrl(d.driver_id);
 
       return `<article class="driver-card${showStreamerBadge ? " is-streamer" : ""}">
-        <div class="driver-card-media">
-          ${badge}
-          <img src="${escapeHtml(photo)}" alt="" onerror="this.onerror=null;this.src='/assets/drivers/placeholder.png'" />
-        </div>
-        <div class="driver-card-body">
-          <h2>${number}${escapeHtml(name)}</h2>
-          ${d.iracing_name && d.iracing_name !== name ? `<p class="muted">${escapeHtml(d.iracing_name)}</p>` : ""}
-        </div>
+        <a class="driver-card-link" href="${escapeHtml(profileUrl)}">
+          <div class="driver-card-media">
+            <img src="${escapeHtml(photo)}" alt="" onerror="this.onerror=null;this.src='/assets/drivers/placeholder.png'" />
+          </div>
+          <div class="driver-card-body">
+            <h2>${number}${escapeHtml(name)}</h2>
+            ${d.iracing_name && d.iracing_name !== name ? `<p class="muted">${escapeHtml(d.iracing_name)}</p>` : ""}
+          </div>
+        </a>
+        ${badge}
       </article>`;
     })
     .join("");

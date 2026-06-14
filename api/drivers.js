@@ -22,6 +22,10 @@ function normalizeStreamUrl(value) {
   return String(value ?? '').trim();
 }
 
+function normalizeOptionalText(value) {
+  return String(value ?? '').trim();
+}
+
 function normalizeDriverProfile(row) {
   if (!row) return null;
   const photo_url = stripPhotoUrlQuery(row.photo_url || '');
@@ -36,6 +40,10 @@ function normalizeDriverProfile(row) {
       : '',
     is_streamer: normalizeBoolean(row.is_streamer, false),
     stream_url: normalizeStreamUrl(row.stream_url),
+    date_of_birth: normalizeOptionalText(row.date_of_birth),
+    dateOfBirth: normalizeOptionalText(row.date_of_birth),
+    hometown: normalizeOptionalText(row.hometown),
+    team: normalizeOptionalText(row.team),
     active: row.active !== false
   };
 }
@@ -55,6 +63,9 @@ function buildUpsertRow(b) {
     photo_url: stripPhotoUrlQuery(b.photo_url || ''),
     is_streamer: normalizeBoolean(b.is_streamer, false),
     stream_url: normalizeStreamUrl(b.stream_url),
+    date_of_birth: normalizeOptionalText(b.date_of_birth ?? b.dateOfBirth),
+    hometown: normalizeOptionalText(b.hometown),
+    team: normalizeOptionalText(b.team),
     active: b.active !== false,
     updated_at: new Date().toISOString()
   };
@@ -92,6 +103,16 @@ export default async function handler(req, res) {
       .map(normalizeDriverProfile)
       .filter(Boolean)
       .sort((a, b) => a.iracing_name.localeCompare(b.iracing_name));
+
+    const driverId = String(req.query?.driver_id ?? req.query?.id ?? '').trim();
+    if (driverId) {
+      const profile = normalized.find((row) => String(row.driver_id) === driverId);
+      if (!profile) {
+        return res.status(404).json({ error: 'Driver not found.' });
+      }
+      return res.status(200).json(profile);
+    }
+
     return res.status(200).json(normalized);
   }
 

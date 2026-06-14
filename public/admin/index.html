@@ -153,6 +153,9 @@
                 <th>Display Name</th>
                 <th>Car #</th>
                 <th>Photo URL</th>
+                <th>Date of Birth</th>
+                <th>Hometown</th>
+                <th>Team</th>
                 <th>Streamer</th>
                 <th>Stream Link</th>
                 <th>Active</th>
@@ -410,6 +413,9 @@
           display_name: profile?.display_name || row.driver,
           car_number: profile?.car_number || '',
           photo_url: profile?.photo_url || row.photoUrl || '',
+          date_of_birth: profile?.date_of_birth || profile?.dateOfBirth || '',
+          hometown: profile?.hometown || '',
+          team: profile?.team || '',
           is_streamer: profile?.is_streamer === true,
           stream_url: profile?.stream_url || '',
           active: profile?.active !== false
@@ -429,6 +435,9 @@
         display_name: rowInput(rowEl, 'display_name')?.value ?? '',
         car_number: rowInput(rowEl, 'car_number')?.value ?? '',
         photo_url: rowInput(rowEl, 'photo_url')?.value ?? '',
+        date_of_birth: rowInput(rowEl, 'date_of_birth')?.value ?? '',
+        hometown: rowInput(rowEl, 'hometown')?.value ?? '',
+        team: rowInput(rowEl, 'team')?.value ?? '',
         is_streamer: rowInput(rowEl, 'is_streamer')?.checked ?? false,
         stream_url: rowInput(rowEl, 'stream_url')?.value ?? '',
         active: rowInput(rowEl, 'active')?.checked ?? true
@@ -497,6 +506,9 @@
           <td><input type="text" name="display_name" value="${escapeAttr(d.display_name || '')}"></td>
           <td><input type="text" name="car_number" value="${escapeAttr(d.car_number || '')}"></td>
           <td><input type="text" name="photo_url" value="${escapeAttr(d.photo_url || '')}"></td>
+          <td><input type="text" name="date_of_birth" value="${escapeAttr(d.date_of_birth || d.dateOfBirth || '')}" placeholder="e.g. March 14, 1990"></td>
+          <td><input type="text" name="hometown" value="${escapeAttr(d.hometown || '')}"></td>
+          <td><input type="text" name="team" value="${escapeAttr(d.team || '')}"></td>
           <td class="center"><input type="checkbox" name="is_streamer"${d.is_streamer === true ? ' checked' : ''}></td>
           <td><input type="url" name="stream_url" value="${escapeAttr(d.stream_url || '')}" placeholder="https://twitch.tv/username or YouTube/Kick/etc."></td>
           <td class="center"><input type="checkbox" name="active"${d.active !== false ? ' checked' : ''}></td>
