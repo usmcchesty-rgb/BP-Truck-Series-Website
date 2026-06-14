@@ -136,6 +136,38 @@
       opacity: .55;
       cursor: not-allowed;
     }
+    .writeup-cell {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .writeup-warnings {
+      margin: 0;
+      padding-left: 18px;
+      color: #b45309;
+      font-size: 13px;
+    }
+    .writeup-warnings:empty,
+    .writeup-warnings[hidden] {
+      display: none;
+    }
+    .writeup-warning {
+      margin: 2px 0;
+    }
+    .writeup-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .regenerate-writeup-btn {
+      font-size: 13px;
+      padding: 6px 10px;
+    }
+    .regenerate-status {
+      font-size: 13px;
+      color: #666;
+    }
     @media (max-width: 900px) {
       .ranking-row, .ranking-row-head { grid-template-columns: 1fr; }
       .ranking-row-head { display: none; }
@@ -239,6 +271,7 @@
     let currentWeekId = null;
     let savedWeeks = [];
     let suggestedRaceNumber = 1;
+    let currentWriteupWarnings = {};
 
     function readRaceNumberInput() {
       const input = $('#raceNumber');
@@ -477,6 +510,9 @@
           nested?.repairFailureReasons ?? data?.repairFailureReasons ?? {},
         repairedWriteupReasons:
           nested?.repairedWriteupReasons ?? data?.repairedWriteupReasons ?? {},
+        repairAttemptDetails:
+          nested?.repairAttemptDetails ?? data?.repairAttemptDetails ?? {},
+        writeupWarnings: nested?.writeupWarnings ?? data?.writeupWarnings ?? {},
         raceNumberDebug: nested?.raceNumberDebug ?? data?.raceNumberDebug ?? null,
         recentWinners: nested?.recentWinners ?? [],
         backToBackWinners: nested?.backToBackWinners ?? [],
@@ -771,6 +807,19 @@
         `Repaired writeups: ${sources.repairedWriteupsCount} (${repairedRanksText})`,
         `Repair reasons: ${formatRepairReasons(sources.repairedWriteupReasons)}`,
         `Repair failed ranks: ${sources.repairFailedRanks.length ? sources.repairFailedRanks.join(', ') : 'none'}`,
+        ...(Object.keys(sources.writeupWarnings || {}).some((key) =>
+          Array.isArray(sources.writeupWarnings[key]) && sources.writeupWarnings[key].length
+        )
+          ? [
+              'Writeup warnings by rank:',
+              ...Object.entries(sources.writeupWarnings || {})
+                .filter(([, items]) => Array.isArray(items) && items.length)
+                .flatMap(([rank, items]) =>
+                  items.map((item) => `  rank ${rank}: [${item.type}] ${item.message}`)
+                ),
+              '',
+            ]
+          : []),
       ].join('\n');
 
       panel.hidden = false;
@@ -872,11 +921,25 @@
       return options.join('');
     }
 
-    function renderRankingRows(entries = []) {
+    function writeupWarningsHtml(rank, warnings = []) {
+      if (!Array.isArray(warnings) || !warnings.length) {
+        return `<ul class="writeup-warnings" data-writeup-warnings="${rank}" hidden></ul>`;
+      }
+      const items = warnings
+        .map(
+          (warning) =>
+            `<li class="writeup-warning writeup-warning-${escapeHtml(String(warning.type || 'warning').replace(/[^a-z0-9_-]/gi, '-'))}">${escapeHtml(warning.message || '')}</li>`
+        )
+        .join('');
+      return `<ul class="writeup-warnings" data-writeup-warnings="${rank}">${items}</ul>`;
+    }
+
+    function renderRankingRows(entries = [], writeupWarnings = currentWriteupWarnings) {
       const container = $('#rankingRows');
       container.innerHTML = Array.from({ length: 10 }, (_, index) => {
         const rank = index + 1;
         const entry = entries.find((e) => Number(e.rank) === rank) || {};
+        const rankWarnings = writeupWarnings[String(rank)] || writeupWarnings[rank] || [];
         return `<div class="ranking-row" data-rank="${rank}">
           <div class="rank-label">#${rank}</div>
           <div>
@@ -888,11 +951,90 @@
           <div>
             <input class="input subtitle-input" type="text" value="${escapeHtml(entry.subtitle || '')}" placeholder="Custom headline">
           </div>
-          <div>
+          <div class="writeup-cell">
             <textarea class="textarea writeup-input" placeholder="Full writeup">${escapeHtml(entry.writeup || '')}</textarea>
+            ${writeupWarningsHtml(rank, rankWarnings)}
+            <div class="writeup-actions">
+              <button class="btn btn-secondary regenerate-writeup-btn" type="button" onclick="regenerateWriteup(${rank})">Regenerate Writeup</button>
+              <span class="regenerate-status" id="regenerateStatus${rank}" hidden>Regenerating...</span>
+            </div>
           </div>
         </div>`;
       }).join('');
+    }
+
+    function updateWriteupWarningsForRank(rank, warnings) {
+      currentWriteupWarnings[String(rank)] = Array.isArray(warnings) ? warnings : [];
+      const row = document.querySelector(`.ranking-row[data-rank="${rank}"]`);
+      if (!row) return;
+      const existing = row.querySelector('.writeup-warnings');
+      const replacement = writeupWarningsHtml(rank, currentWriteupWarnings[String(rank)]);
+      if (existing) {
+        existing.outerHTML = replacement;
+      } else {
+        const actions = row.querySelector('.writeup-actions');
+        if (actions) actions.insertAdjacentHTML('beforebegin', replacement);
+      }
+    }
+
+    async function regenerateWriteup(rank) {
+      const pw = getSessionPw();
+      if (!pw) {
+        setMsg('Session expired: log in again.', true);
+        logout();
+        return;
+      }
+
+      const row = document.querySelector(`.ranking-row[data-rank="${rank}"]`);
+      if (!row) return;
+
+      const raceNumber = readRaceNumberInput();
+      if (!raceNumber) {
+        setMsg('Enter a valid race number before regenerating a writeup.', true);
+        return;
+      }
+
+      const driverId = row.querySelector('.driver-select')?.value || '';
+      if (!driverId) {
+        setMsg(`Select a driver for rank ${rank} before regenerating.`, true);
+        return;
+      }
+
+      const subtitle = row.querySelector('.subtitle-input')?.value || '';
+      const currentWriteup = row.querySelector('.writeup-input')?.value || '';
+      const btn = row.querySelector('.regenerate-writeup-btn');
+      const status = document.getElementById(`regenerateStatus${rank}`);
+
+      if (btn) btn.disabled = true;
+      if (status) status.hidden = false;
+
+      try {
+        const res = await fetch('/api/power-rankings-generate-writeup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            password: pw,
+            raceNumber,
+            rank,
+            driverId,
+            subtitle,
+            currentWriteup,
+            manualRaceNotes: $('#manualRaceNotes')?.value || '',
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Writeup regeneration failed.');
+
+        row.querySelector('.writeup-input').value = data.writeup || '';
+        updateWriteupWarningsForRank(rank, data.warnings || []);
+        setMsg(`Regenerated writeup for rank ${rank}.`);
+      } catch (e) {
+        setMsg(e.message, true);
+      } finally {
+        if (btn) btn.disabled = false;
+        if (status) status.hidden = true;
+      }
     }
 
     function renderMentionRows(mentions = []) {
@@ -980,6 +1122,7 @@
       if (manualNotes) manualNotes.value = '';
       hideTranscriptDiagnostics();
       hideGenerationSources();
+      currentWriteupWarnings = {};
       renderRankingRows();
       renderMentionRows([]);
       setMsg('');
@@ -990,7 +1133,12 @@
       $('#editorTitle').textContent = `Edit ${week.label || `Race ${week.raceNumber}`}`;
       setRaceNumberInput(week.raceNumber);
       $('#publishedDate').value = week.publishedDate || '';
-      renderRankingRows(week.entries || []);
+      if (options.writeupWarnings) {
+        currentWriteupWarnings = options.writeupWarnings;
+      } else if (options.clearWriteupWarnings !== false) {
+        currentWriteupWarnings = {};
+      }
+      renderRankingRows(week.entries || [], currentWriteupWarnings);
       renderMentionRows(week.honorableMentions || []);
       if (options.clearStatus !== false) {
         hideTranscriptDiagnostics();
@@ -1111,7 +1259,10 @@
           label: `Race ${data.raceNumber || raceNumber} Rankings`,
           entries: data.entries || [],
           honorableMentions: data.honorableMentions || [],
-        }, { clearStatus: false });
+        }, {
+          clearStatus: false,
+          writeupWarnings: data.writeupWarnings || {},
+        });
 
         renderGenerationSources(data);
         renderTranscriptDiagnostics(data);
@@ -1137,11 +1288,21 @@
           Array.isArray(data.warnings) && data.warnings.length
             ? ` Warnings: ${data.warnings.join(' ')}`
             : '';
+        const writeupWarningRanks = Object.entries(data.writeupWarnings || {})
+          .filter(([key, items]) => String(key).match(/^\d+$/) && Array.isArray(items) && items.length)
+          .map(([key]) => key);
+        const writeupWarningNote = writeupWarningRanks.length
+          ? ` Writeup warnings at rank(s): ${writeupWarningRanks.join(', ')} — review or regenerate.`
+          : '';
         const repairNote =
           Number(data.repairedWriteupsCount) > 0
             ? ` ${formatRepairRanksMessage(data.repairedRanks || [])}`
             : '';
-        setMsg(`AI draft loaded.${confidenceNote}${transcriptNote}${previousNote}${existingNote}${repairNote}${warningNote}`);
+        const repairFailedNote =
+          Array.isArray(data.repairFailedRanks) && data.repairFailedRanks.length
+            ? ` Repair incomplete for: ${data.repairFailedRanks.join(', ')}.`
+            : '';
+        setMsg(`AI draft loaded.${confidenceNote}${transcriptNote}${previousNote}${existingNote}${repairNote}${repairFailedNote}${writeupWarningNote}${warningNote}`);
       } catch (e) {
         setMsg(e.message, true);
       } finally {
@@ -1160,6 +1321,12 @@
       const payload = collectFormData();
       if (!payload.raceNumber) {
         setMsg('Enter a valid race number (1 or higher).', true);
+        return;
+      }
+
+      const emptyWriteup = payload.entries.find((entry) => !String(entry.writeup || '').trim());
+      if (emptyWriteup) {
+        setMsg(`Rank ${emptyWriteup.rank} writeup is empty. Add text or use Regenerate Writeup before saving.`, true);
         return;
       }
 

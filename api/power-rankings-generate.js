@@ -1079,7 +1079,7 @@ function looksTooGenericForDriver(text) {
   return vaguePraise && !hasSpecificFinish;
 }
 
-function validateWriteup(writeup, driver, context = {}) {
+export function validateWriteup(writeup, driver, context = {}) {
   const text = String(writeup || '').trim();
   const warnings = [];
 
@@ -1239,7 +1239,7 @@ function isRepairableWriteupError(errorType) {
   return REPAIRABLE_WRITEUP_ERROR_TYPES.has(errorType);
 }
 
-function formatDriverStatsForRepair(driver, entry, previousRank) {
+export function formatDriverStatsForRepair(driver, entry, previousRank) {
   const parts = [];
   if (entry?.rank) parts.push(`Power rank: ${entry.rank}`);
   if (previousRank) parts.push(`Previous power rank: ${previousRank}`);
@@ -1340,7 +1340,221 @@ Return only the rewritten paragraph.`,
   return content;
 }
 
-async function repairWriteupQuality(entry, driver, context = {}) {
+export function buildWriteupWarnings(repaired) {
+  const warnings = [];
+
+  for (const message of repaired.writeupResult?.warnings || []) {
+    warnings.push({ type: 'informational', message });
+  }
+
+  if (repaired.writeupResult?.error) {
+    warnings.push({
+      type: repaired.writeupResult.errorType || 'validation-error',
+      message: repaired.writeupResult.error,
+    });
+  }
+
+  if (repaired.unsupportedFactsDetected?.length) {
+    warnings.push({
+      type: 'unsupported-facts-repaired',
+      message: `Unsupported factual claims were detected during repair (${repaired.unsupportedFactsDetected
+        .map((fact) => fact.type)
+        .join(', ')}). Review carefully.`,
+    });
+  }
+
+  return warnings;
+}
+
+export async function callOpenAiSingleWriteup({
+  driverName,
+  rank,
+  subtitle,
+  verifiedFacts,
+  driverStats,
+  manualRaceNotes,
+  transcriptUsed,
+  raceNumber,
+}) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error('OPENAI_API_KEY is not configured in Vercel environment variables.');
+  }
+
+  const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+  const notesExcerpt = String(manualRaceNotes || '').trim().slice(0, 2500);
+
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      temperature: 0.65,
+      max_tokens: 280,
+      messages: [
+        { role: 'system', content: POWER_RANKING_SYSTEM_PROMPT },
+        {
+          role: 'user',
+          content: `Write ONE Power Rankings writeup paragraph for Race ${raceNumber}.
+
+Rules (prompt version ${POWER_RANKING_PROMPT_VERSION}):
+- 50-100 words, 2-4 sentences
+- Do NOT start with the driver's name
+- Use 1-3 verified facts from the list below
+- Prefer recentRaceFinishes and last3RaceAverageFinish when available
+- Explain WHY this driver is ranked here THIS week — not a season summary
+- Avoid generic filler like "showing momentum" or "building confidence" without verified facts
+- Do NOT invent race facts not listed below
+${transcriptUsed ? '- Manual notes or transcript were available — only use supported facts.' : ''}
+
+Driver: ${driverName}
+Rank: ${rank}
+Subtitle: ${subtitle}
+
+Verified facts only:
+${verifiedFacts}
+
+Driver stats:
+${driverStats}
+${notesExcerpt ? `\nManual race notes:\n${notesExcerpt}` : ''}
+
+Return only the writeup paragraph.`,
+        },
+      ],
+    }),
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data?.error?.message || `OpenAI writeup generation failed (${response.status})`);
+  }
+
+  const content = String(data?.choices?.[0]?.message?.content || '')
+    .trim()
+    .replace(/^["']|["']$/g, '');
+
+  if (!content) {
+    throw new Error('OpenAI writeup generation returned an empty response.');
+  }
+
+  return content;
+}
+
+export async function loadPowerRankingsGenerationContext(raceNumber, manualRaceNotesRaw = '') {
+  const settings = await getSettings();
+  const [scheduleHtml, previousRankings, profiles] = await Promise.all([
+    fetchHtml(settings.scheduleUrl),
+    loadPreviousPowerRankings(raceNumber),
+    getDriverProfiles(),
+  ]);
+
+  const scheduleRaces = parseScheduleRaces(scheduleHtml);
+  const raceNumberDebug = buildRaceNumberDebug(scheduleRaces, raceNumber);
+  const standingsResult = await fetchStandingsRows(settings, raceNumberDebug.standingsScheduleId);
+  const standings = standingsResult.rows;
+
+  if (!standings.length) {
+    throw new Error('No standings data available for AI generation.');
+  }
+
+  raceNumberDebug.standingsScheduleIdUsed =
+    standingsResult.scheduleId || raceNumberDebug.standingsScheduleId;
+
+  const manualRaceNotes = normalizeManualRaceNotes(manualRaceNotesRaw);
+  const driverLookup = buildDriverLookup(standings, profiles);
+  const recentFormAnalysis = buildRecentFormAnalysis({
+    scheduleRaces,
+    raceNumber,
+    standings,
+    schedules: standingsResult.schedules,
+    driverLookup,
+  });
+
+  const contextMeta = manualRaceNotes
+    ? buildManualRaceContextMeta(manualRaceNotes, raceNumber)
+    : applyYoutubeContextMeta(await loadBroadcastContext(raceNumber, standings.map((row) => ({
+        driverId: row.driverId,
+        driverName: row.driverName,
+        carNumber: row.carNumber,
+      }))));
+
+  const recentResultsForGrounding = getRecentPointsRaceResults(scheduleRaces, raceNumber, 3).map(
+    (race) => ({
+      raceNumber: race.officialPointsRaceNumber,
+      scheduleRow: race.scheduleRow,
+      date: race.date,
+      track: race.track,
+      winner: race.winner,
+    })
+  );
+
+  const factualGrounding = buildFactualGroundingContext({
+    standings,
+    scheduleRaces,
+    raceNumber,
+    schedules: standingsResult.schedules,
+    driverLookup,
+    recentResults: recentResultsForGrounding,
+    manualRaceNotes,
+    transcriptSummary: contextMeta.broadcastContext?.summary || '',
+  });
+
+  const alignedRaces = getAlignedRaceFinishes(
+    scheduleRaces,
+    raceNumber,
+    standingsResult.schedules,
+    driverLookup
+  );
+
+  const previousRankByDriver = Object.fromEntries(
+    (previousRankings?.entries || []).map((entry) => [
+      String(entry.driverId),
+      Number(entry.rank),
+    ])
+  );
+
+  return {
+    raceNumber,
+    settings,
+    scheduleRaces,
+    raceNumberDebug,
+    standings,
+    standingsResult,
+    profiles,
+    driverLookup,
+    previousRankings,
+    previousRankByDriver,
+    recentFormAnalysis,
+    contextMeta,
+    factualGrounding,
+    alignedRaces,
+    recentResultsForGrounding,
+    manualRaceNotes,
+  };
+}
+
+export function buildWriteupContextForEntry(entry, driver, generationContext, previousRank) {
+  return {
+    transcriptUsed: generationContext.contextMeta?.transcriptUsed === true,
+    transcriptMode: generationContext.contextMeta?.transcriptMode || 'none',
+    previousRank,
+    rank: entry.rank,
+    entry,
+    driverId: entry.driverId,
+    driverGrounding: generationContext.factualGrounding?.drivers?.[String(entry.driverId)],
+    factualGrounding: generationContext.factualGrounding?.drivers?.[String(entry.driverId)],
+    alignedRaces: generationContext.alignedRaces || [],
+    manualRaceNotes: generationContext.manualRaceNotes || '',
+    transcriptSummary: generationContext.contextMeta?.broadcastContext?.summary || '',
+    recentResults: generationContext.recentResultsForGrounding || [],
+    driverLookup: generationContext.driverLookup,
+  };
+}
+
+export async function repairWriteupQuality(entry, driver, context = {}) {
   let writeup = String(entry.writeup || '').trim();
   let repairAttempts = 0;
   let repairAttempted = false;
@@ -1490,6 +1704,8 @@ function buildGenerationSources({
     repairFailedRanks: draft.repairFailedRanks ?? [],
     repairFailureReasons: draft.repairFailureReasons ?? {},
     repairedWriteupReasons: draft.repairedWriteupReasons ?? {},
+    repairAttemptDetails: draft.repairAttemptDetails ?? {},
+    writeupWarnings: draft.writeupWarnings ?? {},
     confidenceScore: sourceQuality.confidenceScore,
     confidenceReason: sourceQuality.confidenceReason,
     dataQualityScore: sourceQuality.dataQualityScore,
@@ -1562,6 +1778,12 @@ async function normalizeDraft(aiDraft, driverLookup, previousRankings, generatio
   const unsupportedFactRanks = [];
   const unsupportedFactDetails = {};
   let repairAttempted = false;
+  const writeupWarnings = {};
+  const repairAttemptDetails = {};
+
+  for (let rank = 1; rank <= 10; rank += 1) {
+    writeupWarnings[String(rank)] = [];
+  }
 
   const verifiedFactsUsed = {};
   const verifiedFactsUsedCount = {};
@@ -1644,37 +1866,33 @@ async function normalizeDraft(aiDraft, driverLookup, previousRankings, generatio
     }
 
     if (repaired.writeupResult.error) {
-      if (repaired.repairAttempted && isRepairableWriteupError(repaired.writeupResult.errorType)) {
-        repairFailedRanks.push(entry.rank);
-        repairFailureReasons[String(entry.rank)] = repaired.writeupResult.error;
-        const repairError = new Error(
-          `Rank ${entry.rank} writeup repair failed after ${repaired.repairAttempts} attempts.`
-        );
-        repairError.repairDiagnostics = {
-          repairAttempted: true,
-          repairedWriteupsCount: repairedRanks.length,
-          repairedRanks: [...repairedRanks],
-          repairFailedRanks: [...repairFailedRanks],
-          repairFailureReasons: { ...repairFailureReasons },
-          repairedWriteupReasons: { ...repairedWriteupReasons },
-          unsupportedFactWarnings,
-          unsupportedFactRanks,
-          unsupportedFactDetails,
-          verifiedFactsUsed,
-          verifiedFactsUsedCount,
-          evidenceBasedWriteupsCount,
-          evidenceRepairRanks,
-        };
-        throw repairError;
-      }
-      throw new Error(
-        `AI draft rank ${entry.rank} writeup rejected: ${repaired.writeupResult.error}`
+      repairFailedRanks.push(entry.rank);
+      repairFailureReasons[String(entry.rank)] = repaired.writeupResult.error;
+      repairAttemptDetails[String(entry.rank)] = {
+        repairAttempted: repaired.repairAttempted === true,
+        repairAttempts: repaired.repairAttempts,
+        repairReasons: [...(repaired.repairReasons || [])],
+        finalErrorType: repaired.writeupResult.errorType || null,
+        finalError: repaired.writeupResult.error,
+      };
+      writeupWarnings[String(entry.rank)] = buildWriteupWarnings(repaired);
+      warnings.push(
+        `Rank ${entry.rank}: writeup has validation warnings — review or use Regenerate Writeup.`
       );
+    } else {
+      writeupWarnings[String(entry.rank)] = buildWriteupWarnings(repaired);
     }
 
     if (repaired.repairAttempts > 0) {
       repairedRanks.push(entry.rank);
       repairedWriteupReasons[String(entry.rank)] = repaired.repairReasons;
+      repairAttemptDetails[String(entry.rank)] = {
+        ...(repairAttemptDetails[String(entry.rank)] || {}),
+        repairAttempted: true,
+        repairAttempts: repaired.repairAttempts,
+        repairReasons: [...(repaired.repairReasons || [])],
+        repairedSuccessfully: !repaired.writeupResult.error,
+      };
     }
 
     if (
@@ -1741,9 +1959,22 @@ async function normalizeDraft(aiDraft, driverLookup, previousRankings, generatio
     }
 
     if (repairedMention.writeupResult.error) {
-      throw new Error(
-        `AI draft honorable mention for ${driver.driverName} rejected: ${repairedMention.writeupResult.error}`
+      const hmKey = `HM:${driverId}`;
+      repairFailedRanks.push(hmKey);
+      repairFailureReasons[hmKey] = repairedMention.writeupResult.error;
+      repairAttemptDetails[hmKey] = {
+        repairAttempted: repairedMention.repairAttempted === true,
+        repairAttempts: repairedMention.repairAttempts,
+        repairReasons: [...(repairedMention.repairReasons || [])],
+        finalErrorType: repairedMention.writeupResult.errorType || null,
+        finalError: repairedMention.writeupResult.error,
+      };
+      writeupWarnings[hmKey] = buildWriteupWarnings(repairedMention);
+      warnings.push(
+        `Honorable mention (${driver.driverName}): writeup has validation warnings — review or edit manually.`
       );
+    } else {
+      writeupWarnings[`HM:${driverId}`] = buildWriteupWarnings(repairedMention);
     }
 
     const hmKey = `HM:${driverId}`;
@@ -1777,6 +2008,8 @@ async function normalizeDraft(aiDraft, driverLookup, previousRankings, generatio
     repairFailedRanks,
     repairFailureReasons,
     repairedWriteupReasons,
+    repairAttemptDetails,
+    writeupWarnings,
     unsupportedFactWarnings,
     unsupportedFactRanks,
     unsupportedFactDetails,
@@ -1807,29 +2040,30 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Valid race number is required.' });
     }
 
-    const settings = await getSettings();
-    const [scheduleHtml, previousRankings, profiles, existingWeek] = await Promise.all([
-      fetchHtml(settings.scheduleUrl),
-      loadPreviousPowerRankings(raceNumber),
-      getDriverProfiles(),
-      loadExistingWeekForRace(raceNumber),
-    ]);
-
-    const scheduleRaces = parseScheduleRaces(scheduleHtml);
-    const raceNumberDebug = buildRaceNumberDebug(scheduleRaces, raceNumber);
-
-    const standingsResult = await fetchStandingsRows(
-      settings,
-      raceNumberDebug.standingsScheduleId
+    const manualRaceNotes = normalizeManualRaceNotes(
+      body.manualRaceNotes ?? body.manual_race_notes
     );
-    const standings = standingsResult.rows;
 
-    if (!standings.length) {
-      return res.status(400).json({ error: 'No standings data available for AI generation.' });
-    }
+    const generationContext = await loadPowerRankingsGenerationContext(
+      raceNumber,
+      manualRaceNotes
+    );
+    const {
+      settings,
+      scheduleRaces,
+      raceNumberDebug,
+      standings,
+      standingsResult,
+      profiles,
+      driverLookup,
+      previousRankings,
+      recentFormAnalysis,
+      contextMeta,
+      factualGrounding,
+      alignedRaces,
+      recentResultsForGrounding,
+    } = generationContext;
 
-    raceNumberDebug.standingsScheduleIdUsed =
-      standingsResult.scheduleId || raceNumberDebug.standingsScheduleId;
     raceNumberDebug.standingsUsedLatestCompletedFallback =
       !raceNumberDebug.standingsScheduleId && Boolean(standingsResult.scheduleId);
 
@@ -1861,51 +2095,6 @@ export default async function handler(req, res) {
       driverName: row.driverName,
       carNumber: row.carNumber,
     }));
-
-    const manualRaceNotes = normalizeManualRaceNotes(
-      body.manualRaceNotes ?? body.manual_race_notes
-    );
-
-    const driverLookup = buildDriverLookup(standings, profiles);
-    const recentFormAnalysis = buildRecentFormAnalysis({
-      scheduleRaces,
-      raceNumber,
-      standings,
-      schedules: standingsResult.schedules,
-      driverLookup,
-    });
-
-    const contextMeta = manualRaceNotes
-      ? buildManualRaceContextMeta(manualRaceNotes, raceNumber)
-      : applyYoutubeContextMeta(await loadBroadcastContext(raceNumber, drivers));
-
-    const recentResultsForGrounding = getRecentPointsRaceResults(scheduleRaces, raceNumber, 3).map(
-      (race) => ({
-        raceNumber: race.officialPointsRaceNumber,
-        scheduleRow: race.scheduleRow,
-        date: race.date,
-        track: race.track,
-        winner: race.winner,
-      })
-    );
-
-    const factualGrounding = buildFactualGroundingContext({
-      standings,
-      scheduleRaces,
-      raceNumber,
-      schedules: standingsResult.schedules,
-      driverLookup,
-      recentResults: recentResultsForGrounding,
-      manualRaceNotes,
-      transcriptSummary: contextMeta.broadcastContext?.summary || '',
-    });
-
-    const alignedRaces = getAlignedRaceFinishes(
-      scheduleRaces,
-      raceNumber,
-      standingsResult.schedules,
-      driverLookup
-    );
 
     const contextPayload = buildContextPayload({
       raceNumber,
@@ -1956,6 +2145,7 @@ export default async function handler(req, res) {
     );
 
     const aiDraft = await callOpenAi(contextPayload);
+    const existingWeek = await loadExistingWeekForRace(raceNumber);
     const draft = await normalizeDraft(aiDraft, driverLookup, previousRankings, {
       transcriptUsed: contextMeta.transcriptUsed,
       transcriptMode: contextMeta.transcriptMode,

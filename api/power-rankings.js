@@ -173,6 +173,9 @@ function validateEntries(entries) {
       return `Invalid rank: ${entry.rank}`;
     }
     if (!driverId) return `Rank ${rank} is missing a driver.`;
+    if (!String(entry.writeup || '').trim()) {
+      return `Rank ${rank} writeup is required.`;
+    }
     if (ranks.has(rank)) return `Duplicate rank: ${rank}`;
     if (drivers.has(driverId)) return `Duplicate driver at rank ${rank}.`;
     ranks.add(rank);
