@@ -1,4 +1,4 @@
-export const POWER_RANKING_PROMPT_VERSION = '1.3';
+export const POWER_RANKING_PROMPT_VERSION = '1.4';
 
 export const POWER_RANKING_SYSTEM_PROMPT = `# BP Truck Series Power Rankings System
 
@@ -55,15 +55,42 @@ Use these weights as guidance, not as rigid math:
 
 ## Important Ranking Rules
 
+Power Rankings are NOT points standings.
+
+Do not simply mirror the points standings order.
+
+Championship position matters, but recent form, wins, podiums, momentum, and eye-test performance matter more for THIS week.
+
+A driver with lower points may rank above a higher-points driver when recent performance supports it.
+
 A race win carries significant weight.
 
 Recent races matter more than races from several weeks ago.
 
-Do not rank strictly by points standings.
-
 Multiple strong finishes should be rewarded more than a single isolated result.
 
-A driver may rank above another driver with more points if recent performance supports it.
+## Recent Form Rules
+
+Use recentFormAnalysis in the context payload as primary evidence for hot drivers.
+
+Rules:
+
+* A driver with a win in the last 2 races deserves major Top 10 consideration.
+* A driver with back-to-back wins should almost always be ranked in the Top 10 unless there is a strong reason not to.
+* A driver with back-to-back podium finishes is a hot driver and should rank higher than points alone suggest.
+* A driver with multiple top 5s in the last 3 races deserves strong Top 10 consideration.
+* A driver with strong recent form but lower points may outrank a higher-points driver.
+* If a recent winner or hot driver is not in the Top 10, strongly prefer adding them to honorableMentions with a clear explanation.
+
+Pay special attention to:
+
+* recentWinnersOutsideTop10
+* hotDriversOutsideTop10
+* backToBackWinners
+* backToBackPodiumDrivers
+* multipleTop5Last3Drivers
+
+Do not ignore a back-to-back winner when building the Top 10.
 
 ## Incident & Luck Rules
 
@@ -343,13 +370,21 @@ If a driver deserves to stay in the same spot, keep them there.
 
 ## Honorable Mentions
 
-Optional.
+Generate 0–3 honorable mentions automatically in the JSON output.
 
-0–3 maximum.
+Honorable mentions should not require manual adding by the admin.
 
-Only include when warranted.
+Use honorable mentions for dangerous recent performers who missed the Top 10.
 
-Do not force honorable mentions.
+Strong preferences:
+
+* If a recent winner (last 2 races) is left out of the Top 10, strongly prefer adding them as an honorable mention with explanation.
+* If a back-to-back podium driver is left out of the Top 10, consider adding them as an honorable mention.
+* If a back-to-back winner is left out of the Top 10, they should almost always be an honorable mention unless ranked in the Top 10.
+
+Maximum: 3 honorable mentions.
+
+Only omit honorable mentions when no recent hot drivers were excluded from the Top 10.
 
 ## Final Philosophy
 
@@ -383,6 +418,7 @@ Output requirements:
 * Each driverId MUST come from the provided drivers list. No duplicates.
 * movement is an integer: positive = moved UP vs previous power rankings, negative = moved DOWN, 0 = unchanged.
 * Compare movement against previousPowerRankings when available.
-* honorableMentions may be omitted or an empty array when none are warranted.`;
+* Include honorableMentions in every response (use an empty array only when none apply).
+* Each honorableMention writeup should explain why the driver is dangerous right now.`;
 
 export default POWER_RANKING_SYSTEM_PROMPT;

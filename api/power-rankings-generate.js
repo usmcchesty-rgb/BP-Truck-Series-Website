@@ -14,6 +14,10 @@ import {
   getPointsRaceByScheduleId,
   getRecentPointsRaceResults,
 } from './_schedule-points-races.js';
+import {
+  buildRecentFormAnalysis,
+  validateRecentFormCoverage,
+} from './_power-rankings-recent-form.js';
 
 function parseBody(req) {
   if (!req.body) return {};
@@ -179,6 +183,7 @@ async function fetchStandingsRows(settings, scheduleId = null) {
     rows,
     scheduleId: resolvedScheduleId,
     seasonName: data.lss?.season_name || null,
+    schedules: data.schedules || {},
   };
 }
 
@@ -604,6 +609,7 @@ function buildContextPayload({
   transcriptMode,
   manualRaceNotes,
   standingsSnapshot,
+  recentFormAnalysis,
 }) {
   const completedRaces = getRecentPointsRaceResults(scheduleRaces, raceNumber, 3);
 
@@ -631,6 +637,7 @@ function buildContextPayload({
       races: row.races,
     })),
     recentResults,
+    recentFormAnalysis: recentFormAnalysis || null,
     previousPowerRankings: previousRankings,
     drivers: standings.map((row) => ({
       driverId: row.driverId,
@@ -677,6 +684,9 @@ Use prompt version ${POWER_RANKING_PROMPT_VERSION} rules: ranking justifications
 
 Standings and driver stats in this payload are frozen to standingsSnapshot.raceNumber. Do not reference wins, points, or results from races after Race ${contextPayload.raceNumber}.
 Only use recentResults and transcript/manual notes for race context through Race ${contextPayload.raceNumber}.
+
+Power Rankings are NOT points standings. Use recentFormAnalysis heavily. Do not simply mirror points order.
+Back-to-back winners should almost always be Top 10. Recent winners and hot drivers left out of the Top 10 should usually appear in honorableMentions (0-3).
 
 transcriptMode: ${contextPayload.transcriptMode || 'none'}
 transcriptUsed: ${contextPayload.transcriptUsed === true}
@@ -1361,6 +1371,7 @@ function buildGenerationSources({
   contextMeta,
   draft,
   raceNumberDebug,
+  recentFormAnalysis,
 }) {
   const recentResultsRaceNumbers = getRecentPointsRaceResults(
     scheduleRaces,
@@ -1403,6 +1414,25 @@ function buildGenerationSources({
     confidenceReason: sourceQuality.confidenceReason,
     dataQualityScore: sourceQuality.dataQualityScore,
     raceNumberDebug: raceNumberDebug ?? buildRaceNumberDebug(scheduleRaces, raceNumber),
+    recentWinners: (recentFormAnalysis?.last3RaceWinners || []).map(
+      (driver) => driver?.driverName || driver
+    ),
+    backToBackWinners: (recentFormAnalysis?.backToBackWinners || []).map(
+      (driver) => driver.driverName
+    ),
+    backToBackPodiumDrivers: (recentFormAnalysis?.backToBackPodiumDrivers || []).map(
+      (driver) => driver.driverName
+    ),
+    multipleTop5Last3Drivers: (recentFormAnalysis?.multipleTop5Last3Drivers || []).map(
+      (driver) => driver.driverName
+    ),
+    recentWinnersOutsideTop10: (recentFormAnalysis?.recentWinnersOutsideTop10 || []).map(
+      (driver) => driver.driverName
+    ),
+    hotDriversOutsideTop10: (recentFormAnalysis?.hotDriversOutsideTop10 || []).map(
+      (driver) => driver.driverName
+    ),
+    honorableMentionsGeneratedCount: draft.honorableMentions?.length ?? 0,
   };
 }
 
@@ -1535,6 +1565,8 @@ async function normalizeDraft(aiDraft, driverLookup, previousRankings, generatio
     })
     .filter(Boolean);
 
+  warnings.push(...validateRecentFormCoverage(normalizedEntries, honorableMentions, generationContext.recentFormAnalysis));
+
   return {
     entries: normalizedEntries,
     honorableMentions,
@@ -1624,6 +1656,15 @@ export default async function handler(req, res) {
       body.manualRaceNotes ?? body.manual_race_notes
     );
 
+    const driverLookup = buildDriverLookup(standings, profiles);
+    const recentFormAnalysis = buildRecentFormAnalysis({
+      scheduleRaces,
+      raceNumber,
+      standings,
+      schedules: standingsResult.schedules,
+      driverLookup,
+    });
+
     const contextMeta = manualRaceNotes
       ? buildManualRaceContextMeta(manualRaceNotes, raceNumber)
       : applyYoutubeContextMeta(await loadBroadcastContext(raceNumber, drivers));
@@ -1645,13 +1686,14 @@ export default async function handler(req, res) {
         track: raceNumberDebug.standingsTrack,
         frozenToRequestedRace: raceNumberDebug.standingsFrozenToRequestedRace === true,
       },
+      recentFormAnalysis,
     });
 
     const aiDraft = await callOpenAi(contextPayload);
-    const driverLookup = buildDriverLookup(standings, profiles);
     const draft = await normalizeDraft(aiDraft, driverLookup, previousRankings, {
       transcriptUsed: contextMeta.transcriptUsed,
       transcriptMode: contextMeta.transcriptMode,
+      recentFormAnalysis,
     });
     const generationSources = buildGenerationSources({
       raceNumber,
@@ -1662,6 +1704,7 @@ export default async function handler(req, res) {
       contextMeta,
       draft,
       raceNumberDebug,
+      recentFormAnalysis,
     });
 
     console.log(

@@ -478,7 +478,20 @@
         repairedWriteupReasons:
           nested?.repairedWriteupReasons ?? data?.repairedWriteupReasons ?? {},
         raceNumberDebug: nested?.raceNumberDebug ?? data?.raceNumberDebug ?? null,
+        recentWinners: nested?.recentWinners ?? [],
+        backToBackWinners: nested?.backToBackWinners ?? [],
+        backToBackPodiumDrivers: nested?.backToBackPodiumDrivers ?? [],
+        multipleTop5Last3Drivers: nested?.multipleTop5Last3Drivers ?? [],
+        recentWinnersOutsideTop10: nested?.recentWinnersOutsideTop10 ?? [],
+        hotDriversOutsideTop10: nested?.hotDriversOutsideTop10 ?? [],
+        honorableMentionsGeneratedCount:
+          nested?.honorableMentionsGeneratedCount ?? data?.honorableMentions?.length ?? 0,
       };
+    }
+
+    function formatDriverList(names) {
+      if (!Array.isArray(names) || !names.length) return 'none';
+      return names.join(', ');
     }
 
     function formatRepairReasons(repairedWriteupReasons) {
@@ -556,6 +569,15 @@
         `Selected video race number: ${sources.selectedVideoRaceNumber ?? 'none'}`,
         `Transcript debug reason: ${sources.transcriptDebugReason ?? 'none'}`,
         `Movement source: ${sources.movementSource ?? 'unknown'}`,
+        '',
+        'Recent form:',
+        `  recentWinners: ${formatDriverList(sources.recentWinners)}`,
+        `  backToBackWinners: ${formatDriverList(sources.backToBackWinners)}`,
+        `  backToBackPodiumDrivers: ${formatDriverList(sources.backToBackPodiumDrivers)}`,
+        `  multipleTop5Last3Drivers: ${formatDriverList(sources.multipleTop5Last3Drivers)}`,
+        `  recentWinnersOutsideTop10: ${formatDriverList(sources.recentWinnersOutsideTop10)}`,
+        `  hotDriversOutsideTop10: ${formatDriverList(sources.hotDriversOutsideTop10)}`,
+        `  honorableMentionsGeneratedCount: ${sources.honorableMentionsGeneratedCount ?? 0}`,
         '',
         `Repair attempted: ${sources.repairAttempted}`,
         `Repaired writeups: ${sources.repairedWriteupsCount} (${repairedRanksText})`,
