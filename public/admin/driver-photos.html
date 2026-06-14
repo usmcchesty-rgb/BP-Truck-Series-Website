@@ -1157,10 +1157,11 @@
         setMsg("Saving...");
 
         try {
-          const res = await fetch("/api/save-driver-photo", {
+          const res = await fetch("/api/uploads", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
+              action: "driver-photo",
               password: getSessionPw(),
               imageBase64: exportPngDataUrl(),
               photoUrl: driver.photo_url,

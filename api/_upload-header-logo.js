@@ -25,24 +25,6 @@ on storage.objects
 for select
 using (bucket_id = 'site-assets');`;
 
-function json(res, status, body) {
-  res.status(status);
-  res.setHeader("Content-Type", "application/json");
-  res.end(JSON.stringify(body));
-}
-
-function parseBody(req) {
-  if (!req.body) return {};
-  if (typeof req.body === "string") {
-    try {
-      return JSON.parse(req.body);
-    } catch {
-      return {};
-    }
-  }
-  return req.body;
-}
-
 function readUploadBuffer(body) {
   const raw = body.imageBase64 || body.image || "";
   const base64 = String(raw).replace(/^data:image\/png;base64,/, "").trim();
@@ -188,64 +170,35 @@ function saveToLocalFile(uploadBuffer) {
   };
 }
 
-export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    json(res, 405, { error: "Method not allowed." });
-    return;
+export async function uploadHeaderLogo(body) {
+  const uploadBuffer = readUploadBuffer(body);
+
+  if (uploadBuffer.length > 8 * 1024 * 1024) {
+    throw new Error("File too large (max 8MB).");
   }
 
-  try {
-    const body = parseBody(req);
-    const password = process.env.ADMIN_PASSWORD;
-    if (password && body.password !== password) {
-      json(res, 401, { error: "Invalid admin password." });
-      return;
-    }
-
-    const uploadBuffer = readUploadBuffer(body);
-
-    if (uploadBuffer.length > 8 * 1024 * 1024) {
-      json(res, 400, { error: "File too large (max 8MB)." });
-      return;
-    }
-
-    const isPng =
-      uploadBuffer.length >= 8 &&
-      uploadBuffer[0] === 0x89 &&
-      uploadBuffer[1] === 0x50 &&
-      uploadBuffer[2] === 0x4e &&
-      uploadBuffer[3] === 0x47;
-    if (!isPng) {
-      json(res, 400, { error: "Only PNG files are supported." });
-      return;
-    }
-
-    const sb = supabase();
-    if (sb) {
-      const result = await saveToSupabaseStorage(sb, uploadBuffer);
-      json(res, 200, { success: true, ...result });
-      return;
-    }
-
-    if (!isLocalDev()) {
-      json(res, 400, {
-        error:
-          "Supabase Storage is required to upload the header logo on the live site.",
-      });
-      return;
-    }
-
-    const result = saveToLocalFile(uploadBuffer);
-    json(res, 200, { success: true, ...result });
-  } catch (err) {
-    if (err.details?.setupSql) {
-      json(res, 400, {
-        error: err.details.error || err.message || "Save failed.",
-        bucket: err.details.bucket,
-        setupSql: err.details.setupSql,
-      });
-      return;
-    }
-    json(res, 400, { error: err.message || "Save failed." });
+  const isPng =
+    uploadBuffer.length >= 8 &&
+    uploadBuffer[0] === 0x89 &&
+    uploadBuffer[1] === 0x50 &&
+    uploadBuffer[2] === 0x4e &&
+    uploadBuffer[3] === 0x47;
+  if (!isPng) {
+    throw new Error("Only PNG files are supported.");
   }
+
+  const sb = supabase();
+  if (sb) {
+    return saveToSupabaseStorage(sb, uploadBuffer);
+  }
+
+  if (!isLocalDev()) {
+    const err = new Error(
+      "Supabase Storage is required to upload the header logo on the live site.",
+    );
+    err.status = 400;
+    throw err;
+  }
+
+  return saveToLocalFile(uploadBuffer);
 }

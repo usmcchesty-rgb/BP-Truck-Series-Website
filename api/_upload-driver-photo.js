@@ -23,24 +23,6 @@ on storage.objects
 for select
 using (bucket_id = 'driver-photos');`;
 
-function json(res, status, body) {
-  res.status(status);
-  res.setHeader("Content-Type", "application/json");
-  res.end(JSON.stringify(body));
-}
-
-function parseBody(req) {
-  if (!req.body) return {};
-  if (typeof req.body === "string") {
-    try {
-      return JSON.parse(req.body);
-    } catch {
-      return {};
-    }
-  }
-  return req.body;
-}
-
 function readUploadBuffer(body) {
   const raw = body.imageBase64 || body.image || "";
   const base64 = String(raw).replace(/^data:image\/png;base64,/, "").trim();
@@ -136,8 +118,6 @@ async function assertSupabaseReady(sb) {
   return verifyStorageBucket(sb);
 }
 
-// Turn the driver's Photo URL (e.g. "assets/drivers/mark-arthur.png")
-// into a safe absolute path inside public/.
 function resolvePhotoOutputPath(photoUrl) {
   let rel = stripPhotoUrlQuery(photoUrl);
   if (!rel) {
@@ -221,7 +201,7 @@ async function upsertDriverPhotoUrl(sb, driverId, publicUrl, body) {
 async function removeExistingStorageObject(sb, filename) {
   const { error } = await sb.storage.from(STORAGE_BUCKET).remove([filename]);
   if (error && !isStorageObjectMissingMessage(error.message)) {
-    console.warn("[save-driver-photo] remove before upload:", error.message);
+    console.warn("[upload-driver-photo] remove before upload:", error.message);
   }
 }
 
@@ -285,93 +265,65 @@ function saveToLocalFile(uploadBuffer, photoUrl) {
   };
 }
 
-export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    json(res, 405, { error: "Method not allowed." });
-    return;
+export async function uploadDriverPhoto(body) {
+  const uploadBuffer = readUploadBuffer(body);
+
+  if (uploadBuffer.length > 12 * 1024 * 1024) {
+    throw new Error("File too large (max 12MB).");
   }
 
-  try {
-    const body = parseBody(req);
-    const password = process.env.ADMIN_PASSWORD;
-    if (password && body.password !== password) {
-      json(res, 401, { error: "Invalid admin password." });
-      return;
+  const isPng =
+    uploadBuffer.length >= 8 &&
+    uploadBuffer[0] === 0x89 &&
+    uploadBuffer[1] === 0x50 &&
+    uploadBuffer[2] === 0x4e &&
+    uploadBuffer[3] === 0x47;
+  if (!isPng) {
+    throw new Error("Only PNG files are supported.");
+  }
+
+  const filename = safeFilenameFromPhotoUrl(body.photoUrl);
+  const driverId = body.driver_id;
+  const sb = supabase();
+  const shouldUseSupabase = Boolean(sb && driverId);
+
+  if (shouldUseSupabase) {
+    const readyError = await assertSupabaseReady(sb);
+    if (readyError) {
+      const err = new Error(readyError.error);
+      err.status = 400;
+      err.details = readyError;
+      throw err;
     }
 
-    const uploadBuffer = readUploadBuffer(body);
+    return saveToSupabaseStorage(sb, uploadBuffer, filename, driverId, body);
+  }
 
-    if (uploadBuffer.length > 12 * 1024 * 1024) {
-      json(res, 400, { error: "File too large (max 12MB)." });
-      return;
+  if (!isLocalDev()) {
+    const configError = getSupabaseConfigError();
+    if (configError) {
+      const err = new Error(configError.error);
+      err.status = 400;
+      err.details = configError;
+      throw err;
     }
-
-    const isPng =
-      uploadBuffer.length >= 8 &&
-      uploadBuffer[0] === 0x89 &&
-      uploadBuffer[1] === 0x50 &&
-      uploadBuffer[2] === 0x4e &&
-      uploadBuffer[3] === 0x47;
-    if (!isPng) {
-      json(res, 400, { error: "Only PNG files are supported." });
-      return;
-    }
-
-    const filename = safeFilenameFromPhotoUrl(body.photoUrl);
-    const driverId = body.driver_id;
-    const sb = supabase();
-    const shouldUseSupabase = Boolean(sb && driverId);
-
-    if (shouldUseSupabase) {
-      const readyError = await assertSupabaseReady(sb);
-      if (readyError) {
-        json(res, 400, readyError);
-        return;
-      }
-
-      const result = await saveToSupabaseStorage(
-        sb,
-        uploadBuffer,
-        filename,
-        driverId,
-        body,
-      );
-      json(res, 200, { success: true, ...result });
-      return;
-    }
-
-    if (!isLocalDev()) {
-      const configError = getSupabaseConfigError();
-      if (configError) {
-        json(res, 400, configError);
-        return;
-      }
-      if (!driverId) {
-        json(res, 400, { error: "Missing driver_id." });
-        return;
-      }
-      json(res, 400, {
-        error: "Supabase Storage is required to save driver photos on the live site.",
-      });
-      return;
-    }
-
     if (!driverId) {
-      json(res, 400, { error: "Missing driver_id." });
-      return;
+      const err = new Error("Missing driver_id.");
+      err.status = 400;
+      throw err;
     }
-
-    const result = saveToLocalFile(uploadBuffer, body.photoUrl);
-    json(res, 200, { success: true, ...result });
-  } catch (err) {
-    if (err.details?.setupSql) {
-      json(res, 400, {
-        error: err.details.error || err.message || "Save failed.",
-        bucket: err.details.bucket,
-        setupSql: err.details.setupSql,
-      });
-      return;
-    }
-    json(res, 400, { error: err.message || "Save failed." });
+    const err = new Error(
+      "Supabase Storage is required to save driver photos on the live site.",
+    );
+    err.status = 400;
+    throw err;
   }
+
+  if (!driverId) {
+    const err = new Error("Missing driver_id.");
+    err.status = 400;
+    throw err;
+  }
+
+  return saveToLocalFile(uploadBuffer, body.photoUrl);
 }

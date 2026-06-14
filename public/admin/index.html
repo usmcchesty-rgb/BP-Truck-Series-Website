@@ -393,10 +393,11 @@
       msg.textContent = 'Uploading logo...';
       try {
         const imageBase64 = await readFileAsDataUrl(file);
-        const res = await fetch('/api/save-header-logo', {
+        const res = await fetch('/api/uploads', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            action: 'header-logo',
             password: getSessionPw(),
             imageBase64
           })
