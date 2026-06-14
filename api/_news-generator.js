@@ -167,13 +167,10 @@ export async function loadNewsGenerationContext(options = {}) {
   const manualNotes = String(
     options.manualNotes ?? options.manualRaceNotes ?? options.manual_race_notes ?? ''
   ).trim();
-  const transcript = String(options.transcript ?? options.transcriptText ?? '').trim();
-  const combinedNotes = [manualNotes, transcript].filter(Boolean).join('\n\n');
 
-  const generationContext = await loadPowerRankingsGenerationContext(
-    raceNumber,
-    combinedNotes
-  );
+  const generationContext = await loadPowerRankingsGenerationContext(raceNumber, '', {
+    supplementalManualNotes: manualNotes,
+  });
 
   return buildNewsFactualContext(generationContext, {
     spotlightDriverId: options.spotlightDriverId || options.spotlight_driver_id || null,
@@ -225,7 +222,6 @@ export async function generateNewsArticle(options = {}) {
   const generationContext = await loadNewsGenerationContext({
     raceNumber,
     manualNotes: options.manualNotes ?? options.manualRaceNotes,
-    transcript: options.transcript,
     spotlightDriverId: options.spotlightDriverId ?? options.spotlight_driver_id,
   });
 
@@ -268,6 +264,10 @@ function buildTranscriptDiagnostics(generationContext) {
     transcriptMode: meta.transcriptMode || 'none',
     manualRaceNotesUsed: meta.manualRaceNotesUsed === true,
     manualRaceNotesLength: String(generationContext.manualRaceNotes || '').length,
+    savedTranscriptUsed: meta.savedTranscriptUsed === true,
+    savedTranscriptRaceNumber: meta.savedTranscriptRaceNumber ?? null,
+    savedTranscriptLength: meta.savedTranscriptLength ?? 0,
+    transcriptSource: meta.transcriptSource || 'none',
     broadcastSource: meta.broadcastContext?.source || null,
     youtubeDiagnostics: meta.youtubeDiagnostics || null,
   };
@@ -275,22 +275,27 @@ function buildTranscriptDiagnostics(generationContext) {
 
 function buildGenerationSources(generationContext, articleType, repaired) {
   const grounding = generationContext.factualGrounding || {};
+  const meta = generationContext.contextMeta || {};
   const manualNotes = Boolean(String(generationContext.manualRaceNotes || '').trim());
-  const transcriptUsed = generationContext.contextMeta?.transcriptUsed === true;
+  const savedTranscriptUsed = meta.savedTranscriptUsed === true;
+  const transcriptUsed = meta.transcriptUsed === true;
 
   let dataQualityScore = 40;
   if ((generationContext.standings || []).length) dataQualityScore += 25;
   if ((generationContext.recentResultsForGrounding || []).length) dataQualityScore += 15;
   if (grounding.diagnostics?.recentRaceFinishesUsed) dataQualityScore += 10;
-  if (manualNotes) dataQualityScore += 25;
-  else if (transcriptUsed) dataQualityScore += 20;
+  if (savedTranscriptUsed) dataQualityScore += 25;
+  else if (manualNotes) dataQualityScore += 25;
+  else if (transcriptUsed && meta.transcriptSource === 'youtube') dataQualityScore += 20;
 
   const confidenceScore =
-    manualNotes && (generationContext.standings || []).length
+    savedTranscriptUsed && (generationContext.standings || []).length
       ? 'HIGH'
-      : transcriptUsed || (generationContext.standings || []).length
-        ? 'MEDIUM'
-        : 'LOW';
+      : manualNotes && (generationContext.standings || []).length
+        ? 'HIGH'
+        : transcriptUsed || (generationContext.standings || []).length
+          ? 'MEDIUM'
+          : 'LOW';
 
   return {
     articleType,
@@ -303,8 +308,12 @@ function buildGenerationSources(generationContext, articleType, repaired) {
       wins: row.wins,
     })),
     transcriptUsed,
-    transcriptMode: generationContext.contextMeta?.transcriptMode || 'none',
+    transcriptMode: meta.transcriptMode || 'none',
     manualNotesUsed: manualNotes,
+    savedTranscriptUsed,
+    savedTranscriptRaceNumber: meta.savedTranscriptRaceNumber ?? null,
+    savedTranscriptLength: meta.savedTranscriptLength ?? 0,
+    transcriptSource: meta.transcriptSource || 'none',
     validationWarnings: repaired.validation?.warnings || [],
     validationErrors: repaired.validation?.errors || [],
     unsupportedFacts: repaired.validation?.unsupportedFacts || [],

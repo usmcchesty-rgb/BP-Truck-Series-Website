@@ -38,7 +38,6 @@ export default async function handler(req, res) {
     const driverId = String(body.driverId ?? body.driver_id ?? '').trim();
     const subtitle = String(body.subtitle || '').trim();
     const currentWriteup = String(body.currentWriteup ?? body.current_writeup ?? '').trim();
-    const manualRaceNotes = String(body.manualRaceNotes ?? body.manual_race_notes ?? '');
 
     if (!Number.isInteger(raceNumber) || raceNumber < 1) {
       return res.status(400).json({ error: 'Valid race number is required.' });
@@ -50,10 +49,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'driverId is required.' });
     }
 
-    const generationContext = await loadPowerRankingsGenerationContext(
-      raceNumber,
-      manualRaceNotes
-    );
+    const generationContext = await loadPowerRankingsGenerationContext(raceNumber);
 
     const driver = generationContext.driverLookup.get(driverId);
     if (!driver) {

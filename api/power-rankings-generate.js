@@ -19,11 +19,6 @@ import {
   validateRecentFormCoverage,
 } from './_power-rankings-recent-form.js';
 import {
-  buildRankedDriverFinishTrace,
-  buildRecentResultsAudit,
-  getAlignedRaceFinishes,
-} from './_power-rankings-results-audit.js';
-import {
   analyzeRecentFormReferences,
   buildFactualGroundingContext,
   buildRecentRaceFinishDiagnostics,
@@ -31,6 +26,12 @@ import {
   validateWriteupFactualGrounding,
   validateWriteupVerifiedEvidence,
 } from './_power-rankings-factual-grounding.js';
+import { loadRaceTranscript } from './_race-transcripts.js';
+import {
+  buildRankedDriverFinishTrace,
+  buildRecentResultsAudit,
+  getAlignedRaceFinishes,
+} from './_power-rankings-results-audit.js';
 import {
   computeMovement,
   formatMovementForRepair,
@@ -282,10 +283,43 @@ function buildManualRaceContextMeta(manualRaceNotes, raceNumber) {
     transcriptMode: 'manual',
     manualRaceNotesUsed: true,
     manualRaceNotesLength: manualRaceNotes.length,
+    savedTranscriptUsed: false,
+    savedTranscriptRaceNumber: null,
+    savedTranscriptLength: 0,
+    transcriptSource: 'manual',
     broadcastContext: {
       source: 'manual',
       summary: manualRaceNotes,
       note: 'Manual race notes provided by admin.',
+    },
+  });
+}
+
+function buildSavedTranscriptContextMeta(savedRow, raceNumber) {
+  const text = String(savedRow.transcript || '').trim();
+  return withTranscriptDiagnostics({
+    requestedRaceNumber: raceNumber,
+    selectedVideoRaceNumber: null,
+    selectedVideoTitle: null,
+    selectionMethod: null,
+    nonPointsAdjustmentApplied: false,
+    transcriptUsed: true,
+    transcriptDebugReason: null,
+    transcriptVideoTitle: null,
+    transcriptLength: text.length,
+    transcriptMode: 'saved',
+    manualRaceNotesUsed: false,
+    manualRaceNotesLength: 0,
+    savedTranscriptUsed: true,
+    savedTranscriptRaceNumber: raceNumber,
+    savedTranscriptLength: text.length,
+    transcriptSource: 'saved',
+    broadcastContext: {
+      source: 'saved',
+      summary: text.slice(0, MANUAL_RACE_NOTES_MAX_LENGTH),
+      raceName: savedRow.raceName || null,
+      sourceUrl: savedRow.sourceUrl || null,
+      note: 'Saved broadcast transcript from race_transcripts.',
     },
   });
 }
@@ -296,6 +330,10 @@ function applyYoutubeContextMeta(transcriptMeta) {
     transcriptMode: transcriptMeta.transcriptUsed ? 'youtube' : 'none',
     manualRaceNotesUsed: false,
     manualRaceNotesLength: 0,
+    savedTranscriptUsed: false,
+    savedTranscriptRaceNumber: null,
+    savedTranscriptLength: 0,
+    transcriptSource: transcriptMeta.transcriptUsed ? 'youtube' : 'none',
   });
 }
 
@@ -349,6 +387,10 @@ function buildTranscriptDiagnostics(meta) {
     transcriptMode: meta.transcriptMode ?? null,
     manualRaceNotesUsed: meta.manualRaceNotesUsed === true,
     manualRaceNotesLength: meta.manualRaceNotesLength ?? 0,
+    savedTranscriptUsed: meta.savedTranscriptUsed === true,
+    savedTranscriptRaceNumber: meta.savedTranscriptRaceNumber ?? null,
+    savedTranscriptLength: meta.savedTranscriptLength ?? 0,
+    transcriptSource: meta.transcriptSource ?? 'none',
   };
 }
 
@@ -1449,12 +1491,17 @@ Return only the writeup paragraph.`,
   return content;
 }
 
-export async function loadPowerRankingsGenerationContext(raceNumber, manualRaceNotesRaw = '') {
+export async function loadPowerRankingsGenerationContext(
+  raceNumber,
+  manualRaceNotesRaw = '',
+  options = {}
+) {
   const settings = await getSettings();
-  const [scheduleHtml, previousRankings, profiles] = await Promise.all([
+  const [scheduleHtml, previousRankings, profiles, savedRow] = await Promise.all([
     fetchHtml(settings.scheduleUrl),
     loadPreviousPowerRankings(raceNumber),
     getDriverProfiles(),
+    loadRaceTranscript(raceNumber),
   ]);
 
   const scheduleRaces = parseScheduleRaces(scheduleHtml);
@@ -1469,7 +1516,41 @@ export async function loadPowerRankingsGenerationContext(raceNumber, manualRaceN
   raceNumberDebug.standingsScheduleIdUsed =
     standingsResult.scheduleId || raceNumberDebug.standingsScheduleId;
 
-  const manualRaceNotes = normalizeManualRaceNotes(manualRaceNotesRaw);
+  const supplementalManual = normalizeManualRaceNotes(
+    options.supplementalManualNotes ?? ''
+  );
+  const legacyManual = normalizeManualRaceNotes(manualRaceNotesRaw);
+  const inlineTranscript = normalizeManualRaceNotes(options.inlineTranscriptFallback ?? '');
+
+  let contextMeta;
+  let manualRaceNotes = '';
+
+  if (savedRow?.transcript && String(savedRow.transcript).trim()) {
+    contextMeta = buildSavedTranscriptContextMeta(savedRow, raceNumber);
+    manualRaceNotes = supplementalManual;
+  } else if (supplementalManual) {
+    contextMeta = buildManualRaceContextMeta(supplementalManual, raceNumber);
+    manualRaceNotes = supplementalManual;
+  } else if (legacyManual) {
+    contextMeta = buildManualRaceContextMeta(legacyManual, raceNumber);
+    manualRaceNotes = legacyManual;
+  } else if (inlineTranscript) {
+    contextMeta = buildManualRaceContextMeta(inlineTranscript, raceNumber);
+    manualRaceNotes = inlineTranscript;
+  } else {
+    contextMeta = applyYoutubeContextMeta(
+      await loadBroadcastContext(
+        raceNumber,
+        standings.map((row) => ({
+          driverId: row.driverId,
+          driverName: row.driverName,
+          carNumber: row.carNumber,
+        }))
+      )
+    );
+    manualRaceNotes = '';
+  }
+
   const driverLookup = buildDriverLookup(standings, profiles);
   const recentFormAnalysis = buildRecentFormAnalysis({
     scheduleRaces,
@@ -1478,14 +1559,6 @@ export async function loadPowerRankingsGenerationContext(raceNumber, manualRaceN
     schedules: standingsResult.schedules,
     driverLookup,
   });
-
-  const contextMeta = manualRaceNotes
-    ? buildManualRaceContextMeta(manualRaceNotes, raceNumber)
-    : applyYoutubeContextMeta(await loadBroadcastContext(raceNumber, standings.map((row) => ({
-        driverId: row.driverId,
-        driverName: row.driverName,
-        carNumber: row.carNumber,
-      }))));
 
   const recentResultsForGrounding = getRecentPointsRaceResults(scheduleRaces, raceNumber, 3).map(
     (race) => ({
@@ -1616,16 +1689,19 @@ function buildSourceQuality({
   const previousRankingsUsed = Boolean(previousRankings?.entries?.length);
   const recentResultsUsed = recentResultsRaceNumbers.length > 0;
   const manualRaceNotesUsed = contextMeta.manualRaceNotesUsed === true;
+  const savedTranscriptUsed = contextMeta.savedTranscriptUsed === true;
   const youtubeTranscriptUsed =
     contextMeta.transcriptMode === 'youtube' && contextMeta.transcriptUsed === true;
-  const hasTranscriptContext = manualRaceNotesUsed || youtubeTranscriptUsed;
+  const hasTranscriptContext =
+    savedTranscriptUsed || manualRaceNotesUsed || youtubeTranscriptUsed;
 
   let dataQualityScore = 0;
   if (standingsUsed) dataQualityScore += 40;
   if (recentResultsUsed) dataQualityScore += 15;
   if (previousRankingsUsed) dataQualityScore += 15;
   if (profilesUsed) dataQualityScore += 5;
-  if (manualRaceNotesUsed) dataQualityScore += 25;
+  if (savedTranscriptUsed) dataQualityScore += 25;
+  else if (manualRaceNotesUsed) dataQualityScore += 25;
   else if (youtubeTranscriptUsed) dataQualityScore += 20;
   dataQualityScore = Math.min(100, dataQualityScore);
 
@@ -1634,9 +1710,11 @@ function buildSourceQuality({
 
   if (hasTranscriptContext && standingsUsed && recentResultsUsed && previousRankingsUsed) {
     confidenceScore = 'HIGH';
-    confidenceReason = manualRaceNotesUsed
-      ? 'Standings, recent results, previous rankings, and manual race notes available.'
-      : 'Standings, recent results, previous rankings, and YouTube transcript available.';
+    confidenceReason = savedTranscriptUsed
+      ? 'Standings, recent results, previous rankings, and saved broadcast transcript available.'
+      : manualRaceNotesUsed
+        ? 'Standings, recent results, previous rankings, and manual race notes available.'
+        : 'Standings, recent results, previous rankings, and YouTube transcript available.';
   } else if (standingsUsed && recentResultsUsed && previousRankingsUsed) {
     confidenceScore = 'MEDIUM';
     confidenceReason =
@@ -1697,6 +1775,10 @@ function buildGenerationSources({
     recentResultsRaceNumbers,
     manualRaceNotesUsed: contextMeta.manualRaceNotesUsed === true,
     manualRaceNotesLength: contextMeta.manualRaceNotesLength ?? 0,
+    savedTranscriptUsed: contextMeta.savedTranscriptUsed === true,
+    savedTranscriptRaceNumber: contextMeta.savedTranscriptRaceNumber ?? null,
+    savedTranscriptLength: contextMeta.savedTranscriptLength ?? 0,
+    transcriptSource: contextMeta.transcriptSource ?? 'none',
     youtubeTranscriptUsed:
       contextMeta.transcriptMode === 'youtube' && contextMeta.transcriptUsed === true,
     transcriptMode: contextMeta.transcriptMode ?? 'none',
@@ -2077,14 +2159,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Valid race number is required.' });
     }
 
-    const manualRaceNotes = normalizeManualRaceNotes(
-      body.manualRaceNotes ?? body.manual_race_notes
-    );
-
-    const generationContext = await loadPowerRankingsGenerationContext(
-      raceNumber,
-      manualRaceNotes
-    );
+    const generationContext = await loadPowerRankingsGenerationContext(raceNumber);
     const {
       settings,
       scheduleRaces,
@@ -2099,6 +2174,7 @@ export default async function handler(req, res) {
       factualGrounding,
       alignedRaces,
       recentResultsForGrounding,
+      manualRaceNotes,
     } = generationContext;
 
     raceNumberDebug.standingsUsedLatestCompletedFallback =
@@ -2343,6 +2419,10 @@ export default async function handler(req, res) {
       transcriptMode: contextMeta.transcriptMode ?? null,
       manualRaceNotesUsed: contextMeta.manualRaceNotesUsed === true,
       manualRaceNotesLength: contextMeta.manualRaceNotesLength ?? 0,
+      savedTranscriptUsed: contextMeta.savedTranscriptUsed === true,
+      savedTranscriptRaceNumber: contextMeta.savedTranscriptRaceNumber ?? null,
+      savedTranscriptLength: contextMeta.savedTranscriptLength ?? 0,
+      transcriptSource: contextMeta.transcriptSource ?? 'none',
       transcriptDebugReason: contextMeta.transcriptDebugReason ?? null,
       transcriptVideoTitle: contextMeta.transcriptVideoTitle,
       transcriptLength: contextMeta.transcriptLength,

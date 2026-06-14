@@ -1,6 +1,12 @@
 import { slugify, supabase } from './_lib.js';
 import { ARTICLE_TYPES } from '../server/config/news-system-prompt.js';
 import { generateNewsArticle } from './_news-generator.js';
+import {
+  deleteRaceTranscript,
+  listRaceTranscripts,
+  loadRaceTranscript,
+  saveRaceTranscript,
+} from './_race-transcripts.js';
 
 function parseBody(req) {
   if (!req.body) return {};
@@ -95,6 +101,20 @@ async function handleGet(req, res) {
 
   const isGet = action === 'get' || Boolean(slug || id);
   const isList = action === 'list' || (!action && !slug && !id);
+
+  if (action === 'get-transcript') {
+    const raceNumber = Number(req.query?.raceNumber ?? req.query?.race_number);
+    if (!Number.isInteger(raceNumber) || raceNumber < 1) {
+      return res.status(400).json({ error: 'Valid raceNumber is required.' });
+    }
+    const transcript = await loadRaceTranscript(raceNumber);
+    return res.status(200).json({ configured: true, transcript });
+  }
+
+  if (action === 'list-transcripts') {
+    const transcripts = await listRaceTranscripts();
+    return res.status(200).json({ configured: true, transcripts });
+  }
 
   if (isGet) {
     if (slug) {
@@ -255,6 +275,18 @@ async function handlePost(req, res) {
     const { error } = await sb.from('news_articles').delete().eq('id', id);
     if (error) return res.status(500).json({ error: `Supabase error: ${error.message}` });
     return res.status(200).json({ ok: true });
+  }
+
+  if (action === 'save-transcript') {
+    const result = await saveRaceTranscript(body);
+    if (result.error) return res.status(result.status).json({ error: result.error });
+    return res.status(result.status).json(result.data);
+  }
+
+  if (action === 'delete-transcript') {
+    const result = await deleteRaceTranscript(body.raceNumber ?? body.race_number);
+    if (result.error) return res.status(result.status).json({ error: result.error });
+    return res.status(result.status).json({ ok: true });
   }
 
   if (action === 'save' || action === 'publish') {

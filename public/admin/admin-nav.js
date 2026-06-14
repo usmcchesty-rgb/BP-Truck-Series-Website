@@ -9,7 +9,7 @@
     { id: "driver-photos", label: "Driver Photos", href: "/admin/driver-photos" },
     { id: "power-rankings", label: "Power Rankings", href: "/admin/power-rankings" },
     { id: "news", label: "News", href: "/admin/news" },
-    { id: "transcripts", label: "Transcripts", href: "/admin/transcripts", optional: true },
+    { id: "transcripts", label: "Transcripts", href: "/admin/transcripts" },
   ];
 
   const STYLE_ID = "admin-shell-nav-styles";
@@ -198,17 +198,6 @@
     wireLogoutButton();
   }
 
-  function appendOptionalLink(root, item, activeId) {
-    const nav = root.querySelector(".admin-shell-nav__links");
-    if (!nav || nav.querySelector(`[data-nav-id="${item.id}"]`)) return;
-    const link = document.createElement("a");
-    link.className = `admin-shell-nav__link${item.id === activeId ? " is-active" : ""}`;
-    link.dataset.navId = item.id;
-    link.href = item.href;
-    link.textContent = item.label;
-    nav.appendChild(link);
-  }
-
   function wireLogoutButton() {
     const logoutBtn = document.getElementById("logoutBtn");
     if (!logoutBtn || logoutBtn.dataset.navBound === "wired") return;
@@ -236,15 +225,6 @@
     });
   }
 
-  async function transcriptsPageExists() {
-    try {
-      const res = await fetch("/admin/transcripts", { method: "HEAD" });
-      return res.ok;
-    } catch {
-      return false;
-    }
-  }
-
   async function init() {
     const mount = document.getElementById(ROOT_ID);
     if (!mount) return;
@@ -254,11 +234,6 @@
     const baseItems = NAV_ITEMS.filter((item) => !item.optional);
     const activeId = getCurrentPageId();
     renderNav(mount, baseItems, activeId);
-
-    if (await transcriptsPageExists()) {
-      const transcriptsItem = NAV_ITEMS.find((item) => item.id === "transcripts");
-      if (transcriptsItem) appendOptionalLink(mount, transcriptsItem, activeId);
-    }
 
     window.addEventListener("hashchange", () => {
       updateActiveLinks(mount, getCurrentPageId());

@@ -94,11 +94,8 @@
         </div>
       </div>
 
-      <label class="field-label" for="transcript">Transcript</label>
-      <textarea id="transcript" class="textarea" placeholder="Optional broadcast transcript (100+ chars recommended)"></textarea>
-
       <label class="field-label" for="manualNotes">Manual Notes</label>
-      <textarea id="manualNotes" class="textarea" placeholder="Verified race facts, quotes, and context for Miles Apex"></textarea>
+      <textarea id="manualNotes" class="textarea" placeholder="Optional verified race facts and context. Saved broadcast transcripts are used first from Transcripts admin."></textarea>
 
       <label class="field-label" for="headlineOverride">Headline Override</label>
       <input id="headlineOverride" class="input" type="text" placeholder="Optional headline direction for generation">
@@ -315,6 +312,10 @@
         `promptVersion: ${td.promptVersion || 'n/a'}`,
         `transcriptUsed: ${td.transcriptUsed ? 'yes' : 'no'}`,
         `transcriptMode: ${td.transcriptMode || 'none'}`,
+        `transcriptSource: ${td.transcriptSource || 'none'}`,
+        `savedTranscriptUsed: ${td.savedTranscriptUsed ? 'yes' : 'no'}`,
+        `savedTranscriptRaceNumber: ${td.savedTranscriptRaceNumber ?? 'none'}`,
+        `savedTranscriptLength: ${td.savedTranscriptLength ?? 0}`,
         `manualRaceNotesUsed: ${td.manualRaceNotesUsed ? 'yes' : 'no'}`,
         `manualRaceNotesLength: ${td.manualRaceNotesLength ?? 0}`,
         `broadcastSource: ${td.broadcastSource || 'none'}`
@@ -327,6 +328,10 @@
         `dataQualityScore: ${gs.dataQualityScore ?? 'n/a'}`,
         `factsUsed: ${(gs.factsUsed || []).join(', ') || 'none'}`,
         `transcriptUsed: ${gs.transcriptUsed ? 'yes' : 'no'}`,
+        `transcriptSource: ${gs.transcriptSource || 'none'}`,
+        `savedTranscriptUsed: ${gs.savedTranscriptUsed ? 'yes' : 'no'}`,
+        `savedTranscriptRaceNumber: ${gs.savedTranscriptRaceNumber ?? 'none'}`,
+        `savedTranscriptLength: ${gs.savedTranscriptLength ?? 0}`,
         `manualNotesUsed: ${gs.manualNotesUsed ? 'yes' : 'no'}`,
         `wordCount: ${gs.wordCount ?? 'n/a'}`,
         `repairAttempted: ${gs.repairAttempted ? 'yes' : 'no'}`,
@@ -358,7 +363,6 @@
             raceNumber: Number($('#raceNumber').value) || 1,
             spotlightDriverId: $('#spotlightDriverId').value || null,
             manualNotes: $('#manualNotes').value,
-            transcript: $('#transcript').value,
             headlineOverride: $('#headlineOverride').value
           })
         });

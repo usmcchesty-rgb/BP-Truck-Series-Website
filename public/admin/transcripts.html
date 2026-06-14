@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Broadcast Transcripts Admin</title>
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+    .wrap { padding: 18px; max-width: 1100px; margin: 0 auto; }
+    .sub { color: var(--muted); font-size: 12px; margin-bottom: 16px; line-height: 1.45; }
+    .panel { padding: 14px; margin-bottom: 14px; }
+    .panel h2 { margin: 0 0 12px; font-size: 18px; color: #ff3030; }
+    .field-label { display: block; font-size: 11px; color: #999; font-weight: 900; text-transform: uppercase; margin: 10px 0 4px; }
+    .input, .textarea, .select { width: 100%; margin-bottom: 8px; padding: 8px; background: #090909; color: #fff; border: 1px solid #555; border-radius: 4px; font-size: 12px; }
+    .textarea { min-height: 280px; resize: vertical; font-family: inherit; line-height: 1.45; }
+    .btn-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+    .btn-secondary { background: linear-gradient(#1c1c1c, #080808); }
+    .btn-danger { background: linear-gradient(#5a1010, #2a0505); border-color: #733; }
+    #adminMsg, #loginMsg { margin-top: 10px; font-size: 12px; color: #ccc; white-space: pre-wrap; }
+    #adminMsg.error, #loginMsg.error { color: #ff6060; }
+    .pw-row { max-width: 320px; margin-bottom: 14px; }
+    .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+    .saved-list { display: grid; gap: 8px; margin-bottom: 16px; }
+    .saved-item { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid #333; background: rgba(0,0,0,.25); }
+    .saved-item strong { font-size: 13px; }
+    .saved-item span { color: #888; font-size: 11px; display: block; margin-top: 2px; }
+    .saved-item button { padding: 4px 10px; font-size: 9px; }
+    #lastUpdated { font-size: 12px; color: #aaa; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <div id="admin-nav-root"></div>
+  <script src="/admin/admin-nav.js"></script>
+
+  <main id="loginView" class="wrap" hidden>
+    <h1>Transcripts Admin</h1>
+    <p class="sub">Enter the admin password to manage saved broadcast transcripts.</p>
+    <div class="pw-row">
+      <input id="loginPw" class="input" type="password" placeholder="Admin password" autocomplete="current-password">
+      <button class="btn" type="button" onclick="login()">Unlock</button>
+      <pre id="loginMsg"></pre>
+    </div>
+  </main>
+
+  <main id="adminView" class="wrap" hidden>
+    <h1>Broadcast Transcripts</h1>
+    <p class="sub">Save one transcript per race. Power Rankings and News generation both use these saved transcripts first.</p>
+
+    <div class="panel">
+      <h2>Saved Transcripts</h2>
+      <div id="savedList" class="saved-list"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Transcript Editor</h2>
+      <div class="meta-grid">
+        <div>
+          <label class="field-label" for="raceSelect">Race</label>
+          <select id="raceSelect" class="select">
+            <option value="">Loading races...</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label" for="raceNumber">Race Number</label>
+          <input id="raceNumber" class="input" type="number" min="1" step="1" placeholder="Race #">
+        </div>
+        <div>
+          <label class="field-label" for="raceName">Race Name</label>
+          <input id="raceName" class="input" type="text" placeholder="Track / event name">
+        </div>
+      </div>
+
+      <label class="field-label" for="sourceUrl">Source URL</label>
+      <input id="sourceUrl" class="input" type="url" placeholder="https://youtube.com/...">
+
+      <label class="field-label" for="transcript">Transcript</label>
+      <textarea id="transcript" class="textarea" placeholder="Paste the full broadcast transcript here..."></textarea>
+
+      <label class="field-label" for="notes">Notes</label>
+      <textarea id="notes" class="textarea" style="min-height: 96px;" placeholder="Optional admin notes about this transcript"></textarea>
+
+      <div id="lastUpdated"></div>
+
+      <div class="btn-row">
+        <button class="btn" type="button" onclick="saveTranscript()">Save Transcript</button>
+        <button class="btn btn-danger" type="button" onclick="deleteTranscript()">Delete Transcript</button>
+      </div>
+      <pre id="adminMsg"></pre>
+    </div>
+  </main>
+
+  <script>
+    const $ = (s) => document.querySelector(s);
+    const SESSION_KEY = 'bp_admin_pw';
+    let scheduleRaces = [];
+    let savedTranscripts = [];
+
+    function getSessionPw() { return sessionStorage.getItem(SESSION_KEY) || ''; }
+
+    async function verifyPassword(pw) {
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pw, verifyOnly: true })
+      });
+      return res.ok;
+    }
+
+    function showLogin() {
+      $('#loginView').hidden = false;
+      $('#adminView').hidden = true;
+      if (window.AdminNav) AdminNav.setLoggedIn(false);
+    }
+
+    async function showAdmin() {
+      $('#loginView').hidden = true;
+      $('#adminView').hidden = false;
+      if (window.AdminNav) AdminNav.setLoggedIn(true);
+      await loadSchedule();
+      await loadSavedList();
+      applyQueryRaceNumber();
+    }
+
+    async function login() {
+      const msg = $('#loginMsg');
+      const pw = $('#loginPw').value;
+      if (!pw) { msg.textContent = 'Enter the admin password.'; msg.classList.add('error'); return; }
+      msg.textContent = 'Checking...';
+      msg.classList.remove('error');
+      try {
+        if (!(await verifyPassword(pw))) throw new Error('Bad password');
+        sessionStorage.setItem(SESSION_KEY, pw);
+        $('#loginPw').value = '';
+        msg.textContent = '';
+        showAdmin();
+      } catch (e) {
+        msg.textContent = e.message;
+        msg.classList.add('error');
+      }
+    }
+
+    function logout() {
+      sessionStorage.removeItem(SESSION_KEY);
+      showLogin();
+    }
+
+    async function initSession() {
+      const pw = getSessionPw();
+      if (!pw) return showLogin();
+      try {
+        if (await verifyPassword(pw)) return showAdmin();
+      } catch {}
+      sessionStorage.removeItem(SESSION_KEY);
+      showLogin();
+    }
+
+    function setMsg(text, isError = false) {
+      const msg = $('#adminMsg');
+      msg.textContent = text;
+      msg.classList.toggle('error', isError);
+    }
+
+    function formatTimestamp(value) {
+      if (!value) return 'Never';
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+    }
+
+    function clearEditor() {
+      $('#transcript').value = '';
+      $('#sourceUrl').value = '';
+      $('#notes').value = '';
+      $('#lastUpdated').textContent = '';
+    }
+
+    function readRaceNumber() {
+      const fromInput = Number($('#raceNumber').value);
+      if (Number.isInteger(fromInput) && fromInput > 0) return fromInput;
+      const fromSelect = Number($('#raceSelect').value);
+      if (Number.isInteger(fromSelect) && fromSelect > 0) return fromSelect;
+      return null;
+    }
+
+    function syncRaceFields(raceNumber) {
+      const num = Number(raceNumber);
+      if (!Number.isInteger(num) || num < 1) return;
+      $('#raceNumber').value = String(num);
+      $('#raceSelect').value = String(num);
+      const race = scheduleRaces.find((row) => Number(row.officialPointsRaceNumber) === num);
+      if (race?.track && !$('#raceName').value.trim()) {
+        $('#raceName').value = race.track;
+      }
+    }
+
+    async function loadSchedule() {
+      try {
+        const res = await fetch('/api/schedule');
+        const data = await res.json();
+        scheduleRaces = Array.isArray(data.races) ? data.races : [];
+        const select = $('#raceSelect');
+        select.innerHTML = scheduleRaces.length
+          ? scheduleRaces.map((race) => {
+              const num = race.officialPointsRaceNumber || race.scheduleRow;
+              const label = `Race ${num} — ${race.track || 'TBD'}`;
+              return `<option value="${num}">${label}</option>`;
+            }).join('')
+          : '<option value="">No races found</option>';
+      } catch {
+        $('#raceSelect').innerHTML = '<option value="">Failed to load schedule</option>';
+      }
+    }
+
+    async function loadSavedList() {
+      try {
+        const res = await fetch('/api/news?action=list-transcripts');
+        const data = await res.json();
+        savedTranscripts = Array.isArray(data.transcripts) ? data.transcripts : [];
+        renderSavedList();
+      } catch (e) {
+        setMsg(e.message, true);
+      }
+    }
+
+    function renderSavedList() {
+      const list = $('#savedList');
+      if (!savedTranscripts.length) {
+        list.innerHTML = '<p class="sub">No saved transcripts yet.</p>';
+        return;
+      }
+      list.innerHTML = savedTranscripts.map((row) => `
+        <div class="saved-item">
+          <div>
+            <strong>Race ${row.raceNumber}${row.raceName ? ` — ${row.raceName}` : ''}</strong>
+            <span>${row.transcriptLength || 0} chars · Updated ${formatTimestamp(row.updatedAt)}</span>
+          </div>
+          <button class="btn btn-secondary" type="button" data-race="${row.raceNumber}">Edit</button>
+        </div>
+      `).join('');
+      list.querySelectorAll('button[data-race]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          syncRaceFields(btn.dataset.race);
+          loadTranscriptForRace(Number(btn.dataset.race));
+        });
+      });
+    }
+
+    async function loadTranscriptForRace(raceNumber) {
+      const num = Number(raceNumber);
+      if (!Number.isInteger(num) || num < 1) {
+        setMsg('Enter a valid race number.', true);
+        return;
+      }
+      syncRaceFields(num);
+      setMsg('Loading transcript...');
+      try {
+        const res = await fetch(`/api/news?action=get-transcript&raceNumber=${num}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to load transcript.');
+        const row = data.transcript;
+        if (!row) {
+          clearEditor();
+          const race = scheduleRaces.find((item) => Number(item.officialPointsRaceNumber) === num);
+          if (race?.track) $('#raceName').value = race.track;
+          setMsg(`No saved transcript for Race ${num}.`);
+          return;
+        }
+        $('#raceName').value = row.raceName || '';
+        $('#sourceUrl').value = row.sourceUrl || '';
+        $('#notes').value = row.notes || '';
+        $('#transcript').value = row.transcript || '';
+        $('#lastUpdated').textContent = `Last updated: ${formatTimestamp(row.updatedAt)}`;
+        setMsg(`Loaded saved transcript for Race ${num}.`);
+      } catch (e) {
+        setMsg(e.message, true);
+      }
+    }
+
+    async function saveTranscript() {
+      const raceNumber = readRaceNumber();
+      if (!raceNumber) {
+        setMsg('Select or enter a race number.', true);
+        return;
+      }
+      setMsg('Saving transcript...');
+      try {
+        const res = await fetch('/api/news', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'save-transcript',
+            password: getSessionPw(),
+            raceNumber,
+            raceName: $('#raceName').value,
+            transcript: $('#transcript').value,
+            sourceUrl: $('#sourceUrl').value,
+            notes: $('#notes').value
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Save failed.');
+        $('#lastUpdated').textContent = `Last updated: ${formatTimestamp(data.updatedAt)}`;
+        await loadSavedList();
+        setMsg(`Saved transcript for Race ${raceNumber}.`);
+      } catch (e) {
+        setMsg(e.message, true);
+      }
+    }
+
+    async function deleteTranscript() {
+      const raceNumber = readRaceNumber();
+      if (!raceNumber) {
+        setMsg('Select or enter a race number.', true);
+        return;
+      }
+      if (!confirm(`Delete saved transcript for Race ${raceNumber}?`)) return;
+      setMsg('Deleting transcript...');
+      try {
+        const res = await fetch('/api/news', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'delete-transcript',
+            password: getSessionPw(),
+            raceNumber
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Delete failed.');
+        clearEditor();
+        $('#raceName').value = '';
+        await loadSavedList();
+        setMsg(`Deleted transcript for Race ${raceNumber}.`);
+      } catch (e) {
+        setMsg(e.message, true);
+      }
+    }
+
+    function applyQueryRaceNumber() {
+      const params = new URLSearchParams(location.search);
+      const raceNumber = Number(params.get('raceNumber'));
+      if (!Number.isInteger(raceNumber) || raceNumber < 1) return;
+      syncRaceFields(raceNumber);
+      loadTranscriptForRace(raceNumber);
+    }
+
+    $('#raceSelect')?.addEventListener('change', () => {
+      const raceNumber = Number($('#raceSelect').value);
+      if (!raceNumber) return;
+      syncRaceFields(raceNumber);
+      const race = scheduleRaces.find((row) => Number(row.officialPointsRaceNumber) === raceNumber);
+      if (race?.track) $('#raceName').value = race.track;
+      loadTranscriptForRace(raceNumber);
+    });
+
+    $('#raceNumber')?.addEventListener('change', () => {
+      const raceNumber = readRaceNumber();
+      if (raceNumber) loadTranscriptForRace(raceNumber);
+    });
+
+    $('#loginPw')?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') login();
+    });
+
+    initSession();
+  </script>
+</body>
+</html>

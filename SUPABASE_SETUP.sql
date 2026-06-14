@@ -121,3 +121,14 @@ create table if not exists news_articles (
 
 -- Existing deployments: run once
 -- alter table news_articles add column if not exists spotlight_driver_id text;
+
+create table if not exists race_transcripts (
+  id bigint generated always as identity primary key,
+  race_number integer not null unique,
+  race_name text,
+  transcript text not null,
+  source_url text,
+  notes text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);

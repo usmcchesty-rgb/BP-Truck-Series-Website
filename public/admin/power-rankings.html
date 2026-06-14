@@ -228,10 +228,10 @@
         </div>
       </div>
 
-      <div class="manual-notes-box">
-        <label class="field-label" for="manualRaceNotes">Manual Race Notes / Transcript</label>
-        <p class="sub">Optional. Paste race notes, broadcast transcript, or key storylines here. If provided, this is used before YouTube transcript fallback.</p>
-        <textarea id="manualRaceNotes" class="textarea" placeholder="Paste race notes or transcript text here..."></textarea>
+      <div id="savedTranscriptPanel" class="manual-notes-box">
+        <label class="field-label">Saved Broadcast Transcript</label>
+        <p id="savedTranscriptStatus" class="sub">Select a race number to check for a saved transcript.</p>
+        <a id="uploadTranscriptLink" class="btn btn-secondary" href="/admin/transcripts" hidden>Upload Transcript</a>
       </div>
 
       <div class="generate-row">
@@ -314,9 +314,48 @@
       const input = $('#raceNumber');
       if (!input || value == null || value === '') {
         if (input) input.value = '';
+        refreshSavedTranscriptStatus();
         return;
       }
       input.value = String(value);
+      refreshSavedTranscriptStatus();
+    }
+
+    async function refreshSavedTranscriptStatus() {
+      const raceNumber = readRaceNumberInput();
+      const status = $('#savedTranscriptStatus');
+      const link = $('#uploadTranscriptLink');
+      if (!status || !link) return;
+
+      if (!raceNumber) {
+        status.textContent = 'Select a race number to check for a saved transcript.';
+        link.hidden = true;
+        return;
+      }
+
+      status.textContent = `Checking saved transcript for Race ${raceNumber}...`;
+      link.hidden = true;
+      link.href = `/admin/transcripts?raceNumber=${raceNumber}`;
+
+      try {
+        const res = await fetch(`/api/news?action=get-transcript&raceNumber=${raceNumber}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to check saved transcript.');
+        if (data.transcript?.transcript) {
+          status.textContent =
+            `Saved transcript found for Race ${raceNumber}` +
+            `${data.transcript.raceName ? ` (${data.transcript.raceName})` : ''}` +
+            ` — ${String(data.transcript.transcript).length} characters.` +
+            ` Last updated ${new Date(data.transcript.updatedAt).toLocaleString()}.`;
+          link.hidden = true;
+          return;
+        }
+        status.textContent = `No saved transcript for Race ${raceNumber}.`;
+        link.hidden = false;
+      } catch (e) {
+        status.textContent = e.message;
+        link.hidden = false;
+      }
     }
 
     function suggestNextRaceNumberFromWeeks() {
@@ -375,6 +414,14 @@
           nested?.manualRaceNotesUsed ?? data?.manualRaceNotesUsed === true,
         manualRaceNotesLength:
           nested?.manualRaceNotesLength ?? data?.manualRaceNotesLength ?? 0,
+        savedTranscriptUsed:
+          nested?.savedTranscriptUsed ?? data?.savedTranscriptUsed === true,
+        savedTranscriptRaceNumber:
+          nested?.savedTranscriptRaceNumber ?? data?.savedTranscriptRaceNumber ?? null,
+        savedTranscriptLength:
+          nested?.savedTranscriptLength ?? data?.savedTranscriptLength ?? 0,
+        transcriptSource:
+          nested?.transcriptSource ?? data?.transcriptSource ?? 'none',
         requestedRaceNumber:
           nested?.requestedRaceNumber ?? data?.requestedRaceNumber ?? null,
         videoId: nested?.videoId ?? null,
@@ -445,6 +492,10 @@
         `transcriptMode: ${diagnostics.transcriptMode ?? 'null'}`,
         `manualRaceNotesUsed: ${diagnostics.manualRaceNotesUsed ?? false}`,
         `manualRaceNotesLength: ${diagnostics.manualRaceNotesLength ?? 0}`,
+        `savedTranscriptUsed: ${diagnostics.savedTranscriptUsed ?? false}`,
+        `savedTranscriptRaceNumber: ${diagnostics.savedTranscriptRaceNumber ?? 'null'}`,
+        `savedTranscriptLength: ${diagnostics.savedTranscriptLength ?? 0}`,
+        `transcriptSource: ${diagnostics.transcriptSource ?? 'none'}`,
         `transcriptDebugReason: ${diagnostics.transcriptDebugReason ?? 'null'}`,
         `requestedRaceNumber: ${diagnostics.requestedRaceNumber ?? 'null'}`,
         `selectedVideoTitle: ${diagnostics.selectedVideoTitle ?? 'null'}`,
@@ -516,6 +567,14 @@
           nested?.manualRaceNotesUsed ?? data?.manualRaceNotesUsed === true,
         manualRaceNotesLength:
           nested?.manualRaceNotesLength ?? data?.manualRaceNotesLength ?? 0,
+        savedTranscriptUsed:
+          nested?.savedTranscriptUsed ?? data?.savedTranscriptUsed === true,
+        savedTranscriptRaceNumber:
+          nested?.savedTranscriptRaceNumber ?? data?.savedTranscriptRaceNumber ?? null,
+        savedTranscriptLength:
+          nested?.savedTranscriptLength ?? data?.savedTranscriptLength ?? 0,
+        transcriptSource:
+          nested?.transcriptSource ?? data?.transcriptSource ?? 'none',
         youtubeTranscriptUsed: nested?.youtubeTranscriptUsed ?? false,
         transcriptMode: nested?.transcriptMode ?? data?.transcriptMode ?? 'none',
         selectedVideoTitle:
@@ -812,6 +871,10 @@
         `Recent results races: ${formatRaceList(sources.recentResultsRaceNumbers)}`,
         `Manual race notes used: ${sources.manualRaceNotesUsed}`,
         `Manual race notes length: ${sources.manualRaceNotesLength}`,
+        `Saved transcript used: ${sources.savedTranscriptUsed ?? false}`,
+        `Saved transcript race number: ${sources.savedTranscriptRaceNumber ?? 'none'}`,
+        `Saved transcript length: ${sources.savedTranscriptLength ?? 0}`,
+        `Transcript source: ${sources.transcriptSource ?? 'none'}`,
         `YouTube transcript used: ${sources.youtubeTranscriptUsed}`,
         `Transcript mode: ${sources.transcriptMode}`,
         `Selected video: ${sources.selectedVideoTitle || 'none'}`,
@@ -1168,7 +1231,6 @@
             driverId,
             subtitle,
             currentWriteup,
-            manualRaceNotes: $('#manualRaceNotes')?.value || '',
           }),
         });
 
@@ -1268,8 +1330,6 @@
       $('#editorTitle').textContent = 'Create Rankings';
       setRaceNumberInput(suggestedRaceNumber);
       $('#publishedDate').value = new Date().toISOString().slice(0, 10);
-      const manualNotes = $('#manualRaceNotes');
-      if (manualNotes) manualNotes.value = '';
       const prophetTake = $('#prophetTake');
       if (prophetTake) prophetTake.value = '';
       hideTranscriptDiagnostics();
@@ -1369,7 +1429,7 @@
       }
 
       setGenerating(true);
-      setMsg('Gathering standings, results, broadcast transcript, and previous rankings...');
+      setMsg('Gathering standings, results, saved transcript, and previous rankings...');
 
       try {
         const res = await fetch('/api/power-rankings-generate', {
@@ -1378,7 +1438,6 @@
           body: JSON.stringify({
             password: pw,
             raceNumber,
-            manualRaceNotes: $('#manualRaceNotes')?.value || '',
           }),
         });
 
@@ -1427,11 +1486,13 @@
           ? ` Movement compared to Race ${data.previousRaceNumber} rankings.`
           : ' No previous rankings found — movement defaults applied.';
         const transcriptNote =
-          diagnostics.transcriptMode === 'manual'
+          diagnostics.transcriptSource === 'saved'
+            ? ` Saved broadcast transcript used (${diagnostics.savedTranscriptLength || 0} characters).`
+            : diagnostics.transcriptMode === 'manual'
             ? ` Manual race notes used (${diagnostics.manualRaceNotesLength || 0} characters).`
             : diagnostics.transcriptUsed
           ? ` Green Flag TV transcript used${diagnostics.selectedVideoTitle ? `: ${diagnostics.selectedVideoTitle}` : ''}.`
-          : ` No transcript available — draft used standings/results only.${diagnostics.transcriptDebugReason ? ` Debug: ${diagnostics.transcriptDebugReason}.` : ''}`;
+          : ` No saved transcript available — draft used standings/results only.${diagnostics.transcriptDebugReason ? ` Debug: ${diagnostics.transcriptDebugReason}.` : ''}`;
         const existingNote = weekId
           ? ' Updated existing Race week in the form — save to overwrite the draft.'
           : ' Review and edit before saving or publishing.';
@@ -1561,6 +1622,9 @@
     }
 
     initSession();
+
+    $('#raceNumber')?.addEventListener('input', refreshSavedTranscriptStatus);
+    $('#raceNumber')?.addEventListener('change', refreshSavedTranscriptStatus);
   </script>
 </body>
 </html>

@@ -5,6 +5,7 @@
     { "source": "/admin/driver-photos", "destination": "/admin/driver-photos.html" },
     { "source": "/admin/power-rankings", "destination": "/admin/power-rankings.html" },
     { "source": "/admin/news", "destination": "/admin/news.html" },
+    { "source": "/admin/transcripts", "destination": "/admin/transcripts.html" },
     { "source": "/news/:slug", "destination": "/news-article.html?slug=:slug" }
   ]
 }
