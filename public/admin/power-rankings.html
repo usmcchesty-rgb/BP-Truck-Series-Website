@@ -465,13 +465,38 @@
         transcriptDebugReason:
           nested?.transcriptDebugReason ?? data?.transcriptDebugReason ?? null,
         movementSource: nested?.movementSource ?? null,
-        repairAttempted: data?.repairAttempted === true,
+        confidenceScore: nested?.confidenceScore ?? null,
+        confidenceReason: nested?.confidenceReason ?? null,
+        dataQualityScore: nested?.dataQualityScore ?? null,
+        repairAttempted: nested?.repairAttempted ?? data?.repairAttempted === true,
         repairedWriteupsCount:
           nested?.repairedWriteupsCount ?? data?.repairedWriteupsCount ?? 0,
         repairedRanks: nested?.repairedRanks ?? data?.repairedRanks ?? [],
-        repairFailedRanks: data?.repairFailedRanks ?? [],
-        repairFailureReasons: data?.repairFailureReasons ?? {},
+        repairFailedRanks: nested?.repairFailedRanks ?? data?.repairFailedRanks ?? [],
+        repairFailureReasons:
+          nested?.repairFailureReasons ?? data?.repairFailureReasons ?? {},
+        repairedWriteupReasons:
+          nested?.repairedWriteupReasons ?? data?.repairedWriteupReasons ?? {},
       };
+    }
+
+    function formatRepairReasons(repairedWriteupReasons) {
+      const entries = Object.entries(repairedWriteupReasons || {});
+      if (!entries.length) return 'none';
+      return entries
+        .map(([rank, reasons]) => {
+          const list = Array.isArray(reasons) ? reasons.join(', ') : String(reasons || '');
+          return `rank ${rank}: ${list || 'quality repair'}`;
+        })
+        .join('; ');
+    }
+
+    function formatRepairRanksMessage(repairedRanks) {
+      if (!Array.isArray(repairedRanks) || repairedRanks.length === 0) return '';
+      if (repairedRanks.length === 1) return `Repaired 1 writeup at rank ${repairedRanks[0]}.`;
+      const last = repairedRanks[repairedRanks.length - 1];
+      const rest = repairedRanks.slice(0, -1).join(', ');
+      return `Repaired ${repairedRanks.length} writeups at ranks ${rest} and ${last}.`;
     }
 
     function renderGenerationSources(data) {
@@ -487,6 +512,10 @@
         : 'none';
 
       pre.textContent = [
+        `Confidence score: ${sources.confidenceScore ?? 'unknown'}`,
+        `Confidence reason: ${sources.confidenceReason ?? 'none'}`,
+        `Data quality score: ${sources.dataQualityScore ?? 'unknown'}/100`,
+        '',
         `Prompt version: ${sources.promptVersion ?? 'unknown'}`,
         `Standings used: ${sources.standingsUsed}`,
         `Driver profiles used: ${sources.driverProfilesUsed}`,
@@ -502,7 +531,11 @@
         `Selected video race number: ${sources.selectedVideoRaceNumber ?? 'none'}`,
         `Transcript debug reason: ${sources.transcriptDebugReason ?? 'none'}`,
         `Movement source: ${sources.movementSource ?? 'unknown'}`,
+        '',
+        `Repair attempted: ${sources.repairAttempted}`,
         `Repaired writeups: ${sources.repairedWriteupsCount} (${repairedRanksText})`,
+        `Repair reasons: ${formatRepairReasons(sources.repairedWriteupReasons)}`,
+        `Repair failed ranks: ${sources.repairFailedRanks.length ? sources.repairFailedRanks.join(', ') : 'none'}`,
       ].join('\n');
 
       panel.hidden = false;
@@ -821,6 +854,7 @@
               repairedRanks: data.repairedRanks,
               repairFailedRanks: data.repairFailedRanks,
               repairFailureReasons: data.repairFailureReasons,
+              repairedWriteupReasons: data.repairedWriteupReasons,
             });
           }
           throw new Error(data.error || 'AI draft generation failed.');
@@ -860,15 +894,19 @@
         const existingNote = weekId
           ? ' Updated existing Race week in the form — save to overwrite the draft.'
           : ' Review and edit before saving or publishing.';
+        const sources = buildGenerationSourcesView(data);
+        const confidenceNote = sources.confidenceScore
+          ? ` Confidence: ${sources.confidenceScore} (${sources.dataQualityScore ?? '?'}/100).`
+          : '';
         const warningNote =
           Array.isArray(data.warnings) && data.warnings.length
             ? ` Warnings: ${data.warnings.join(' ')}`
             : '';
         const repairNote =
           Number(data.repairedWriteupsCount) > 0
-            ? ` Repaired ${data.repairedWriteupsCount} writeup opening(s) at rank(s) ${(data.repairedRanks || []).join(', ')}.`
+            ? ` ${formatRepairRanksMessage(data.repairedRanks || [])}`
             : '';
-        setMsg(`AI draft loaded.${transcriptNote}${previousNote}${existingNote}${repairNote}${warningNote}`);
+        setMsg(`AI draft loaded.${confidenceNote}${transcriptNote}${previousNote}${existingNote}${repairNote}${warningNote}`);
       } catch (e) {
         setMsg(e.message, true);
       } finally {

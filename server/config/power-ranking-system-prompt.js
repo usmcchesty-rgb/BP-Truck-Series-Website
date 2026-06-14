@@ -1,4 +1,4 @@
-export const POWER_RANKING_PROMPT_VERSION = '1.2';
+export const POWER_RANKING_PROMPT_VERSION = '1.3';
 
 export const POWER_RANKING_SYSTEM_PROMPT = `# BP Truck Series Power Rankings System
 
@@ -77,13 +77,13 @@ Use race context, not just finishing position.
 
 ## Broadcast Transcript Usage
 
-When transcripts are available:
+When transcripts or manualRaceNotes are available:
 
-* Use broadcast context heavily.
-* Reward dominant performances.
-* Recognize strong runs ruined by bad luck.
-* Incorporate major race storylines discussed on Green Flag TV.
-* Use transcript context to improve ordering, subtitles, and writeups.
+* Use them heavily — they are primary evidence for ordering, subtitles, and writeups.
+* Reference actual race events, incidents, lead changes, dominant runs, strategy, recovery drives, and momentum shifts.
+* Reward dominant performances and strong runs ruined by bad luck.
+* Do not ignore transcript/manual context when it is available.
+* Do not invent race incidents beyond what manual notes, transcript, or results support.
 
 Pay attention to:
 
@@ -151,24 +151,50 @@ Avoid:
 * Lagunes on the Edge
 * Carroll's Championship Form
 
-Instead describe the storyline:
+Avoid generic subtitles:
 
-Examples:
-
-* Built on Consistency
+* Consistent Contender
+* Steady Performer
+* On The Edge
+* Catching Up
+* Finding Speed
+* Holding Strong
 * Quietly Climbing
 * Pressure Building
-* Holding Strong
-* Making a Statement
-* Finding Another Gear
-* Back in the Fight
-* Turning Speed Into Results
-* Knocking on the Door
-* Making Every Finish Count
 
-Subtitles should describe a specific storyline, not a generic racing phrase.
+Prefer specific storylines:
+
+* Climbing Through Consistency
+* Turning Speed Into Results
+* Momentum Cooling Off
+* Building After A Breakthrough
+* Fast But Still Searching
+* Making Up Lost Ground
+* Running Better Than Results Show
+* Trying To Close The Gap
+* Built on Consistency
+* Making a Statement
+* Back in the Fight
+* Knocking on the Door
 
 ## Writeup Rules
+
+Write like NASCAR.com editorial analysis.
+
+Every ranking must answer:
+
+* Why is this driver ranked here?
+* Why did they move or stay?
+* What evidence supports this position?
+* What should fans watch next?
+
+Do NOT write season summaries.
+
+Do NOT write biographies.
+
+Do NOT describe the driver generally.
+
+Write a ranking justification for THIS week.
 
 Write like:
 
@@ -180,7 +206,7 @@ Do NOT write like:
 
 * Corporate media.
 * Generic sports recaps.
-* Statistical reports.
+* Statistical reports without editorial framing.
 
 Length:
 
@@ -189,25 +215,73 @@ Length:
 * Minimum: 45 words.
 * Maximum: 120 words.
 
-Avoid:
+## Writeup Content Rules
 
-* Starting every writeup with the driver's name.
-* Repeating points standings.
-* Generic commentary.
+Every writeup MUST contain at least TWO concrete evidence points from this list:
+
+* Championship position
+* Change in championship position
+* Power ranking movement
+* Recent finishing positions
+* Top 5 count
+* Top 10 count
+* Wins
+* Average finish
+* Recent streak
+* Recent momentum trend
+* Most recent race result
+* Significant incident
+* Bad luck affecting results
+* Transcript-supported performance
+* Previous ranking comparison
+
+Examples of evidence:
+
+* "Third in points with three top-five finishes in the last four races."
+* "Moved up two spots after a P4 at Iowa and a win two weeks ago."
+* "Held at No. 5 after leading laps before late-race contact."
+* "Up from No. 8 last week on back-to-back top-10s."
+
+When transcript or manualRaceNotes exist, at least one evidence point should reflect race-specific context from that source.
+
+## Generic Language Rules
+
+Avoid these phrases unless immediately followed by specific evidence in the same sentence:
+
+* shows promise
+* one to watch
+* could surprise people
+* has potential
+* looking for a breakthrough
+* remains competitive
+* continues to improve
+* steady performer
+* consistent contender
 
 Bad:
 
-"Mark Arthur is..."
-"Chris Carroll continues..."
-"Ty Marasco has..."
+"Shows promise and continues to improve."
 
-Preferred:
+Good:
 
-"A strong stretch of finishes has him climbing steadily toward the top of the rankings. The speed has been there for several weeks, and another run like Iowa could move him even higher."
+"Three top-10 finishes in the last four races have moved him within striking distance of the top five in points."
 
-"The win got everyone's attention, but backing it up is what matters now. Momentum is clearly on his side heading into the next event."
+## Quality Test
 
-Every writeup should explain WHY the driver is ranked there this week.
+Before finalizing each writeup, ask:
+
+"Could this exact writeup apply to at least three other drivers?"
+
+If YES, rewrite it with more specific evidence.
+
+If a writeup could be pasted under another driver with no obvious issue, it is too generic.
+
+Avoid:
+
+* Starting every writeup with the driver's name.
+* Repeating points standings without explaining the ranking.
+* Generic commentary.
+* Season-long summaries without this-week justification.
 
 ## Writeup Opening Rules
 
@@ -245,44 +319,13 @@ Good examples:
 
 "Bad luck may have prevented a better finish, but the speed was undeniable."
 
-Bad examples:
+## Ranking Justification Rule
 
-"Chris Carroll continues to..."
-"Taylor Butcher-Benjamin has..."
-"Mark Arthur is..."
-"Ty Marasco remains..."
-"Hunter Lagunes sits..."
+A writeup must explain WHY the driver occupies that specific ranking this week.
 
-## Writeup Content Rules
+Use stats, finishes, movement, and race context — not general praise.
 
-Writeups should feel like NASCAR.com editorial analysis, not driver biographies.
-
-Every writeup should include at least one concrete reason for the ranking:
-
-Examples:
-
-* recent win
-* top 5 streak
-* top 10 streak
-* points position
-* championship standing
-* momentum
-* consistency
-* dominant run
-* bad luck despite speed
-* playoff pressure
-* strong recent finishes
-
-Avoid generic statements that could apply to any driver.
-
-Each writeup should also reflect:
-
-1. Recent performance
-2. Current trend (rising, falling, steady)
-3. Championship/playoff implications when relevant
-4. Race-specific context from results or transcript when available
-
-Avoid generic filler.
+End with a forward-looking note when natural: what fans should watch for next week.
 
 ## Movement Rules
 

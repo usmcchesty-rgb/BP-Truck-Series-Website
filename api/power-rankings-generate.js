@@ -647,6 +647,8 @@ async function callOpenAi(contextPayload) {  const apiKey = process.env.OPENAI_A
           role: 'user',
           content: `Generate Race ${contextPayload.raceNumber} power rankings using this data.
 
+Use prompt version ${POWER_RANKING_PROMPT_VERSION} rules: ranking justifications with at least two evidence points, no season summaries, no generic filler, NASCAR.com editorial tone.
+
 transcriptMode: ${contextPayload.transcriptMode || 'none'}
 transcriptUsed: ${contextPayload.transcriptUsed === true}
 If transcriptMode is "manual", treat manualRaceNotes as trusted race context provided by the admin.
@@ -762,6 +764,22 @@ function validateSubtitle(subtitle, driver, usedSubtitles) {
     }
   }
 
+  const genericSubtitles = [
+    'consistent contender',
+    'steady performer',
+    'on the edge',
+    'catching up',
+    'finding speed',
+    'holding strong',
+    'quietly climbing',
+    'pressure building',
+    'making every finish count',
+    'finding another gear',
+  ];
+  if (genericSubtitles.includes(normalized)) {
+    return 'Subtitle is too generic — use a specific storyline.';
+  }
+
   return null;
 }
 
@@ -784,7 +802,205 @@ function getFirstSentence(text) {
   return (match?.[0] || String(text || '')).trim();
 }
 
-function validateWriteup(writeup, driver) {
+function getSentenceContaining(text, phrase) {
+  const lower = String(text || '').toLowerCase();
+  const index = lower.indexOf(String(phrase || '').toLowerCase());
+  if (index < 0) return String(text || '');
+
+  const before = lower.slice(0, index);
+  const after = lower.slice(index);
+  const delimiterIndexes = [
+    before.lastIndexOf('.'),
+    before.lastIndexOf('!'),
+    before.lastIndexOf('?'),
+  ].filter((position) => position >= 0);
+  const start = (delimiterIndexes.length ? Math.max(...delimiterIndexes) : -1) + 1;
+  const endMatch = after.match(/[.!?]/);
+  const end = endMatch ? index + endMatch.index + 1 : text.length;
+  return String(text || '').slice(start, end).trim();
+}
+
+const WRITEUP_EVIDENCE_PATTERNS = [
+  {
+    id: 'championship-position',
+    patterns: [
+      /\b(\d+(?:st|nd|rd|th)\s+in\s+points|top\s+\d+\s+in\s+points|points\s+position|championship\s+(lead|standings|position|picture)|\b\d+\s+in\s+the\s+points)\b/i,
+      /\b(leader|leads)\s+the\s+(points|standings|championship)\b/i,
+    ],
+  },
+  {
+    id: 'championship-position-change',
+    patterns: [
+      /\b(moved|climbed|gained|dropped|fell|lost)\s+\d+\s+(spots?|positions?)\s+in\s+(the\s+)?points\b/i,
+      /\bpoints\s+position\s+(improved|dropped|changed)\b/i,
+    ],
+  },
+  {
+    id: 'power-ranking-movement',
+    patterns: [
+      /\b(moved|climbed|jumped|dropped|fell|slid)\s+\d+\s+(spots?|positions?)\b/i,
+      /\b(up|down)\s+\d+\s+(spots?|positions?)\b/i,
+      /\b(holds?|held|stays?|remains?)\s+(at|in)\s+(the\s+)?(no\.?\s*)?#?\d+\b/i,
+      /\bpower\s+rank(ing|ings)?\b/i,
+      /\bunchanged\s+(at|in)\s+(the\s+)?(no\.?\s*)?#?\d+\b/i,
+    ],
+  },
+  {
+    id: 'recent-finishing-positions',
+    patterns: [
+      /\bP?\d+\s+(finish|finishes|at|in)\b/i,
+      /\bfinish(ed|es|ing)?\s+(in\s+)?(the\s+)?\d+\b/i,
+      /\btop\s*-?\s*(five|ten|5|10)\b/i,
+      /\b\d+(?:st|nd|rd|th)\s+place\b/i,
+    ],
+  },
+  {
+    id: 'top5-count',
+    patterns: [/\b\d+\s+top\s*-?\s*(five|5)s?\b/i, /\btop\s*-?\s*(five|5)s?\b/i],
+  },
+  {
+    id: 'top10-count',
+    patterns: [/\b\d+\s+top\s*-?\s*(ten|10)s?\b/i, /\btop\s*-?\s*(ten|10)s?\b/i],
+  },
+  {
+    id: 'wins',
+    patterns: [/\b\d+\s+win(s)?\b/i, /\bwin(ning|ner|s)?\b/i, /\bvictory\b/i, /\bcheckered\b/i],
+  },
+  {
+    id: 'average-finish',
+    patterns: [/\baverage\s+finish\b/i, /\bavg\.?\s+finish\b/i],
+  },
+  {
+    id: 'recent-streak',
+    patterns: [
+      /\b(streak|consecutive|back-to-back|in\s+a\s+row|straight)\b/i,
+      /\blast\s+\d+\s+(races?|starts?|weeks?)\b/i,
+    ],
+  },
+  {
+    id: 'momentum-trend',
+    patterns: [
+      /\b(momentum|trending|surging|building|heating\s+up|cooling\s+off|on\s+the\s+rise|sliding|trend)\b/i,
+    ],
+  },
+  {
+    id: 'most-recent-race',
+    patterns: [
+      /\b(last|latest|most\s+recent)\s+(race|start|week| outing)\b/i,
+      /\brace\s+\d+\b/i,
+      /\b(at|in)\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b/,
+    ],
+  },
+  {
+    id: 'significant-incident',
+    patterns: [
+      /\b(wreck|crash|spin|contact|incident|trouble|penalty|caution|brought\s+out|cut\s+tire|mechanical)\b/i,
+    ],
+  },
+  {
+    id: 'bad-luck',
+    patterns: [
+      /\b(bad\s+luck|despite\s+the\s+speed|speed\s+was|faster\s+than|should\s+have|ruined|cost\s+(him|her|them))\b/i,
+    ],
+  },
+  {
+    id: 'transcript-performance',
+    patterns: [
+      /\b(lead\s+change|dominant|led\s+\d+|laps\s+led|recovery\s+drive|strategy|green\s+flag|commentary|broadcast|charge\s+through)\b/i,
+    ],
+  },
+  {
+    id: 'previous-ranking-comparison',
+    patterns: [
+      /\b(last\s+week|previous|from\s+#?\d+\s+to|compared\s+to\s+last|unchanged\s+from|same\s+spot)\b/i,
+      /\bwas\s+#?\d+\s+(last\s+week|previously)\b/i,
+    ],
+  },
+];
+
+const GENERIC_WRITEUP_PHRASES = [
+  'shows promise',
+  'one to watch',
+  'could surprise people',
+  'has potential',
+  'looking for a breakthrough',
+  'remains competitive',
+  'continues to improve',
+  'steady performer',
+  'consistent contender',
+];
+
+const REPAIRABLE_WRITEUP_ERROR_TYPES = new Set([
+  'name-first-opening',
+  'insufficient-evidence',
+  'generic-language',
+  'season-summary',
+  'too-generic',
+]);
+
+function countWriteupEvidencePoints(text) {
+  let count = 0;
+  for (const group of WRITEUP_EVIDENCE_PATTERNS) {
+    if (group.patterns.some((pattern) => pattern.test(text))) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
+function sentenceHasSpecificEvidence(sentence) {
+  const text = String(sentence || '');
+  if (/\b\d+\b/.test(text)) return true;
+  if (countWriteupEvidencePoints(text) >= 1) return true;
+  return /\b(P\d+|top\s*-?\s*(five|ten|5|10)|win|wins|points|finish)\b/i.test(text);
+}
+
+function findUnsupportedGenericPhrase(text) {
+  const lower = String(text || '').toLowerCase();
+  for (const phrase of GENERIC_WRITEUP_PHRASES) {
+    if (!lower.includes(phrase)) continue;
+    const sentence = getSentenceContaining(text, phrase);
+    if (!sentenceHasSpecificEvidence(sentence)) {
+      return phrase;
+    }
+  }
+  return null;
+}
+
+function looksLikeSeasonSummary(text) {
+  const hasSeasonWide =
+    /\b(this season|all season|throughout the season|season-long|full season|entire season)\b/i.test(
+      text
+    ) ||
+    /\b(has|have)\s+been\s+(a|an)\s+(consistent|solid|strong|reliable|steady)\b/i.test(text);
+
+  if (!hasSeasonWide) return false;
+
+  const hasRecentAnchor =
+    /\b(last|recent|latest|race|week|finish|P\d|top\s*-?\s*\d+|moved|ranked|ranking)\b/i.test(
+      text
+    );
+  return !hasRecentAnchor;
+}
+
+function looksTooGenericForDriver(text) {
+  const evidenceCount = countWriteupEvidencePoints(text);
+  const numberCount = (String(text || '').match(/\b\d+\b/g) || []).length;
+
+  if (evidenceCount >= 3 && numberCount >= 1) return false;
+  if (evidenceCount < 2) return false;
+
+  const vaguePraise =
+    /\b(competitive|improving|potential|promising|contender|consistent|dangerous|threat|talented)\b/i.test(
+      text
+    );
+  const hasSpecificFinish =
+    /\b(P\d+|top\s*-?\s*(five|ten|5|10)|win|wins|\d+\s+top)\b/i.test(text) || numberCount >= 2;
+
+  return vaguePraise && !hasSpecificFinish;
+}
+
+function validateWriteup(writeup, driver, context = {}) {
   const text = String(writeup || '').trim();
   const warnings = [];
 
@@ -856,6 +1072,52 @@ function validateWriteup(writeup, driver) {
     warnings.push('Writeup opening is generic.');
   }
 
+  const unsupportedGeneric = findUnsupportedGenericPhrase(text);
+  if (unsupportedGeneric) {
+    return {
+      error: `Writeup uses generic phrase "${unsupportedGeneric}" without specific evidence.`,
+      errorType: 'generic-language',
+      warnings,
+    };
+  }
+
+  const evidenceCount = countWriteupEvidencePoints(text);
+  if (evidenceCount < 2) {
+    return {
+      error: `Writeup needs at least two concrete evidence points (found ${evidenceCount}).`,
+      errorType: 'insufficient-evidence',
+      warnings,
+    };
+  }
+
+  if (looksLikeSeasonSummary(text)) {
+    return {
+      error: 'Writeup reads like a season summary instead of a ranking justification.',
+      errorType: 'season-summary',
+      warnings,
+    };
+  }
+
+  if (looksTooGenericForDriver(text)) {
+    return {
+      error: 'Writeup is too generic and could apply to multiple drivers.',
+      errorType: 'too-generic',
+      warnings,
+    };
+  }
+
+  if (
+    context.transcriptUsed === true &&
+    !WRITEUP_EVIDENCE_PATTERNS.find((group) => group.id === 'transcript-performance')?.patterns.some(
+      (pattern) => pattern.test(text)
+    ) &&
+    !/\b(incident|wreck|contact|lead|dominant|strategy|recovery|caution|speed\s+was|bad\s+luck)\b/i.test(
+      text
+    )
+  ) {
+    warnings.push('Transcript/manual notes were available but writeup lacks race-specific context.');
+  }
+
   return { error: null, errorType: null, warnings };
 }
 
@@ -870,7 +1132,39 @@ function isNameFirstOpeningError(error, errorType) {
   );
 }
 
-async function callOpenAiWriteupRepair({ writeup, driverName, rank, subtitle }) {
+function isRepairableWriteupError(errorType) {
+  return REPAIRABLE_WRITEUP_ERROR_TYPES.has(errorType);
+}
+
+function formatDriverStatsForRepair(driver, entry, previousRank) {
+  const parts = [];
+  if (entry?.rank) parts.push(`Power rank: ${entry.rank}`);
+  if (previousRank) parts.push(`Previous power rank: ${previousRank}`);
+  if (Number.isFinite(entry?.movement)) {
+    if (entry.movement > 0) parts.push(`Movement: up ${entry.movement}`);
+    else if (entry.movement < 0) parts.push(`Movement: down ${Math.abs(entry.movement)}`);
+    else parts.push('Movement: unchanged');
+  }
+  if (driver?.position) parts.push(`Points position: ${driver.position}`);
+  if (driver?.previousPosition && driver.previousPosition !== driver.position) {
+    parts.push(`Previous points position: ${driver.previousPosition}`);
+  }
+  if (Number.isFinite(driver?.wins)) parts.push(`Wins: ${driver.wins}`);
+  if (Number.isFinite(driver?.top5)) parts.push(`Top 5s: ${driver.top5}`);
+  if (Number.isFinite(driver?.top10)) parts.push(`Top 10s: ${driver.top10}`);
+  if (Number.isFinite(driver?.points)) parts.push(`Points: ${driver.points}`);
+  return parts.join('\n');
+}
+
+async function callOpenAiWriteupRepair({
+  writeup,
+  driverName,
+  rank,
+  subtitle,
+  repairReason,
+  driverStats,
+  transcriptUsed,
+}) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     throw new Error('OPENAI_API_KEY is not configured in Vercel environment variables.');
@@ -891,14 +1185,29 @@ async function callOpenAiWriteupRepair({ writeup, driverName, rank, subtitle }) 
       messages: [
         {
           role: 'user',
-          content: `Rewrite this Power Rankings writeup. Do not start with the driver's name. Keep 50-100 words. Keep the same meaning. Return only the rewritten paragraph.
+          content: `Rewrite this Power Rankings writeup as NASCAR.com editorial analysis.
+
+Rules:
+- Do NOT start with the driver's name.
+- 50-100 words, 2-4 sentences.
+- Explain WHY this driver is ranked here THIS week (not a season summary or biography).
+- Include at least TWO concrete evidence points (stats, finishes, movement, race context).
+- Avoid generic filler unless immediately backed by specific evidence.
+- Do not use unsupported phrases like "shows promise" or "steady performer".
+${transcriptUsed ? '- Transcript/manual race notes were available — include race-specific context.' : ''}
 
 Driver: ${driverName}
 Rank: ${rank}
 Subtitle: ${subtitle}
+Repair reason: ${repairReason}
+
+Driver stats:
+${driverStats}
 
 Original writeup:
-${writeup}`,
+${writeup}
+
+Return only the rewritten paragraph.`,
         },
       ],
     }),
@@ -921,29 +1230,32 @@ ${writeup}`,
   return content;
 }
 
-async function repairWriteupOpening(entry, driver) {
+async function repairWriteupQuality(entry, driver, context = {}) {
   let writeup = String(entry.writeup || '').trim();
   let repairAttempts = 0;
   let repairAttempted = false;
-  let writeupResult = validateWriteup(writeup, driver);
+  const repairReasons = [];
+  let writeupResult = validateWriteup(writeup, driver, context);
 
-  if (writeupResult.error && isNameFirstOpeningError(writeupResult.error, writeupResult.errorType)) {
+  while (
+    writeupResult.error &&
+    isRepairableWriteupError(writeupResult.errorType) &&
+    repairAttempts < 2
+  ) {
     repairAttempted = true;
-    while (
-      writeupResult.error &&
-      isNameFirstOpeningError(writeupResult.error, writeupResult.errorType) &&
-      repairAttempts < 2
-    ) {
-      writeup = await callOpenAiWriteupRepair({
-        writeup,
-        driverName: driver.driverName,
-        rank: entry.rank,
-        subtitle: entry.subtitle,
-      });
-      writeup = String(writeup || '').trim();
-      repairAttempts += 1;
-      writeupResult = validateWriteup(writeup, driver);
-    }
+    repairReasons.push(writeupResult.errorType);
+    writeup = await callOpenAiWriteupRepair({
+      writeup,
+      driverName: driver.driverName,
+      rank: entry.rank,
+      subtitle: entry.subtitle,
+      repairReason: writeupResult.error,
+      driverStats: formatDriverStatsForRepair(driver, entry, context.previousRank),
+      transcriptUsed: context.transcriptUsed === true,
+    });
+    writeup = String(writeup || '').trim();
+    repairAttempts += 1;
+    writeupResult = validateWriteup(writeup, driver, context);
   }
 
   return {
@@ -951,6 +1263,63 @@ async function repairWriteupOpening(entry, driver) {
     writeupResult,
     repairAttempts,
     repairAttempted,
+    repairReasons,
+  };
+}
+
+function buildSourceQuality({
+  standings,
+  profiles,
+  previousRankings,
+  recentResultsRaceNumbers,
+  contextMeta,
+}) {
+  const standingsUsed = standings.length > 0;
+  const profilesUsed = profiles.length > 0;
+  const previousRankingsUsed = Boolean(previousRankings?.entries?.length);
+  const recentResultsUsed = recentResultsRaceNumbers.length > 0;
+  const manualRaceNotesUsed = contextMeta.manualRaceNotesUsed === true;
+  const youtubeTranscriptUsed =
+    contextMeta.transcriptMode === 'youtube' && contextMeta.transcriptUsed === true;
+  const hasTranscriptContext = manualRaceNotesUsed || youtubeTranscriptUsed;
+
+  let dataQualityScore = 0;
+  if (standingsUsed) dataQualityScore += 40;
+  if (recentResultsUsed) dataQualityScore += 15;
+  if (previousRankingsUsed) dataQualityScore += 15;
+  if (profilesUsed) dataQualityScore += 5;
+  if (manualRaceNotesUsed) dataQualityScore += 25;
+  else if (youtubeTranscriptUsed) dataQualityScore += 20;
+  dataQualityScore = Math.min(100, dataQualityScore);
+
+  let confidenceScore = 'LOW';
+  let confidenceReason = 'Limited source data available for generation.';
+
+  if (hasTranscriptContext && standingsUsed && recentResultsUsed && previousRankingsUsed) {
+    confidenceScore = 'HIGH';
+    confidenceReason = manualRaceNotesUsed
+      ? 'Standings, recent results, previous rankings, and manual race notes available.'
+      : 'Standings, recent results, previous rankings, and YouTube transcript available.';
+  } else if (standingsUsed && recentResultsUsed && previousRankingsUsed) {
+    confidenceScore = 'MEDIUM';
+    confidenceReason =
+      'Standings, recent results, and previous rankings available. No transcript or manual notes.';
+  } else if (standingsUsed && !recentResultsUsed && !previousRankingsUsed && !hasTranscriptContext) {
+    confidenceScore = 'LOW';
+    confidenceReason = 'Standings only — no recent results, previous rankings, or transcript context.';
+  } else if (standingsUsed) {
+    confidenceScore = 'LOW';
+    const parts = ['Standings'];
+    if (recentResultsUsed) parts.push('recent results');
+    if (previousRankingsUsed) parts.push('previous rankings');
+    if (hasTranscriptContext) parts.push('transcript/manual notes');
+    confidenceReason = `${parts.join(', ')} available, but key sources are missing for high-confidence analysis.`;
+  }
+
+  return {
+    confidenceScore,
+    confidenceReason,
+    dataQualityScore,
   };
 }
 
@@ -967,6 +1336,14 @@ function buildGenerationSources({
     .filter((race) => race.winner && race.raceNumber <= raceNumber)
     .slice(-3)
     .map((race) => race.raceNumber);
+
+  const sourceQuality = buildSourceQuality({
+    standings,
+    profiles,
+    previousRankings,
+    recentResultsRaceNumbers,
+    contextMeta,
+  });
 
   return {
     promptVersion: POWER_RANKING_PROMPT_VERSION,
@@ -987,10 +1364,17 @@ function buildGenerationSources({
     movementSource: previousRankings?.entries?.length ? 'previous rankings' : 'defaulted',
     repairedWriteupsCount: draft.repairedWriteupsCount ?? 0,
     repairedRanks: draft.repairedRanks ?? [],
+    repairAttempted: draft.repairAttempted === true,
+    repairFailedRanks: draft.repairFailedRanks ?? [],
+    repairFailureReasons: draft.repairFailureReasons ?? {},
+    repairedWriteupReasons: draft.repairedWriteupReasons ?? {},
+    confidenceScore: sourceQuality.confidenceScore,
+    confidenceReason: sourceQuality.confidenceReason,
+    dataQualityScore: sourceQuality.dataQualityScore,
   };
 }
 
-async function normalizeDraft(aiDraft, driverLookup, previousRankings) {
+async function normalizeDraft(aiDraft, driverLookup, previousRankings, generationContext = {}) {
   const previousRankByDriver = Object.fromEntries(
     (previousRankings?.entries || []).map((entry) => [
       String(entry.driverId),
@@ -1010,6 +1394,7 @@ async function normalizeDraft(aiDraft, driverLookup, previousRankings) {
   const repairedRanks = [];
   const repairFailedRanks = [];
   const repairFailureReasons = {};
+  const repairedWriteupReasons = {};
   let repairAttempted = false;
 
   for (let expectedRank = 1; expectedRank <= 10; expectedRank += 1) {
@@ -1048,8 +1433,14 @@ async function normalizeDraft(aiDraft, driverLookup, previousRankings) {
 
   for (const entry of normalizedEntries) {
     const driver = driverLookup.get(entry.driverId);
+    const previousRank = previousRankByDriver[entry.driverId];
+    const writeupContext = {
+      transcriptUsed: generationContext.transcriptUsed === true,
+      transcriptMode: generationContext.transcriptMode || 'none',
+      previousRank,
+    };
 
-    const repaired = await repairWriteupOpening(entry, driver);
+    const repaired = await repairWriteupQuality(entry, driver, writeupContext);
     entry.writeup = repaired.writeup;
 
     if (repaired.repairAttempted) {
@@ -1057,10 +1448,7 @@ async function normalizeDraft(aiDraft, driverLookup, previousRankings) {
     }
 
     if (repaired.writeupResult.error) {
-      if (
-        repaired.repairAttempted &&
-        isNameFirstOpeningError(repaired.writeupResult.error, repaired.writeupResult.errorType)
-      ) {
+      if (repaired.repairAttempted && isRepairableWriteupError(repaired.writeupResult.errorType)) {
         repairFailedRanks.push(entry.rank);
         repairFailureReasons[String(entry.rank)] = repaired.writeupResult.error;
         const repairError = new Error(
@@ -1072,6 +1460,7 @@ async function normalizeDraft(aiDraft, driverLookup, previousRankings) {
           repairedRanks: [...repairedRanks],
           repairFailedRanks: [...repairFailedRanks],
           repairFailureReasons: { ...repairFailureReasons },
+          repairedWriteupReasons: { ...repairedWriteupReasons },
         };
         throw repairError;
       }
@@ -1082,6 +1471,7 @@ async function normalizeDraft(aiDraft, driverLookup, previousRankings) {
 
     if (repaired.repairAttempts > 0) {
       repairedRanks.push(entry.rank);
+      repairedWriteupReasons[String(entry.rank)] = repaired.repairReasons;
     }
 
     for (const warning of repaired.writeupResult.warnings) {
@@ -1122,6 +1512,7 @@ async function normalizeDraft(aiDraft, driverLookup, previousRankings) {
     repairedRanks,
     repairFailedRanks,
     repairFailureReasons,
+    repairedWriteupReasons,
   };
 }
 
@@ -1184,7 +1575,10 @@ export default async function handler(req, res) {
 
     const aiDraft = await callOpenAi(contextPayload);
     const driverLookup = buildDriverLookup(standings, profiles);
-    const draft = await normalizeDraft(aiDraft, driverLookup, previousRankings);
+    const draft = await normalizeDraft(aiDraft, driverLookup, previousRankings, {
+      transcriptUsed: contextMeta.transcriptUsed,
+      transcriptMode: contextMeta.transcriptMode,
+    });
     const generationSources = buildGenerationSources({
       raceNumber,
       standings,
@@ -1221,6 +1615,9 @@ export default async function handler(req, res) {
       existingPublished: existingWeek?.published === true,
       ...draft,
       generationSources,
+      confidenceScore: generationSources.confidenceScore,
+      confidenceReason: generationSources.confidenceReason,
+      dataQualityScore: generationSources.dataQualityScore,
       transcriptDiagnostics: contextMeta.transcriptDiagnostics,
       transcriptUsed: contextMeta.transcriptUsed,
       transcriptMode: contextMeta.transcriptMode ?? null,
