@@ -1,5 +1,6 @@
 import { slugify, supabase } from './_lib.js';
 import { ARTICLE_TYPES } from '../server/config/news-system-prompt.js';
+import { generateNewsArticle } from './_news-generator.js';
 
 function parseBody(req) {
   if (!req.body) return {};
@@ -11,6 +12,10 @@ function parseBody(req) {
     }
   }
   return req.body;
+}
+
+function resolveAction(req, body = {}) {
+  return String(req.query?.action || body.action || '').trim().toLowerCase();
 }
 
 function articleTypeLabel(type) {
@@ -75,6 +80,51 @@ async function loadArticles(includeUnpublished = false) {
   const { data, error } = await query;
   if (error || !Array.isArray(data)) return [];
   return data.map(normalizeArticle);
+}
+
+async function handleGet(req, res) {
+  const sb = supabase();
+  if (!sb) {
+    return res.status(200).json({ configured: false, featured: null, articles: [] });
+  }
+
+  const action = resolveAction(req);
+  const includeUnpublished = req.query?.admin === '1';
+  const slug = String(req.query?.slug || '').trim();
+  const id = req.query?.id ? Number(req.query.id) : null;
+
+  const isGet = action === 'get' || Boolean(slug || id);
+  const isList = action === 'list' || (!action && !slug && !id);
+
+  if (isGet) {
+    if (slug) {
+      const article = await loadArticleBySlug(slug, includeUnpublished);
+      if (!article) return res.status(404).json({ error: 'Article not found.' });
+      return res.status(200).json({ configured: true, article });
+    }
+
+    if (id) {
+      const article = await loadArticleById(id);
+      if (!article || (!article.published && !includeUnpublished)) {
+        return res.status(404).json({ error: 'Article not found.' });
+      }
+      return res.status(200).json({ configured: true, article });
+    }
+
+    return res.status(400).json({ error: 'Missing slug or id for action=get.' });
+  }
+
+  if (isList) {
+    const articles = await loadArticles(includeUnpublished);
+    const published = articles.filter((a) => a.published);
+    return res.status(200).json({
+      configured: true,
+      featured: published[0] || null,
+      articles: includeUnpublished ? articles : published,
+    });
+  }
+
+  return res.status(400).json({ error: `Unknown action: ${action}` });
 }
 
 async function saveArticle(body, publish = false) {
@@ -159,50 +209,43 @@ async function saveArticle(body, publish = false) {
   return { data: saved, status: 200 };
 }
 
-export default async function handler(req, res) {
-  if (req.method === 'GET') {
-    const sb = supabase();
-    if (!sb) {
-      return res.status(200).json({ configured: false, featured: null, articles: [] });
-    }
+async function handleGenerate(body) {
+  const raceNumber = Number(body.raceNumber ?? body.race_number ?? 1);
+  if (!Number.isInteger(raceNumber) || raceNumber < 1) {
+    return { error: 'Valid race number is required.', status: 400 };
+  }
 
-    const includeUnpublished = req.query?.admin === '1';
-    const slug = String(req.query?.slug || '').trim();
-    const id = req.query?.id ? Number(req.query.id) : null;
-
-    if (slug) {
-      const article = await loadArticleBySlug(slug, includeUnpublished);
-      if (!article) return res.status(404).json({ error: 'Article not found.' });
-      return res.status(200).json({ configured: true, article });
-    }
-
-    if (id) {
-      const article = await loadArticleById(id);
-      if (!article || (!article.published && !includeUnpublished)) {
-        return res.status(404).json({ error: 'Article not found.' });
-      }
-      return res.status(200).json({ configured: true, article });
-    }
-
-    const articles = await loadArticles(includeUnpublished);
-    const published = articles.filter((a) => a.published);
-    return res.status(200).json({
-      configured: true,
-      featured: published[0] || null,
-      articles: includeUnpublished ? articles : published,
+  try {
+    const result = await generateNewsArticle({
+      articleType: body.articleType ?? body.article_type,
+      raceNumber,
+      manualNotes: body.manualNotes ?? body.manualRaceNotes ?? body.manual_notes,
+      transcript: body.transcript,
+      headlineOverride: body.headlineOverride ?? body.headline_override,
+      spotlightDriverId: body.spotlightDriverId ?? body.spotlight_driver_id ?? body.driverId,
     });
+    return { data: result, status: 200 };
+  } catch (error) {
+    return {
+      error: error.message || 'News generation failed.',
+      status: 500,
+    };
   }
+}
 
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
+async function handlePost(req, res) {
   const body = parseBody(req);
   if (body.password !== process.env.ADMIN_PASSWORD) {
     return res.status(401).json({ error: 'Bad password' });
   }
 
-  const action = body.action || 'save';
+  const action = resolveAction(req, body) || 'save';
+
+  if (action === 'generate') {
+    const result = await handleGenerate(body);
+    if (result.error) return res.status(result.status).json({ error: result.error });
+    return res.status(result.status).json(result.data);
+  }
 
   if (action === 'delete') {
     const sb = supabase();
@@ -214,8 +257,23 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: true });
   }
 
-  const publish = action === 'publish';
-  const result = await saveArticle(body, publish);
-  if (result.error) return res.status(result.status).json({ error: result.error });
-  return res.status(result.status).json(result.data);
+  if (action === 'save' || action === 'publish') {
+    const result = await saveArticle(body, action === 'publish');
+    if (result.error) return res.status(result.status).json({ error: result.error });
+    return res.status(result.status).json(result.data);
+  }
+
+  return res.status(400).json({ error: `Unknown action: ${action}` });
+}
+
+export default async function handler(req, res) {
+  if (req.method === 'GET') {
+    return handleGet(req, res);
+  }
+
+  if (req.method === 'POST') {
+    return handlePost(req, res);
+  }
+
+  return res.status(405).json({ error: 'Method not allowed' });
 }

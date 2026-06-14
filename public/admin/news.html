@@ -230,7 +230,7 @@
       const list = $('#articleList');
       list.innerHTML = '<span class="sub">Loading...</span>';
       try {
-        const res = await fetch('/api/news?admin=1');
+        const res = await fetch('/api/news?action=list&admin=1');
         const data = await res.json();
         const articles = data.articles || [];
         if (!articles.length) {
@@ -267,7 +267,7 @@
 
     async function loadArticle(id) {
       try {
-        const res = await fetch(`/api/news?id=${id}&admin=1`);
+        const res = await fetch(`/api/news?action=get&id=${id}&admin=1`);
         const data = await res.json();
         const a = data.article;
         if (!a) throw new Error('Article not found.');
@@ -356,10 +356,11 @@
       setMsg(isRegenerate ? 'Regenerating draft...' : 'Generating draft...');
       setGenerating(true);
       try {
-        const res = await fetch('/api/news-generate', {
+        const res = await fetch('/api/news', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            action: 'generate',
             password: getSessionPw(),
             articleType: $('#articleType').value,
             raceNumber: Number($('#raceNumber').value) || 1,
