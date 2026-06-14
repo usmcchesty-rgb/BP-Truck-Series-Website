@@ -1,4 +1,5 @@
 import { getRecentPointsRaceResults } from './_schedule-points-races.js';
+import { alignFinishRacesWithTrace } from './_power-rankings-schedule-alignment.js';
 import { extractFinishRacesFromSchedules } from './_simracerhub-schedule-results.js';
 
 function normalizeName(value) {
@@ -50,42 +51,6 @@ function summarizeDriver(driverLookup, driverId) {
     driverName: driver.driverName,
     pointsPosition: driver.position ?? null,
   };
-}
-
-function alignFinishRacesToRecentPointsRaces(recentPointsRaces, finishRaces, driverLookup) {
-  const aligned = recentPointsRaces.map((race) => {
-    const winnerDriverId = matchDriverIdByName(race.winner, driverLookup);
-    const match =
-      finishRaces.find((entry) => entry.winnerDriverId && entry.winnerDriverId === winnerDriverId) ||
-      finishRaces.find((entry) => {
-        if (!winnerDriverId || !entry.finishes[winnerDriverId]) return false;
-        return entry.finishes[winnerDriverId] === 1;
-      }) ||
-      null;
-
-    return {
-      pointsRaceNumber: race.officialPointsRaceNumber,
-      scheduleRow: race.scheduleRow,
-      track: race.track,
-      winner: race.winner,
-      winnerDriverId,
-      finishes: match?.finishes || {},
-    };
-  });
-
-  if (aligned.every((race) => Object.keys(race.finishes).length === 0) && finishRaces.length) {
-    const tail = finishRaces.slice(-recentPointsRaces.length);
-    return recentPointsRaces.map((race, index) => ({
-      pointsRaceNumber: race.officialPointsRaceNumber,
-      scheduleRow: race.scheduleRow,
-      track: race.track,
-      winner: race.winner,
-      winnerDriverId: matchDriverIdByName(race.winner, driverLookup),
-      finishes: tail[index]?.finishes || {},
-    }));
-  }
-
-  return aligned;
 }
 
 function driversWithMultipleTop5Last3(alignedRaces) {
@@ -155,11 +120,7 @@ export function buildRecentFormAnalysis({
 }) {
   const recentPointsRaces = getRecentPointsRaceResults(scheduleRaces, raceNumber, 3);
   const finishRaces = extractFinishRacesFromSchedules(schedules);
-  const alignedRaces = alignFinishRacesToRecentPointsRaces(
-    recentPointsRaces,
-    finishRaces,
-    driverLookup
-  );
+  const alignedRaces = alignFinishRacesWithTrace(recentPointsRaces, finishRaces, driverLookup);
 
   const last3RaceWinners = alignedRaces
     .map((race) =>

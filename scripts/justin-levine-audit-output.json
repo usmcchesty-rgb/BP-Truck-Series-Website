@@ -1,0 +1,1311 @@
+﻿{
+  "auditTarget": "Justin Levine",
+  "generatedAt": "2026-06-14T09:40:08.781Z",
+  "context": {
+    "raceNumberUsedForGrounding": 12,
+    "latestCompletedPointsRace": 12,
+    "standingsScheduleId": "346494",
+    "standingsSnapshotRace": 12,
+    "recentPointsRacesIncluded": [
+      {
+        "pointsRaceNumber": 10,
+        "track": "Rockingham Speedway Oval",
+        "alignmentMethod": "schedules-api-winner-id-match",
+        "schedulesApiScheduleKey": "4"
+      },
+      {
+        "pointsRaceNumber": 11,
+        "track": "Charlotte Motor Speedway Oval Night",
+        "alignmentMethod": "schedules-api-winner-id-match",
+        "schedulesApiScheduleKey": "10"
+      },
+      {
+        "pointsRaceNumber": 12,
+        "track": "Iowa Speedway Oval Night",
+        "alignmentMethod": "schedules-api-winner-id-match",
+        "schedulesApiScheduleKey": "10"
+      }
+    ]
+  },
+  "driverResolution": {
+    "driverIdUsedInGrounding": "30961",
+    "matchedViaNameLookup": "30961",
+    "standingsRowDriverId": "30961",
+    "driversApiEntry": {
+      "driver_id": "30961",
+      "custid": "244220",
+      "name": "Justin Levine",
+      "last_first": "Levine, Justin",
+      "is_ai": false,
+      "flair_country_code": "US"
+    },
+    "rpsDrid": "30961",
+    "idsConsistent": true,
+    "standingsName": "Justin Levine",
+    "iracingName": "Justin Levine",
+    "carNumber": "",
+    "pointsPosition": 23,
+    "racesCountedInStandings": 5
+  },
+  "factualGroundingRecentRaceFinishes": [
+    {
+      "raceNumber": 10,
+      "track": "Rockingham Speedway Oval",
+      "finish": 5
+    },
+    {
+      "raceNumber": 11,
+      "track": "Charlotte Motor Speedway Oval Night",
+      "finish": 1
+    },
+    {
+      "raceNumber": 12,
+      "track": "Iowa Speedway Oval Night",
+      "finish": 1
+    }
+  ],
+  "last3Summary": {
+    "last3RaceAverageFinish": 2.3,
+    "bestFinishLast3": 1,
+    "worstFinishLast3": 5
+  },
+  "perFinishTrace": [
+    {
+      "raceNumber": 10,
+      "track": "Rockingham Speedway Oval",
+      "finishPos": 5,
+      "driverId": "30961",
+      "driverName": "Justin Levine",
+      "alignment": {
+        "alignmentMethod": "schedules-api-winner-id-match",
+        "schedulesApiScheduleKey": "4",
+        "schedulePageScheduleId": "346491",
+        "scheduleRow": 12,
+        "winnerFromSchedulePage": "Chris Carroll3",
+        "winnerDriverId": "39765",
+        "finishInAlignedMap": 5,
+        "schedulesApiFinishesCount": 30
+      },
+      "rawSchedulesApi": {
+        "scheduleKey": "4",
+        "scheduleId": "346481",
+        "eventName": null,
+        "raceDate": 1774756800,
+        "bucketKey": "345205",
+        "bucketSession": "RACE",
+        "bucketCountStats": "Y",
+        "bucketRaceId": "345205",
+        "jsonPath": "schedules[\"4\"].drivers[\"345205\"][\"30961\"]",
+        "rawResult": {
+          "race_participant_id": "6907067",
+          "race_id": "345205",
+          "driver_id": "30961",
+          "car_id": "91",
+          "qualify_pos": "29",
+          "num_laps": "200",
+          "laps_led": "0",
+          "finish_pos": "5",
+          "race_points": "39",
+          "status": "Running",
+          "incidents": "16",
+          "provisional": "N",
+          "avg_pos": "12.399",
+          "arp": "11.9801",
+          "avg_fast_lap": "152102",
+          "num_fast_lap": "3",
+          "passes": "30",
+          "quality_passes": "4",
+          "closing_passes": "3",
+          "fastest_lap_time": "15",
+          "fastest_restart": "79417",
+          "rating": "93.3682",
+          "count_stats": "Y",
+          "session": "RACE",
+          "session_num": "0.0",
+          "bonus_points": 0,
+          "penalty_points": 0,
+          "stage_points": 0,
+          "total_points": 39,
+          "corners": 800,
+          "miles": 106.60000000000001,
+          "keep": "Y"
+        },
+        "finishPosFromRaw": "5",
+        "driverNameInRawResult": null,
+        "driverIdInRawResult": "30961",
+        "allBucketDriverIds": [
+          "8564",
+          "12987",
+          "18522",
+          "30545",
+          "30961",
+          "33242",
+          "36319",
+          "36378",
+          "36764",
+          "36776",
+          "37348",
+          "37866",
+          "37997",
+          "38639",
+          "39623",
+          "39628",
+          "39765",
+          "41238",
+          "44943",
+          "48600",
+          "53592",
+          "54550",
+          "60452",
+          "62905",
+          "63816",
+          "63970",
+          "72175",
+          "79784",
+          "85687",
+          "100913",
+          "105924",
+          "114521",
+          "120411"
+        ],
+        "driverPresentInBucket": true
+      },
+      "issues": []
+    },
+    {
+      "raceNumber": 11,
+      "track": "Charlotte Motor Speedway Oval Night",
+      "finishPos": 1,
+      "driverId": "30961",
+      "driverName": "Justin Levine",
+      "alignment": {
+        "alignmentMethod": "schedules-api-winner-id-match",
+        "schedulesApiScheduleKey": "10",
+        "schedulePageScheduleId": "346493",
+        "scheduleRow": 13,
+        "winnerFromSchedulePage": "Justin Levine",
+        "winnerDriverId": "30961",
+        "finishInAlignedMap": 1,
+        "schedulesApiFinishesCount": 22
+      },
+      "rawSchedulesApi": {
+        "scheduleKey": "10",
+        "scheduleId": "346493",
+        "eventName": null,
+        "raceDate": 1780200000,
+        "bucketKey": "358615",
+        "bucketSession": "RACE",
+        "bucketCountStats": "Y",
+        "bucketRaceId": "358615",
+        "jsonPath": "schedules[\"10\"].drivers[\"358615\"][\"30961\"]",
+        "rawResult": {
+          "race_participant_id": "7190750",
+          "race_id": "358615",
+          "driver_id": "30961",
+          "car_id": "91",
+          "qualify_pos": "18",
+          "num_laps": "135",
+          "laps_led": "21",
+          "finish_pos": "1",
+          "race_points": "43",
+          "status": "Running",
+          "incidents": "6",
+          "provisional": "N",
+          "avg_pos": "9.75556",
+          "arp": "9.16964",
+          "avg_fast_lap": "305354",
+          "num_fast_lap": "11",
+          "passes": "42",
+          "quality_passes": "19",
+          "closing_passes": "1",
+          "fastest_lap_time": "31",
+          "fastest_restart": "445625",
+          "rating": "110.892",
+          "count_stats": "Y",
+          "session": "RACE",
+          "session_num": "0.0",
+          "bonus_points": "1",
+          "penalty_points": 0,
+          "stage_points": 0,
+          "total_points": 44,
+          "corners": 540,
+          "miles": 202.5,
+          "keep": "Y"
+        },
+        "finishPosFromRaw": "1",
+        "driverNameInRawResult": null,
+        "driverIdInRawResult": "30961",
+        "allBucketDriverIds": [
+          "12987",
+          "18540",
+          "30961",
+          "33242",
+          "36378",
+          "36764",
+          "36776",
+          "37866",
+          "37997",
+          "38639",
+          "39623",
+          "39628",
+          "39765",
+          "41238",
+          "44943",
+          "48600",
+          "49087",
+          "56040",
+          "60452",
+          "63816",
+          "65015",
+          "72175",
+          "85687",
+          "110127",
+          "118463"
+        ],
+        "driverPresentInBucket": true
+      },
+      "issues": []
+    },
+    {
+      "raceNumber": 12,
+      "track": "Iowa Speedway Oval Night",
+      "finishPos": 1,
+      "driverId": "30961",
+      "driverName": "Justin Levine",
+      "alignment": {
+        "alignmentMethod": "schedules-api-winner-id-match",
+        "schedulesApiScheduleKey": "10",
+        "schedulePageScheduleId": "346494",
+        "scheduleRow": 14,
+        "winnerFromSchedulePage": "Justin Levine",
+        "winnerDriverId": "30961",
+        "finishInAlignedMap": 1,
+        "schedulesApiFinishesCount": 22
+      },
+      "rawSchedulesApi": {
+        "scheduleKey": "10",
+        "scheduleId": "346493",
+        "eventName": null,
+        "raceDate": 1780200000,
+        "bucketKey": "358615",
+        "bucketSession": "RACE",
+        "bucketCountStats": "Y",
+        "bucketRaceId": "358615",
+        "jsonPath": "schedules[\"10\"].drivers[\"358615\"][\"30961\"]",
+        "rawResult": {
+          "race_participant_id": "7190750",
+          "race_id": "358615",
+          "driver_id": "30961",
+          "car_id": "91",
+          "qualify_pos": "18",
+          "num_laps": "135",
+          "laps_led": "21",
+          "finish_pos": "1",
+          "race_points": "43",
+          "status": "Running",
+          "incidents": "6",
+          "provisional": "N",
+          "avg_pos": "9.75556",
+          "arp": "9.16964",
+          "avg_fast_lap": "305354",
+          "num_fast_lap": "11",
+          "passes": "42",
+          "quality_passes": "19",
+          "closing_passes": "1",
+          "fastest_lap_time": "31",
+          "fastest_restart": "445625",
+          "rating": "110.892",
+          "count_stats": "Y",
+          "session": "RACE",
+          "session_num": "0.0",
+          "bonus_points": "1",
+          "penalty_points": 0,
+          "stage_points": 0,
+          "total_points": 44,
+          "corners": 540,
+          "miles": 202.5,
+          "keep": "Y"
+        },
+        "finishPosFromRaw": "1",
+        "driverNameInRawResult": null,
+        "driverIdInRawResult": "30961",
+        "allBucketDriverIds": [
+          "12987",
+          "18540",
+          "30961",
+          "33242",
+          "36378",
+          "36764",
+          "36776",
+          "37866",
+          "37997",
+          "38639",
+          "39623",
+          "39628",
+          "39765",
+          "41238",
+          "44943",
+          "48600",
+          "49087",
+          "56040",
+          "60452",
+          "63816",
+          "65015",
+          "72175",
+          "85687",
+          "110127",
+          "118463"
+        ],
+        "driverPresentInBucket": true
+      },
+      "issues": []
+    }
+  ],
+  "rockinghamDeepTrace": {
+    "raceNumber": 10,
+    "track": "Rockingham Speedway Oval",
+    "finishPos": 5,
+    "driverId": "30961",
+    "driverName": "Justin Levine",
+    "alignment": {
+      "alignmentMethod": "schedules-api-winner-id-match",
+      "schedulesApiScheduleKey": "4",
+      "schedulePageScheduleId": "346491",
+      "scheduleRow": 12,
+      "winnerFromSchedulePage": "Chris Carroll3",
+      "winnerDriverId": "39765",
+      "finishInAlignedMap": 5,
+      "schedulesApiFinishesCount": 30
+    },
+    "rawSchedulesApi": {
+      "scheduleKey": "4",
+      "scheduleId": "346481",
+      "eventName": null,
+      "raceDate": 1774756800,
+      "bucketKey": "345205",
+      "bucketSession": "RACE",
+      "bucketCountStats": "Y",
+      "bucketRaceId": "345205",
+      "jsonPath": "schedules[\"4\"].drivers[\"345205\"][\"30961\"]",
+      "rawResult": {
+        "race_participant_id": "6907067",
+        "race_id": "345205",
+        "driver_id": "30961",
+        "car_id": "91",
+        "qualify_pos": "29",
+        "num_laps": "200",
+        "laps_led": "0",
+        "finish_pos": "5",
+        "race_points": "39",
+        "status": "Running",
+        "incidents": "16",
+        "provisional": "N",
+        "avg_pos": "12.399",
+        "arp": "11.9801",
+        "avg_fast_lap": "152102",
+        "num_fast_lap": "3",
+        "passes": "30",
+        "quality_passes": "4",
+        "closing_passes": "3",
+        "fastest_lap_time": "15",
+        "fastest_restart": "79417",
+        "rating": "93.3682",
+        "count_stats": "Y",
+        "session": "RACE",
+        "session_num": "0.0",
+        "bonus_points": 0,
+        "penalty_points": 0,
+        "stage_points": 0,
+        "total_points": 39,
+        "corners": 800,
+        "miles": 106.60000000000001,
+        "keep": "Y"
+      },
+      "finishPosFromRaw": "5",
+      "driverNameInRawResult": null,
+      "driverIdInRawResult": "30961",
+      "allBucketDriverIds": [
+        "8564",
+        "12987",
+        "18522",
+        "30545",
+        "30961",
+        "33242",
+        "36319",
+        "36378",
+        "36764",
+        "36776",
+        "37348",
+        "37866",
+        "37997",
+        "38639",
+        "39623",
+        "39628",
+        "39765",
+        "41238",
+        "44943",
+        "48600",
+        "53592",
+        "54550",
+        "60452",
+        "62905",
+        "63816",
+        "63970",
+        "72175",
+        "79784",
+        "85687",
+        "100913",
+        "105924",
+        "114521",
+        "120411"
+      ],
+      "driverPresentInBucket": true
+    },
+    "issues": []
+  },
+  "duplicateNameAnalysis": {
+    "justinLevineCollisions": [
+      {
+        "normalizedName": "justin levine",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "30961",
+            "name": "Justin Levine"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "30961",
+            "name": "Justin Levine"
+          }
+        ]
+      }
+    ],
+    "allDuplicateNormalizedNames": [
+      {
+        "normalizedName": "chris carroll3",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "39765",
+            "name": "Chris Carroll3"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "39765",
+            "name": "Chris Carroll3"
+          }
+        ]
+      },
+      {
+        "normalizedName": "taylor butcher-benjamin",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "36776",
+            "name": "Taylor Butcher-Benjamin"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "36776",
+            "name": "Taylor Butcher-Benjamin"
+          }
+        ]
+      },
+      {
+        "normalizedName": "dalton kilroe",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "39623",
+            "name": "Dalton Kilroe"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "39623",
+            "name": "Dalton Kilroe"
+          }
+        ]
+      },
+      {
+        "normalizedName": "chris berg",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "36378",
+            "name": "Chris Berg"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "36378",
+            "name": "Chris Berg"
+          }
+        ]
+      },
+      {
+        "normalizedName": "mark arthur",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "12987",
+            "name": "Mark Arthur"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "12987",
+            "name": "Mark Arthur"
+          }
+        ]
+      },
+      {
+        "normalizedName": "kyle wellman",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "44943",
+            "name": "Kyle Wellman"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "44943",
+            "name": "Kyle Wellman"
+          }
+        ]
+      },
+      {
+        "normalizedName": "matthew kleinschmidt2",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "36764",
+            "name": "Matthew Kleinschmidt2"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "36764",
+            "name": "Matthew Kleinschmidt2"
+          }
+        ]
+      },
+      {
+        "normalizedName": "ty marasco",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "39628",
+            "name": "Ty Marasco"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "39628",
+            "name": "Ty Marasco"
+          }
+        ]
+      },
+      {
+        "normalizedName": "hunter lagunes",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "72175",
+            "name": "Hunter Lagunes"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "72175",
+            "name": "Hunter Lagunes"
+          }
+        ]
+      },
+      {
+        "normalizedName": "trevor harmon2",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "33242",
+            "name": "Trevor Harmon2"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "33242",
+            "name": "Trevor Harmon2"
+          }
+        ]
+      },
+      {
+        "normalizedName": "bryan dees",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "38639",
+            "name": "Bryan Dees"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "38639",
+            "name": "Bryan Dees"
+          }
+        ]
+      },
+      {
+        "normalizedName": "brian zimmerman3",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "41238",
+            "name": "Brian Zimmerman3"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "41238",
+            "name": "Brian Zimmerman3"
+          }
+        ]
+      },
+      {
+        "normalizedName": "william bruton",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "63816",
+            "name": "William Bruton"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "63816",
+            "name": "William Bruton"
+          }
+        ]
+      },
+      {
+        "normalizedName": "mike massengill",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "37866",
+            "name": "Mike Massengill"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "37866",
+            "name": "Mike Massengill"
+          }
+        ]
+      },
+      {
+        "normalizedName": "larry bell",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "37997",
+            "name": "Larry Bell"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "37997",
+            "name": "Larry Bell"
+          }
+        ]
+      },
+      {
+        "normalizedName": "logan m wilson",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "85687",
+            "name": "Logan M Wilson"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "85687",
+            "name": "Logan M Wilson"
+          }
+        ]
+      },
+      {
+        "normalizedName": "caleb elswick2",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "65015",
+            "name": "Caleb Elswick2"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "65015",
+            "name": "Caleb Elswick2"
+          }
+        ]
+      },
+      {
+        "normalizedName": "eddie hagigh",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "60452",
+            "name": "Eddie Hagigh"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "60452",
+            "name": "Eddie Hagigh"
+          }
+        ]
+      },
+      {
+        "normalizedName": "landon cano",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "110127",
+            "name": "Landon Cano"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "110127",
+            "name": "Landon Cano"
+          }
+        ]
+      },
+      {
+        "normalizedName": "michael boone2",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "79784",
+            "name": "Michael Boone2"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "79784",
+            "name": "Michael Boone2"
+          }
+        ]
+      },
+      {
+        "normalizedName": "ronnie lane",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "118463",
+            "name": "Ronnie Lane"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "118463",
+            "name": "Ronnie Lane"
+          }
+        ]
+      },
+      {
+        "normalizedName": "christopher howell",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "62905",
+            "name": "Christopher Howell"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "62905",
+            "name": "Christopher Howell"
+          }
+        ]
+      },
+      {
+        "normalizedName": "justin levine",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "30961",
+            "name": "Justin Levine"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "30961",
+            "name": "Justin Levine"
+          }
+        ]
+      },
+      {
+        "normalizedName": "dustin ping",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "21637",
+            "name": "Dustin Ping"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "21637",
+            "name": "Dustin Ping"
+          }
+        ]
+      },
+      {
+        "normalizedName": "cody gibson",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "18540",
+            "name": "Cody Gibson"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "18540",
+            "name": "Cody Gibson"
+          }
+        ]
+      },
+      {
+        "normalizedName": "brad lawson",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "18522",
+            "name": "Brad Lawson"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "18522",
+            "name": "Brad Lawson"
+          }
+        ]
+      },
+      {
+        "normalizedName": "tanner marr",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "48600",
+            "name": "Tanner Marr"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "48600",
+            "name": "Tanner Marr"
+          }
+        ]
+      },
+      {
+        "normalizedName": "jonathan dominix",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "105924",
+            "name": "Jonathan Dominix"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "105924",
+            "name": "Jonathan Dominix"
+          }
+        ]
+      },
+      {
+        "normalizedName": "kevin coburn",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "114521",
+            "name": "Kevin Coburn"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "114521",
+            "name": "Kevin Coburn"
+          }
+        ]
+      },
+      {
+        "normalizedName": "brian roush",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "100913",
+            "name": "Brian Roush"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "100913",
+            "name": "Brian Roush"
+          }
+        ]
+      },
+      {
+        "normalizedName": "chris evans3",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "54550",
+            "name": "Chris Evans3"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "54550",
+            "name": "Chris Evans3"
+          }
+        ]
+      },
+      {
+        "normalizedName": "jamie-le dunning",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "53592",
+            "name": "Jamie-Le Dunning"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "53592",
+            "name": "Jamie-Le Dunning"
+          }
+        ]
+      },
+      {
+        "normalizedName": "joey neace",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "37348",
+            "name": "Joey Neace"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "37348",
+            "name": "Joey Neace"
+          }
+        ]
+      },
+      {
+        "normalizedName": "joseph causey",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "49087",
+            "name": "Joseph Causey"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "49087",
+            "name": "Joseph Causey"
+          }
+        ]
+      },
+      {
+        "normalizedName": "bill harkins",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "39625",
+            "name": "Bill Harkins"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "39625",
+            "name": "Bill Harkins"
+          }
+        ]
+      },
+      {
+        "normalizedName": "carter phillips",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "99226",
+            "name": "Carter Phillips"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "99226",
+            "name": "Carter Phillips"
+          }
+        ]
+      },
+      {
+        "normalizedName": "jacob bell",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "17894",
+            "name": "Jacob Bell"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "17894",
+            "name": "Jacob Bell"
+          }
+        ]
+      },
+      {
+        "normalizedName": "jason t powell",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "36319",
+            "name": "Jason T Powell"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "36319",
+            "name": "Jason T Powell"
+          }
+        ]
+      },
+      {
+        "normalizedName": "james south",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "8564",
+            "name": "James South"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "8564",
+            "name": "James South"
+          }
+        ]
+      },
+      {
+        "normalizedName": "billy hensley",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "63970",
+            "name": "Billy Hensley"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "63970",
+            "name": "Billy Hensley"
+          }
+        ]
+      },
+      {
+        "normalizedName": "haiden wheeler",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "34178",
+            "name": "Haiden Wheeler"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "34178",
+            "name": "Haiden Wheeler"
+          }
+        ]
+      },
+      {
+        "normalizedName": "nick crawford",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "29887",
+            "name": "Nick Crawford"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "29887",
+            "name": "Nick Crawford"
+          }
+        ]
+      },
+      {
+        "normalizedName": "austin darbyshire",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "30545",
+            "name": "Austin Darbyshire"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "30545",
+            "name": "Austin Darbyshire"
+          }
+        ]
+      },
+      {
+        "normalizedName": "talan drake",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "30529",
+            "name": "Talan Drake"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "30529",
+            "name": "Talan Drake"
+          }
+        ]
+      },
+      {
+        "normalizedName": "levi allen",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "49256",
+            "name": "Levi Allen"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "49256",
+            "name": "Levi Allen"
+          }
+        ]
+      },
+      {
+        "normalizedName": "scotty stevens",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "56040",
+            "name": "Scotty Stevens"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "56040",
+            "name": "Scotty Stevens"
+          }
+        ]
+      },
+      {
+        "normalizedName": "jess hadley2",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "120411",
+            "name": "Jess Hadley2"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "120411",
+            "name": "Jess Hadley2"
+          }
+        ]
+      },
+      {
+        "normalizedName": "derek paulson",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "31879",
+            "name": "Derek Paulson"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "31879",
+            "name": "Derek Paulson"
+          }
+        ]
+      },
+      {
+        "normalizedName": "tyler smith24",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "105357",
+            "name": "Tyler Smith24"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "105357",
+            "name": "Tyler Smith24"
+          }
+        ]
+      },
+      {
+        "normalizedName": "juan cobbs jr",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "108900",
+            "name": "Juan Cobbs Jr"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "108900",
+            "name": "Juan Cobbs Jr"
+          }
+        ]
+      },
+      {
+        "normalizedName": "jeffrey reed",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "114355",
+            "name": "Jeffrey Reed"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "114355",
+            "name": "Jeffrey Reed"
+          }
+        ]
+      },
+      {
+        "normalizedName": "bradley d wilson",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "108498",
+            "name": "Bradley D Wilson"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "108498",
+            "name": "Bradley D Wilson"
+          }
+        ]
+      },
+      {
+        "normalizedName": "nicholas moody",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "115120",
+            "name": "Nicholas Moody"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "115120",
+            "name": "Nicholas Moody"
+          }
+        ]
+      },
+      {
+        "normalizedName": "robbie good",
+        "entries": [
+          {
+            "source": "standings/rps",
+            "driverId": "124539",
+            "name": "Robbie Good"
+          },
+          {
+            "source": "drivers API",
+            "driverId": "124539",
+            "name": "Robbie Good"
+          }
+        ]
+      }
+    ]
+  },
+  "carNumberCollisions": [],
+  "conclusions": {
+    "wrongDriverAssignment": false,
+    "nonParticipantsIncluded": false,
+    "standingsVsSchedulesIdMismatch": false,
+    "duplicateNameOrCarJoinRisk": true
+  },
+  "dataFlowSummary": [
+    "1. get_standings.php returns schedules{} keyed by index; each schedule has drivers[race_id][driver_id] buckets.",
+    "2. pickOfficialRaceBucket() selects the RACE session bucket (count_stats=Y).",
+    "3. extractFinishRacesFromSchedules() builds finish maps per schedule_id.",
+    "4. alignFinishRacesWithTrace() maps last 3 points races (from schedule page) to schedules API entries via winner driver ID match.",
+    "5. buildDriverGrounding() reads race.finishes[driverId] for each aligned race ΓåÆ recentRaceFinishes."
+  ]
+}

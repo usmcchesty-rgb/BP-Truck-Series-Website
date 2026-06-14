@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 3000",
     "start": "vercel dev --listen 3000",
+    "test:schedule-alignment": "node scripts/test-schedule-alignment-regression.mjs",
     "track-tool": "node server/track-processor.mjs"
   },
   "dependencies": {

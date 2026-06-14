@@ -210,6 +210,9 @@ export function buildFactualGroundingContext({
       winner: race.winner,
       schedulesApiFinishesCount: Object.keys(race.finishes || {}).length,
       alignmentMethod: race.alignmentMethod,
+      schedulePageScheduleId: race.schedulePageScheduleId ?? null,
+      schedulesApiScheduleId: race.schedulesApiScheduleId ?? null,
+      alignmentMismatchWarning: race.alignmentMismatchWarning ?? null,
     })),
     drivers,
   };

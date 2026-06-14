@@ -1,6 +1,9 @@
 import { getRecentPointsRaceResults } from './_schedule-points-races.js';
 import { matchDriverIdByName } from './_power-rankings-recent-form.js';
+import { alignFinishRacesWithTrace } from './_power-rankings-schedule-alignment.js';
 import { extractFinishRacesFromSchedules } from './_simracerhub-schedule-results.js';
+
+export { alignFinishRacesWithTrace };
 
 export const DEFAULT_AUDIT_DRIVER_NAMES = [
   'Mark Arthur',
@@ -18,60 +21,6 @@ export const DATA_SOURCES = {
   NOT_IN_SOURCE: 'not present in source data',
   MODEL_INFERRED: 'not in prompt payload (model-inferred)',
 };
-
-function alignFinishRacesWithTrace(recentPointsRaces, finishRaces, driverLookup) {
-  const aligned = recentPointsRaces.map((race) => {
-    const winnerDriverId = matchDriverIdByName(race.winner, driverLookup);
-    let match = null;
-    let alignmentMethod = 'none';
-
-    match =
-      finishRaces.find(
-        (entry) => entry.winnerDriverId && entry.winnerDriverId === winnerDriverId
-      ) || null;
-    if (match) alignmentMethod = 'schedules-api-winner-id-match';
-
-    if (!match) {
-      match =
-        finishRaces.find((entry) => {
-          if (!winnerDriverId || !entry.finishes[winnerDriverId]) return false;
-          return entry.finishes[winnerDriverId] === 1;
-        }) || null;
-      if (match) alignmentMethod = 'schedules-api-winner-finish-match';
-    }
-
-    return {
-      pointsRaceNumber: race.officialPointsRaceNumber,
-      scheduleRow: race.scheduleRow,
-      track: race.track,
-      date: race.date,
-      winner: race.winner,
-      winnerDriverId,
-      finishes: match?.finishes || {},
-      schedulesApiScheduleKey: match?.scheduleKey ?? null,
-      alignmentMethod,
-      schedulesApiFinishesCount: Object.keys(match?.finishes || {}).length,
-    };
-  });
-
-  if (aligned.every((race) => Object.keys(race.finishes).length === 0) && finishRaces.length) {
-    const tail = finishRaces.slice(-recentPointsRaces.length);
-    return recentPointsRaces.map((race, index) => ({
-      pointsRaceNumber: race.officialPointsRaceNumber,
-      scheduleRow: race.scheduleRow,
-      track: race.track,
-      date: race.date,
-      winner: race.winner,
-      winnerDriverId: matchDriverIdByName(race.winner, driverLookup),
-      finishes: tail[index]?.finishes || {},
-      schedulesApiScheduleKey: tail[index]?.scheduleKey ?? null,
-      alignmentMethod: 'schedules-api-index-fallback',
-      schedulesApiFinishesCount: Object.keys(tail[index]?.finishes || {}).length,
-    }));
-  }
-
-  return aligned;
-}
 
 export function getAlignedRaceFinishes(scheduleRaces, raceNumber, schedules, driverLookup) {
   const recentPointsRaces = getRecentPointsRaceResults(scheduleRaces, raceNumber, 3);
@@ -259,6 +208,9 @@ export function buildRecentResultsAudit({
       track: race.track,
       winner: race.winner,
       alignmentMethod: race.alignmentMethod,
+      schedulePageScheduleId: race.schedulePageScheduleId ?? null,
+      schedulesApiScheduleId: race.schedulesApiScheduleId ?? null,
+      alignmentMismatchWarning: race.alignmentMismatchWarning ?? null,
       schedulesApiScheduleKey: race.schedulesApiScheduleKey,
       schedulesApiFinishesCount: race.schedulesApiFinishesCount,
     })),

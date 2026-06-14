@@ -824,6 +824,16 @@
           : []),
         '  last3RaceAverageFinish (ranked top 10):',
         ...formatLast3RaceAverageFinish(sources.last3RaceAverageFinish),
+        ...(Array.isArray(sources.alignedRaceTrace) && sources.alignedRaceTrace.length
+          ? [
+              '',
+              'Schedule alignment trace:',
+              ...sources.alignedRaceTrace.map(
+                (race) =>
+                  `  PR${race.pointsRaceNumber} ${race.track || 'Unknown'}: method=${race.alignmentMethod || 'unknown'}, pageScheduleId=${race.schedulePageScheduleId ?? 'none'}, apiScheduleId=${race.schedulesApiScheduleId ?? 'none'}${race.alignmentMismatchWarning ? `, warning=${race.alignmentMismatchWarning}` : ''}`
+              ),
+            ]
+          : []),
         '',
         'Recent form writeup references:',
         `  recentFormReferencedRanks: ${(sources.recentFormReferencedRanks || []).length ? sources.recentFormReferencedRanks.join(', ') : 'none'}`,
