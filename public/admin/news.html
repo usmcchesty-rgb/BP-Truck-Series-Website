@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>News Admin — Miles Apex</title>
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+    .wrap { padding: 18px; max-width: 1100px; margin: 0 auto; }
+    .nav { display: flex; justify-content: space-between; align-items: center; padding: 12px 18px; border-bottom: 1px solid #333; background: #0a0a0a; }
+    .nav .brand { font-weight: 900; font-size: 18px; }
+    .nav .brand span { color: var(--red); }
+    .nav a { color: #fff; text-decoration: none; font-size: 12px; font-weight: 900; margin-left: 14px; }
+    .sub { color: var(--muted); font-size: 12px; margin-bottom: 16px; line-height: 1.45; }
+    .panel { padding: 14px; margin-bottom: 14px; }
+    .panel h2 { margin: 0 0 12px; font-size: 18px; color: #ff3030; }
+    .field-label { display: block; font-size: 11px; color: #999; font-weight: 900; text-transform: uppercase; margin: 10px 0 4px; }
+    .input, .textarea, .select { width: 100%; margin-bottom: 8px; padding: 8px; background: #090909; color: #fff; border: 1px solid #555; border-radius: 4px; font-size: 12px; }
+    .textarea { min-height: 72px; resize: vertical; font-family: inherit; }
+    .textarea.body { min-height: 320px; line-height: 1.55; }
+    .btn-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+    .btn-secondary { background: linear-gradient(#1c1c1c, #080808); }
+    .btn-danger { background: linear-gradient(#5a1010, #2a0505); border-color: #733; }
+    #adminMsg, #loginMsg { margin-top: 10px; font-size: 12px; color: #ccc; white-space: pre-wrap; }
+    #adminMsg.error, #loginMsg.error { color: #ff6060; }
+    .pw-row { max-width: 320px; margin-bottom: 14px; }
+    .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+    .article-list { display: grid; gap: 8px; margin-bottom: 16px; }
+    .article-item { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid #333; background: rgba(0,0,0,.25); }
+    .article-item strong { font-size: 13px; }
+    .article-item span { color: #888; font-size: 11px; display: block; margin-top: 2px; }
+    .article-item-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .article-item-actions button { padding: 4px 10px; font-size: 9px; }
+    .generate-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 14px 0 4px; }
+    .generate-status { display: inline-flex; align-items: center; gap: 8px; color: var(--gold); font-size: 12px; font-weight: 900; }
+    .generate-status[hidden] { display: none !important; }
+    .generate-spinner { width: 14px; height: 14px; border: 2px solid #444; border-top-color: var(--gold); border-radius: 50%; animation: news-spin .8s linear infinite; }
+    @keyframes news-spin { to { transform: rotate(360deg); } }
+    .transcript-diagnostics, .generation-sources { margin-top: 12px; padding: 10px 12px; border-radius: 6px; }
+    .transcript-diagnostics { border: 1px solid #444; background: #1a1a1a; }
+    .transcript-diagnostics h3 { margin: 0 0 8px; font-size: 13px; color: #f0c040; }
+    .generation-sources { border: 1px solid #334; background: #121820; }
+    .generation-sources h3 { margin: 0 0 8px; font-size: 13px; color: #6ec6ff; }
+    .transcript-diagnostics pre, .generation-sources pre { margin: 0; font-size: 12px; color: #ccc; white-space: pre-wrap; }
+    .preview-link { font-size: 11px; color: #8fd3ff; }
+  </style>
+</head>
+<body>
+  <header class="nav">
+    <div class="brand">BP ADMIN <span>NEWS</span></div>
+    <nav>
+      <a href="/admin/">Admin Home</a>
+      <a href="/news.html">Public News</a>
+      <button id="logoutBtn" class="btn" type="button" hidden onclick="logout()">Logout</button>
+    </nav>
+  </header>
+
+  <main id="loginView" class="wrap" hidden>
+    <h1>News Admin</h1>
+    <p class="sub">Enter the admin password to manage Miles Apex news articles.</p>
+    <div class="pw-row">
+      <input id="loginPw" class="input" type="password" placeholder="Admin password" autocomplete="current-password">
+      <button class="btn" type="button" onclick="login()">Unlock</button>
+      <pre id="loginMsg"></pre>
+    </div>
+  </main>
+
+  <main id="adminView" class="wrap" hidden>
+    <h1>News — Miles Apex</h1>
+    <p class="sub">Generate, edit, and publish Blazing Pedals Truck Series news articles. All public articles appear under byline Miles Apex.</p>
+
+    <div class="panel">
+      <h2>Saved Articles</h2>
+      <div id="articleList" class="article-list"></div>
+      <button class="btn btn-secondary" type="button" onclick="startNewArticle()">New Article</button>
+    </div>
+
+    <div class="panel">
+      <h2>Article Editor</h2>
+      <input type="hidden" id="articleId">
+      <div class="meta-grid">
+        <div>
+          <label class="field-label" for="articleType">Article Type</label>
+          <select id="articleType" class="select">
+            <option value="race-recap">Race Recap</option>
+            <option value="weekend-preview">Weekend Preview</option>
+            <option value="driver-spotlight">Driver Spotlight</option>
+            <option value="championship-watch">Championship Watch</option>
+            <option value="breaking-news">Breaking News</option>
+            <option value="league-announcement">League Announcement</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label" for="raceNumber">Race Number</label>
+          <input id="raceNumber" class="input" type="number" min="1" value="1">
+        </div>
+        <div>
+          <label class="field-label" for="spotlightDriverId">Driver (optional)</label>
+          <select id="spotlightDriverId" class="select"><option value="">—</option></select>
+        </div>
+        <div>
+          <label class="field-label" for="featuredImageUrl">Featured Image URL</label>
+          <input id="featuredImageUrl" class="input" type="url" placeholder="https://...">
+        </div>
+      </div>
+
+      <label class="field-label" for="transcript">Transcript</label>
+      <textarea id="transcript" class="textarea" placeholder="Optional broadcast transcript (100+ chars recommended)"></textarea>
+
+      <label class="field-label" for="manualNotes">Manual Notes</label>
+      <textarea id="manualNotes" class="textarea" placeholder="Verified race facts, quotes, and context for Miles Apex"></textarea>
+
+      <label class="field-label" for="headlineOverride">Headline Override</label>
+      <input id="headlineOverride" class="input" type="text" placeholder="Optional headline direction for generation">
+
+      <div class="generate-row">
+        <button id="generateBtn" class="btn" type="button" onclick="generateDraft(false)">Generate Draft</button>
+        <button id="regenerateBtn" class="btn btn-secondary" type="button" onclick="generateDraft(true)">Regenerate</button>
+        <span id="generateStatus" class="generate-status" hidden><span class="generate-spinner"></span>Generating…</span>
+      </div>
+
+      <label class="field-label" for="headline">Headline</label>
+      <input id="headline" class="input" type="text">
+
+      <label class="field-label" for="subheadline">Subheadline</label>
+      <input id="subheadline" class="input" type="text">
+
+      <label class="field-label" for="summary">Summary</label>
+      <textarea id="summary" class="textarea"></textarea>
+
+      <label class="field-label" for="body">Article Body</label>
+      <textarea id="body" class="textarea body"></textarea>
+
+      <div class="btn-row">
+        <button class="btn btn-secondary" type="button" onclick="saveArticle(false)">Save Draft</button>
+        <button class="btn" type="button" onclick="saveArticle(true)">Publish</button>
+        <button class="btn btn-danger" type="button" onclick="deleteArticle()">Delete</button>
+        <a id="previewLink" class="preview-link" href="#" target="_blank" rel="noopener noreferrer" hidden>Preview public article</a>
+      </div>
+
+      <div id="transcriptDiagnosticsPanel" class="transcript-diagnostics" hidden>
+        <h3>Transcript Diagnostics</h3>
+        <pre id="transcriptDiagnostics"></pre>
+      </div>
+      <div id="generationSourcesPanel" class="generation-sources" hidden>
+        <h3>Generation Sources</h3>
+        <pre id="generationSources"></pre>
+      </div>
+      <pre id="adminMsg"></pre>
+    </div>
+  </main>
+
+  <script>
+    const $ = (s) => document.querySelector(s);
+    const SESSION_KEY = 'bp_admin_pw';
+    let drivers = [];
+
+    function getSessionPw() { return sessionStorage.getItem(SESSION_KEY) || ''; }
+
+    async function verifyPassword(pw) {
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pw, verifyOnly: true })
+      });
+      return res.ok;
+    }
+
+    function showLogin() {
+      $('#loginView').hidden = false;
+      $('#adminView').hidden = true;
+      $('#logoutBtn').hidden = true;
+    }
+
+    function showAdmin() {
+      $('#loginView').hidden = true;
+      $('#adminView').hidden = false;
+      $('#logoutBtn').hidden = false;
+      loadDrivers();
+      loadArticles();
+    }
+
+    async function login() {
+      const msg = $('#loginMsg');
+      const pw = $('#loginPw').value;
+      if (!pw) { msg.textContent = 'Enter the admin password.'; msg.classList.add('error'); return; }
+      msg.textContent = 'Checking...';
+      msg.classList.remove('error');
+      try {
+        if (!(await verifyPassword(pw))) throw new Error('Bad password');
+        sessionStorage.setItem(SESSION_KEY, pw);
+        $('#loginPw').value = '';
+        msg.textContent = '';
+        showAdmin();
+      } catch (e) {
+        msg.textContent = e.message;
+        msg.classList.add('error');
+      }
+    }
+
+    function logout() {
+      sessionStorage.removeItem(SESSION_KEY);
+      showLogin();
+    }
+
+    async function initSession() {
+      const pw = getSessionPw();
+      if (!pw) return showLogin();
+      try {
+        if (await verifyPassword(pw)) return showAdmin();
+      } catch {}
+      sessionStorage.removeItem(SESSION_KEY);
+      showLogin();
+    }
+
+    async function loadDrivers() {
+      try {
+        const res = await fetch('/api/drivers');
+        const data = await res.json();
+        drivers = Array.isArray(data) ? data : [];
+        const select = $('#spotlightDriverId');
+        select.innerHTML = '<option value="">—</option>' + drivers.map((d) => {
+          const name = d.display_name || d.iracing_name || 'Unknown';
+          return `<option value="${d.driver_id}">${name}</option>`;
+        }).join('');
+      } catch {}
+    }
+
+    async function loadArticles() {
+      const list = $('#articleList');
+      list.innerHTML = '<span class="sub">Loading...</span>';
+      try {
+        const res = await fetch('/api/news?admin=1');
+        const data = await res.json();
+        const articles = data.articles || [];
+        if (!articles.length) {
+          list.innerHTML = '<span class="sub">No saved articles yet.</span>';
+          return;
+        }
+        list.innerHTML = articles.map((a) => `
+          <div class="article-item">
+            <div>
+              <strong>${escapeHtml(a.headline)}</strong>
+              <span>${escapeHtml(a.articleTypeLabel || a.articleType)} · ${a.published ? 'Published' : 'Draft'} · Race ${a.raceNumber ?? '—'}</span>
+            </div>
+            <div class="article-item-actions">
+              <button class="btn btn-secondary" type="button" onclick="loadArticle(${a.id})">Edit</button>
+            </div>
+          </div>
+        `).join('');
+      } catch (e) {
+        list.innerHTML = `<span class="sub">${escapeHtml(e.message)}</span>`;
+      }
+    }
+
+    function startNewArticle() {
+      $('#articleId').value = '';
+      $('#headline').value = '';
+      $('#subheadline').value = '';
+      $('#summary').value = '';
+      $('#body').value = '';
+      $('#headlineOverride').value = '';
+      $('#featuredImageUrl').value = '';
+      $('#previewLink').hidden = true;
+      setMsg('');
+    }
+
+    async function loadArticle(id) {
+      try {
+        const res = await fetch(`/api/news?id=${id}&admin=1`);
+        const data = await res.json();
+        const a = data.article;
+        if (!a) throw new Error('Article not found.');
+        $('#articleId').value = a.id;
+        $('#articleType').value = a.articleType || 'race-recap';
+        $('#raceNumber').value = a.raceNumber || 1;
+        $('#spotlightDriverId').value = a.spotlightDriverId || '';
+        $('#headline').value = a.headline || '';
+        $('#subheadline').value = a.subheadline || '';
+        $('#summary').value = a.summary || '';
+        $('#body').value = a.body || '';
+        $('#featuredImageUrl').value = a.featuredImageUrl || '';
+        const preview = $('#previewLink');
+        if (a.slug) {
+          preview.href = `/news/${encodeURIComponent(a.slug)}`;
+          preview.hidden = false;
+        } else {
+          preview.hidden = true;
+        }
+        setMsg(`Loaded article #${a.id}.`);
+      } catch (e) {
+        setMsg(e.message, true);
+      }
+    }
+
+    function collectFormData() {
+      return {
+        password: getSessionPw(),
+        id: $('#articleId').value ? Number($('#articleId').value) : undefined,
+        articleType: $('#articleType').value,
+        raceNumber: Number($('#raceNumber').value) || undefined,
+        spotlightDriverId: $('#spotlightDriverId').value || null,
+        headline: $('#headline').value,
+        subheadline: $('#subheadline').value,
+        summary: $('#summary').value,
+        body: $('#body').value,
+        featuredImageUrl: $('#featuredImageUrl').value
+      };
+    }
+
+    function setGenerating(active) {
+      $('#generateBtn').disabled = active;
+      $('#regenerateBtn').disabled = active;
+      $('#generateStatus').hidden = !active;
+    }
+
+    function renderDiagnostics(data) {
+      const transcriptPanel = $('#transcriptDiagnosticsPanel');
+      const sourcesPanel = $('#generationSourcesPanel');
+      const td = data.transcriptDiagnostics || {};
+      transcriptPanel.hidden = false;
+      $('#transcriptDiagnostics').textContent = [
+        `promptVersion: ${td.promptVersion || 'n/a'}`,
+        `transcriptUsed: ${td.transcriptUsed ? 'yes' : 'no'}`,
+        `transcriptMode: ${td.transcriptMode || 'none'}`,
+        `manualRaceNotesUsed: ${td.manualRaceNotesUsed ? 'yes' : 'no'}`,
+        `manualRaceNotesLength: ${td.manualRaceNotesLength ?? 0}`,
+        `broadcastSource: ${td.broadcastSource || 'none'}`
+      ].join('\n');
+
+      const gs = data.generationSources || {};
+      sourcesPanel.hidden = false;
+      $('#generationSources').textContent = [
+        `confidenceScore: ${gs.confidenceScore || 'n/a'}`,
+        `dataQualityScore: ${gs.dataQualityScore ?? 'n/a'}`,
+        `factsUsed: ${(gs.factsUsed || []).join(', ') || 'none'}`,
+        `transcriptUsed: ${gs.transcriptUsed ? 'yes' : 'no'}`,
+        `manualNotesUsed: ${gs.manualNotesUsed ? 'yes' : 'no'}`,
+        `wordCount: ${gs.wordCount ?? 'n/a'}`,
+        `repairAttempted: ${gs.repairAttempted ? 'yes' : 'no'}`,
+        `repairAttempts: ${gs.repairAttempts ?? 0}`,
+        `repairReasons: ${(gs.repairReasons || []).join(', ') || 'none'}`,
+        '',
+        'Standings snapshot:',
+        ...(gs.standingsSnapshot || []).map((row) => `  P${row.position} ${row.driverName} — ${row.points} pts`),
+        '',
+        'Validation warnings:',
+        ...(gs.validationWarnings || []).map((w) => `  - ${w.message}`),
+        '',
+        'Unsupported facts:',
+        ...(gs.unsupportedFacts || []).map((f) => `  - [${f.type}] ${f.message || f.claim || ''}`)
+      ].join('\n');
+    }
+
+    async function generateDraft(isRegenerate) {
+      setMsg(isRegenerate ? 'Regenerating draft...' : 'Generating draft...');
+      setGenerating(true);
+      try {
+        const res = await fetch('/api/news-generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            password: getSessionPw(),
+            articleType: $('#articleType').value,
+            raceNumber: Number($('#raceNumber').value) || 1,
+            spotlightDriverId: $('#spotlightDriverId').value || null,
+            manualNotes: $('#manualNotes').value,
+            transcript: $('#transcript').value,
+            headlineOverride: $('#headlineOverride').value
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Generation failed');
+
+        const article = data.article || {};
+        if (!$('#headlineOverride').value.trim() || isRegenerate) {
+          $('#headline').value = article.headline || '';
+        }
+        $('#subheadline').value = article.subheadline || '';
+        $('#summary').value = article.summary || '';
+        $('#body').value = article.body || '';
+        renderDiagnostics(data);
+
+        const warnings = (data.validation?.errors || []).length;
+        setMsg(
+          warnings
+            ? `Draft generated with ${warnings} validation issue(s) — review before publishing.`
+            : 'Draft generated successfully.'
+        );
+      } catch (e) {
+        setMsg(e.message, true);
+      } finally {
+        setGenerating(false);
+      }
+    }
+
+    async function saveArticle(publish) {
+      setMsg(publish ? 'Publishing...' : 'Saving draft...');
+      try {
+        const payload = collectFormData();
+        payload.action = publish ? 'publish' : 'save';
+        const res = await fetch('/api/news', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Save failed');
+        $('#articleId').value = data.id;
+        if (data.slug) {
+          const preview = $('#previewLink');
+          preview.href = `/news/${encodeURIComponent(data.slug)}`;
+          preview.hidden = false;
+        }
+        await loadArticles();
+        setMsg(publish ? 'Article published.' : 'Draft saved.');
+      } catch (e) {
+        setMsg(e.message, true);
+      }
+    }
+
+    async function deleteArticle() {
+      const id = Number($('#articleId').value);
+      if (!id) return setMsg('Nothing to delete — open a saved article first.', true);
+      if (!confirm('Delete this article permanently?')) return;
+      try {
+        const res = await fetch('/api/news', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: getSessionPw(), action: 'delete', id })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Delete failed');
+        startNewArticle();
+        await loadArticles();
+        setMsg('Article deleted.');
+      } catch (e) {
+        setMsg(e.message, true);
+      }
+    }
+
+    function setMsg(text, isError = false) {
+      const msg = $('#adminMsg');
+      msg.textContent = text || '';
+      msg.classList.toggle('error', Boolean(isError));
+    }
+
+    function escapeHtml(s) {
+      return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    $('#loginPw')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') login(); });
+    initSession();
+  </script>
+</body>
+</html>

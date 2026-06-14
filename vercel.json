@@ -3,6 +3,8 @@
     { "source": "/admin", "destination": "/admin/index.html" },
     { "source": "/admin/track-images", "destination": "/admin/track-images.html" },
     { "source": "/admin/driver-photos", "destination": "/admin/driver-photos.html" },
-    { "source": "/admin/power-rankings", "destination": "/admin/power-rankings.html" }
+    { "source": "/admin/power-rankings", "destination": "/admin/power-rankings.html" },
+    { "source": "/admin/news", "destination": "/admin/news.html" },
+    { "source": "/news/:slug", "destination": "/news-article.html?slug=:slug" }
   ]
 }

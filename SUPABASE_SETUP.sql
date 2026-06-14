@@ -100,3 +100,24 @@ create table if not exists power_rankings_honorable_mentions (
   writeup text not null default '',
   unique (week_id, sort_order)
 );
+
+create table if not exists news_articles (
+  id bigint generated always as identity primary key,
+  article_type text not null,
+  headline text not null,
+  subheadline text,
+  slug text unique,
+  summary text,
+  body text not null,
+  author text default 'Miles Apex',
+  race_number integer,
+  spotlight_driver_id text,
+  published boolean default false,
+  featured_image_url text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  published_at timestamptz
+);
+
+-- Existing deployments: run once
+-- alter table news_articles add column if not exists spotlight_driver_id text;
