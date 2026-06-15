@@ -389,7 +389,7 @@ export function buildPromptFactualGrounding(generationContext, articleType, opti
 
   const payload = {
     rules:
-      'Use only verified facts in this object, manual notes, or truncated transcript. Do not invent race events. Driver Spotlight may cite cumulative stats only from leagueCareerStats when careerStatsVerified is true. Use allowedSeasonStats for current-season numbers. Do not infer driver personality or style.' +
+      'Use only verified facts in this object, manual notes, or truncated transcript. Do not invent race events. Driver Spotlight must use identical leagueCareerStats in headline, subheadline, summary, and body. Cumulative stats only from leagueCareerStats when careerStatsVerified is true. Use allowedSeasonStats for current-season numbers with clear this-season labeling. Do not infer driver personality or style.' +
       (spotlightRules ? ` ${spotlightRules}` : ''),
     manualNotesAvailable: fullGrounding.manualNotesAvailable === true,
     transcriptSummaryAvailable: fullGrounding.transcriptSummaryAvailable === true,
@@ -512,7 +512,7 @@ ${factualJson}
 Manual notes / transcript (use only when relevant to the spotlight driver):
 ${promptContext.truncatedTranscript.text || '(none)'}
 
-Return JSON only with headline, subheadline, summary, and body.`;
+Return JSON only with headline, subheadline, summary, and body. Use the same verified leagueCareerStats career totals in every field.`;
   }
 
   const raceRow = generationContext.scheduleRaces?.find(
@@ -544,7 +544,7 @@ ${factualJson}
 Race notes / transcript (trimmed to race-relevant content):
 ${promptContext.truncatedTranscript.text || '(none)'}
 
-Return JSON only with headline, subheadline, summary, and body.`;
+Return JSON only with headline, subheadline, summary, and body. Use the same verified leagueCareerStats career totals in every field.`;
 }
 
 export function measureNewsPromptSize(systemPrompt, userPrompt, promptContext) {

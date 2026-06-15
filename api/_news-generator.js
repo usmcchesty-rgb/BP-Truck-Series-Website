@@ -100,7 +100,10 @@ ${repairReason}
 Current article JSON:
 ${JSON.stringify(previousArticle, null, 2)}
 
-Return corrected JSON only with headline, subheadline, summary, and body.`,
+Return corrected JSON only with headline, subheadline, summary, and body.
+Every field must use the same verified leagueCareerStats for career totals and allowedSeasonStats for current-season totals.
+If the body has the correct career numbers, copy those exact figures into headline, subheadline, and summary.
+Label career vs current-season stats clearly and never mix scopes.`,
     });
   } else {
     messages.push({ role: 'user', content: userPrompt });
@@ -287,7 +290,7 @@ function buildGenerationSources(generationContext, articleType, repaired, prompt
   const careerStatsDiagnostics = generationContext.careerStatsDiagnostics || null;
   const unsupportedCareerSummaryClaims =
     repaired.validation?.unsupportedFacts?.filter((fact) =>
-      ['unsupported-career-summary', 'unsupported-career-stat', 'unsupported-career-scope', 'unsupported-career-tenure'].includes(
+      ['unsupported-career-summary', 'unsupported-career-stat', 'unsupported-career-scope', 'unsupported-career-tenure', 'unsupported-mixed-scope'].includes(
         fact.type
       )
     ) || [];
@@ -336,6 +339,10 @@ function buildGenerationSources(generationContext, articleType, repaired, prompt
     transcriptSource: meta.transcriptSource || 'none',
     validationWarnings: repaired.validation?.warnings || [],
     validationErrors: repaired.validation?.errors || [],
+    headlineValidationErrors: repaired.validation?.headlineValidationErrors || [],
+    subheadlineValidationErrors: repaired.validation?.subheadlineValidationErrors || [],
+    summaryValidationErrors: repaired.validation?.summaryValidationErrors || [],
+    bodyValidationErrors: repaired.validation?.bodyValidationErrors || [],
     unsupportedFacts: repaired.validation?.unsupportedFacts || [],
     repairAttempted: repaired.repairAttempted,
     repairAttempts: repaired.repairAttempts,

@@ -1,9 +1,6 @@
 import { validateWriteupFactualGrounding } from './_power-rankings-factual-grounding.js';
 import {
-  validateCareerTenureClaims,
-  validateDriverSpotlightCareerStats,
-  validateDriverSpotlightCareerSummary,
-  validateDriverSpotlightStyleClaims,
+  validateDriverSpotlightField,
 } from './_driver-career-history.js';
 import { ARTICLE_TYPES } from '../server/config/news-system-prompt.js';
 
@@ -104,7 +101,9 @@ export function validateNewsArticle(article, context = {}) {
 
   const body = String(article?.body || '').trim();
   const headline = String(article?.headline || '').trim();
-  const fullText = `${headline}\n${article?.subheadline || ''}\n${body}`.trim();
+  const subheadline = String(article?.subheadline || '').trim();
+  const summary = String(article?.summary || '').trim();
+  const fullText = `${headline}\n${subheadline}\n${summary}\n${body}`.trim();
   const articleType = context.articleType || 'race-recap';
   const typeConfig = ARTICLE_TYPES[articleType] || ARTICLE_TYPES['race-recap'];
   const wordCount = countWords(body);
@@ -150,19 +149,28 @@ export function validateNewsArticle(article, context = {}) {
   const transcriptSummary =
     context.broadcastContext?.summary || context.transcriptSummary || '';
 
-  function pushCareerTenureError(err, driverName = null) {
+  function pushSpotlightFieldError(err, fieldName, driverName = null) {
+    const enriched = { ...err, articleField: fieldName };
     unsupportedFacts.push({
-      type: err.type,
-      claim: err.claim || err.message,
+      type: enriched.type,
+      claim: enriched.claim || enriched.message,
       driverName,
-      message: err.message,
+      message: enriched.message,
+      articleField: fieldName,
     });
     errors.push({
-      type: err.type,
-      message: driverName ? `${driverName}: ${err.message}` : err.message,
-      claim: err.claim,
+      type: enriched.type,
+      message: driverName ? `${driverName} (${fieldName}): ${enriched.message}` : `${fieldName}: ${enriched.message}`,
+      claim: enriched.claim,
+      articleField: fieldName,
+      field: enriched.field,
     });
   }
+
+  const headlineValidationErrors = [];
+  const subheadlineValidationErrors = [];
+  const summaryValidationErrors = [];
+  const bodyValidationErrors = [];
 
   if (articleType === 'driver-spotlight' && context.spotlightDriverId) {
     const spotlightGrounding =
@@ -188,56 +196,26 @@ export function validateNewsArticle(article, context = {}) {
       transcriptSummary,
     };
 
-    for (const err of validateCareerTenureClaims(fullText, spotlightValidationContext)) {
-      pushCareerTenureError(err, spotlightGrounding?.driverName || null);
-    }
+    const spotlightFields = {
+      headline,
+      subheadline,
+      summary,
+      body,
+    };
 
-    for (const err of validateDriverSpotlightCareerStats(fullText, spotlightValidationContext)) {
-      unsupportedFacts.push({
-        type: err.type,
-        claim: err.claim || err.message,
-        driverName: spotlightGrounding?.driverName || null,
-        message: err.message,
-      });
-      errors.push({
-        type: err.type,
-        message: spotlightGrounding?.driverName
-          ? `${spotlightGrounding.driverName}: ${err.message}`
-          : err.message,
-        claim: err.claim,
-      });
-    }
+    const fieldErrorBuckets = {
+      headline: headlineValidationErrors,
+      subheadline: subheadlineValidationErrors,
+      summary: summaryValidationErrors,
+      body: bodyValidationErrors,
+    };
 
-    for (const err of validateDriverSpotlightCareerSummary(fullText, spotlightValidationContext)) {
-      unsupportedFacts.push({
-        type: err.type,
-        claim: err.claim || err.message,
-        driverName: spotlightGrounding?.driverName || null,
-        message: err.message,
-      });
-      errors.push({
-        type: err.type,
-        message: spotlightGrounding?.driverName
-          ? `${spotlightGrounding.driverName}: ${err.message}`
-          : err.message,
-        claim: err.claim,
-      });
-    }
-
-    for (const err of validateDriverSpotlightStyleClaims(fullText, spotlightValidationContext)) {
-      unsupportedFacts.push({
-        type: err.type,
-        claim: err.claim || err.message,
-        driverName: spotlightGrounding?.driverName || null,
-        message: err.message,
-      });
-      errors.push({
-        type: err.type,
-        message: spotlightGrounding?.driverName
-          ? `${spotlightGrounding.driverName}: ${err.message}`
-          : err.message,
-        claim: err.claim,
-      });
+    for (const [fieldName, fieldText] of Object.entries(spotlightFields)) {
+      if (!fieldText) continue;
+      for (const err of validateDriverSpotlightField(fieldText, spotlightValidationContext)) {
+        fieldErrorBuckets[fieldName].push(err);
+        pushSpotlightFieldError(err, fieldName, spotlightGrounding?.driverName || null);
+      }
     }
   }
 
@@ -278,34 +256,49 @@ export function validateNewsArticle(article, context = {}) {
 
   const standings = context.standings || [];
   const mentionedDrivers = findMentionedDrivers(fullText, standings);
+  const groundingFields =
+    articleType === 'driver-spotlight'
+      ? { headline, subheadline, summary, body }
+      : { body };
+
   for (const driver of mentionedDrivers) {
     const driverGrounding =
       context.factualGrounding?.drivers?.[String(driver.driverId)] || null;
-    const { unsupported = [] } = validateWriteupFactualGrounding(body, {
-      driverId: driver.driverId,
-      driverName: driver.driverName,
-      driverGrounding,
-      factualGrounding: driverGrounding,
-      alignedRaces: context.alignedRaces,
-      recentResults: context.recentResultsForGrounding,
-      driverLookup: context.driverLookup,
-      manualRaceNotes: manualNotes,
-      transcriptSummary,
-      rank: driver.position,
-    });
 
-    for (const err of unsupported) {
-      unsupportedFacts.push({
-        type: err.type || 'unsupported-facts',
-        claim: err.claim || err.message,
+    for (const [fieldName, fieldText] of Object.entries(groundingFields)) {
+      if (!fieldText) continue;
+      const { unsupported = [] } = validateWriteupFactualGrounding(fieldText, {
+        driverId: driver.driverId,
         driverName: driver.driverName,
-        message: err.message,
+        driverGrounding,
+        factualGrounding: driverGrounding,
+        alignedRaces: context.alignedRaces,
+        recentResults: context.recentResultsForGrounding,
+        driverLookup: context.driverLookup,
+        manualRaceNotes: manualNotes,
+        transcriptSummary,
+        rank: driver.position,
       });
-      errors.push({
-        type: err.type || 'unsupported-facts',
-        message: `${driver.driverName}: ${err.message}`,
-        claim: err.claim,
-      });
+
+      for (const err of unsupported) {
+        unsupportedFacts.push({
+          type: err.type || 'unsupported-facts',
+          claim: err.claim || err.message,
+          driverName: driver.driverName,
+          message: err.message,
+          articleField: fieldName,
+        });
+        errors.push({
+          type: err.type || 'unsupported-facts',
+          message: `${driver.driverName} (${fieldName}): ${err.message}`,
+          claim: err.claim,
+          articleField: fieldName,
+        });
+        if (fieldName === 'headline') headlineValidationErrors.push(err);
+        else if (fieldName === 'subheadline') subheadlineValidationErrors.push(err);
+        else if (fieldName === 'summary') summaryValidationErrors.push(err);
+        else bodyValidationErrors.push(err);
+      }
     }
   }
 
@@ -319,7 +312,12 @@ export function validateNewsArticle(article, context = {}) {
       claim: fact.claim,
       message: fact.message,
       driverName: fact.driverName || null,
+      articleField: fact.articleField || null,
     })),
+    headlineValidationErrors,
+    subheadlineValidationErrors,
+    summaryValidationErrors,
+    bodyValidationErrors,
     wordCount,
     mentionedDrivers: mentionedDrivers.map((d) => d.driverName),
   };
@@ -341,13 +339,36 @@ export const REPAIRABLE_NEWS_ERROR_TYPES = new Set([
   'unsupported-career-stat',
   'unsupported-career-summary',
   'unsupported-career-scope',
+  'unsupported-mixed-scope',
   'unsupported-driver-style',
   'forbidden-meta',
 ]);
 
 export function formatNewsValidationForRepair(validation) {
   if (!validation?.errors?.length) return 'No validation errors.';
-  return validation.errors
-    .map((err) => `- [${err.type}] ${err.message}${err.claim ? ` (claim: "${err.claim}")` : ''}`)
-    .join('\n');
+  const fieldSections = [
+    ['headline', validation.headlineValidationErrors],
+    ['subheadline', validation.subheadlineValidationErrors],
+    ['summary', validation.summaryValidationErrors],
+    ['body', validation.bodyValidationErrors],
+  ]
+    .filter(([, errs]) => errs?.length)
+    .map(
+      ([field, errs]) =>
+        `${field}:\n${errs.map((err) => `  - [${err.type}] ${err.message}${err.claim ? ` (claim: "${err.claim}")` : ''}`).join('\n')}`
+    );
+
+  const lines = validation.errors.map(
+    (err) =>
+      `- [${err.type}] (${err.articleField || 'article'}) ${err.message}${err.claim ? ` (claim: "${err.claim}")` : ''}`
+  );
+
+  return [
+    'Fix ALL fields (headline, subheadline, summary, body) so they use the same verified leagueCareerStats and allowedSeasonStats.',
+    'Career totals in headline/subheadline/summary must exactly match leagueCareerStats — not just the body.',
+    '',
+    ...(fieldSections.length ? ['Errors by field:', ...fieldSections, ''] : []),
+    'All errors:',
+    ...lines,
+  ].join('\n');
 }

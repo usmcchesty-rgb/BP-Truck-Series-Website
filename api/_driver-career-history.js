@@ -1027,6 +1027,51 @@ function parseNumericClaim(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+const WORD_NUMBER_MAP = {
+  one: 1,
+  a: 1,
+  single: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+};
+
+function parseWordOrNumericClaim(value) {
+  const numeric = parseNumericClaim(value);
+  if (Number.isFinite(numeric)) return numeric;
+  const word = String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z]/g, '');
+  return WORD_NUMBER_MAP[word] ?? null;
+}
+
+const CAREER_SCOPE_WINDOW_PATTERN =
+  /\bcareer\b|\bleague\s+career\b|\bblazing pedals\b|\bacross (?:his|her|their)\b|\bover (?:his|her|their)\b|\ball[- ]time\b/i;
+
+const SEASON_SCOPE_WINDOW_PATTERN =
+  /\bthis season\b|\bcurrent season\b|\bin the standings\b|\bchampionship standings\b|\bpoints standings\b/i;
+
+const WORD_CAREER_WIN_PATTERNS = [
+  { pattern: /\b(one|a single|single)\s+(?:career\s+|league\s+)?wins?\b/gi, value: 1 },
+  { pattern: /\b(one|a)\s+career\s+win\b/gi, value: 1 },
+  { pattern: /\b(two)\s+(?:career\s+|league\s+)?wins?\b/gi, value: 2 },
+  { pattern: /\b(three)\s+(?:career\s+|league\s+)?wins?\b/gi, value: 3 },
+  { pattern: /\b(four)\s+(?:career\s+|league\s+)?wins?\b/gi, value: 4 },
+  { pattern: /\b(five)\s+(?:career\s+|league\s+)?wins?\b/gi, value: 5 },
+  { pattern: /\b(six)\s+(?:career\s+|league\s+)?wins?\b/gi, value: 6 },
+  { pattern: /\b(seven)\s+(?:career\s+|league\s+)?wins?\b/gi, value: 7 },
+  { pattern: /\b(eight)\s+(?:career\s+|league\s+)?wins?\b/gi, value: 8 },
+  { pattern: /\b(nine)\s+(?:career\s+|league\s+)?wins?\b/gi, value: 9 },
+  { pattern: /\b(ten)\s+(?:career\s+|league\s+)?wins?\b/gi, value: 10 },
+  { pattern: /\bfirst\s+(?:career\s+|league\s+|blazing pedals\s+)?win\b/gi, value: 1 },
+];
+
 const DRIVER_SPOTLIGHT_STYLE_PATTERNS = [
   {
     type: 'unsupported-driver-style',
@@ -1113,7 +1158,8 @@ const CAREER_STAT_CLAIM_RULES = [
     field: 'careerWins',
     patterns: [
       /\b(\d[\d,]*)\s+career\s+wins?\b/gi,
-      /\b(\d[\d,]*)\s+wins?\s+(?:in|across)\s+(?:his|her|their)\s+(?:truck\s+series\s+)?career\b/gi,
+      /\b(\d[\d,]*)\s+wins?\s+(?:in|across)\s+(?:his|her|their)\s+(?:truck\s+series\s+|league\s+|blazing pedals\s+)?career\b/gi,
+      /\b(?:over|across)\s+(?:his|her|their)\s+(?:league\s+)?career[^.!?]{0,50}\b(\d[\d,]*)\s+wins?\b/gi,
     ],
   },
   {
@@ -1251,14 +1297,16 @@ export function validateDriverSpotlightCareerStats(text, context = {}) {
     if (/\b(at|in|from)\b/i.test(claim)) continue;
     const idx = match.index ?? 0;
     const window = String(text || '').slice(Math.max(0, idx - 70), idx + claim.length + 70);
-    if (!/\bcareer\b|\bacross (?:his|her|their)\b|\bover (?:his|her|their)\b/i.test(window)) continue;
-    if (/\bthis season\b/i.test(window)) continue;
+    if (!CAREER_SCOPE_WINDOW_PATTERN.test(window)) continue;
+    if (SEASON_SCOPE_WINDOW_PATTERN.test(window)) continue;
     if (claimSupportedInNotes(claim, manualRaceNotes, transcriptSummary)) continue;
 
     const claimed = parseNumericClaim(match[1]);
     if (!Number.isFinite(claimed)) continue;
     if (leagueCareerStats?.careerStatsVerified && claimed === leagueCareerStats.careerWins) continue;
-    if (seasonStats && claimed === Number(seasonStats.winsTotal)) continue;
+    if (seasonStats && claimed === Number(seasonStats.winsTotal) && SEASON_SCOPE_WINDOW_PATTERN.test(window)) {
+      continue;
+    }
 
     if (!leagueCareerStats?.careerStatsVerified) {
       unsupported.push({
@@ -1278,6 +1326,32 @@ export function validateDriverSpotlightCareerStats(text, context = {}) {
     }
   }
 
+  for (const rule of WORD_CAREER_WIN_PATTERNS) {
+    for (const match of String(text || '').matchAll(rule.pattern)) {
+      const claim = match[0];
+      if (claimSupportedInNotes(claim, manualRaceNotes, transcriptSummary)) continue;
+      const claimed = rule.value;
+      if (!leagueCareerStats?.careerStatsVerified) {
+        unsupported.push({
+          type: 'unsupported-career-stat',
+          message: 'Career win claim requires verified leagueCareerStats.',
+          claim: claim.trim(),
+          field: 'careerWins',
+        });
+        continue;
+      }
+      if (claimed !== leagueCareerStats.careerWins) {
+        unsupported.push({
+          type: 'unsupported-career-stat',
+          message: `Claimed ${claimed} career win(s) ("${claim.trim()}"), but verified value is ${leagueCareerStats.careerWins}.`,
+          claim: claim.trim(),
+          field: 'careerWins',
+          verifiedValue: leagueCareerStats.careerWins,
+        });
+      }
+    }
+  }
+
   for (const match of String(text || '').matchAll(/\btruck series career\b/gi)) {
     if (claimSupportedInNotes(match[0], manualRaceNotes, transcriptSummary)) continue;
     unsupported.push({
@@ -1286,6 +1360,81 @@ export function validateDriverSpotlightCareerStats(text, context = {}) {
         'Use Blazing Pedals career or league career language — truck-only career totals are not verified.',
       claim: match[0].trim(),
     });
+  }
+
+  return unsupported;
+}
+
+export function validateDriverSpotlightMixedScopeStats(text, context = {}) {
+  const unsupported = [];
+  const leagueCareerStats = context.leagueCareerStats || null;
+  const seasonStats = context.allowedSeasonStats || null;
+  const manualRaceNotes = context.manualRaceNotes || '';
+  const transcriptSummary = context.transcriptSummary || '';
+
+  if (!leagueCareerStats?.careerStatsVerified || !seasonStats) {
+    return unsupported;
+  }
+
+  const careerWins = Number(leagueCareerStats.careerWins);
+  const seasonWins = Number(seasonStats.winsTotal);
+  if (!Number.isFinite(careerWins) || !Number.isFinite(seasonWins) || careerWins === seasonWins) {
+    return unsupported;
+  }
+
+  for (const match of String(text || '').matchAll(
+    /\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+wins?\b/gi
+  )) {
+    const claim = match[0];
+    if (claimSupportedInNotes(claim, manualRaceNotes, transcriptSummary)) continue;
+    const idx = match.index ?? 0;
+    const window = String(text || '').slice(Math.max(0, idx - 90), idx + claim.length + 90);
+    const claimed = parseWordOrNumericClaim(match[1]);
+    if (!Number.isFinite(claimed)) continue;
+
+    const hasCareerLabel = CAREER_SCOPE_WINDOW_PATTERN.test(window);
+    const hasSeasonLabel = SEASON_SCOPE_WINDOW_PATTERN.test(window);
+    if (hasCareerLabel || hasSeasonLabel) continue;
+
+    const matchesCareer = claimed === careerWins;
+    const matchesSeason = claimed === seasonWins;
+
+    if (matchesCareer) {
+      unsupported.push({
+        type: 'unsupported-mixed-scope',
+        message:
+          'Win total matches league career wins — label as career/league wins so it is not confused with current-season wins.',
+        claim: claim.trim(),
+        field: 'careerWins',
+      });
+    } else if (matchesSeason) {
+      unsupported.push({
+        type: 'unsupported-mixed-scope',
+        message:
+          'Win total matches current-season wins — label as this season so it is not confused with career wins.',
+        claim: claim.trim(),
+        field: 'seasonWins',
+      });
+    }
+  }
+
+  for (const sentence of String(text || '').split(/[.!?]+/)) {
+    const trimmed = sentence.trim();
+    if (!trimmed) continue;
+    const winClaims = [
+      ...trimmed.matchAll(/\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+wins?\b/gi),
+    ]
+      .map((entry) => parseWordOrNumericClaim(entry[1]))
+      .filter((value) => Number.isFinite(value));
+    const uniqueWins = [...new Set(winClaims)];
+    if (uniqueWins.length > 1 && !/\bcareer\b[\s\S]{0,80}\bseason\b|\bseason\b[\s\S]{0,80}\bcareer\b/i.test(trimmed)) {
+      unsupported.push({
+        type: 'unsupported-mixed-scope',
+        message:
+          'Multiple different win totals in one sentence require clear career vs current-season labels.',
+        claim: trimmed,
+      });
+    }
   }
 
   return unsupported;
@@ -1514,4 +1663,26 @@ export function validateCareerTenureClaims(text, context = {}) {
   }
 
   return unsupported;
+}
+
+export const DRIVER_SPOTLIGHT_FIELD_VALIDATORS = [
+  validateCareerTenureClaims,
+  validateDriverSpotlightCareerStats,
+  validateDriverSpotlightCareerSummary,
+  validateDriverSpotlightMixedScopeStats,
+  validateDriverSpotlightStyleClaims,
+];
+
+export function validateDriverSpotlightField(text, context = {}) {
+  const seen = new Set();
+  const errors = [];
+  for (const validator of DRIVER_SPOTLIGHT_FIELD_VALIDATORS) {
+    for (const err of validator(text, context)) {
+      const key = `${err.type}|${err.field || ''}|${err.claim || err.message}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      errors.push(err);
+    }
+  }
+  return errors;
 }
