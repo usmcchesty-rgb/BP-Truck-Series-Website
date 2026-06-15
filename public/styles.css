@@ -1432,14 +1432,14 @@ a.home-news-item:hover h4{color:#fff}
 .driver-profile-back:hover{color:var(--red)}
 .driver-profile-car-wrap{
   width:100%;
-  align-self:stretch;
   display:flex;
   justify-content:center;
+  margin-top:16px;
 }
 .driver-profile-car-hero{
   margin:0 0 6px;
   width:100%;
-  max-width:550px;
+  max-width:605px;
 }
 .driver-profile-car-hero-inner{
   display:flex;
@@ -1450,8 +1450,8 @@ a.home-news-item:hover h4{color:#fff}
 .driver-profile-car-hero-image{
   display:block;
   width:100%;
-  max-width:550px;
-  max-height:180px;
+  max-width:605px;
+  max-height:198px;
   height:auto;
   object-fit:contain;
   object-position:center bottom;
@@ -1480,9 +1480,23 @@ a.home-news-item:hover h4{color:#fff}
   gap:clamp(14px,2vw,28px);
   width:100%;
 }
-.driver-profile-identity-namestack .driver-profile-identity-text{
-  flex:0 1 auto;
+.driver-profile-identity-namecol{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  width:fit-content;
   max-width:min(840px,100%);
+  min-width:0;
+}
+.driver-profile-identity-namecol .driver-profile-car-wrap{
+  align-self:stretch;
+}
+.driver-profile-identity-namestack .driver-profile-identity-text,
+.driver-profile-identity-namecol .driver-profile-identity-text{
+  flex:0 1 auto;
+  width:100%;
+  max-width:min(840px,100%);
+  align-self:stretch;
 }
 .driver-profile-hero{
   display:grid;
@@ -1762,7 +1776,7 @@ a.home-news-item:hover h4{color:#fff}
     padding-bottom:0;
   }
   .driver-profile-car-hero-image{
-    max-height:120px;
+    max-height:132px;
   }
   .driver-profile-identity{
     align-items:flex-end;
@@ -1787,7 +1801,7 @@ a.home-news-item:hover h4{color:#fff}
     max-width:100%;
   }
   .driver-profile-car-hero-image{
-    max-height:120px;
+    max-height:132px;
   }
   .driver-profile-social-btn{
     width:30px;

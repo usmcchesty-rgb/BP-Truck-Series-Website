@@ -943,20 +943,22 @@ function renderProfile(profile, stats, seasonLabel, carImageUrl = "") {
       <div class="driver-profile-hero-info${carImageUrl ? " driver-profile-hero-info--with-car" : ""}">
         <div class="driver-profile-identity">
           <div class="${escapeAttr(stackClasses)}">
-            ${renderCarImageHeroSection(carImageUrl, name)}
             <div class="driver-profile-identity-titlerow">
               ${
                 number
                   ? `<div class="driver-profile-number" aria-hidden="true">${escapeHtml(number)}</div>`
                   : ""
               }
-              <div class="driver-profile-identity-text">
-                <h1 class="${escapeAttr(nameClasses)}">${escapeHtml(name)}</h1>
-                ${
-                  profile.iracing_name && profile.iracing_name !== name
-                    ? `<p class="driver-profile-alias">${escapeHtml(profile.iracing_name)}</p>`
-                    : ""
-                }
+              <div class="driver-profile-identity-namecol">
+                ${renderCarImageHeroSection(carImageUrl, name)}
+                <div class="driver-profile-identity-text">
+                  <h1 class="${escapeAttr(nameClasses)}">${escapeHtml(name)}</h1>
+                  ${
+                    profile.iracing_name && profile.iracing_name !== name
+                      ? `<p class="driver-profile-alias">${escapeHtml(profile.iracing_name)}</p>`
+                      : ""
+                  }
+                </div>
               </div>
             </div>
           </div>
