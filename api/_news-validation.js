@@ -1,5 +1,9 @@
 import { validateWriteupFactualGrounding } from './_power-rankings-factual-grounding.js';
-import { validateCareerTenureClaims } from './_driver-career-history.js';
+import {
+  validateCareerTenureClaims,
+  validateDriverSpotlightCareerStats,
+  validateDriverSpotlightStyleClaims,
+} from './_driver-career-history.js';
 import { ARTICLE_TYPES } from '../server/config/news-system-prompt.js';
 
 function normalizeText(value) {
@@ -167,13 +171,52 @@ export function validateNewsArticle(article, context = {}) {
       spotlightGrounding?.careerHistory?.truckSeriesCareerHistory ||
       spotlightGrounding?.careerHistory ||
       null;
-    for (const err of validateCareerTenureClaims(fullText, {
+    const spotlightValidationContext = {
       truckSeriesCareerHistory: truckHistory,
       careerHistory: spotlightGrounding?.careerHistory,
+      leagueCareerStats:
+        spotlightGrounding?.leagueCareerStats ||
+        context.leagueCareerStats ||
+        null,
+      allowedSeasonStats: spotlightGrounding?.allowedSeasonStats || null,
       manualRaceNotes: manualNotes,
       transcriptSummary,
-    })) {
+    };
+
+    for (const err of validateCareerTenureClaims(fullText, spotlightValidationContext)) {
       pushCareerTenureError(err, spotlightGrounding?.driverName || null);
+    }
+
+    for (const err of validateDriverSpotlightCareerStats(fullText, spotlightValidationContext)) {
+      unsupportedFacts.push({
+        type: err.type,
+        claim: err.claim || err.message,
+        driverName: spotlightGrounding?.driverName || null,
+        message: err.message,
+      });
+      errors.push({
+        type: err.type,
+        message: spotlightGrounding?.driverName
+          ? `${spotlightGrounding.driverName}: ${err.message}`
+          : err.message,
+        claim: err.claim,
+      });
+    }
+
+    for (const err of validateDriverSpotlightStyleClaims(fullText, spotlightValidationContext)) {
+      unsupportedFacts.push({
+        type: err.type,
+        claim: err.claim || err.message,
+        driverName: spotlightGrounding?.driverName || null,
+        message: err.message,
+      });
+      errors.push({
+        type: err.type,
+        message: spotlightGrounding?.driverName
+          ? `${spotlightGrounding.driverName}: ${err.message}`
+          : err.message,
+        claim: err.claim,
+      });
     }
   }
 
@@ -250,6 +293,12 @@ export function validateNewsArticle(article, context = {}) {
     errors,
     warnings,
     unsupportedFacts,
+    rejectedUnsupportedClaims: unsupportedFacts.map((fact) => ({
+      type: fact.type,
+      claim: fact.claim,
+      message: fact.message,
+      driverName: fact.driverName || null,
+    })),
     wordCount,
     mentionedDrivers: mentionedDrivers.map((d) => d.driverName),
   };
@@ -268,6 +317,9 @@ export const REPAIRABLE_NEWS_ERROR_TYPES = new Set([
   'unsupported-quote',
   'unsupported-facts',
   'unsupported-career-tenure',
+  'unsupported-career-stat',
+  'unsupported-career-scope',
+  'unsupported-driver-style',
   'forbidden-meta',
 ]);
 

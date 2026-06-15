@@ -391,16 +391,13 @@ function buildScopeCareerHistory({
     return Number(a.seasonId) - Number(b.seasonId);
   });
 
-  const totals = participated.reduce(
-    (acc, season) => {
-      acc.totalCareerStarts += season.starts;
-      acc.careerWins += season.wins;
-      acc.careerTop5s += season.top5s;
-      acc.careerTop10s += season.top10s;
-      return acc;
-    },
-    { totalCareerStarts: 0, careerWins: 0, careerTop5s: 0, careerTop10s: 0 }
-  );
+  // Season standings sums are not equivalent to SimRacerHub career stats — totals require driver_stats.php.
+  const totals = {
+    totalCareerStarts: null,
+    careerWins: null,
+    careerTop5s: null,
+    careerTop10s: null,
+  };
 
   const firstParticipation = participated[0] || null;
   const currentParticipation =
@@ -449,11 +446,171 @@ function buildScopeCareerHistory({
     isFirstTruckSeason: scope === 'bp-truck-series' ? isFirstSeasonInScope : undefined,
     isVeteranInScope,
     isReturningInScope,
+    careerStatsVerified: false,
+    careerStatsSource: null,
+    verifiedCareerStats: null,
     reason: classificationReliable
-      ? null
+      ? 'Career totals require SimRacerHub driver_stats.php — season standings sums are not published.'
       : 'Season classification was not reliable enough for automated career-tenure claims.',
   };
 }
+
+export function parseDriverStatsRaceEntries(html) {
+  const m = String(html || '').match(/React\.createElement\(DriverStats,(\{[\s\S]*?\})\)\)/);
+  if (!m) return [];
+
+  const entries = [];
+  for (const match of m[1].matchAll(/"(\d+)":\{"race_participant_id":"(\d+)"([\s\S]*?)\}(?=,"|\})/g)) {
+    const body = match[3];
+    const get = (key) => body.match(new RegExp(`"${key}":"([^"]*)"`))?.[1];
+    const finish = Number(get('finish_pos'));
+    if (!Number.isFinite(finish) || finish < 1) continue;
+
+    entries.push({
+      raceParticipantId: match[2],
+      raceId: get('race_id') || null,
+      finish,
+      incidents: Number(get('incidents') || 0),
+      lapsLed: Number(get('laps_led') || 0),
+      qualifyPos: get('qualify_pos') || '',
+      seasonId: String(get('season_id') || ''),
+      seriesId: String(get('series_id') || ''),
+      leagueId: String(get('league_id') || ''),
+      provisional: get('provisional') || 'N',
+    });
+  }
+
+  return entries;
+}
+
+function buildParticipatedSeasonsFromRaceEntries(entries = [], seasonCatalog = null) {
+  const seasonLookup = Object.fromEntries(
+    (seasonCatalog?.seasons || []).map((season) => [String(season.seasonId), season])
+  );
+  const bySeason = {};
+
+  for (const entry of entries) {
+    if (!bySeason[entry.seasonId]) {
+      const meta = seasonLookup[entry.seasonId] || {};
+      bySeason[entry.seasonId] = {
+        seasonId: entry.seasonId,
+        seasonName: meta.seasonName || null,
+        seriesId: meta.seriesId || entry.seriesId,
+        seriesName: meta.seriesName || null,
+        category: meta.category || LEAGUE_SERIES_CATEGORIES.BP_TRUCK,
+        bpSeasonNumber: meta.bpSeasonNumber ?? null,
+        starts: 0,
+        wins: 0,
+        top5s: 0,
+        top10s: 0,
+      };
+    }
+    const season = bySeason[entry.seasonId];
+    season.starts += 1;
+    if (entry.finish === 1) season.wins += 1;
+    if (entry.finish >= 1 && entry.finish <= 5) season.top5s += 1;
+    if (entry.finish >= 1 && entry.finish <= 10) season.top10s += 1;
+  }
+
+  return Object.values(bySeason).sort((a, b) => {
+    const aNum = Number.isFinite(a.bpSeasonNumber) ? a.bpSeasonNumber : Number.MAX_SAFE_INTEGER;
+    const bNum = Number.isFinite(b.bpSeasonNumber) ? b.bpSeasonNumber : Number.MAX_SAFE_INTEGER;
+    if (aNum !== bNum) return aNum - bNum;
+    return Number(a.seasonId) - Number(b.seasonId);
+  });
+}
+
+export function aggregateLeagueCareerStatsFromRaceEntries(entries = [], meta = {}) {
+  const starts = entries.length;
+  if (!starts) {
+    return {
+      verified: false,
+      careerStarts: null,
+      careerWins: null,
+      careerTop5s: null,
+      careerTop10s: null,
+      careerAverageFinish: null,
+      careerPoles: null,
+      careerLapsLed: null,
+      careerIncidents: null,
+      raceEntriesUsed: 0,
+      reason: 'No race results found in SimRacerHub driver stats.',
+    };
+  }
+
+  const wins = entries.filter((entry) => entry.finish === 1).length;
+  const top5s = entries.filter((entry) => entry.finish >= 1 && entry.finish <= 5).length;
+  const top10s = entries.filter((entry) => entry.finish >= 1 && entry.finish <= 10).length;
+  const poles = entries.filter((entry) => Number(entry.qualifyPos) === 1).length;
+  const lapsLed = entries.reduce((sum, entry) => sum + entry.lapsLed, 0);
+  const incidents = entries.reduce((sum, entry) => sum + entry.incidents, 0);
+  const careerAverageFinish = Number(
+    (entries.reduce((sum, entry) => sum + entry.finish, 0) / starts).toFixed(1)
+  );
+
+  return {
+    verified: true,
+    careerStarts: starts,
+    careerWins: wins,
+    careerTop5s: top5s,
+    careerTop10s: top10s,
+    careerAverageFinish,
+    careerPoles: poles,
+    careerLapsLed: lapsLed,
+    careerIncidents: incidents,
+    raceEntriesUsed: starts,
+  };
+}
+
+export async function fetchSimRacerHubLeagueCareerStats(driverId, seasonCatalog = null) {
+  const leagueId = String(seasonCatalog?.leagueId || DEFAULT_LEAGUE_ID);
+  const sourceUrl = `https://www.simracerhub.com/scoring/driver_stats.php?driver_id=${driverId}&league_id=${leagueId}`;
+
+  try {
+    const html = await fetchHtml(sourceUrl);
+    const entries = parseDriverStatsRaceEntries(html).filter(
+      (entry) => entry.leagueId === leagueId
+    );
+
+    const parsedCareerStats = aggregateLeagueCareerStatsFromRaceEntries(entries, {
+      driverId,
+      leagueId,
+    });
+
+    const leagueCareerStats = {
+      scope: 'league',
+      careerStatsScope: 'league',
+      careerStatsVerified: parsedCareerStats.verified === true,
+      careerStatsSource: 'simracerhub-driver_stats.php',
+      careerStatsSourceUrl: sourceUrl,
+      careerStatsDriverId: String(driverId),
+      leagueId,
+      parsedCareerStats,
+      participatedSeasons: parsedCareerStats.verified
+        ? buildParticipatedSeasonsFromRaceEntries(entries, seasonCatalog)
+        : [],
+      ...parsedCareerStats,
+    };
+
+    return leagueCareerStats;
+  } catch (error) {
+    return {
+      scope: 'league',
+      careerStatsScope: 'league',
+      verified: false,
+      careerStatsVerified: false,
+      careerStatsSource: 'simracerhub-driver_stats.php',
+      careerStatsSourceUrl: sourceUrl,
+      careerStatsDriverId: String(driverId),
+      parsedCareerStats: null,
+      reason: error?.message || 'Failed to load SimRacerHub driver stats.',
+    };
+  }
+}
+
+export const fetchSimRacerHubDriverCareerStats = fetchSimRacerHubLeagueCareerStats;
+
+export const aggregateVerifiedCareerStatsFromRaceEntries = aggregateLeagueCareerStatsFromRaceEntries;
 
 export async function discoverSimRacerHubSeasonCatalog(settings, standingsLss = null) {
   const currentSeasonId = String(standingsLss?.season_id || settings?.seasonId || '27987');
@@ -592,7 +749,10 @@ export function buildDriverCareerHistory({
   seasonCatalog = null,
   manualRaceNotes = '',
   transcriptSummary = '',
+  verifiedCareerStats = null,
+  leagueCareerStats = null,
 }) {
+  const resolvedLeagueCareerStats = leagueCareerStats || verifiedCareerStats;
   const manualTenure = parseTenureClaimsFromNotes(manualRaceNotes, transcriptSummary);
   const classificationReliable = seasonCatalog?.classificationReliable === true;
   const currentSeasonId = seasonCatalog?.currentSeasonId || null;
@@ -652,13 +812,313 @@ export function buildDriverCareerHistory({
     ...truckSeriesCareerHistory,
     truckSeriesCareerHistory,
     overallLeagueCareerHistory,
+    leagueCareerStats: resolvedLeagueCareerStats?.careerStatsVerified
+      ? resolvedLeagueCareerStats
+      : null,
     currentSeasonOnly,
     forbiddenWithoutVerification: CAREER_TENURE_FORBIDDEN_WITHOUT_VERIFICATION,
     manualTenureNotes: manualTenure.claims,
-    reason: truckSeriesCareerHistory.reason || seasonCatalog?.auditNotes || null,
+    reason:
+      truckSeriesCareerHistory.reason ||
+      seasonCatalog?.auditNotes ||
+      (resolvedLeagueCareerStats?.careerStatsVerified
+        ? null
+        : 'League career stat totals require SimRacerHub driver_stats.php.'),
   };
 
   return careerHistory;
+}
+
+export function buildCareerStatsDiagnostics(leagueCareerStats, spotlightDriverId) {
+  return {
+    careerStatsScope: leagueCareerStats?.careerStatsScope || 'league',
+    careerStatsSource: leagueCareerStats?.careerStatsSource || null,
+    careerStatsSourceUrl: leagueCareerStats?.careerStatsSourceUrl || null,
+    careerStatsDriverId: spotlightDriverId ? String(spotlightDriverId) : null,
+    careerStatsVerified: leagueCareerStats?.careerStatsVerified === true,
+    parsedCareerStats: leagueCareerStats?.parsedCareerStats || null,
+    careerStatsUsed: leagueCareerStats?.careerStatsVerified
+      ? {
+          careerStarts: leagueCareerStats.careerStarts,
+          careerWins: leagueCareerStats.careerWins,
+          careerTop5s: leagueCareerStats.careerTop5s,
+          careerTop10s: leagueCareerStats.careerTop10s,
+          careerAverageFinish: leagueCareerStats.careerAverageFinish,
+          careerPoles: leagueCareerStats.careerPoles,
+          careerLapsLed: leagueCareerStats.careerLapsLed,
+          careerIncidents: leagueCareerStats.careerIncidents,
+        }
+      : null,
+    rejectedUnsupportedClaims: [],
+  };
+}
+
+export async function enrichSpotlightDriverCareerStats(generationContext, spotlightDriverId) {
+  if (!spotlightDriverId || !generationContext?.factualGrounding?.drivers) {
+    return generationContext;
+  }
+
+  const driverKey = String(spotlightDriverId);
+  const catalog = generationContext.factualGrounding.careerHistoryAudit;
+  const leagueCareerStats = await fetchSimRacerHubLeagueCareerStats(driverKey, catalog);
+  const existing = generationContext.factualGrounding.drivers[driverKey];
+  if (!existing) {
+    return {
+      ...generationContext,
+      leagueCareerStats,
+      careerStatsDiagnostics: buildCareerStatsDiagnostics(leagueCareerStats, spotlightDriverId),
+    };
+  }
+
+  const standingsRow = generationContext.standings?.find(
+    (row) => String(row.driverId) === driverKey
+  );
+  const careerHistory = buildDriverCareerHistory({
+    driverId: driverKey,
+    standingsRow,
+    seasonCatalog: catalog,
+    manualRaceNotes: generationContext.manualRaceNotes || '',
+    transcriptSummary: generationContext.contextMeta?.broadcastContext?.summary || '',
+    leagueCareerStats,
+  });
+
+  generationContext.factualGrounding.drivers[driverKey] = {
+    ...existing,
+    careerHistory,
+    truckSeriesCareerHistory: careerHistory.truckSeriesCareerHistory,
+    overallLeagueCareerHistory: careerHistory.overallLeagueCareerHistory,
+    leagueCareerStats: careerHistory.leagueCareerStats,
+  };
+
+  return {
+    ...generationContext,
+    leagueCareerStats,
+    careerStatsDiagnostics: buildCareerStatsDiagnostics(leagueCareerStats, spotlightDriverId),
+  };
+}
+
+function parseNumericClaim(value) {
+  const parsed = Number(String(value || '').replace(/,/g, ''));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+const DRIVER_SPOTLIGHT_STYLE_PATTERNS = [
+  {
+    type: 'unsupported-driver-style',
+    pattern: /\bcalm under pressure\b/gi,
+    message: 'Personality/style claim requires manual notes or transcript.',
+  },
+  {
+    type: 'unsupported-driver-style',
+    pattern: /\btactical\b/gi,
+    message: 'Personality/style claim (tactical) requires manual notes or transcript.',
+  },
+  {
+    type: 'unsupported-driver-style',
+    pattern: /\btrack dynamics\b/gi,
+    message: 'Personality/style claim requires manual notes or transcript.',
+  },
+  {
+    type: 'unsupported-driver-style',
+    pattern: /\bveteran savvy\b/gi,
+    message: 'Personality/style claim requires manual notes or transcript.',
+  },
+  {
+    type: 'unsupported-driver-style',
+    pattern: /\bstrategic (?:mind|prowess|savvy|approach|thinker)\b/gi,
+    message: 'Personality/style claim requires manual notes or transcript.',
+  },
+];
+
+const CAREER_STAT_CLAIM_RULES = [
+  {
+    field: 'careerStarts',
+    patterns: [
+      /\b(\d[\d,]*)\s+career\s+starts?\b/gi,
+      /\b(\d[\d,]*)\s+starts?\s+(?:in|across)\s+(?:his|her|their)\s+(?:truck\s+series\s+)?career\b/gi,
+      /\b(?:over|across)\s+(?:his|her|their)\s+career[^.!?]{0,40}\b(\d[\d,]*)\s+starts?\b/gi,
+    ],
+  },
+  {
+    field: 'careerWins',
+    patterns: [
+      /\b(\d[\d,]*)\s+career\s+wins?\b/gi,
+      /\b(\d[\d,]*)\s+wins?\s+(?:in|across)\s+(?:his|her|their)\s+(?:truck\s+series\s+)?career\b/gi,
+    ],
+  },
+  {
+    field: 'careerTop5s',
+    patterns: [
+      /\b(\d[\d,]*)\s+(?:career\s+)?top[\s-]?(?:five|5s?)\b/gi,
+      /\b(\d[\d,]*)\s+top[\s-]?five\b/gi,
+    ],
+  },
+  {
+    field: 'careerTop10s',
+    patterns: [
+      /\b(\d[\d,]*)\s+(?:career\s+)?top[\s-]?(?:ten|10s?)\b/gi,
+      /\b(\d[\d,]*)\s+top[\s-]?ten\b/gi,
+    ],
+  },
+  {
+    field: 'careerAverageFinish',
+    patterns: [/\b(?:career\s+)?average finish(?:ing)?\s+of\s+(\d+(?:\.\d+)?)\b/gi],
+  },
+  {
+    field: 'careerPoles',
+    patterns: [/\b(\d[\d,]*)\s+(?:career\s+)?poles?\b/gi],
+  },
+  {
+    field: 'careerLapsLed',
+    patterns: [/\b(\d[\d,]*)\s+(?:career\s+)?laps?\s+led\b/gi],
+  },
+  {
+    field: 'careerIncidents',
+    patterns: [/\b(\d[\d,]*)\s+(?:career\s+)?incidents?\b/gi],
+  },
+];
+
+export function validateDriverSpotlightStyleClaims(text, context = {}) {
+  const unsupported = [];
+  const manualRaceNotes = context.manualRaceNotes || '';
+  const transcriptSummary = context.transcriptSummary || '';
+
+  for (const rule of DRIVER_SPOTLIGHT_STYLE_PATTERNS) {
+    for (const match of String(text || '').matchAll(rule.pattern)) {
+      if (claimSupportedInNotes(match[0], manualRaceNotes, transcriptSummary)) continue;
+      unsupported.push({
+        type: rule.type,
+        message: rule.message,
+        claim: match[0].trim(),
+      });
+    }
+  }
+
+  return unsupported;
+}
+
+export function validateDriverSpotlightCareerStats(text, context = {}) {
+  const unsupported = [];
+  const leagueCareerStats =
+    context.leagueCareerStats ||
+    context.verifiedCareerStats ||
+    context.truckSeriesCareerHistory?.leagueCareerStats ||
+    null;
+  const verified = leagueCareerStats?.careerStatsVerified
+    ? leagueCareerStats.parsedCareerStats || leagueCareerStats
+    : null;
+  const manualRaceNotes = context.manualRaceNotes || '';
+  const transcriptSummary = context.transcriptSummary || '';
+  const seasonStats = context.allowedSeasonStats || null;
+
+  for (const rule of CAREER_STAT_CLAIM_RULES) {
+    for (const pattern of rule.patterns) {
+      for (const match of String(text || '').matchAll(pattern)) {
+        const claim = match[0];
+        if (claimSupportedInNotes(claim, manualRaceNotes, transcriptSummary)) continue;
+
+        const claimed = parseNumericClaim(match[1]);
+        if (!Number.isFinite(claimed)) continue;
+
+        const verifiedValue = leagueCareerStats?.[rule.field] ?? verified?.[rule.field];
+        if (!leagueCareerStats?.careerStatsVerified || verifiedValue == null) {
+          unsupported.push({
+            type: 'unsupported-career-stat',
+            message: `Career stat claim (${rule.field}) is unavailable — omit career totals.`,
+            claim: claim.trim(),
+            field: rule.field,
+          });
+          continue;
+        }
+
+        if (claimed !== verifiedValue) {
+          unsupported.push({
+            type: 'unsupported-career-stat',
+            message: `Claimed ${rule.field} ${claimed}, but verified SimRacerHub value is ${verifiedValue}.`,
+            claim: claim.trim(),
+            field: rule.field,
+            verifiedValue,
+          });
+        }
+      }
+    }
+  }
+
+  for (const match of String(text || '').matchAll(/\b(\d[\d,]*)\s+starts?\b/gi)) {
+    const claim = match[0];
+    const idx = match.index ?? 0;
+    const window = String(text || '').slice(Math.max(0, idx - 70), idx + claim.length + 70);
+    if (!/\bcareer\b|\bacross (?:his|her|their)\b|\bover (?:his|her|their)\b|\ball[- ]time\b/i.test(window)) {
+      continue;
+    }
+    if (claimSupportedInNotes(claim, manualRaceNotes, transcriptSummary)) continue;
+    if (/\bthis season\b|\bin the standings\b/i.test(window)) continue;
+
+    const claimed = parseNumericClaim(match[1]);
+    if (!Number.isFinite(claimed)) continue;
+    if (leagueCareerStats?.careerStatsVerified && claimed === leagueCareerStats.careerStarts) continue;
+
+    if (!leagueCareerStats?.careerStatsVerified) {
+      unsupported.push({
+        type: 'unsupported-career-stat',
+        message: 'Career starts require verified SimRacerHub driver stats or manual notes.',
+        claim: claim.trim(),
+        field: 'careerStarts',
+      });
+    } else {
+      unsupported.push({
+        type: 'unsupported-career-stat',
+        message: `Claimed ${claimed} career starts, but verified value is ${leagueCareerStats.careerStarts}.`,
+        claim: claim.trim(),
+        field: 'careerStarts',
+        verifiedValue: leagueCareerStats.careerStarts,
+      });
+    }
+  }
+
+  for (const match of String(text || '').matchAll(/\b(\d[\d,]*)\s+wins?\b/gi)) {
+    const claim = match[0];
+    if (/\b(at|in|from)\b/i.test(claim)) continue;
+    const idx = match.index ?? 0;
+    const window = String(text || '').slice(Math.max(0, idx - 70), idx + claim.length + 70);
+    if (!/\bcareer\b|\bacross (?:his|her|their)\b|\bover (?:his|her|their)\b/i.test(window)) continue;
+    if (/\bthis season\b/i.test(window)) continue;
+    if (claimSupportedInNotes(claim, manualRaceNotes, transcriptSummary)) continue;
+
+    const claimed = parseNumericClaim(match[1]);
+    if (!Number.isFinite(claimed)) continue;
+    if (leagueCareerStats?.careerStatsVerified && claimed === leagueCareerStats.careerWins) continue;
+    if (seasonStats && claimed === Number(seasonStats.winsTotal)) continue;
+
+    if (!leagueCareerStats?.careerStatsVerified) {
+      unsupported.push({
+        type: 'unsupported-career-stat',
+        message: 'Career wins require verified SimRacerHub driver stats or manual notes.',
+        claim: claim.trim(),
+        field: 'careerWins',
+      });
+    } else {
+      unsupported.push({
+        type: 'unsupported-career-stat',
+        message: `Claimed ${claimed} career wins, but verified value is ${leagueCareerStats.careerWins}.`,
+        claim: claim.trim(),
+        field: 'careerWins',
+        verifiedValue: leagueCareerStats.careerWins,
+      });
+    }
+  }
+
+  for (const match of String(text || '').matchAll(/\btruck series career\b/gi)) {
+    if (claimSupportedInNotes(match[0], manualRaceNotes, transcriptSummary)) continue;
+    unsupported.push({
+      type: 'unsupported-career-scope',
+      message:
+        'Use Blazing Pedals career or league career language — truck-only career totals are not verified.',
+      claim: match[0].trim(),
+    });
+  }
+
+  return unsupported;
 }
 
 function claimAllowedByCareerHistory(scope, claim, careerHistory, manualRaceNotes, transcriptSummary) {

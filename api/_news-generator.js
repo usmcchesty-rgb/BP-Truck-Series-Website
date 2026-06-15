@@ -49,6 +49,7 @@ function buildValidationContext(generationContext, articleType) {
     spotlightDriverId: generationContext.spotlightDriverId || null,
     standings: generationContext.standings || [],
     factualGrounding: generationContext.factualGrounding,
+    leagueCareerStats: generationContext.leagueCareerStats || null,
     alignedRaces: generationContext.alignedRaces || [],
     recentResultsForGrounding: generationContext.recentResultsForGrounding || [],
     driverLookup: generationContext.driverLookup,
@@ -309,6 +310,19 @@ function buildGenerationSources(generationContext, articleType, repaired, prompt
           firstBpSeasonOverall: grounding.careerHistoryAudit.firstBpSeasonOverall,
           classificationReliable: grounding.careerHistoryAudit.classificationReliable,
           classificationIssues: grounding.careerHistoryAudit.classificationIssues || [],
+        }
+      : null,
+    careerStatsDiagnostics: generationContext.careerStatsDiagnostics
+      ? {
+          ...generationContext.careerStatsDiagnostics,
+          rejectedUnsupportedClaims:
+            repaired.validation?.rejectedUnsupportedClaims ||
+            repaired.validation?.unsupportedFacts?.map((fact) => ({
+              type: fact.type,
+              claim: fact.claim,
+              message: fact.message,
+            })) ||
+            [],
         }
       : null,
     promptSize,

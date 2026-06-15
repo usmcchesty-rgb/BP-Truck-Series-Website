@@ -266,30 +266,41 @@ function shouldIncludeCareerHistory(articleType, driverId, options = {}) {
   return spotlightId && id === spotlightId;
 }
 
-function slimCareerHistory(history) {
+function slimLeagueCareerStats(leagueCareerStats) {
+  if (!leagueCareerStats?.careerStatsVerified) {
+    return {
+      careerStatsScope: 'league',
+      careerStatsVerified: false,
+      note: 'Do not cite career starts/wins/top 5s/top 10s/average finish/poles/laps led/incidents unless leagueCareerStats is verified.',
+    };
+  }
+
+  return {
+    careerStatsScope: 'league',
+    careerStatsVerified: true,
+    careerStatsSource: leagueCareerStats.careerStatsSource,
+    careerStarts: leagueCareerStats.careerStarts,
+    careerWins: leagueCareerStats.careerWins,
+    careerTop5s: leagueCareerStats.careerTop5s,
+    careerTop10s: leagueCareerStats.careerTop10s,
+    careerAverageFinish: leagueCareerStats.careerAverageFinish,
+    careerPoles: leagueCareerStats.careerPoles,
+    careerLapsLed: leagueCareerStats.careerLapsLed,
+    careerIncidents: leagueCareerStats.careerIncidents,
+    label: 'Blazing Pedals league career',
+  };
+}
+
+function slimTenureHistory(history) {
   if (!history) return null;
   return {
-    scope: history.scope,
     tenureClaimsAllowed: history.tenureClaimsAllowed,
-    firstSeason: history.firstSeason,
-    firstSeasonName: history.firstSeasonName,
-    seasonsStarted: history.seasonsStarted,
-    totalCareerStarts: history.totalCareerStarts,
-    careerWins: history.careerWins,
-    careerTop5s: history.careerTop5s,
-    careerTop10s: history.careerTop10s,
     isFirstTruckSeason: history.isFirstTruckSeason,
     isTruckSeriesVeteran: history.isTruckSeriesVeteran,
     isReturningInScope: history.isReturningInScope,
-    priorSeasonResults: (history.priorSeasonResults || []).map((season) => ({
-      seasonId: season.seasonId,
-      seasonName: season.seasonName,
-      bpSeasonNumber: season.bpSeasonNumber,
-      starts: season.starts,
-      wins: season.wins,
-      top5s: season.top5s,
-      top10s: season.top10s,
-    })),
+    seasonsStarted: history.seasonsStarted,
+    firstSeason: history.firstSeason,
+    note: 'Tenure only — do not cite numeric career totals from this object.',
   };
 }
 
@@ -308,10 +319,8 @@ function slimDriverGrounding(grounding, { includeCareerHistory = false } = {}) {
   };
 
   if (includeCareerHistory) {
-    slim.truckSeriesCareerHistory = slimCareerHistory(grounding.truckSeriesCareerHistory);
-    if (grounding.overallLeagueCareerHistory) {
-      slim.overallLeagueCareerHistory = slimCareerHistory(grounding.overallLeagueCareerHistory);
-    }
+    slim.leagueCareerStats = slimLeagueCareerStats(grounding.leagueCareerStats);
+    slim.truckSeriesCareerHistory = slimTenureHistory(grounding.truckSeriesCareerHistory);
   }
 
   return slim;
@@ -344,15 +353,14 @@ export function buildPromptFactualGrounding(generationContext, articleType, opti
 
     if (includeCareerHistory) {
       careerHistoryChars += JSON.stringify({
-        truck: slim.truckSeriesCareerHistory,
-        overall: slim.overallLeagueCareerHistory,
+        league: slim.leagueCareerStats,
       }).length;
     }
   }
 
   const payload = {
     rules:
-      'Use only verified facts in this object, manual notes, or truncated transcript. Do not invent race events. Career tenure language requires truckSeriesCareerHistory when included for a driver.',
+      'Use only verified facts in this object, manual notes, or truncated transcript. Do not invent race events. Driver Spotlight may cite cumulative stats only from leagueCareerStats when careerStatsVerified is true. Use allowedSeasonStats for current-season numbers. Do not infer driver personality or style.',
     manualNotesAvailable: fullGrounding.manualNotesAvailable === true,
     transcriptSummaryAvailable: fullGrounding.transcriptSummaryAvailable === true,
     recentResultsWinnersOnly: fullGrounding.recentResultsWinnersOnly || [],
@@ -478,10 +486,9 @@ export function measureNewsPromptSize(systemPrompt, userPrompt, promptContext) {
     JSON.stringify(
       Object.values(promptContext.factualGrounding.drivers || {})
         .map((driver) => ({
-          truck: driver.truckSeriesCareerHistory,
-          overall: driver.overallLeagueCareerHistory,
+          league: driver.leagueCareerStats,
         }))
-        .filter((entry) => entry.truck || entry.overall)
+        .filter((entry) => entry.league)
     )
   );
   const factualGroundingTokens = estimateTokens(JSON.stringify(promptContext.factualGrounding));

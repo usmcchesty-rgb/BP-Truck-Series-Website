@@ -1,8 +1,10 @@
+import { enrichSpotlightDriverCareerStats } from './_driver-career-history.js';
+
 export { buildFactualGroundingContext } from './_power-rankings-factual-grounding.js';
 
-export function buildNewsFactualContext(generationContext, options = {}) {
+export async function buildNewsFactualContext(generationContext, options = {}) {
   const spotlightDriverId = options.spotlightDriverId || null;
-  return {
+  const base = {
     ...generationContext,
     spotlightDriverId,
     spotlightDriver:
@@ -10,4 +12,8 @@ export function buildNewsFactualContext(generationContext, options = {}) {
         (row) => String(row.driverId) === String(spotlightDriverId)
       ) || null,
   };
+
+  if (!spotlightDriverId) return base;
+
+  return enrichSpotlightDriverCareerStats(base, spotlightDriverId);
 }
