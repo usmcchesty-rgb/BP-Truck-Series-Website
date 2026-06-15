@@ -1052,10 +1052,68 @@ function parseWordOrNumericClaim(value) {
 }
 
 const CAREER_SCOPE_WINDOW_PATTERN =
-  /\bcareer\b|\bleague\s+career\b|\bblazing pedals\b|\bacross (?:his|her|their)\b|\bover (?:his|her|their)\b|\ball[- ]time\b/i;
+  /\bcareer\b|\bleague\s+career\b|\bblazing pedals\b(?:\s+career)?|\bacross (?:his|her|their)\b|\bover (?:his|her|their)\b|\ball[- ]time\b|\bthroughout (?:his|her|their)\b/i;
 
 const SEASON_SCOPE_WINDOW_PATTERN =
-  /\bthis season\b|\bcurrent season\b|\bin the standings\b|\bchampionship standings\b|\bpoints standings\b/i;
+  /\bthis season\b|\bcurrent season\b|\bseason\s*#?\s*\d+\b|\b20\d{2}\s+season\b|\bin the standings\b|\bchampionship standings\b|\bpoints standings\b/i;
+
+export const MIXED_SCOPE_ERROR_TYPES = new Set([
+  'unsupported-mixed-scope-season-career',
+  'career-stat-labeled-as-season',
+  'season-stat-labeled-as-career',
+  'unsupported-mixed-scope',
+]);
+
+const MIXED_SCOPE_WORD_NUM = 'one|two|three|four|five|six|seven|eight|nine|ten|\\d[\\d,]*';
+
+function pushMixedScopeError(unsupported, seen, entry) {
+  const key = `${entry.type}|${entry.field || ''}|${entry.claim}`;
+  if (seen.has(key)) return;
+  seen.add(key);
+  unsupported.push(entry);
+}
+
+function getCareerSeasonValues(leagueCareerStats, seasonStats, careerField, seasonField) {
+  const careerValue = Number(leagueCareerStats?.[careerField]);
+  const seasonValue = Number(seasonStats?.[seasonField]);
+  return {
+    careerValue: Number.isFinite(careerValue) ? careerValue : null,
+    seasonValue: Number.isFinite(seasonValue) ? seasonValue : null,
+  };
+}
+
+function scopesDiffer(careerValue, seasonValue) {
+  return careerValue != null && seasonValue != null && careerValue !== seasonValue;
+}
+
+export function buildSpotlightVerifiedStatsRepairBlock(context = {}) {
+  const league =
+    context.leagueCareerStats ||
+    context.factualGrounding?.drivers?.[String(context.spotlightDriverId)]?.leagueCareerStats ||
+    null;
+  const season =
+    context.allowedSeasonStats ||
+    context.factualGrounding?.drivers?.[String(context.spotlightDriverId)]?.allowedSeasonStats ||
+    null;
+
+  if (!league?.careerStatsVerified || !season) {
+    return '';
+  }
+
+  return `Verified currentSeasonStats (must use: this season / current season / Season 11):
+- wins: ${season.winsTotal}
+- top5: ${season.top5Total}
+- top10: ${season.top10Total}
+- points: ${season.pointsTotal}
+- position: P${season.pointsPosition}
+
+Verified leagueCareerStats (must use: career / league career / Blazing Pedals career):
+- starts: ${league.careerStarts}
+- wins: ${league.careerWins}
+- top5: ${league.careerTop5s}
+- top10: ${league.careerTop10s}
+- avgFinish: ${league.careerAverageFinish}`;
+}
 
 const WORD_CAREER_WIN_PATTERNS = [
   { pattern: /\b(one|a single|single)\s+(?:career\s+|league\s+)?wins?\b/gi, value: 1 },
@@ -1367,6 +1425,7 @@ export function validateDriverSpotlightCareerStats(text, context = {}) {
 
 export function validateDriverSpotlightMixedScopeStats(text, context = {}) {
   const unsupported = [];
+  const seen = new Set();
   const leagueCareerStats = context.leagueCareerStats || null;
   const seasonStats = context.allowedSeasonStats || null;
   const manualRaceNotes = context.manualRaceNotes || '';
@@ -1376,45 +1435,166 @@ export function validateDriverSpotlightMixedScopeStats(text, context = {}) {
     return unsupported;
   }
 
-  const careerWins = Number(leagueCareerStats.careerWins);
-  const seasonWins = Number(seasonStats.winsTotal);
-  if (!Number.isFinite(careerWins) || !Number.isFinite(seasonWins) || careerWins === seasonWins) {
-    return unsupported;
-  }
+  const statChecks = [
+    {
+      field: 'careerWins',
+      seasonField: 'winsTotal',
+      label: 'wins',
+      claimPatterns: [
+        new RegExp(`\\b(${MIXED_SCOPE_WORD_NUM})\\s+wins?\\b`, 'gi'),
+        new RegExp(`\\b(${MIXED_SCOPE_WORD_NUM})\\s+victories?\\b`, 'gi'),
+      ],
+      seasonMislabelPatterns: [
+        new RegExp(`\\b(${MIXED_SCOPE_WORD_NUM})\\s+wins?\\s+this\\s+season\\b`, 'gi'),
+        new RegExp(`\\b(${MIXED_SCOPE_WORD_NUM})\\s+victories?\\s+this\\s+season\\b`, 'gi'),
+        new RegExp(
+          `\\b(${MIXED_SCOPE_WORD_NUM})\\s+wins?\\s+(?:in|during)\\s+(?:the\\s+)?current\\s+season\\b`,
+          'gi'
+        ),
+        new RegExp(`\\bwith\\s+(${MIXED_SCOPE_WORD_NUM})\\s+wins?\\s+already\\b`, 'gi'),
+        new RegExp(
+          `\\b(${MIXED_SCOPE_WORD_NUM})\\s+wins?\\s+under\\s+(?:his|her|their)\\s+belt\\b`,
+          'gi'
+        ),
+      ],
+    },
+    {
+      field: 'careerTop5s',
+      seasonField: 'top5Total',
+      label: 'top-five finishes',
+      claimPatterns: [
+        new RegExp(`\\b(${MIXED_SCOPE_WORD_NUM})\\s+top[\\s-]?(?:five|5s?)\\b`, 'gi'),
+        new RegExp(`\\b(${MIXED_SCOPE_WORD_NUM})\\s+top[\\s-]?five\\s+finishes?\\b`, 'gi'),
+      ],
+      seasonMislabelPatterns: [
+        new RegExp(
+          `\\b(${MIXED_SCOPE_WORD_NUM})\\s+top[\\s-]?(?:five|5s?)[^.!?]{0,30}this\\s+season\\b`,
+          'gi'
+        ),
+        new RegExp(
+          `\\b(${MIXED_SCOPE_WORD_NUM})\\s+top[\\s-]?five\\s+finishes?[^.!?]{0,30}this\\s+season\\b`,
+          'gi'
+        ),
+      ],
+    },
+    {
+      field: 'careerTop10s',
+      seasonField: 'top10Total',
+      label: 'top-ten finishes',
+      claimPatterns: [
+        new RegExp(`\\b(${MIXED_SCOPE_WORD_NUM})\\s+top[\\s-]?(?:ten|10s?)\\b`, 'gi'),
+        new RegExp(`\\b(${MIXED_SCOPE_WORD_NUM})\\s+top[\\s-]?ten\\s+finishes?\\b`, 'gi'),
+      ],
+      seasonMislabelPatterns: [
+        new RegExp(
+          `\\b(${MIXED_SCOPE_WORD_NUM})\\s+top[\\s-]?(?:ten|10s?)[^.!?]{0,30}this\\s+season\\b`,
+          'gi'
+        ),
+        new RegExp(
+          `\\b(${MIXED_SCOPE_WORD_NUM})\\s+top[\\s-]?ten\\s+finishes?[^.!?]{0,30}this\\s+season\\b`,
+          'gi'
+        ),
+      ],
+    },
+  ];
 
-  for (const match of String(text || '').matchAll(
-    /\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+wins?\b/gi
-  )) {
-    const claim = match[0];
-    if (claimSupportedInNotes(claim, manualRaceNotes, transcriptSummary)) continue;
-    const idx = match.index ?? 0;
-    const window = String(text || '').slice(Math.max(0, idx - 90), idx + claim.length + 90);
-    const claimed = parseWordOrNumericClaim(match[1]);
-    if (!Number.isFinite(claimed)) continue;
+  for (const check of statChecks) {
+    const { careerValue, seasonValue } = getCareerSeasonValues(
+      leagueCareerStats,
+      seasonStats,
+      check.field,
+      check.seasonField
+    );
+    if (!scopesDiffer(careerValue, seasonValue)) continue;
 
-    const hasCareerLabel = CAREER_SCOPE_WINDOW_PATTERN.test(window);
-    const hasSeasonLabel = SEASON_SCOPE_WINDOW_PATTERN.test(window);
-    if (hasCareerLabel || hasSeasonLabel) continue;
+    for (const pattern of check.seasonMislabelPatterns) {
+      for (const match of String(text || '').matchAll(pattern)) {
+        const claim = match[0];
+        if (claimSupportedInNotes(claim, manualRaceNotes, transcriptSummary)) continue;
+        const claimed = parseWordOrNumericClaim(match[1]);
+        if (!Number.isFinite(claimed)) continue;
 
-    const matchesCareer = claimed === careerWins;
-    const matchesSeason = claimed === seasonWins;
+        if (claimed === careerValue && claimed !== seasonValue) {
+          pushMixedScopeError(unsupported, seen, {
+            type: 'career-stat-labeled-as-season',
+            message: `${claimed} ${check.label} is a league career total (${careerValue}), not a current-season total (${seasonValue}). Do not label it as "this season".`,
+            claim: claim.trim(),
+            field: check.field,
+            verifiedCareerValue: careerValue,
+            verifiedSeasonValue: seasonValue,
+          });
+        } else if (claimed !== seasonValue && claimed !== careerValue) {
+          pushMixedScopeError(unsupported, seen, {
+            type: 'unsupported-mixed-scope-season-career',
+            message: `${check.label} claim "${claim.trim()}" does not match verified season (${seasonValue}) or career (${careerValue}) totals.`,
+            claim: claim.trim(),
+            field: check.field,
+          });
+        }
+      }
+    }
 
-    if (matchesCareer) {
-      unsupported.push({
-        type: 'unsupported-mixed-scope',
-        message:
-          'Win total matches league career wins — label as career/league wins so it is not confused with current-season wins.',
-        claim: claim.trim(),
-        field: 'careerWins',
-      });
-    } else if (matchesSeason) {
-      unsupported.push({
-        type: 'unsupported-mixed-scope',
-        message:
-          'Win total matches current-season wins — label as this season so it is not confused with career wins.',
-        claim: claim.trim(),
-        field: 'seasonWins',
-      });
+    for (const pattern of check.claimPatterns) {
+      for (const match of String(text || '').matchAll(pattern)) {
+        const claim = match[0];
+        if (claimSupportedInNotes(claim, manualRaceNotes, transcriptSummary)) continue;
+        const idx = match.index ?? 0;
+        const window = String(text || '').slice(Math.max(0, idx - 100), idx + claim.length + 100);
+        const claimed = parseWordOrNumericClaim(match[1]);
+        if (!Number.isFinite(claimed)) continue;
+
+        const hasCareerLabel = CAREER_SCOPE_WINDOW_PATTERN.test(window);
+        const hasSeasonLabel = SEASON_SCOPE_WINDOW_PATTERN.test(window);
+        const matchesCareer = claimed === careerValue;
+        const matchesSeason = claimed === seasonValue;
+
+        if (matchesCareer && !matchesSeason && hasSeasonLabel && !hasCareerLabel) {
+          pushMixedScopeError(unsupported, seen, {
+            type: 'career-stat-labeled-as-season',
+            message: `${claimed} ${check.label} matches league career (${careerValue}) but is labeled as current season.`,
+            claim: claim.trim(),
+            field: check.field,
+            verifiedCareerValue: careerValue,
+            verifiedSeasonValue: seasonValue,
+          });
+          continue;
+        }
+
+        if (matchesSeason && !matchesCareer && hasCareerLabel && !hasSeasonLabel) {
+          pushMixedScopeError(unsupported, seen, {
+            type: 'season-stat-labeled-as-career',
+            message: `${claimed} ${check.label} matches current season (${seasonValue}) but is labeled as career.`,
+            claim: claim.trim(),
+            field: check.field,
+            verifiedCareerValue: careerValue,
+            verifiedSeasonValue: seasonValue,
+          });
+          continue;
+        }
+
+        if (matchesCareer && !matchesSeason && !hasCareerLabel && !hasSeasonLabel) {
+          pushMixedScopeError(unsupported, seen, {
+            type: 'unsupported-mixed-scope-season-career',
+            message: `${claimed} ${check.label} matches league career (${careerValue}) — label as career/league/Blazing Pedals career, not an unlabeled total.`,
+            claim: claim.trim(),
+            field: check.field,
+            verifiedCareerValue: careerValue,
+            verifiedSeasonValue: seasonValue,
+          });
+          continue;
+        }
+
+        if (matchesSeason && !matchesCareer && !hasSeasonLabel && !hasCareerLabel) {
+          pushMixedScopeError(unsupported, seen, {
+            type: 'unsupported-mixed-scope-season-career',
+            message: `${claimed} ${check.label} matches current season (${seasonValue}) — label as this season/current season.`,
+            claim: claim.trim(),
+            field: check.field,
+            verifiedCareerValue: careerValue,
+            verifiedSeasonValue: seasonValue,
+          });
+        }
+      }
     }
   }
 
@@ -1422,17 +1602,28 @@ export function validateDriverSpotlightMixedScopeStats(text, context = {}) {
     const trimmed = sentence.trim();
     if (!trimmed) continue;
     const winClaims = [
-      ...trimmed.matchAll(/\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+wins?\b/gi),
+      ...trimmed.matchAll(new RegExp(`\\b(${MIXED_SCOPE_WORD_NUM})\\s+wins?\\b`, 'gi')),
     ]
       .map((entry) => parseWordOrNumericClaim(entry[1]))
       .filter((value) => Number.isFinite(value));
     const uniqueWins = [...new Set(winClaims)];
-    if (uniqueWins.length > 1 && !/\bcareer\b[\s\S]{0,80}\bseason\b|\bseason\b[\s\S]{0,80}\bcareer\b/i.test(trimmed)) {
-      unsupported.push({
-        type: 'unsupported-mixed-scope',
+    const { careerValue: careerWins, seasonValue: seasonWins } = getCareerSeasonValues(
+      leagueCareerStats,
+      seasonStats,
+      'careerWins',
+      'winsTotal'
+    );
+    if (
+      scopesDiffer(careerWins, seasonWins) &&
+      uniqueWins.length > 1 &&
+      !/\bcareer\b[\s\S]{0,80}\bseason\b|\bseason\b[\s\S]{0,80}\bcareer\b/i.test(trimmed)
+    ) {
+      pushMixedScopeError(unsupported, seen, {
+        type: 'unsupported-mixed-scope-season-career',
         message:
           'Multiple different win totals in one sentence require clear career vs current-season labels.',
         claim: trimmed,
+        field: 'careerWins',
       });
     }
   }

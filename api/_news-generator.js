@@ -18,6 +18,10 @@ import {
   REPAIRABLE_NEWS_ERROR_TYPES,
   formatNewsValidationForRepair,
 } from './_news-validation.js';
+import {
+  buildSpotlightVerifiedStatsRepairBlock,
+  MIXED_SCOPE_ERROR_TYPES,
+} from './_driver-career-history.js';
 
 function parseBody(req) {
   if (!req.body) return {};
@@ -80,7 +84,10 @@ function buildNewsUserPrompt(generationContext, options = {}) {
   return { userPrompt, promptContext };
 }
 
-async function callOpenAiNews(userPrompt, { repairReason = null, previousArticle = null } = {}) {
+async function callOpenAiNews(
+  userPrompt,
+  { repairReason = null, previousArticle = null, repairContext = null } = {}
+) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     throw new Error('OPENAI_API_KEY is not configured in Vercel environment variables.');
@@ -90,20 +97,24 @@ async function callOpenAiNews(userPrompt, { repairReason = null, previousArticle
   const messages = [{ role: 'system', content: NEWS_SYSTEM_PROMPT }];
 
   if (repairReason && previousArticle) {
+    const statsBlock = buildSpotlightVerifiedStatsRepairBlock(repairContext || {});
     messages.push({
       role: 'user',
       content: `Revise this article to fix validation errors.
 
 Validation errors:
 ${repairReason}
-
+${statsBlock ? `\n${statsBlock}\n` : ''}
 Current article JSON:
 ${JSON.stringify(previousArticle, null, 2)}
 
 Return corrected JSON only with headline, subheadline, summary, and body.
-Every field must use the same verified leagueCareerStats for career totals and allowedSeasonStats for current-season totals.
-If the body has the correct career numbers, copy those exact figures into headline, subheadline, and summary.
-Label career vs current-season stats clearly and never mix scopes.`,
+Rewrite ALL affected fields. Separate season stats from career stats in every field.
+
+Examples when career wins=5 and season wins=1:
+- ALLOWED season: "one win this season"
+- ALLOWED career: "five wins across his Blazing Pedals career"
+- REJECTED: "five wins this season"`,
     });
   } else {
     messages.push({ role: 'user', content: userPrompt });
@@ -173,7 +184,19 @@ export async function repairNewsArticle(article, generationContext, articleType)
   let repairAttempted = false;
   const repairReasons = [];
   const validationContext = buildValidationContext(generationContext, articleType);
+  const repairContext = {
+    ...validationContext,
+    spotlightDriverId: generationContext.spotlightDriverId,
+    allowedSeasonStats:
+      generationContext.factualGrounding?.drivers?.[String(generationContext.spotlightDriverId)]
+        ?.allowedSeasonStats || null,
+  };
   let validation = validateNewsArticle(current, validationContext);
+  const mixedScopeFieldsBeforeRepair = new Set(
+    validation.errors
+      .filter((err) => MIXED_SCOPE_ERROR_TYPES.has(err.type) && err.articleField)
+      .map((err) => err.articleField)
+  );
 
   while (
     !validation.valid &&
@@ -189,12 +212,20 @@ export async function repairNewsArticle(article, generationContext, articleType)
     );
 
     current = await callOpenAiNews(null, {
-      repairReason: formatNewsValidationForRepair(validation),
+      repairReason: formatNewsValidationForRepair(validation, repairContext),
       previousArticle: current,
+      repairContext,
     });
 
     validation = validateNewsArticle(current, validationContext);
   }
+
+  const repairedMixedScopeFields = [...mixedScopeFieldsBeforeRepair].filter(
+    (field) =>
+      !validation.errors.some(
+        (err) => MIXED_SCOPE_ERROR_TYPES.has(err.type) && err.articleField === field
+      )
+  );
 
   return {
     article: current,
@@ -202,6 +233,7 @@ export async function repairNewsArticle(article, generationContext, articleType)
     repairAttempted,
     repairAttempts,
     repairReasons: [...new Set(repairReasons)],
+    repairedMixedScopeFields,
   };
 }
 
@@ -288,11 +320,19 @@ function buildGenerationSources(generationContext, articleType, repaired, prompt
     ? grounding.drivers?.[String(spotlightDriverId)] || null
     : null;
   const careerStatsDiagnostics = generationContext.careerStatsDiagnostics || null;
+  const mixedScopeClaims = repaired.validation?.mixedScopeClaims || [];
   const unsupportedCareerSummaryClaims =
     repaired.validation?.unsupportedFacts?.filter((fact) =>
-      ['unsupported-career-summary', 'unsupported-career-stat', 'unsupported-career-scope', 'unsupported-career-tenure', 'unsupported-mixed-scope'].includes(
-        fact.type
-      )
+      [
+        'unsupported-career-summary',
+        'unsupported-career-stat',
+        'unsupported-career-scope',
+        'unsupported-career-tenure',
+        'unsupported-mixed-scope',
+        'unsupported-mixed-scope-season-career',
+        'career-stat-labeled-as-season',
+        'season-stat-labeled-as-career',
+      ].includes(fact.type)
     ) || [];
 
   let dataQualityScore = 40;
@@ -317,6 +357,8 @@ function buildGenerationSources(generationContext, articleType, repaired, prompt
     spotlightDriverId,
     leagueCareerStatsUsed: careerStatsDiagnostics?.leagueCareerStatsUsed === true,
     currentSeasonStatsUsed: Boolean(spotlightGrounding?.allowedSeasonStats),
+    mixedScopeClaims,
+    repairedMixedScopeFields: repaired.repairedMixedScopeFields || [],
     recentResultsUsed: Boolean(
       spotlightGrounding?.recentRaceFinishes?.length ||
         spotlightGrounding?.verifiedRaceFinishes?.length

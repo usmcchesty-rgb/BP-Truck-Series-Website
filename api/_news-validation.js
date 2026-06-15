@@ -1,6 +1,8 @@
 import { validateWriteupFactualGrounding } from './_power-rankings-factual-grounding.js';
 import {
   validateDriverSpotlightField,
+  buildSpotlightVerifiedStatsRepairBlock,
+  MIXED_SCOPE_ERROR_TYPES,
 } from './_driver-career-history.js';
 import { ARTICLE_TYPES } from '../server/config/news-system-prompt.js';
 
@@ -314,6 +316,14 @@ export function validateNewsArticle(article, context = {}) {
       driverName: fact.driverName || null,
       articleField: fact.articleField || null,
     })),
+    mixedScopeClaims: unsupportedFacts
+      .filter((fact) => MIXED_SCOPE_ERROR_TYPES.has(fact.type))
+      .map((fact) => ({
+        type: fact.type,
+        claim: fact.claim,
+        message: fact.message,
+        articleField: fact.articleField || null,
+      })),
     headlineValidationErrors,
     subheadlineValidationErrors,
     summaryValidationErrors,
@@ -340,11 +350,14 @@ export const REPAIRABLE_NEWS_ERROR_TYPES = new Set([
   'unsupported-career-summary',
   'unsupported-career-scope',
   'unsupported-mixed-scope',
+  'unsupported-mixed-scope-season-career',
+  'career-stat-labeled-as-season',
+  'season-stat-labeled-as-career',
   'unsupported-driver-style',
   'forbidden-meta',
 ]);
 
-export function formatNewsValidationForRepair(validation) {
+export function formatNewsValidationForRepair(validation, repairContext = {}) {
   if (!validation?.errors?.length) return 'No validation errors.';
   const fieldSections = [
     ['headline', validation.headlineValidationErrors],
@@ -363,9 +376,14 @@ export function formatNewsValidationForRepair(validation) {
       `- [${err.type}] (${err.articleField || 'article'}) ${err.message}${err.claim ? ` (claim: "${err.claim}")` : ''}`
   );
 
+  const statsBlock = buildSpotlightVerifiedStatsRepairBlock(repairContext);
+
   return [
-    'Fix ALL fields (headline, subheadline, summary, body) so they use the same verified leagueCareerStats and allowedSeasonStats.',
-    'Career totals in headline/subheadline/summary must exactly match leagueCareerStats — not just the body.',
+    'Fix ALL fields (headline, subheadline, summary, body). Rewrite every affected field so season stats and career stats are clearly separated.',
+    'Never label a league career total as "this season". Never label a current-season total as "career".',
+  statsBlock ? `\n${statsBlock}\n` : '',
+    'Career totals in headline/subheadline/summary/body must exactly match leagueCareerStats.',
+    'Current-season totals must exactly match currentSeasonStats and use this season/current season labeling.',
     '',
     ...(fieldSections.length ? ['Errors by field:', ...fieldSections, ''] : []),
     'All errors:',
