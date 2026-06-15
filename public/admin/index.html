@@ -32,6 +32,19 @@
     .drivers-table .center { text-align: center; }
     .drivers-table .readonly { color: #aaa; font-size: 11px; }
     .drivers-table .btn-save { padding: 4px 10px; font-size: 9px; }
+    .drivers-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 14px; }
+    .form-sync-panel { margin: 16px 0; padding: 14px; border: 1px solid #333; background: #0a0a0a; }
+    .form-sync-panel h3 { margin: 0 0 10px; font-size: 14px; color: #fff; }
+    .form-sync-summary { font-size: 12px; color: #aaa; margin-bottom: 12px; line-height: 1.5; }
+    .form-sync-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    .form-sync-table th, .form-sync-table td { border: 1px solid #333; padding: 6px 8px; text-align: left; vertical-align: top; }
+    .form-sync-table th { color: #999; text-transform: uppercase; letter-spacing: .06em; font-size: 10px; }
+    .form-sync-tag { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: 900; text-transform: uppercase; }
+    .form-sync-tag.ok { background: rgba(40,120,60,.25); color: #7fd99a; }
+    .form-sync-tag.skip { background: rgba(120,90,20,.25); color: #e8c547; }
+    .form-sync-tag.bad { background: rgba(120,30,30,.25); color: #ff8080; }
+    .form-sync-fields { color: #ccc; line-height: 1.45; max-width: 280px; }
+    .form-sync-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
     .pw-row { max-width: 320px; margin-bottom: 14px; }
     .logo-preview-wrap {
       margin: 12px 0 10px;
@@ -143,7 +156,32 @@
         <h2>Driver Profiles</h2>
         <p class="sub">Drivers load from current standings. Save a row or use Sync All to write profiles to Supabase.</p>
         <p class="sub">Driver ID = SimRacerHub Driver ID. Car Numbers are managed by BP and do not come from SimRacerHub.</p>
-        <button class="btn" type="button" onclick="syncAllDrivers()">Sync All Drivers</button>
+        <div class="drivers-actions">
+          <button class="btn" type="button" onclick="syncAllDrivers()">Sync All Drivers</button>
+          <button class="btn btn-secondary" type="button" onclick="previewFormSync()">Sync Driver Bios From Google Form</button>
+        </div>
+        <div id="formSyncPanel" class="form-sync-panel" hidden>
+          <h3>Google Form Bio Sync Preview</h3>
+          <div id="formSyncSummary" class="form-sync-summary"></div>
+          <div class="table-wrap">
+            <table class="form-sync-table">
+              <thead>
+                <tr>
+                  <th>Apply</th>
+                  <th>Status</th>
+                  <th>Form Driver</th>
+                  <th>Matched Profile</th>
+                  <th>Fields / Links</th>
+                </tr>
+              </thead>
+              <tbody id="formSyncBody"></tbody>
+            </table>
+          </div>
+          <div class="form-sync-actions">
+            <button class="btn" type="button" onclick="applyFormSync()">Apply Sync</button>
+            <button class="btn btn-secondary" type="button" onclick="closeFormSyncPanel()">Cancel</button>
+          </div>
+        </div>
         <div class="table-wrap">
           <table class="drivers-table" id="driversTable">
             <thead>
@@ -617,6 +655,227 @@
           saved++;
         }
         setDriversMsg(`Synced ${saved} drivers.`);
+        await loadDrivers();
+      } catch (e) {
+        setDriversMsg(e.message, true);
+      }
+    }
+
+    let formSyncPreviewData = null;
+
+    function truncateText(value, max = 72) {
+      const text = String(value || '').trim();
+      if (text.length <= max) return text;
+      return `${text.slice(0, max - 1)}…`;
+    }
+
+    function formatFormSyncLinks(links) {
+      if (!links || typeof links !== 'object') return '';
+      const items = Object.entries(links)
+        .filter(([, url]) => String(url || '').trim())
+        .map(([name, url]) => `${name}: ${truncateText(url, 48)}`);
+      return items.length ? items.join('<br>') : '—';
+    }
+
+    function formatFormSyncFields(item, status) {
+      const lines = [];
+
+      if (status === 'matched' && item.proposed) {
+        const p = item.proposed;
+        const bioFields = [
+          ['Bio', p.bio],
+          ['Years', p.years_sim_racing],
+          ['Style', p.driving_style],
+          ['Track', p.favorite_track],
+          ['NASCAR fav', p.favorite_nascar_driver],
+          ['Accomplishment', p.sim_racing_accomplishment],
+          ['Season goal', p.season_goal],
+          ['Fun fact', p.fun_fact],
+        ].filter(([, value]) => String(value || '').trim());
+
+        if (bioFields.length) {
+          lines.push(
+            `<strong>Bio fields:</strong><br>${bioFields
+              .map(([label, value]) => `${escapeHtml(label)}: ${escapeHtml(truncateText(value))}`)
+              .join('<br>')}`
+          );
+        }
+      }
+
+      if (status === 'matched' || status === 'skipped') {
+        lines.push(`<strong>Permission:</strong> ${item.permissionGranted ? 'Yes' : 'No'}`);
+      }
+
+      if (status === 'skipped' && item.skipReason) {
+        lines.push(`<strong>Note:</strong> ${escapeHtml(item.skipReason)}`);
+      }
+
+      if (status === 'matched') {
+        lines.push(
+          `<strong>Streamer:</strong> ${item.isStreamer ? 'Yes' : 'No'}${
+            item.streamUrl ? ` — ${escapeHtml(truncateText(item.streamUrl, 56))}` : ''
+          }`
+        );
+        lines.push(`<strong>Social:</strong><br>${formatFormSyncLinks(item.socialLinks)}`);
+        if (item.driverImageUrl) {
+          lines.push(
+            `<strong>Driver image (preview only):</strong><br>${escapeHtml(truncateText(item.driverImageUrl, 56))}`
+          );
+        }
+        if (item.carImageUrl) {
+          lines.push(
+            `<strong>Car image:</strong><br>${escapeHtml(truncateText(item.carImageUrl, 56))}`
+          );
+        }
+        if (item.existingPhotoUrl) {
+          lines.push('<strong>Existing photo:</strong> kept (not overwritten)');
+        }
+      }
+
+      if (item.conflicts?.length) {
+        lines.push(
+          `<strong>Conflicts:</strong> ${item.conflicts.map((c) => escapeHtml(c)).join('; ')}`
+        );
+      }
+
+      return lines.length ? lines.join('<br><br>') : '—';
+    }
+
+    function renderFormSyncRow(item, status) {
+      const tagClass = status === 'matched' ? 'ok' : status === 'skipped' ? 'skip' : 'bad';
+      const tagLabel = status === 'matched' ? 'Matched' : status === 'skipped' ? 'Skipped' : 'Unmatched';
+      const applyCell =
+        status === 'matched'
+          ? `<input type="checkbox" class="form-sync-apply" data-driver-id="${escapeAttr(item.driver_id)}" checked>`
+          : '—';
+      const matchedProfile =
+        status === 'unmatched'
+          ? '—'
+          : `${escapeHtml(item.displayName || '')}${
+              item.iracingName && item.iracingName !== item.displayName
+                ? `<br><span style="color:#888">${escapeHtml(item.iracingName)}</span>`
+                : ''
+            }${
+              item.matchMethod
+                ? `<br><span style="color:#666">via ${escapeHtml(item.matchMethod)}</span>`
+                : ''
+            }`;
+
+      return `<tr data-sync-status="${escapeAttr(status)}">
+        <td class="center">${applyCell}</td>
+        <td><span class="form-sync-tag ${tagClass}">${tagLabel}</span></td>
+        <td>${escapeHtml(item.formDriverName || '')}${
+          item.formCarNumber ? `<br>#${escapeHtml(item.formCarNumber)}` : ''
+        }${
+          item.formTimestamp ? `<br><span style="color:#666">${escapeHtml(item.formTimestamp)}</span>` : ''
+        }</td>
+        <td>${matchedProfile}</td>
+        <td class="form-sync-fields">${formatFormSyncFields(item, status)}</td>
+      </tr>`;
+    }
+
+    function renderFormSyncPreview(data) {
+      formSyncPreviewData = data;
+      const panel = $('#formSyncPanel');
+      const summary = $('#formSyncSummary');
+      const tbody = $('#formSyncBody');
+
+      const matched = Array.isArray(data.matched) ? data.matched : [];
+      const skipped = Array.isArray(data.skipped) ? data.skipped : [];
+      const unmatched = Array.isArray(data.unmatched) ? data.unmatched : [];
+
+      summary.innerHTML = [
+        `<strong>${matched.length}</strong> matched and ready to sync.`,
+        `<strong>${skipped.length}</strong> skipped (permission not granted).`,
+        `<strong>${unmatched.length}</strong> unmatched form rows.`,
+        `Latest responses: <strong>${data.latestResponseCount ?? 0}</strong> of <strong>${data.totalFormRows ?? 0}</strong> total rows.`,
+        data.sheetUrl
+          ? `<a href="${escapeAttr(data.sheetUrl)}" target="_blank" rel="noopener noreferrer">Open Google Sheet</a>`
+          : '',
+      ]
+        .filter(Boolean)
+        .join('<br>');
+
+      const rows = [
+        ...matched.map((item) => renderFormSyncRow(item, 'matched')),
+        ...skipped.map((item) => renderFormSyncRow(item, 'skipped')),
+        ...unmatched.map((item) => renderFormSyncRow(item, 'unmatched')),
+      ];
+
+      tbody.innerHTML = rows.length
+        ? rows.join('')
+        : '<tr><td colspan="5">No form responses found.</td></tr>';
+
+      panel.hidden = false;
+      panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function closeFormSyncPanel() {
+      const panel = $('#formSyncPanel');
+      if (panel) panel.hidden = true;
+      formSyncPreviewData = null;
+    }
+
+    async function previewFormSync() {
+      const pw = getSessionPw();
+      if (!pw) {
+        setDriversMsg('Session expired: log in again.', true);
+        logout();
+        return;
+      }
+
+      setDriversMsg('Fetching Google Form responses...');
+      closeFormSyncPanel();
+
+      try {
+        const data = await postDriver({ action: 'preview-form-sync', password: pw });
+        renderFormSyncPreview(data);
+        setDriversMsg(
+          `Form sync preview ready: ${data.matched?.length || 0} matched, ${data.skipped?.length || 0} skipped, ${data.unmatched?.length || 0} unmatched.`
+        );
+      } catch (e) {
+        setDriversMsg(e.message, true);
+      }
+    }
+
+    async function applyFormSync() {
+      const pw = getSessionPw();
+      if (!pw) {
+        setDriversMsg('Session expired: log in again.', true);
+        logout();
+        return;
+      }
+
+      const driverIds = [...document.querySelectorAll('.form-sync-apply:checked')]
+        .map((el) => el.dataset.driverId)
+        .filter(Boolean);
+
+      if (!driverIds.length) {
+        setDriversMsg('Select at least one matched driver to apply.', true);
+        return;
+      }
+
+      setDriversMsg(`Applying bio sync for ${driverIds.length} driver(s)...`);
+
+      try {
+        const data = await postDriver({
+          action: 'apply-form-sync',
+          password: pw,
+          driver_ids: driverIds,
+        });
+
+        const applied = data.applyResult?.applied ?? 0;
+        const failed = data.applyResult?.failed ?? [];
+        if (failed.length) {
+          setDriversMsg(
+            `Applied ${applied} profile(s). ${failed.length} failed: ${failed.map((f) => f.displayName || f.driver_id).join(', ')}`,
+            true
+          );
+        } else {
+          setDriversMsg(`Applied bio sync to ${applied} driver profile(s).`);
+        }
+
+        closeFormSyncPanel();
         await loadDrivers();
       } catch (e) {
         setDriversMsg(e.message, true);

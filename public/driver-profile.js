@@ -58,6 +58,141 @@ function metaItem(label, value) {
   </div>`;
 }
 
+function profileText(profile, ...keys) {
+  for (const key of keys) {
+    const value = profile?.[key];
+    const text = String(value ?? "").trim();
+    if (text) return text;
+  }
+  return "";
+}
+
+function escapeAttr(s) {
+  return escapeHtml(s).replace(/'/g, "&#39;");
+}
+
+function streamerBadgeHtml(streamUrl) {
+  const badge = `<span class="streamer-badge">STREAMER</span>`;
+  const url = String(streamUrl || "").trim();
+  if (!url) return badge;
+  return `<a class="streamer-badge-link" href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer" aria-label="Watch stream">${badge}</a>`;
+}
+
+const SOCIAL_ICON_SVGS = {
+  facebook: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M14 3h3.5L16 7.9 13.5 8.2c-.9.1-1.3.5-1.3 1.4V12h3.2l-.4 3.6H12.2V21H8.6v-5.4H6V12h2.6V7.8c0-2.4 1.4-3.8 3.7-3.8.9 0 1.7.1 1.7.1z"/></svg>`,
+  twitter: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4 4l8.1 10.8L4.2 20h2.3l6.4-7.5 5.2 7.5H20l-8.6-11.5L19.1 4h-2.3l-5.9 6.9L6.4 4H4zm2.6 1.5h1.5l10.8 15.5h-1.5L6.6 5.5z"/></svg>`,
+  instagram: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4zm0 2a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H7zm5 3.5A5.5 5.5 0 1 1 6.5 14 5.5 5.5 0 0 1 12 8.5zm0 2A3.5 3.5 0 1 0 15.5 14 3.5 3.5 0 0 0 12 10.5zM17.8 6.7a1.1 1.1 0 1 1-1.1 1.1 1.1 1.1 0 0 1 1.1-1.1z"/></svg>`,
+  tiktok: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M14.5 4c.3 2.2 1.6 3.9 3.8 4.2v2.8c-1.4 0-2.7-.4-3.8-1.1v5.8a5.1 5.1 0 1 1-5.1-5.1c.3 0 .7 0 1 .1v3a2.2 2.2 0 1 0 1.6 2.1V4h2.5z"/></svg>`,
+  youtube: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M21.6 7.2a2.5 2.5 0 0 0-1.8-1.8C17.8 5 12 5 12 5s-5.8 0-7.8.4A2.5 2.5 0 0 0 2.4 7.2 26 26 0 0 0 2 12a26 26 0 0 0 .4 4.8 2.5 2.5 0 0 0 1.8 1.8c2 .4 7.8.4 7.8.4s5.8 0 7.8-.4a2.5 2.5 0 0 0 1.8-1.8A26 26 0 0 0 22 12a26 26 0 0 0-.4-4.8zM10 15.5v-7l6 3.5-6 3.5z"/></svg>`,
+  twitch: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4 3h16v13.5l-4 4H12l-2 2H8v-2H4V3zm2 2v11h2v3l2-3h3l3-3V5H6zm9 2v6h-2V7h2zm-4 0v6H9V7h2z"/></svg>`,
+};
+
+function socialButton(platform, url, label) {
+  const href = String(url || "").trim();
+  if (!href) return "";
+  const icon = SOCIAL_ICON_SVGS[platform] || "";
+  return `<a class="driver-profile-social-btn driver-profile-social-btn--${platform}" href="${escapeAttr(href)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeAttr(label)}">${icon}</a>`;
+}
+
+function renderConnectSection(profile) {
+  const buttons = [
+    socialButton("facebook", profileText(profile, "facebook_url", "facebookUrl"), "Facebook"),
+    socialButton("twitter", profileText(profile, "twitter_url", "twitterUrl"), "X / Twitter"),
+    socialButton("instagram", profileText(profile, "instagram_url", "instagramUrl"), "Instagram"),
+    socialButton("tiktok", profileText(profile, "tiktok_url", "tiktokUrl"), "TikTok"),
+    socialButton("youtube", profileText(profile, "youtube_url", "youtubeUrl"), "YouTube"),
+    socialButton("twitch", profileText(profile, "twitch_url", "twitchUrl"), "Twitch"),
+  ].filter(Boolean);
+
+  if (!buttons.length) return "";
+
+  return `<section class="driver-profile-connect-section">
+    <div class="driver-profile-section-head">
+      <h2>Connect</h2>
+    </div>
+    <div class="driver-profile-social-row">${buttons.join("")}</div>
+  </section>`;
+}
+
+function renderInfoSection(title, items) {
+  const rows = items
+    .map(([label, value]) => {
+      const text = String(value || "").trim();
+      if (!text) return "";
+      return `<div class="driver-profile-info-item">
+        <span class="driver-profile-info-label">${escapeHtml(label)}</span>
+        <span class="driver-profile-info-value">${escapeHtml(text)}</span>
+      </div>`;
+    })
+    .filter(Boolean);
+
+  if (!rows.length) return "";
+
+  return `<section class="driver-profile-info-section">
+    <div class="driver-profile-section-head">
+      <h2>${escapeHtml(title)}</h2>
+    </div>
+    <div class="driver-profile-info-grid">${rows.join("")}</div>
+  </section>`;
+}
+
+function renderBioSection(profile) {
+  const bio = profileText(profile, "bio");
+  if (!bio) return "";
+
+  return `<section class="driver-profile-bio-section">
+    <div class="driver-profile-section-head">
+      <h2>Bio</h2>
+    </div>
+    <p class="driver-profile-bio-text">${escapeHtml(bio)}</p>
+  </section>`;
+}
+
+function renderDriverInfoSection(profile) {
+  return renderInfoSection("Driver Info", [
+    ["Years Sim Racing", profileText(profile, "years_sim_racing", "yearsSimRacing")],
+    ["Driving Style", profileText(profile, "driving_style", "drivingStyle")],
+    ["Favorite Track", profileText(profile, "favorite_track", "favoriteTrack")],
+    [
+      "Favorite NASCAR Driver",
+      profileText(profile, "favorite_nascar_driver", "favoriteNascarDriver"),
+    ],
+  ]);
+}
+
+function renderCareerNotesSection(profile) {
+  return renderInfoSection("Career Notes", [
+    [
+      "Biggest accomplishment in sim racing",
+      profileText(profile, "sim_racing_accomplishment", "simRacingAccomplishment"),
+    ],
+    ["Goal for this season", profileText(profile, "season_goal", "seasonGoal")],
+    [
+      "Something fans may not know",
+      profileText(profile, "fun_fact", "funFact"),
+    ],
+  ]);
+}
+
+function renderCarImageSection(profile) {
+  const carImage = profileText(profile, "car_image_url", "carImageUrl");
+  if (!carImage) return "";
+
+  return `<section class="driver-profile-car-section">
+    <div class="driver-profile-section-head">
+      <h2>Car</h2>
+    </div>
+    <div class="driver-profile-car-card">
+      <img
+        class="driver-profile-car-image"
+        src="${escapeAttr(carImage)}"
+        alt="Race car"
+        loading="lazy"
+      />
+    </div>
+  </section>`;
+}
+
 function renderMetaRow(profile) {
   const items = [
     metaItem("Date of Birth", profile.dateOfBirth || profile.date_of_birth),
@@ -441,10 +576,20 @@ function renderProfile(profile, stats, seasonLabel) {
             }
           </div>
         </div>
+        ${
+          profile.is_streamer === true
+            ? `<div class="driver-profile-streamer">${streamerBadgeHtml(profile.stream_url)}</div>`
+            : ""
+        }
         ${renderMetaRow(profile)}
       </div>
     </section>
 
+    ${renderBioSection(profile)}
+    ${renderDriverInfoSection(profile)}
+    ${renderCareerNotesSection(profile)}
+    ${renderConnectSection(profile)}
+    ${renderCarImageSection(profile)}
     ${renderStatsBar(stats, seasonLabel)}
     ${renderRecentResults(stats.recentRaces)}
   `;

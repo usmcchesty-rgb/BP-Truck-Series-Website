@@ -1612,6 +1612,84 @@ a.home-news-item:hover h4{color:#fff}
   color:var(--gold);
   white-space:nowrap;
 }
+.driver-profile-streamer{margin-top:4px}
+.driver-profile-bio-section,
+.driver-profile-info-section,
+.driver-profile-connect-section,
+.driver-profile-car-section{
+  margin-top:28px;
+}
+.driver-profile-bio-text{
+  margin:0;
+  max-width:860px;
+  color:#ddd;
+  font-size:16px;
+  line-height:1.7;
+}
+.driver-profile-info-grid{
+  display:grid;
+  gap:18px 28px;
+  grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+}
+.driver-profile-info-item{
+  display:grid;
+  gap:6px;
+}
+.driver-profile-info-label{
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  color:#888;
+}
+.driver-profile-info-value{
+  color:#fff;
+  font-size:15px;
+  line-height:1.45;
+}
+.driver-profile-social-row{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:14px;
+}
+.driver-profile-social-btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:38px;
+  height:38px;
+  border-radius:50%;
+  color:#fff;
+  background:rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.12);
+  transition:transform .18s ease,box-shadow .18s ease,color .18s ease,border-color .18s ease;
+}
+.driver-profile-social-btn svg{
+  width:20px;
+  height:20px;
+  display:block;
+}
+.driver-profile-social-btn:hover,
+.driver-profile-social-btn:focus-visible{
+  color:#fff;
+  border-color:rgba(204,0,0,.65);
+  box-shadow:0 0 14px rgba(204,0,0,.55);
+  transform:scale(1.08);
+}
+.driver-profile-car-card{
+  border:1px solid rgba(255,255,255,.08);
+  background:#0a0a0a;
+  border-radius:6px;
+  overflow:hidden;
+}
+.driver-profile-car-image{
+  display:block;
+  width:100%;
+  max-height:420px;
+  object-fit:contain;
+  background:#050505;
+}
 @media (max-width:900px){
   .driver-profile-hero{
     grid-template-columns:1fr;
@@ -1646,6 +1724,14 @@ a.home-news-item:hover h4{color:#fff}
   .driver-profile-stat-value{font-size:22px}
   .driver-profile-name{font-size:clamp(28px,8vw,40px)}
   .driver-profile-number{font-size:clamp(56px,16vw,88px)}
+  .driver-profile-social-btn{
+    width:30px;
+    height:30px;
+  }
+  .driver-profile-social-btn svg{
+    width:17px;
+    height:17px;
+  }
 }
 
 .results-main{

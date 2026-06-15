@@ -1,4 +1,9 @@
 import { getDriverProfiles, supabase, slugify, stripPhotoUrlQuery, withPhotoCacheBust, photoCacheVersion } from './_lib.js';
+import {
+  fetchGoogleFormResponses,
+  buildFormSyncPreview,
+  applyFormSyncUpdates,
+} from './_driver-bio-sync.js';
 
 function parseBody(req) {
   if (!req.body) return {};
@@ -23,12 +28,14 @@ function normalizeStreamUrl(value) {
 }
 
 function normalizeOptionalText(value) {
-  return String(value ?? '').trim();
+  const text = String(value ?? '').trim();
+  return text || null;
 }
 
 function normalizeDriverProfile(row) {
   if (!row) return null;
   const photo_url = stripPhotoUrlQuery(row.photo_url || '');
+  const car_image_url = stripPhotoUrlQuery(row.car_image_url || '');
   return {
     driver_id: String(row.driver_id || row.iracing_id || row.slug || ''),
     iracing_name: row.iracing_name || row.driver_name || '',
@@ -38,13 +45,48 @@ function normalizeDriverProfile(row) {
     photoUrl: photo_url
       ? withPhotoCacheBust(photo_url, photoCacheVersion(row.updated_at))
       : '',
+    car_image_url,
+    carImageUrl: car_image_url || '',
     is_streamer: normalizeBoolean(row.is_streamer, false),
     stream_url: normalizeStreamUrl(row.stream_url),
-    date_of_birth: normalizeOptionalText(row.date_of_birth),
-    dateOfBirth: normalizeOptionalText(row.date_of_birth),
-    hometown: normalizeOptionalText(row.hometown),
-    team: normalizeOptionalText(row.team),
-    active: row.active !== false
+    date_of_birth: normalizeOptionalText(row.date_of_birth) || '',
+    dateOfBirth: normalizeOptionalText(row.date_of_birth) || '',
+    hometown: normalizeOptionalText(row.hometown) || '',
+    team: normalizeOptionalText(row.team) || '',
+    active: row.active !== false,
+    bio: normalizeOptionalText(row.bio) || '',
+    years_sim_racing: normalizeOptionalText(row.years_sim_racing) || '',
+    yearsSimRacing: normalizeOptionalText(row.years_sim_racing) || '',
+    driving_style: normalizeOptionalText(row.driving_style) || '',
+    drivingStyle: normalizeOptionalText(row.driving_style) || '',
+    favorite_track: normalizeOptionalText(row.favorite_track) || '',
+    favoriteTrack: normalizeOptionalText(row.favorite_track) || '',
+    favorite_nascar_driver: normalizeOptionalText(row.favorite_nascar_driver) || '',
+    favoriteNascarDriver: normalizeOptionalText(row.favorite_nascar_driver) || '',
+    sim_racing_accomplishment: normalizeOptionalText(row.sim_racing_accomplishment) || '',
+    simRacingAccomplishment: normalizeOptionalText(row.sim_racing_accomplishment) || '',
+    season_goal: normalizeOptionalText(row.season_goal) || '',
+    seasonGoal: normalizeOptionalText(row.season_goal) || '',
+    fun_fact: normalizeOptionalText(row.fun_fact) || '',
+    funFact: normalizeOptionalText(row.fun_fact) || '',
+    facebook_url: normalizeOptionalText(row.facebook_url) || '',
+    facebookUrl: normalizeOptionalText(row.facebook_url) || '',
+    twitter_url: normalizeOptionalText(row.twitter_url) || '',
+    twitterUrl: normalizeOptionalText(row.twitter_url) || '',
+    instagram_url: normalizeOptionalText(row.instagram_url) || '',
+    instagramUrl: normalizeOptionalText(row.instagram_url) || '',
+    youtube_url: normalizeOptionalText(row.youtube_url) || '',
+    youtubeUrl: normalizeOptionalText(row.youtube_url) || '',
+    twitch_url: normalizeOptionalText(row.twitch_url) || '',
+    twitchUrl: normalizeOptionalText(row.twitch_url) || '',
+    tiktok_url: normalizeOptionalText(row.tiktok_url) || '',
+    tiktokUrl: normalizeOptionalText(row.tiktok_url) || '',
+    form_email: normalizeOptionalText(row.form_email) || '',
+    formEmail: normalizeOptionalText(row.form_email) || '',
+    form_submitted_at: row.form_submitted_at || null,
+    formSubmittedAt: row.form_submitted_at || null,
+    form_permission_granted: normalizeBoolean(row.form_permission_granted, false),
+    formPermissionGranted: normalizeBoolean(row.form_permission_granted, false),
   };
 }
 
@@ -52,7 +94,7 @@ function buildUpsertRow(b) {
   const displayName = b.display_name || b.iracing_name;
   const carNumber = b.car_number || '';
 
-  return {
+  const row = {
     driver_id: String(b.driver_id),
     iracing_name: String(b.iracing_name),
     display_name: displayName,
@@ -67,8 +109,32 @@ function buildUpsertRow(b) {
     hometown: normalizeOptionalText(b.hometown),
     team: normalizeOptionalText(b.team),
     active: b.active !== false,
-    updated_at: new Date().toISOString()
+    bio: normalizeOptionalText(b.bio),
+    years_sim_racing: normalizeOptionalText(b.years_sim_racing ?? b.yearsSimRacing),
+    driving_style: normalizeOptionalText(b.driving_style ?? b.drivingStyle),
+    favorite_track: normalizeOptionalText(b.favorite_track ?? b.favoriteTrack),
+    favorite_nascar_driver: normalizeOptionalText(
+      b.favorite_nascar_driver ?? b.favoriteNascarDriver
+    ),
+    sim_racing_accomplishment: normalizeOptionalText(
+      b.sim_racing_accomplishment ?? b.simRacingAccomplishment
+    ),
+    season_goal: normalizeOptionalText(b.season_goal ?? b.seasonGoal),
+    fun_fact: normalizeOptionalText(b.fun_fact ?? b.funFact),
+    facebook_url: normalizeOptionalText(b.facebook_url ?? b.facebookUrl),
+    twitter_url: normalizeOptionalText(b.twitter_url ?? b.twitterUrl),
+    instagram_url: normalizeOptionalText(b.instagram_url ?? b.instagramUrl),
+    youtube_url: normalizeOptionalText(b.youtube_url ?? b.youtubeUrl),
+    twitch_url: normalizeOptionalText(b.twitch_url ?? b.twitchUrl),
+    tiktok_url: normalizeOptionalText(b.tiktok_url ?? b.tiktokUrl),
+    car_image_url: stripPhotoUrlQuery(b.car_image_url ?? b.carImageUrl ?? ''),
+    form_email: normalizeOptionalText(b.form_email ?? b.formEmail),
+    form_submitted_at: b.form_submitted_at ?? b.formSubmittedAt ?? null,
+    form_permission_granted: normalizeBoolean(b.form_permission_granted ?? b.formPermissionGranted),
+    updated_at: new Date().toISOString(),
   };
+
+  return row;
 }
 
 function isConflictConstraintError(error) {
@@ -94,6 +160,38 @@ async function upsertDriver(sb, row) {
     .upsert(row, { onConflict: 'slug' })
     .select()
     .single();
+}
+
+async function handleFormSyncAction(b, res) {
+  const sb = supabase();
+  if (!sb) {
+    return res.status(400).json({ error: 'Supabase not configured yet.' });
+  }
+
+  const profiles = await getDriverProfiles();
+  const sheetData = await fetchGoogleFormResponses();
+  const preview = buildFormSyncPreview(profiles, sheetData);
+
+  if (b.action === 'preview-form-sync') {
+    return res.status(200).json(preview);
+  }
+
+  if (b.action === 'apply-form-sync') {
+    const driverIds = Array.isArray(b.driver_ids)
+      ? b.driver_ids
+      : Array.isArray(b.driverIds)
+        ? b.driverIds
+        : [];
+
+    if (!driverIds.length) {
+      return res.status(400).json({ error: 'driver_ids array is required for apply-form-sync.' });
+    }
+
+    const result = await applyFormSyncUpdates(sb, profiles, driverIds, sheetData);
+    return res.status(200).json({ ...preview, applyResult: result });
+  }
+
+  return res.status(400).json({ error: 'Unknown action.' });
 }
 
 export default async function handler(req, res) {
@@ -124,6 +222,15 @@ export default async function handler(req, res) {
 
   if (b.password !== process.env.ADMIN_PASSWORD) {
     return res.status(401).json({ error: 'Bad password' });
+  }
+
+  const action = String(b.action || '').trim().toLowerCase();
+  if (action === 'preview-form-sync' || action === 'apply-form-sync') {
+    try {
+      return await handleFormSyncAction(b, res);
+    } catch (error) {
+      return res.status(500).json({ error: error.message || 'Form sync failed.' });
+    }
   }
 
   const sb = supabase();

@@ -79,6 +79,26 @@ alter table driver_profiles add column if not exists date_of_birth text;
 alter table driver_profiles add column if not exists hometown text;
 alter table driver_profiles add column if not exists team text;
 
+-- Google Form bio sync fields (run once on existing deployments)
+alter table driver_profiles add column if not exists bio text;
+alter table driver_profiles add column if not exists years_sim_racing text;
+alter table driver_profiles add column if not exists driving_style text;
+alter table driver_profiles add column if not exists favorite_track text;
+alter table driver_profiles add column if not exists favorite_nascar_driver text;
+alter table driver_profiles add column if not exists sim_racing_accomplishment text;
+alter table driver_profiles add column if not exists season_goal text;
+alter table driver_profiles add column if not exists fun_fact text;
+alter table driver_profiles add column if not exists facebook_url text;
+alter table driver_profiles add column if not exists twitter_url text;
+alter table driver_profiles add column if not exists instagram_url text;
+alter table driver_profiles add column if not exists youtube_url text;
+alter table driver_profiles add column if not exists twitch_url text;
+alter table driver_profiles add column if not exists tiktok_url text;
+alter table driver_profiles add column if not exists car_image_url text;
+alter table driver_profiles add column if not exists form_email text;
+alter table driver_profiles add column if not exists form_submitted_at timestamptz;
+alter table driver_profiles add column if not exists form_permission_granted boolean default false;
+
 -- Power Rankings (weekly Top 10 + optional honorable mentions)
 create table if not exists power_rankings_weeks (
   id serial primary key,
