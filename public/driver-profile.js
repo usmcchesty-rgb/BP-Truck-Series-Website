@@ -154,50 +154,154 @@ const SOCIAL_ICON_SVGS = {
   twitch: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4 3h16v13.5l-4 4H12l-2 2H8v-2H4V3zm2 2v11h2v3l2-3h3l3-3V5H6zm9 2v6h-2V7h2zm-4 0v6H9V7h2z"/></svg>`,
 };
 
+function shouldLogSocialUrlDiagnostics() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("debug") === "social") return true;
+    const host = window.location.hostname;
+    return host === "localhost" || host === "127.0.0.1";
+  } catch {
+    return false;
+  }
+}
+
+function logSocialUrlDiagnostic(platform, raw, normalized, note = "") {
+  if (!shouldLogSocialUrlDiagnostics()) return;
+  console.info("[BP Driver Profile Social]", {
+    platform,
+    raw,
+    normalized: normalized || null,
+    note: note || undefined,
+  });
+}
+
+function normalizeSocialHandle(value) {
+  return String(value || "")
+    .trim()
+    .replace(/^@+/, "");
+}
+
+function isAbsoluteHttpUrl(value) {
+  return /^https?:\/\//i.test(String(value || "").trim());
+}
+
+function isRelativeOrInternalPath(value) {
+  const text = String(value || "").trim();
+  if (!text) return true;
+  if (text.startsWith("/") || text.startsWith("./") || text.startsWith("../")) return true;
+  if (/\/drivers\//i.test(text) || /^drivers\//i.test(text)) return true;
+  return false;
+}
+
+function looksLikeDomainUrl(value) {
+  const text = String(value || "").trim();
+  if (!text || text.startsWith("@")) return false;
+  return /^(?:[a-z0-9-]+\.)+[a-z]{2,}(?:[/:?#]|$)/i.test(text);
+}
+
+function buildPlatformSocialUrl(platform, handle) {
+  const safeHandle = encodeURIComponent(handle).replace(/%40/g, "@");
+  switch (platform) {
+    case "twitter":
+      return `https://x.com/${safeHandle}`;
+    case "instagram":
+      return `https://instagram.com/${safeHandle}`;
+    case "tiktok":
+      return `https://tiktok.com/@${safeHandle}`;
+    case "twitch":
+      return `https://twitch.tv/${safeHandle}`;
+    case "youtube":
+      return `https://youtube.com/@${safeHandle}`;
+    case "facebook":
+      return `https://facebook.com/${safeHandle}`;
+    default:
+      return "";
+  }
+}
+
+function isValidSocialHandle(handle) {
+  return /^[a-z0-9._-]+$/i.test(String(handle || "").trim());
+}
+
 function normalizeSocialUrl(value, platform) {
-  const url = String(value || "").trim();
-  if (!url) return "";
-  if (/^https?:\/\//i.test(url)) return url;
-  if (/^www\./i.test(url)) return `https://${url}`;
+  const raw = String(value || "").trim();
+  if (!raw) return "";
 
-  if (url.startsWith("@")) {
-    const handle = url.slice(1);
-    if (platform === "twitter") return `https://x.com/${encodeURIComponent(handle)}`;
-    if (platform === "instagram") return `https://instagram.com/${encodeURIComponent(handle)}`;
-    if (platform === "tiktok") return `https://tiktok.com/@${encodeURIComponent(handle)}`;
-    if (platform === "twitch") return `https://twitch.tv/${encodeURIComponent(handle)}`;
-    return url;
+  if (isRelativeOrInternalPath(raw)) {
+    logSocialUrlDiagnostic(platform, raw, "", "rejected relative or internal path");
+    return "";
   }
 
-  if (/^(twitch|youtube|instagram|facebook|twitter|x|tiktok)\./i.test(url)) {
-    return `https://${url}`;
+  if (isAbsoluteHttpUrl(raw)) {
+    logSocialUrlDiagnostic(platform, raw, raw);
+    return raw;
   }
 
-  if (platform === "twitter" && /^[a-z0-9_]+$/i.test(url)) {
-    return `https://x.com/${encodeURIComponent(url.replace(/^@/, ""))}`;
+  if (/^www\./i.test(raw)) {
+    const normalized = `https://${raw}`;
+    logSocialUrlDiagnostic(platform, raw, normalized);
+    return normalized;
   }
 
-  return url;
+  if (looksLikeDomainUrl(raw)) {
+    const normalized = `https://${raw.replace(/^\/\//, "")}`;
+    logSocialUrlDiagnostic(platform, raw, normalized);
+    return normalized;
+  }
+
+  if (/^(twitch|youtube|instagram|facebook|twitter|x|tiktok)\./i.test(raw)) {
+    const normalized = `https://${raw}`;
+    logSocialUrlDiagnostic(platform, raw, normalized);
+    return normalized;
+  }
+
+  const handle = normalizeSocialHandle(raw);
+  if (!handle || !isValidSocialHandle(handle)) {
+    logSocialUrlDiagnostic(platform, raw, "", "rejected invalid handle");
+    return "";
+  }
+
+  const normalized = buildPlatformSocialUrl(platform, handle);
+  if (!normalized || !isAbsoluteHttpUrl(normalized)) {
+    logSocialUrlDiagnostic(platform, raw, "", "failed to build absolute URL");
+    return "";
+  }
+
+  logSocialUrlDiagnostic(platform, raw, normalized);
+  return normalized;
 }
 
 function socialButton(platform, url, label) {
   const href = normalizeSocialUrl(url, platform);
-  if (!href) return "";
+  if (!href || !isAbsoluteHttpUrl(href) || isRelativeOrInternalPath(href)) return "";
   const icon = SOCIAL_ICON_SVGS[platform] || "";
   return `<a class="driver-profile-social-btn driver-profile-social-btn--${platform}" href="${escapeAttr(href)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeAttr(label)}">${icon}</a>`;
 }
 
 function renderConnectSection(profile) {
-  const buttons = [
-    socialButton("facebook", profileText(profile, "facebook_url", "facebookUrl"), "Facebook"),
-    socialButton("twitter", profileText(profile, "twitter_url", "twitterUrl"), "X / Twitter"),
-    socialButton("instagram", profileText(profile, "instagram_url", "instagramUrl"), "Instagram"),
-    socialButton("tiktok", profileText(profile, "tiktok_url", "tiktokUrl"), "TikTok"),
-    socialButton("youtube", profileText(profile, "youtube_url", "youtubeUrl"), "YouTube"),
-    socialButton("twitch", profileText(profile, "twitch_url", "twitchUrl"), "Twitch"),
-  ].filter(Boolean);
+  const entries = [
+    ["facebook", profileText(profile, "facebook_url", "facebookUrl"), "Facebook"],
+    ["twitter", profileText(profile, "twitter_url", "twitterUrl"), "X / Twitter"],
+    ["instagram", profileText(profile, "instagram_url", "instagramUrl"), "Instagram"],
+    ["tiktok", profileText(profile, "tiktok_url", "tiktokUrl"), "TikTok"],
+    ["youtube", profileText(profile, "youtube_url", "youtubeUrl"), "YouTube"],
+    ["twitch", profileText(profile, "twitch_url", "twitchUrl"), "Twitch"],
+  ];
+
+  const buttons = entries
+    .map(([platform, rawUrl, label]) => socialButton(platform, rawUrl, label))
+    .filter(Boolean);
 
   if (!buttons.length) return "";
+
+  if (shouldLogSocialUrlDiagnostics()) {
+    const summary = Object.fromEntries(
+      entries
+        .map(([platform, rawUrl]) => [platform, { raw: rawUrl, normalized: normalizeSocialUrl(rawUrl, platform) }])
+        .filter(([, value]) => value.raw)
+    );
+    console.info("[BP Driver Profile Social] connect section summary", summary);
+  }
 
   return `<section class="driver-profile-connect-section">
     <div class="driver-profile-section-head">
