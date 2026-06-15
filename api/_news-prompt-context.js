@@ -291,6 +291,28 @@ function slimLeagueCareerStats(leagueCareerStats) {
   };
 }
 
+function slimLeagueCareerSummary(summary) {
+  if (!summary?.careerSummaryVerified) {
+    return {
+      careerSummaryVerified: false,
+      note: 'Do not cite championships, best season finish, runner-up seasons, or top-three championship finishes unless leagueCareerSummary is verified.',
+    };
+  }
+
+  return {
+    careerSummaryVerified: true,
+    seasonsAppeared: summary.seasonsAppeared,
+    seasonsStarted: summary.seasonsStarted,
+    championships: summary.championships,
+    championshipSeasons: summary.championshipSeasons,
+    runnerUpSeasons: summary.runnerUpSeasons,
+    top3SeasonFinishes: summary.top3SeasonFinishes,
+    bestSeasonFinish: summary.bestSeasonFinish,
+    bestSeasonName: summary.bestSeasonName,
+    label: 'Blazing Pedals league championship history',
+  };
+}
+
 function slimTenureHistory(history) {
   if (!history) return null;
   return {
@@ -320,6 +342,7 @@ function slimDriverGrounding(grounding, { includeCareerHistory = false } = {}) {
 
   if (includeCareerHistory) {
     slim.leagueCareerStats = slimLeagueCareerStats(grounding.leagueCareerStats);
+    slim.leagueCareerSummary = slimLeagueCareerSummary(grounding.leagueCareerSummary);
     slim.truckSeriesCareerHistory = slimTenureHistory(grounding.truckSeriesCareerHistory);
   }
 
@@ -354,13 +377,20 @@ export function buildPromptFactualGrounding(generationContext, articleType, opti
     if (includeCareerHistory) {
       careerHistoryChars += JSON.stringify({
         league: slim.leagueCareerStats,
+        summary: slim.leagueCareerSummary,
       }).length;
     }
   }
 
+  const spotlightRules =
+    articleType === 'driver-spotlight'
+      ? 'Driver Spotlight structure: (1) Opening current-season overview using allowedSeasonStats and standings position/points. (2) Blazing Pedals career snapshot from leagueCareerStats when careerStatsVerified. (3) Championship history from leagueCareerSummary when careerSummaryVerified — bestSeasonFinish, bestSeasonName, championships, championshipSeasons, runnerUpSeasons, top3SeasonFinishes, seasonsAppeared. Omit section 3 entirely if not verified. (4) Recent form from verifiedRaceFinishes / last3RaceAverageFinish. (5) Outlook based only on verified current-season stats and recent results — no personality claims.'
+      : null;
+
   const payload = {
     rules:
-      'Use only verified facts in this object, manual notes, or truncated transcript. Do not invent race events. Driver Spotlight may cite cumulative stats only from leagueCareerStats when careerStatsVerified is true. Use allowedSeasonStats for current-season numbers. Do not infer driver personality or style.',
+      'Use only verified facts in this object, manual notes, or truncated transcript. Do not invent race events. Driver Spotlight may cite cumulative stats only from leagueCareerStats when careerStatsVerified is true. Use allowedSeasonStats for current-season numbers. Do not infer driver personality or style.' +
+      (spotlightRules ? ` ${spotlightRules}` : ''),
     manualNotesAvailable: fullGrounding.manualNotesAvailable === true,
     transcriptSummaryAvailable: fullGrounding.transcriptSummaryAvailable === true,
     recentResultsWinnersOnly: fullGrounding.recentResultsWinnersOnly || [],
@@ -432,11 +462,14 @@ export function buildNewsPromptContext(generationContext, options = {}) {
 
 export function buildNewsUserPromptFromContext(generationContext, promptContext, options = {}) {
   const typeConfig = options.typeConfig;
+  const articleType = promptContext.articleType || options.articleType || 'race-recap';
   const raceNumber = Number(options.raceNumber ?? generationContext.raceNumber);
   const headlineOverride = String(options.headlineOverride || '').trim();
   const spotlight = generationContext.standings?.find(
     (row) => String(row.driverId) === String(promptContext.spotlightDriverId)
   );
+  const spotlightGrounding =
+    generationContext.factualGrounding?.drivers?.[String(promptContext.spotlightDriverId)] || null;
 
   const recentResults = (generationContext.recentResultsForGrounding || [])
     .map(
@@ -445,11 +478,46 @@ export function buildNewsUserPromptFromContext(generationContext, promptContext,
     )
     .join('\n');
 
+  const factualJson = JSON.stringify(promptContext.factualGrounding);
+
+  if (articleType === 'driver-spotlight') {
+    const stats = spotlightGrounding?.allowedSeasonStats;
+    const currentSeasonBlock = stats
+      ? `Current season stats: P${stats.pointsPosition ?? spotlight?.position ?? '—'}, ${stats.pointsTotal ?? spotlight?.points ?? '—'} pts, ${stats.winsTotal ?? spotlight?.wins ?? 0} wins, ${stats.top5Total ?? spotlight?.top5 ?? 0} top 5s, ${stats.top10Total ?? spotlight?.top10 ?? 0} top 10s`
+      : spotlight
+        ? `Current season: P${spotlight.position}, ${spotlight.points} pts, ${spotlight.wins} wins`
+        : '(current season stats unavailable)';
+
+    return `Write a ${typeConfig.label} feature article for the Blazing Pedals Truck Series.
+
+Article type: ${typeConfig.label}
+Target length: ${typeConfig.minWords}-${typeConfig.maxWords} words
+Required structure: ${typeConfig.structure}
+Author byline: ${options.author || 'Miles Apex'}
+${headlineOverride ? `Suggested headline direction: ${headlineOverride}` : ''}
+Spotlight driver: ${spotlight?.driverName || spotlightGrounding?.driverName || 'Selected driver'}
+${currentSeasonBlock}
+
+This is NOT a race recap. Do not anchor the article to a specific race number or single event unless manual notes/transcript explicitly support it.
+
+Standings snapshot (current season context):
+${promptContext.standingsSnapshot.text}
+
+Recent league results (context only):
+${recentResults || '(none)'}
+
+Factual grounding (verified facts only — leagueCareerStats, leagueCareerSummary, recent form):
+${factualJson}
+
+Manual notes / transcript (use only when relevant to the spotlight driver):
+${promptContext.truncatedTranscript.text || '(none)'}
+
+Return JSON only with headline, subheadline, summary, and body.`;
+  }
+
   const raceRow = generationContext.scheduleRaces?.find(
     (race) => race.officialPointsRaceNumber === raceNumber
   );
-
-  const factualJson = JSON.stringify(promptContext.factualGrounding);
 
   return `Write a ${typeConfig.label} article for the Blazing Pedals Truck Series.
 
@@ -487,8 +555,9 @@ export function measureNewsPromptSize(systemPrompt, userPrompt, promptContext) {
       Object.values(promptContext.factualGrounding.drivers || {})
         .map((driver) => ({
           league: driver.leagueCareerStats,
+          summary: driver.leagueCareerSummary,
         }))
-        .filter((entry) => entry.league)
+        .filter((entry) => entry.league || entry.summary)
     )
   );
   const factualGroundingTokens = estimateTokens(JSON.stringify(promptContext.factualGrounding));

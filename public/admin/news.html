@@ -21,6 +21,8 @@
     #adminMsg.error, #loginMsg.error, #reporterMsg.error { color: #ff6060; }
     .pw-row { max-width: 320px; margin-bottom: 14px; }
     .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+    .field-hint { font-size: 11px; color: #888; margin: -4px 0 8px; line-height: 1.4; }
+    .field-disabled .input { opacity: 0.55; pointer-events: none; }
     .article-list { display: grid; gap: 8px; margin-bottom: 16px; }
     .article-item { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid #333; background: rgba(0,0,0,.25); }
     .article-item strong { font-size: 13px; }
@@ -153,12 +155,13 @@
             <option value="league-announcement">League Announcement</option>
           </select>
         </div>
-        <div>
+        <div id="raceNumberField">
           <label class="field-label" for="raceNumber">Race Number</label>
           <input id="raceNumber" class="input" type="number" min="1" value="1">
+          <p id="raceNumberHint" class="field-hint" hidden>Not used for Driver Spotlight — generation uses current season standings and league career history.</p>
         </div>
         <div>
-          <label class="field-label" for="spotlightDriverId">Driver (optional)</label>
+          <label class="field-label" for="spotlightDriverId" id="spotlightDriverLabel">Driver (optional)</label>
           <select id="spotlightDriverId" class="select"><option value="">—</option></select>
         </div>
       </div>
@@ -326,6 +329,7 @@
       loadReporterSettings();
       loadDrivers();
       loadArticles();
+      syncArticleTypeFields();
     }
 
     function readReporterCropFromForm() {
@@ -773,7 +777,12 @@
         if (!a) throw new Error('Article not found.');
         $('#articleId').value = a.id;
         $('#articleType').value = a.articleType || 'race-recap';
-        $('#raceNumber').value = a.raceNumber || 1;
+        syncArticleTypeFields();
+        if (a.articleType === 'driver-spotlight') {
+          $('#raceNumber').value = '';
+        } else {
+          $('#raceNumber').value = a.raceNumber || 1;
+        }
         $('#spotlightDriverId').value = a.spotlightDriverId || '';
         $('#headline').value = a.headline || '';
         $('#subheadline').value = a.subheadline || '';
@@ -793,12 +802,36 @@
       }
     }
 
+    function isDriverSpotlightType() {
+      return $('#articleType').value === 'driver-spotlight';
+    }
+
+    function syncArticleTypeFields() {
+      const spotlight = isDriverSpotlightType();
+      const raceField = $('#raceNumberField');
+      const raceInput = $('#raceNumber');
+      const raceHint = $('#raceNumberHint');
+      const driverLabel = $('#spotlightDriverLabel');
+
+      if (spotlight) {
+        raceInput.value = '';
+        raceField.classList.add('field-disabled');
+        raceHint.hidden = false;
+        driverLabel.textContent = 'Spotlight Driver (required)';
+      } else {
+        if (!raceInput.value) raceInput.value = '1';
+        raceField.classList.remove('field-disabled');
+        raceHint.hidden = true;
+        driverLabel.textContent = 'Driver (optional)';
+      }
+    }
+
     function collectFormData() {
-      return {
+      const spotlight = isDriverSpotlightType();
+      const payload = {
         password: getSessionPw(),
         id: $('#articleId').value ? Number($('#articleId').value) : undefined,
         articleType: $('#articleType').value,
-        raceNumber: Number($('#raceNumber').value) || undefined,
         spotlightDriverId: $('#spotlightDriverId').value || null,
         headline: $('#headline').value,
         subheadline: $('#subheadline').value,
@@ -810,6 +843,10 @@
         featuredImageY: Number($('#articleImageY').value),
         featuredImageUpdatedAt: $('#featuredImageUpdatedAt').value || undefined,
       };
+      if (!spotlight) {
+        payload.raceNumber = Number($('#raceNumber').value) || undefined;
+      }
+      return payload;
     }
 
     function setGenerating(active) {
@@ -837,8 +874,21 @@
       ].join('\n');
 
       const gs = data.generationSources || {};
+      const cs = gs.careerStatsDiagnostics || {};
       sourcesPanel.hidden = false;
       $('#generationSources').textContent = [
+        `spotlightDriverId: ${gs.spotlightDriverId ?? 'none'}`,
+        `leagueCareerStatsUsed: ${gs.leagueCareerStatsUsed ? 'yes' : 'no'}`,
+        `currentSeasonStatsUsed: ${gs.currentSeasonStatsUsed ? 'yes' : 'no'}`,
+        `recentResultsUsed: ${gs.recentResultsUsed ? 'yes' : 'no'}`,
+        `transcriptSource: ${gs.transcriptSource || 'none'}`,
+        `careerSummaryVerified: ${cs.careerSummaryVerified ? 'yes' : 'no'}`,
+        `bestSeasonFinish: ${cs.bestSeasonFinish ?? 'n/a'}`,
+        `bestSeasonName: ${cs.bestSeasonName ?? 'n/a'}`,
+        `championships: ${cs.championships ?? 'n/a'}`,
+        `championshipSeasons: ${(cs.championshipSeasons || []).map((s) => s.label || s.seasonName).join(', ') || 'none'}`,
+        `seasonsScanned: ${cs.seasonsScanned ?? 'n/a'}`,
+        '',
         `confidenceScore: ${gs.confidenceScore || 'n/a'}`,
         `dataQualityScore: ${gs.dataQualityScore ?? 'n/a'}`,
         `factsUsed: ${(gs.factsUsed || []).join(', ') || 'none'}`,
@@ -860,26 +910,35 @@
         ...(gs.validationWarnings || []).map((w) => `  - ${w.message}`),
         '',
         'Unsupported facts:',
-        ...(gs.unsupportedFacts || []).map((f) => `  - [${f.type}] ${f.message || f.claim || ''}`)
+        ...(gs.unsupportedFacts || []).map((f) => `  - [${f.type}] ${f.message || f.claim || ''}`),
+        '',
+        'Unsupported career summary claims:',
+        ...(cs.unsupportedCareerSummaryClaims || []).map((f) => `  - [${f.type}] ${f.message || f.claim || ''}`)
       ].join('\n');
     }
 
     async function generateDraft(isRegenerate) {
+      if (isDriverSpotlightType() && !$('#spotlightDriverId').value) {
+        return setMsg('Select a spotlight driver before generating a Driver Spotlight article.', true);
+      }
       setMsg(isRegenerate ? 'Regenerating draft...' : 'Generating draft...');
       setGenerating(true);
       try {
+        const payload = {
+          action: 'generate',
+          password: getSessionPw(),
+          articleType: $('#articleType').value,
+          spotlightDriverId: $('#spotlightDriverId').value || null,
+          manualNotes: $('#manualNotes').value,
+          headlineOverride: $('#headlineOverride').value
+        };
+        if (!isDriverSpotlightType()) {
+          payload.raceNumber = Number($('#raceNumber').value) || 1;
+        }
         const res = await fetch('/api/news', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'generate',
-            password: getSessionPw(),
-            articleType: $('#articleType').value,
-            raceNumber: Number($('#raceNumber').value) || 1,
-            spotlightDriverId: $('#spotlightDriverId').value || null,
-            manualNotes: $('#manualNotes').value,
-            headlineOverride: $('#headlineOverride').value
-          })
+          body: JSON.stringify(payload)
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Generation failed');
@@ -965,6 +1024,7 @@
     }
 
     $('#loginPw')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') login(); });
+    $('#articleType')?.addEventListener('change', syncArticleTypeFields);
     initSession();
   </script>
 </body>

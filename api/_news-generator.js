@@ -50,6 +50,7 @@ function buildValidationContext(generationContext, articleType) {
     standings: generationContext.standings || [],
     factualGrounding: generationContext.factualGrounding,
     leagueCareerStats: generationContext.leagueCareerStats || null,
+    leagueCareerSummary: generationContext.leagueCareerSummary || null,
     alignedRaces: generationContext.alignedRaces || [],
     recentResultsForGrounding: generationContext.recentResultsForGrounding || [],
     driverLookup: generationContext.driverLookup,
@@ -133,14 +134,30 @@ Return corrected JSON only with headline, subheadline, summary, and body.`,
 }
 
 export async function loadNewsGenerationContext(options = {}) {
-  const raceNumber = Number(options.raceNumber ?? options.race_number ?? 1);
+  const articleType = normalizeArticleType(options.articleType ?? options.article_type);
+  let raceNumber = options.raceNumber ?? options.race_number;
   const manualNotes = String(
     options.manualNotes ?? options.manualRaceNotes ?? options.manual_race_notes ?? ''
   ).trim();
 
+  if (articleType === 'driver-spotlight') {
+    if (raceNumber == null || raceNumber === '' || Number(raceNumber) < 1) {
+      const bootstrap = await loadPowerRankingsGenerationContext(1, '', {
+        supplementalManualNotes: manualNotes,
+      });
+      raceNumber = bootstrap.raceNumberDebug?.latestCompletedRaceNumber ?? 1;
+    } else {
+      raceNumber = Number(raceNumber);
+    }
+  } else {
+    raceNumber = Number(raceNumber ?? 1);
+  }
+
   const generationContext = await loadPowerRankingsGenerationContext(raceNumber, '', {
     supplementalManualNotes: manualNotes,
   });
+  generationContext.resolvedRaceNumber = raceNumber;
+  generationContext.articleType = articleType;
 
   return buildNewsFactualContext(generationContext, {
     spotlightDriverId: options.spotlightDriverId || options.spotlight_driver_id || null,
@@ -187,17 +204,25 @@ export async function repairNewsArticle(article, generationContext, articleType)
 
 export async function generateNewsArticle(options = {}) {
   const articleType = normalizeArticleType(options.articleType ?? options.article_type);
-  const raceNumber = Number(options.raceNumber ?? options.race_number ?? 1);
+  const isDriverSpotlight = articleType === 'driver-spotlight';
+  const raceNumber = isDriverSpotlight
+    ? null
+    : Number(options.raceNumber ?? options.race_number ?? 1);
 
   const generationContext = await loadNewsGenerationContext({
-    raceNumber,
+    articleType,
+    raceNumber: isDriverSpotlight
+      ? options.raceNumber ?? options.race_number ?? null
+      : raceNumber,
     manualNotes: options.manualNotes ?? options.manualRaceNotes,
     spotlightDriverId: options.spotlightDriverId ?? options.spotlight_driver_id,
   });
 
+  const resolvedRaceNumber = generationContext.resolvedRaceNumber ?? raceNumber ?? 1;
+
   const { userPrompt, promptContext } = buildNewsUserPrompt(generationContext, {
     articleType,
-    raceNumber,
+    raceNumber: resolvedRaceNumber,
     headlineOverride: options.headlineOverride ?? options.headline_override,
     spotlightDriverId: options.spotlightDriverId ?? options.spotlight_driver_id,
   });
@@ -220,7 +245,7 @@ export async function generateNewsArticle(options = {}) {
     promptVersion: NEWS_PROMPT_VERSION,
     author: NEWS_AUTHOR,
     articleType,
-    raceNumber,
+    raceNumber: isDriverSpotlight ? null : resolvedRaceNumber,
     article: repaired.article,
     validation: repaired.validation,
     repairAttempted: repaired.repairAttempted,
@@ -255,6 +280,17 @@ function buildGenerationSources(generationContext, articleType, repaired, prompt
   const manualNotes = Boolean(String(generationContext.manualRaceNotes || '').trim());
   const savedTranscriptUsed = meta.savedTranscriptUsed === true;
   const transcriptUsed = meta.transcriptUsed === true;
+  const spotlightDriverId = generationContext.spotlightDriverId || null;
+  const spotlightGrounding = spotlightDriverId
+    ? grounding.drivers?.[String(spotlightDriverId)] || null
+    : null;
+  const careerStatsDiagnostics = generationContext.careerStatsDiagnostics || null;
+  const unsupportedCareerSummaryClaims =
+    repaired.validation?.unsupportedFacts?.filter((fact) =>
+      ['unsupported-career-summary', 'unsupported-career-stat', 'unsupported-career-scope', 'unsupported-career-tenure'].includes(
+        fact.type
+      )
+    ) || [];
 
   let dataQualityScore = 40;
   if ((generationContext.standings || []).length) dataQualityScore += 25;
@@ -275,6 +311,14 @@ function buildGenerationSources(generationContext, articleType, repaired, prompt
 
   return {
     articleType,
+    spotlightDriverId,
+    leagueCareerStatsUsed: careerStatsDiagnostics?.leagueCareerStatsUsed === true,
+    currentSeasonStatsUsed: Boolean(spotlightGrounding?.allowedSeasonStats),
+    recentResultsUsed: Boolean(
+      spotlightGrounding?.recentRaceFinishes?.length ||
+        spotlightGrounding?.verifiedRaceFinishes?.length
+    ),
+    transcriptSource: meta.transcriptSource || 'none',
     factsUsed: repaired.validation?.mentionedDrivers || [],
     resultsUsed: generationContext.recentResultsForGrounding || [],
     standingsSnapshot: (generationContext.standings || []).slice(0, 10).map((row) => ({
@@ -312,17 +356,16 @@ function buildGenerationSources(generationContext, articleType, repaired, prompt
           classificationIssues: grounding.careerHistoryAudit.classificationIssues || [],
         }
       : null,
-    careerStatsDiagnostics: generationContext.careerStatsDiagnostics
+    careerStatsDiagnostics: careerStatsDiagnostics
       ? {
-          ...generationContext.careerStatsDiagnostics,
+          ...careerStatsDiagnostics,
+          unsupportedCareerSummaryClaims,
           rejectedUnsupportedClaims:
-            repaired.validation?.rejectedUnsupportedClaims ||
             repaired.validation?.unsupportedFacts?.map((fact) => ({
               type: fact.type,
               claim: fact.claim,
               message: fact.message,
-            })) ||
-            [],
+            })) || [],
         }
       : null,
     promptSize,

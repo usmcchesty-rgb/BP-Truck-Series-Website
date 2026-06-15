@@ -1,6 +1,6 @@
 import { slugify, stripPhotoUrlQuery, supabase } from './_lib.js';
 import { ARTICLE_TYPES } from '../server/config/news-system-prompt.js';
-import { generateNewsArticle } from './_news-generator.js';
+import { generateNewsArticle, normalizeArticleType } from './_news-generator.js';
 import {
   deleteRaceTranscript,
   listRaceTranscripts,
@@ -276,19 +276,30 @@ async function saveArticle(body, publish = false) {
 }
 
 async function handleGenerate(body) {
-  const raceNumber = Number(body.raceNumber ?? body.race_number ?? 1);
-  if (!Number.isInteger(raceNumber) || raceNumber < 1) {
-    return { error: 'Valid race number is required.', status: 400 };
+  const articleType = normalizeArticleType(body.articleType ?? body.article_type);
+  const isDriverSpotlight = articleType === 'driver-spotlight';
+  const spotlightDriverId =
+    body.spotlightDriverId ?? body.spotlight_driver_id ?? body.driverId ?? null;
+
+  if (isDriverSpotlight) {
+    if (!spotlightDriverId) {
+      return { error: 'Driver Spotlight requires a selected driver.', status: 400 };
+    }
+  } else {
+    const raceNumber = Number(body.raceNumber ?? body.race_number ?? 1);
+    if (!Number.isInteger(raceNumber) || raceNumber < 1) {
+      return { error: 'Valid race number is required.', status: 400 };
+    }
   }
 
   try {
     const result = await generateNewsArticle({
-      articleType: body.articleType ?? body.article_type,
-      raceNumber,
+      articleType,
+      raceNumber: isDriverSpotlight ? null : Number(body.raceNumber ?? body.race_number ?? 1),
       manualNotes: body.manualNotes ?? body.manualRaceNotes ?? body.manual_notes,
       transcript: body.transcript,
       headlineOverride: body.headlineOverride ?? body.headline_override,
-      spotlightDriverId: body.spotlightDriverId ?? body.spotlight_driver_id ?? body.driverId,
+      spotlightDriverId,
     });
     return { data: result, status: 200 };
   } catch (error) {

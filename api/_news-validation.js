@@ -2,6 +2,7 @@ import { validateWriteupFactualGrounding } from './_power-rankings-factual-groun
 import {
   validateCareerTenureClaims,
   validateDriverSpotlightCareerStats,
+  validateDriverSpotlightCareerSummary,
   validateDriverSpotlightStyleClaims,
 } from './_driver-career-history.js';
 import { ARTICLE_TYPES } from '../server/config/news-system-prompt.js';
@@ -178,6 +179,10 @@ export function validateNewsArticle(article, context = {}) {
         spotlightGrounding?.leagueCareerStats ||
         context.leagueCareerStats ||
         null,
+      leagueCareerSummary:
+        spotlightGrounding?.leagueCareerSummary ||
+        context.leagueCareerSummary ||
+        null,
       allowedSeasonStats: spotlightGrounding?.allowedSeasonStats || null,
       manualRaceNotes: manualNotes,
       transcriptSummary,
@@ -188,6 +193,22 @@ export function validateNewsArticle(article, context = {}) {
     }
 
     for (const err of validateDriverSpotlightCareerStats(fullText, spotlightValidationContext)) {
+      unsupportedFacts.push({
+        type: err.type,
+        claim: err.claim || err.message,
+        driverName: spotlightGrounding?.driverName || null,
+        message: err.message,
+      });
+      errors.push({
+        type: err.type,
+        message: spotlightGrounding?.driverName
+          ? `${spotlightGrounding.driverName}: ${err.message}`
+          : err.message,
+        claim: err.claim,
+      });
+    }
+
+    for (const err of validateDriverSpotlightCareerSummary(fullText, spotlightValidationContext)) {
       unsupportedFacts.push({
         type: err.type,
         claim: err.claim || err.message,
@@ -318,6 +339,7 @@ export const REPAIRABLE_NEWS_ERROR_TYPES = new Set([
   'unsupported-facts',
   'unsupported-career-tenure',
   'unsupported-career-stat',
+  'unsupported-career-summary',
   'unsupported-career-scope',
   'unsupported-driver-style',
   'forbidden-meta',
