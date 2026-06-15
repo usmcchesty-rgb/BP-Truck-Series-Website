@@ -1,11 +1,18 @@
 {
   "drivers": [
     {
-      "name": "Mark Arthur",
+      "name": "Russell Gilbert",
+      "carNumber": "29",
+      "iracingCustomerId": 41903,
+      "slug": "russell-gilbert",
+      "carImage": "/assets/images/cars/russell-gilbert.png"
+    },
+    {
+      "name": "Gustavo Mallia2",
       "carNumber": "32",
-      "iracingCustomerId": 91227,
-      "slug": "mark-arthur",
-      "carImage": "/assets/images/cars/mark-arthur.png"
+      "iracingCustomerId": 1365149,
+      "slug": "gustavo-mallia2",
+      "carImage": "/assets/images/cars/gustavo-mallia2.png"
     }
   ]
 }

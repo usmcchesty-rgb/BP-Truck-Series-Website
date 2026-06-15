@@ -45,6 +45,11 @@
     .form-sync-tag.bad { background: rgba(120,30,30,.25); color: #ff8080; }
     .form-sync-fields { color: #ccc; line-height: 1.45; max-width: 280px; }
     .form-sync-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+    .form-sync-meta { margin: 0 0 14px; font-size: 11px; color: #aaa; line-height: 1.55; }
+    .form-sync-meta strong { color: #ddd; }
+    .form-sync-meta ul { margin: 6px 0 0; padding-left: 18px; }
+    .form-sync-warning { color: #e8c547; }
+    .form-sync-unknown { color: #888; }
     .pw-row { max-width: 320px; margin-bottom: 14px; }
     .logo-preview-wrap {
       margin: 12px 0 10px;
@@ -163,6 +168,7 @@
         <div id="formSyncPanel" class="form-sync-panel" hidden>
           <h3>Google Form Bio Sync Preview</h3>
           <div id="formSyncSummary" class="form-sync-summary"></div>
+          <div id="formSyncHeaderMeta" class="form-sync-meta"></div>
           <div class="table-wrap">
             <table class="form-sync-table">
               <thead>
@@ -738,7 +744,66 @@
         );
       }
 
+      if (item.warnings?.length) {
+        lines.push(
+          `<strong class="form-sync-warning">Warnings:</strong><br>${item.warnings
+            .map((w) => `<span class="form-sync-warning">${escapeHtml(w)}</span>`)
+            .join('<br>')}`
+        );
+      }
+
       return lines.length ? lines.join('<br><br>') : '—';
+    }
+
+    function renderFormSyncHeaderMeta(data) {
+      const meta = $('#formSyncHeaderMeta');
+      if (!meta) return;
+
+      const mapping = data.headerMapping;
+      if (!mapping) {
+        meta.innerHTML = '';
+        return;
+      }
+
+      const sheetHeaders = Array.isArray(mapping.sheetHeaders) ? mapping.sheetHeaders : [];
+      const fieldMapping = mapping.fieldMapping || {};
+      const missing = Array.isArray(mapping.missingExpectedColumns) ? mapping.missingExpectedColumns : [];
+      const unknown = Array.isArray(mapping.unknownColumns) ? mapping.unknownColumns : [];
+
+      const headerList = sheetHeaders.length
+        ? `<ul>${sheetHeaders
+            .map(
+              (col) =>
+                `<li>Col ${col.columnIndex + 1}: ${escapeHtml(col.headerName || '(blank)')}</li>`
+            )
+            .join('')}</ul>`
+        : '<p>No headers detected.</p>';
+
+      const mappingList = Object.keys(fieldMapping).length
+        ? `<ul>${Object.entries(fieldMapping)
+            .map(
+              ([field, info]) =>
+                `<li>${escapeHtml(field)} → Col ${info.columnIndex + 1} (${escapeHtml(info.headerName)})</li>`
+            )
+            .join('')}</ul>`
+        : '<p>No field mappings detected.</p>';
+
+      meta.innerHTML = [
+        '<strong>Detected sheet headers</strong>',
+        headerList,
+        '<strong>Field mapping</strong>',
+        mappingList,
+        missing.length
+          ? `<strong class="form-sync-warning">Missing expected columns</strong><ul>${missing
+              .map((name) => `<li class="form-sync-warning">${escapeHtml(name)}</li>`)
+              .join('')}</ul>`
+          : '<strong>Missing expected columns:</strong> none',
+        unknown.length
+          ? `<strong class="form-sync-unknown">Unknown / unmapped columns</strong><ul>${unknown
+              .map((name) => `<li class="form-sync-unknown">${escapeHtml(name)}</li>`)
+              .join('')}</ul>`
+          : '<strong>Unknown columns:</strong> none',
+      ].join('');
     }
 
     function renderFormSyncRow(item, status) {
@@ -783,11 +848,18 @@
       const matched = Array.isArray(data.matched) ? data.matched : [];
       const skipped = Array.isArray(data.skipped) ? data.skipped : [];
       const unmatched = Array.isArray(data.unmatched) ? data.unmatched : [];
+      const warningCount = [...matched, ...skipped, ...unmatched].reduce(
+        (count, item) => count + (Array.isArray(item.warnings) ? item.warnings.length : 0),
+        0
+      );
 
       summary.innerHTML = [
         `<strong>${matched.length}</strong> matched and ready to sync.`,
         `<strong>${skipped.length}</strong> skipped (permission not granted).`,
         `<strong>${unmatched.length}</strong> unmatched form rows.`,
+        warningCount
+          ? `<strong class="form-sync-warning">${warningCount}</strong> validation warning(s) — invalid social values will not be saved.`
+          : '',
         `Latest responses: <strong>${data.latestResponseCount ?? 0}</strong> of <strong>${data.totalFormRows ?? 0}</strong> total rows.`,
         data.sheetUrl
           ? `<a href="${escapeAttr(data.sheetUrl)}" target="_blank" rel="noopener noreferrer">Open Google Sheet</a>`
@@ -795,6 +867,8 @@
       ]
         .filter(Boolean)
         .join('<br>');
+
+      renderFormSyncHeaderMeta(data);
 
       const rows = [
         ...matched.map((item) => renderFormSyncRow(item, 'matched')),

@@ -7,55 +7,172 @@ const HEADER_ALIASES = {
   timestamp: ['timestamp'],
   email: ['email address', 'email'],
   driverName: ['driver name', 'name'],
-  carNumber: ['car number', 'car #', 'car'],
+  carNumber: ['car number', 'number', 'truck number'],
   hometown: ['hometown'],
-  stateCountry: ['state / country', 'state/country', 'state country'],
+  stateCountry: ['state country', 'state/country', 'location'],
   bio: ['driver bio', 'bio'],
-  yearsSimRacing: ['years of sim racing experience', 'years sim racing'],
+  yearsSimRacing: ['years of sim racing experience', 'sim racing experience'],
   drivingStyle: ['driving style'],
   favoriteTrack: ['favorite track'],
   favoriteNascarDriver: ['favorite nascar driver'],
-  accomplishment: ['biggest accomplishment in sim racing', 'biggest accomplishment'],
-  seasonGoal: ['goal for this season', 'season goal'],
-  funFact: ['something other drivers may not know', 'fun fact'],
-  driverImage: ['driver image', 'driver photo'],
-  carImage: ['car image', 'car photo'],
-  streams: ['do you stream your races', 'stream your races', 'stream races'],
+  accomplishment: [
+    'biggest accomplishment in sim racing',
+    'sim racing accomplishment',
+    'what is your biggest accomplishment in sim racing',
+  ],
+  seasonGoal: ['goal for this season', 'season goal', 'what is your goal for this season'],
+  funFact: [
+    'something other drivers may not know',
+    'fun fact',
+    'what is something other drivers may not know about you',
+  ],
+  driverImage: ['driver image'],
+  carImage: ['car image'],
+  streams: ['do you stream your races', 'streamer'],
   facebook: ['facebook'],
-  twitter: ['x / twitter', 'x/twitter', 'twitter', 'x'],
+  twitter: ['x twitter', 'x / twitter', 'twitter'],
   instagram: ['instagram'],
   youtube: ['youtube'],
   twitch: ['twitch'],
   tiktok: ['tiktok'],
-  permission: [
-    'permission',
-    'i give permission',
-    'permission to publish',
-    'permission checkbox',
-    'may we publish',
-    'publish my bio',
-  ],
-  birthdate: ['birthdate', 'date of birth', 'birthday'],
+  permission: ['permission', 'permission checkbox', 'i give blazing pedals permission'],
+  birthdate: ['birthdate', 'date of birth', 'dob'],
+};
+
+const EXPECTED_HEADER_FIELDS = Object.keys(HEADER_ALIASES);
+
+const SOCIAL_FIELDS = ['facebook', 'twitter', 'instagram', 'youtube', 'twitch', 'tiktok'];
+
+const EXACT_ONLY_ALIASES = new Set(['name', 'number', 'bio', 'dob', 'email']);
+
+const FIELD_LABELS = {
+  timestamp: 'Timestamp',
+  email: 'Email Address',
+  driverName: 'Driver Name',
+  carNumber: 'Car Number',
+  hometown: 'Hometown',
+  stateCountry: 'State / Country',
+  bio: 'Driver Bio',
+  yearsSimRacing: 'Years of Sim Racing Experience',
+  drivingStyle: 'Driving Style',
+  favoriteTrack: 'Favorite Track',
+  favoriteNascarDriver: 'Favorite NASCAR Driver',
+  accomplishment: 'Biggest accomplishment in sim racing',
+  seasonGoal: 'Goal for this season',
+  funFact: 'Something other drivers may not know',
+  driverImage: 'Driver Image',
+  carImage: 'Car Image',
+  streams: 'Do you stream your races',
+  facebook: 'Facebook',
+  twitter: 'X / Twitter',
+  instagram: 'Instagram',
+  youtube: 'YouTube',
+  twitch: 'Twitch',
+  tiktok: 'TikTok',
+  permission: 'Permission checkbox',
+  birthdate: 'Birthdate',
 };
 
 function normalizeHeader(value) {
   return String(value || '')
     .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
 
+function scoreHeaderMatch(normalizedHeader, alias) {
+  const normalizedAlias = normalizeHeader(alias);
+  if (!normalizedHeader || !normalizedAlias) return 0;
+
+  if (normalizedHeader === normalizedAlias) {
+    return 1000 + normalizedAlias.length;
+  }
+
+  if (EXACT_ONLY_ALIASES.has(normalizedAlias)) {
+    return 0;
+  }
+
+  if (normalizedAlias.length >= 4 && normalizedHeader.includes(normalizedAlias)) {
+    return 500 + normalizedAlias.length;
+  }
+
+  if (normalizedHeader.length >= 4 && normalizedAlias.includes(normalizedHeader)) {
+    return 400 + normalizedHeader.length;
+  }
+
+  return 0;
+}
+
 function mapHeaders(headerRow) {
-  const mapped = {};
-  headerRow.forEach((header, index) => {
-    const normalized = normalizeHeader(header);
-    for (const [field, aliases] of Object.entries(HEADER_ALIASES)) {
-      if (aliases.some((alias) => normalized === alias || normalized.includes(alias))) {
-        if (!mapped[field]) mapped[field] = index;
+  const normalizedHeaders = headerRow.map(normalizeHeader);
+  const candidates = [];
+
+  for (const [field, aliases] of Object.entries(HEADER_ALIASES)) {
+    normalizedHeaders.forEach((header, index) => {
+      for (const alias of aliases) {
+        const score = scoreHeaderMatch(header, alias);
+        if (score > 0) {
+          candidates.push({
+            field,
+            index,
+            score,
+            header: String(headerRow[index] ?? '').trim(),
+            normalizedHeader: header,
+            alias,
+          });
+        }
       }
-    }
-  });
-  return mapped;
+    });
+  }
+
+  candidates.sort((a, b) => b.score - a.score);
+
+  const mapped = {};
+  const usedColumns = new Set();
+  const usedFields = new Set();
+  const mappingDetails = {};
+
+  for (const candidate of candidates) {
+    if (usedFields.has(candidate.field) || usedColumns.has(candidate.index)) continue;
+    mapped[candidate.field] = candidate.index;
+    usedFields.add(candidate.field);
+    usedColumns.add(candidate.index);
+    mappingDetails[candidate.field] = {
+      columnIndex: candidate.index,
+      headerName: candidate.header,
+      normalizedHeader: candidate.normalizedHeader,
+      matchedAlias: candidate.alias,
+      score: candidate.score,
+    };
+  }
+
+  return { mapped, mappingDetails, usedColumns, normalizedHeaders };
+}
+
+function buildHeaderMappingMeta(headerRow, mapResult) {
+  const { mapped, mappingDetails, usedColumns } = mapResult;
+  const sheetHeaders = headerRow.map((header, index) => ({
+    columnIndex: index,
+    headerName: String(header ?? '').trim(),
+    normalizedHeader: normalizeHeader(header),
+  }));
+
+  const missingExpectedColumns = EXPECTED_HEADER_FIELDS.filter(
+    (field) => mapped[field] == null
+  ).map((field) => FIELD_LABELS[field] || field);
+
+  const unknownColumns = sheetHeaders
+    .filter((column) => !usedColumns.has(column.columnIndex))
+    .map((column) => column.headerName)
+    .filter(Boolean);
+
+  return {
+    sheetHeaders,
+    fieldMapping: mappingDetails,
+    missingExpectedColumns,
+    unknownColumns,
+  };
 }
 
 function parseCsv(text) {
@@ -148,6 +265,223 @@ function normalizeUrl(value) {
   return url;
 }
 
+function isSuspiciousSocialValue(value) {
+  const text = String(value || '').trim();
+  if (!text) return false;
+
+  const lower = text.toLowerCase();
+  if (/^(yes|no|y|n|true|false)$/i.test(lower)) return true;
+  if (/^\d+\+?$/.test(text)) return true;
+  if (/^\d+\s*[-–]\s*\d+\+?$/.test(text)) return true;
+  if (/^\d+-\d+$/.test(text)) return true;
+  if (text.length > 120) return true;
+  if (text.split(/\s+/).length >= 8 && /[.!?]/.test(text)) return true;
+  if (/\b(years?|experience|racing experience|martinsville|talladega|daytona|charlotte|bristol)\b/i.test(text)) {
+    return true;
+  }
+
+  return false;
+}
+
+function valueMatchesOtherEntryField(value, entry, excludeField) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return false;
+
+  const compareFields = [
+    'driverName',
+    'carNumber',
+    'hometown',
+    'stateCountry',
+    'bio',
+    'yearsSimRacing',
+    'drivingStyle',
+    'favoriteTrack',
+    'favoriteNascarDriver',
+    'accomplishment',
+    'seasonGoal',
+    'funFact',
+    'streams',
+    'birthdate',
+  ];
+
+  return compareFields.some((field) => {
+    if (field === excludeField) return false;
+    return String(entry[field] || '').trim().toLowerCase() === normalized;
+  });
+}
+
+function isLikelyHandle(value) {
+  const handle = String(value || '').trim().replace(/^@+/, '');
+  return /^[a-z0-9._-]{1,40}$/i.test(handle);
+}
+
+function validateTwitterValue(value) {
+  const text = String(value || '').trim();
+  if (!text) return { ok: true, value: '' };
+
+  if (isSuspiciousSocialValue(text)) {
+    return { ok: false, warning: `Skipped Twitter/X value "${text}" — looks like a non-social answer.` };
+  }
+
+  if (/^https?:\/\//i.test(text) || /^(twitter|x)\./i.test(text)) {
+    if (/twitter\.com|x\.com/i.test(text) || /^(twitter|x)\./i.test(text)) {
+      return { ok: true, value: normalizeUrl(text) };
+    }
+    return { ok: false, warning: `Skipped Twitter/X URL "${text}" — must be x.com or twitter.com.` };
+  }
+
+  if (text.startsWith('@') || isLikelyHandle(text)) {
+    return { ok: true, value: normalizeUrl(text) };
+  }
+
+  return { ok: false, warning: `Skipped Twitter/X value "${text}" — expected @handle or x.com URL.` };
+}
+
+function validateFacebookValue(value) {
+  const text = String(value || '').trim();
+  if (!text) return { ok: true, value: '' };
+
+  if (isSuspiciousSocialValue(text)) {
+    return { ok: false, warning: `Skipped Facebook value "${text}" — looks like a non-social answer.` };
+  }
+
+  if (/^https?:\/\//i.test(text) || /^www\./i.test(text) || /facebook\.com/i.test(text)) {
+    return { ok: true, value: normalizeUrl(text) };
+  }
+
+  if (/^facebook\./i.test(text)) {
+    return { ok: true, value: normalizeUrl(text) };
+  }
+
+  if (isLikelyHandle(text)) {
+    return { ok: true, value: normalizeUrl(text) };
+  }
+
+  return { ok: false, warning: `Skipped Facebook value "${text}" — expected URL or username.` };
+}
+
+function validateInstagramValue(value) {
+  const text = String(value || '').trim();
+  if (!text) return { ok: true, value: '' };
+
+  if (isSuspiciousSocialValue(text)) {
+    return { ok: false, warning: `Skipped Instagram value "${text}" — looks like a non-social answer.` };
+  }
+
+  if (/^https?:\/\//i.test(text) || /instagram\.com/i.test(text) || /^instagram\./i.test(text)) {
+    return { ok: true, value: normalizeUrl(text) };
+  }
+
+  if (text.startsWith('@') || isLikelyHandle(text)) {
+    return { ok: true, value: normalizeUrl(text) };
+  }
+
+  return { ok: false, warning: `Skipped Instagram value "${text}" — expected @handle or instagram.com URL.` };
+}
+
+function validateTikTokValue(value) {
+  const text = String(value || '').trim();
+  if (!text) return { ok: true, value: '' };
+
+  if (isSuspiciousSocialValue(text)) {
+    return { ok: false, warning: `Skipped TikTok value "${text}" — looks like a non-social answer.` };
+  }
+
+  if (/^https?:\/\//i.test(text) || /tiktok\.com/i.test(text) || /^tiktok\./i.test(text)) {
+    return { ok: true, value: normalizeUrl(text) };
+  }
+
+  if (text.startsWith('@') || isLikelyHandle(text)) {
+    return { ok: true, value: normalizeUrl(text) };
+  }
+
+  return { ok: false, warning: `Skipped TikTok value "${text}" — expected @handle or tiktok.com URL.` };
+}
+
+function validateTwitchValue(value) {
+  const text = String(value || '').trim();
+  if (!text) return { ok: true, value: '' };
+
+  if (isSuspiciousSocialValue(text)) {
+    return { ok: false, warning: `Skipped Twitch value "${text}" — looks like a non-social answer.` };
+  }
+
+  if (/^https?:\/\//i.test(text) || /twitch\.tv/i.test(text) || /^twitch\./i.test(text)) {
+    return { ok: true, value: normalizeUrl(text) };
+  }
+
+  if (isLikelyHandle(text)) {
+    return { ok: true, value: normalizeUrl(text) };
+  }
+
+  return { ok: false, warning: `Skipped Twitch value "${text}" — expected twitch.tv URL or username.` };
+}
+
+function validateYouTubeValue(value) {
+  const text = String(value || '').trim();
+  if (!text) return { ok: true, value: '' };
+
+  if (isSuspiciousSocialValue(text)) {
+    return { ok: false, warning: `Skipped YouTube value "${text}" — looks like a non-social answer.` };
+  }
+
+  if (
+    /^https?:\/\//i.test(text) ||
+    /youtube\.com|youtu\.be/i.test(text) ||
+    /^youtube\./i.test(text)
+  ) {
+    return { ok: true, value: normalizeUrl(text) };
+  }
+
+  if (text.startsWith('@') || isLikelyHandle(text)) {
+    return { ok: true, value: normalizeUrl(text) };
+  }
+
+  return { ok: false, warning: `Skipped YouTube value "${text}" — expected channel URL or @handle.` };
+}
+
+const SOCIAL_VALIDATORS = {
+  facebook: validateFacebookValue,
+  twitter: validateTwitterValue,
+  instagram: validateInstagramValue,
+  youtube: validateYouTubeValue,
+  twitch: validateTwitchValue,
+  tiktok: validateTikTokValue,
+};
+
+function validateFormEntry(entry) {
+  const cleaned = { ...entry };
+  const warnings = [];
+
+  for (const field of SOCIAL_FIELDS) {
+    const raw = String(entry[field] || '').trim();
+    if (!raw) {
+      cleaned[field] = '';
+      continue;
+    }
+
+    if (valueMatchesOtherEntryField(raw, entry, field)) {
+      warnings.push(
+        `Skipped ${FIELD_LABELS[field] || field} value "${raw}" — matches another form answer.`
+      );
+      cleaned[field] = '';
+      continue;
+    }
+
+    const validator = SOCIAL_VALIDATORS[field];
+    const result = validator ? validator(raw) : { ok: true, value: normalizeUrl(raw) };
+    if (!result.ok) {
+      if (result.warning) warnings.push(result.warning);
+      cleaned[field] = '';
+      continue;
+    }
+
+    cleaned[field] = result.value || '';
+  }
+
+  return { entry: cleaned, warnings };
+}
+
 function pickStreamUrl(row) {
   const candidates = [
     normalizeUrl(row.twitch),
@@ -166,7 +500,7 @@ function parseTimestamp(value) {
 
 function rowToFormEntry(row, headers) {
   const get = (field) => cellValue(row, headers[field]);
-  return {
+  const entry = {
     timestamp: get('timestamp'),
     timestampMs: parseTimestamp(get('timestamp')),
     email: get('email'),
@@ -185,14 +519,20 @@ function rowToFormEntry(row, headers) {
     driverImageUrl: normalizeUrl(get('driverImage')),
     carImageUrl: normalizeUrl(get('carImage')),
     streams: get('streams'),
-    facebook: normalizeUrl(get('facebook')),
-    twitter: normalizeUrl(get('twitter')),
-    instagram: normalizeUrl(get('instagram')),
-    youtube: normalizeUrl(get('youtube')),
-    twitch: normalizeUrl(get('twitch')),
-    tiktok: normalizeUrl(get('tiktok')),
+    facebook: get('facebook'),
+    twitter: get('twitter'),
+    instagram: get('instagram'),
+    youtube: get('youtube'),
+    twitch: get('twitch'),
+    tiktok: get('tiktok'),
     permissionGranted: parsePermission(get('permission')),
     birthdate: get('birthdate'),
+  };
+
+  const validated = validateFormEntry(entry);
+  return {
+    ...validated.entry,
+    validationWarnings: validated.warnings,
   };
 }
 
@@ -211,7 +551,10 @@ export async function fetchGoogleFormResponses() {
     throw new Error('Google Sheet returned no form responses.');
   }
 
-  const headers = mapHeaders(table[0]);
+  const mapResult = mapHeaders(table[0]);
+  const headers = mapResult.mapped;
+  const headerMapping = buildHeaderMappingMeta(table[0], mapResult);
+
   if (headers.driverName == null) {
     throw new Error('Could not find Driver Name column in Google Sheet.');
   }
@@ -233,17 +576,14 @@ export async function fetchGoogleFormResponses() {
   return {
     sheetUrl: `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}/edit#gid=${GOOGLE_SHEET_GID}`,
     headersFound: Object.keys(headers),
+    headerMapping,
     totalRows: entries.length,
     latestEntries: [...latestByDriver.values()],
   };
 }
 
 function profileNames(profile) {
-  return [
-    profile.display_name,
-    profile.iracing_name,
-    profile.driver_name,
-  ]
+  return [profile.display_name, profile.iracing_name, profile.driver_name]
     .filter(Boolean)
     .map(normalizeName);
 }
@@ -310,12 +650,6 @@ function buildProposedUpdates(entry, profile) {
     sim_racing_accomplishment: entry.accomplishment || null,
     season_goal: entry.seasonGoal || null,
     fun_fact: entry.funFact || null,
-    facebook_url: entry.facebook || null,
-    twitter_url: entry.twitter || null,
-    instagram_url: entry.instagram || null,
-    youtube_url: entry.youtube || null,
-    twitch_url: entry.twitch || null,
-    tiktok_url: entry.tiktok || null,
     car_image_url: entry.carImageUrl || null,
     form_email: entry.email || null,
     form_submitted_at: entry.timestamp ? new Date(entry.timestampMs || Date.now()).toISOString() : null,
@@ -323,6 +657,14 @@ function buildProposedUpdates(entry, profile) {
     is_streamer: isStreamer,
     stream_url: streamUrl || null,
   };
+
+  for (const field of SOCIAL_FIELDS) {
+    const dbKey = `${field}_url`;
+    const validatedValue = String(entry[field] || '').trim();
+    if (validatedValue) {
+      proposed[dbKey] = validatedValue;
+    }
+  }
 
   if (entry.birthdate) {
     proposed.date_of_birth = entry.birthdate;
@@ -342,6 +684,7 @@ export function buildFormSyncPreview(profiles, sheetData) {
   for (const entry of sheetData.latestEntries) {
     const { profile, method, conflicts } = matchProfile(entry, profiles);
     const preview = buildProposedUpdates(entry, profile);
+    const rowWarnings = [...(entry.validationWarnings || []), ...(conflicts || [])];
 
     const base = {
       formDriverName: entry.driverName,
@@ -362,6 +705,7 @@ export function buildFormSyncPreview(profiles, sheetData) {
       },
       proposed: preview.proposed,
       skipReason: preview.skipReason,
+      warnings: rowWarnings,
       conflicts,
     };
 
@@ -394,6 +738,7 @@ export function buildFormSyncPreview(profiles, sheetData) {
     sheetUrl: sheetData.sheetUrl,
     totalFormRows: sheetData.totalRows,
     latestResponseCount: sheetData.latestEntries.length,
+    headerMapping: sheetData.headerMapping || null,
     matched,
     skipped,
     unmatched,
