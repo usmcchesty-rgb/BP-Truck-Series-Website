@@ -114,30 +114,97 @@ function normalizeCarNumber(value) {
     .replace(/^0+/, "") || "";
 }
 
+function buildNameAssetBases(name) {
+  const trimmed = String(name || "").trim();
+  if (!trimmed) return [];
+
+  const slug = slugifyDriverName(trimmed);
+  const titleCase = trimmed
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) =>
+      word
+        .split("-")
+        .map((part) => {
+          if (!part) return part;
+          return part.charAt(0).toUpperCase() + part.slice(1).toLowerCase();
+        })
+        .join("-")
+    )
+    .join(" ");
+
+  return [...new Set([titleCase, trimmed, slug].filter(Boolean))];
+}
+
+function toCarAssetUrl(baseName, ext) {
+  const encoded = String(baseName)
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+  return `${CAR_IMAGE_BASE}/${encoded}${ext}`;
+}
+
 function buildLocalCarImageCandidates(profile) {
   const name = profile.display_name || profile.iracing_name || "";
+  const nameBases = buildNameAssetBases(name);
   const slug = slugifyDriverName(name);
   const carNum = normalizeCarNumber(profile.car_number);
   const driverId = String(profile.driver_id || "").trim();
-  const bases = [];
+  const orderedBases = [];
 
-  if (slug && carNum) {
-    bases.push(`${slug}-${carNum}`);
-    bases.push(`${carNum}-${slug}`);
+  for (const base of nameBases) {
+    if (carNum) {
+      orderedBases.push(`${base}-${carNum}`);
+      orderedBases.push(`${carNum}-${base}`);
+    }
   }
-  if (slug) bases.push(slug);
-  if (driverId) bases.push(driverId);
-  if (carNum) bases.push(carNum);
+  for (const base of nameBases) {
+    orderedBases.push(base);
+  }
+
+  if (slug && !nameBases.includes(slug)) {
+    if (carNum) {
+      orderedBases.push(`${slug}-${carNum}`);
+      orderedBases.push(`${carNum}-${slug}`);
+    }
+    orderedBases.push(slug);
+  }
+
+  if (driverId) orderedBases.push(driverId);
+  if (carNum) orderedBases.push(carNum);
 
   const candidates = [];
-  for (const base of bases) {
+  for (const base of orderedBases) {
     if (!base) continue;
     for (const ext of CAR_IMAGE_EXTENSIONS) {
-      candidates.push(`${CAR_IMAGE_BASE}/${base}${ext}`);
+      candidates.push(toCarAssetUrl(base, ext));
     }
   }
 
   return [...new Set(candidates)];
+}
+
+function shouldLogCarImageDiagnostics() {
+  try {
+    return new URLSearchParams(window.location.search).get("debug") === "car";
+  } catch {
+    return false;
+  }
+}
+
+function logCarImageResolution(details) {
+  if (shouldLogCarImageDiagnostics()) {
+    console.info("[BP Driver Profile Car]", details);
+    return;
+  }
+
+  if (!details.selectedUrl) {
+    console.warn("[BP Driver Profile Car] no car image resolved", {
+      carImageUrlFromProfile: details.carImageUrlFromProfile,
+      localCandidates: details.localCandidates,
+      failedCandidates: details.failedCandidates,
+    });
+  }
 }
 
 function probeImageUrl(url) {
@@ -147,24 +214,50 @@ function probeImageUrl(url) {
   return new Promise((resolve) => {
     const img = new Image();
     img.onload = () => resolve(src);
-    img.onerror = () => resolve("");
+    img.onerror = () => {
+      fetch(src, { method: "HEAD" })
+        .then((res) => resolve(res.ok ? src : ""))
+        .catch(() => resolve(""));
+    };
     img.src = src;
   });
 }
 
 async function resolveCarImageUrl(profile) {
-  const remote = profileText(profile, "car_image_url", "carImageUrl");
-  if (remote) {
-    const loaded = await probeImageUrl(remote);
-    if (loaded) return loaded;
+  const carImageUrlFromProfile = profileText(profile, "car_image_url", "carImageUrl");
+  const localCandidates = buildLocalCarImageCandidates(profile);
+  const failedCandidates = [];
+  let selectedUrl = "";
+
+  if (carImageUrlFromProfile) {
+    const loaded = await probeImageUrl(carImageUrlFromProfile);
+    if (loaded) {
+      selectedUrl = loaded;
+    } else {
+      failedCandidates.push(carImageUrlFromProfile);
+    }
   }
 
-  for (const candidate of buildLocalCarImageCandidates(profile)) {
-    const loaded = await probeImageUrl(candidate);
-    if (loaded) return loaded;
+  if (!selectedUrl) {
+    for (const candidate of localCandidates) {
+      const loaded = await probeImageUrl(candidate);
+      if (loaded) {
+        selectedUrl = loaded;
+        break;
+      }
+      failedCandidates.push(candidate);
+    }
   }
 
-  return "";
+  const details = {
+    carImageUrlFromProfile: carImageUrlFromProfile || "",
+    localCandidates,
+    selectedUrl,
+    failedCandidates,
+  };
+  logCarImageResolution(details);
+
+  return { url: selectedUrl, debug: details };
 }
 
 function renderCarImageHeroSection(carImageUrl, driverName) {
@@ -935,8 +1028,8 @@ async function loadDriverProfile() {
     const seasonLabel =
       standingsData.settings?.seasonName || scheduleData.settings?.seasonName || "Season 11";
 
-    const carImageUrl = await resolveCarImageUrl(profile);
-    renderProfile(profile, stats, seasonLabel, carImageUrl);
+    const carImage = await resolveCarImageUrl(profile);
+    renderProfile(profile, stats, seasonLabel, carImage.url);
   } catch (e) {
     console.error("Failed to load driver profile:", e);
     panel.innerHTML = `
