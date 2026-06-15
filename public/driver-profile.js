@@ -170,15 +170,17 @@ async function resolveCarImageUrl(profile) {
 function renderCarImageHeroSection(carImageUrl, driverName) {
   if (!carImageUrl) return "";
 
-  return `<div class="driver-profile-car-hero" aria-label="Race car">
-    <div class="driver-profile-car-hero-inner">
-      <img
-        class="driver-profile-car-hero-image"
-        src="${escapeAttr(carImageUrl)}"
-        alt="${escapeAttr(`${driverName} race car`)}"
-        loading="eager"
-        decoding="async"
-      />
+  return `<div class="driver-profile-car-wrap">
+    <div class="driver-profile-car-hero" aria-label="Race car">
+      <div class="driver-profile-car-hero-inner">
+        <img
+          class="driver-profile-car-hero-image"
+          src="${escapeAttr(carImageUrl)}"
+          alt="${escapeAttr(`${driverName} race car`)}"
+          loading="eager"
+          decoding="async"
+        />
+      </div>
     </div>
   </div>`;
 }

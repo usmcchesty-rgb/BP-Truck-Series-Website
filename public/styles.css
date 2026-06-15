@@ -1430,11 +1430,16 @@ a.home-news-item:hover h4{color:#fff}
   transition:color .15s ease;
 }
 .driver-profile-back:hover{color:var(--red)}
+.driver-profile-car-wrap{
+  width:100%;
+  align-self:stretch;
+  display:flex;
+  justify-content:center;
+}
 .driver-profile-car-hero{
   margin:0 0 6px;
   width:100%;
   max-width:550px;
-  align-self:center;
 }
 .driver-profile-car-hero-inner{
   display:flex;
@@ -1458,12 +1463,12 @@ a.home-news-item:hover h4{color:#fff}
   align-items:flex-end;
 }
 .driver-profile-identity-namestack{
-  display:flex;
+  display:inline-flex;
   flex-direction:column;
-  align-items:center;
-  justify-content:flex-end;
+  align-items:flex-start;
+  max-width:700px;
   min-width:0;
-  flex:1 1 220px;
+  justify-content:flex-end;
 }
 .driver-profile-identity-namestack .driver-profile-identity-text{
   width:100%;
