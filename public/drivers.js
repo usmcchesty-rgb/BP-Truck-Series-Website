@@ -20,6 +20,45 @@ function escapeAttr(s) {
   return escapeHtml(s).replace(/'/g, "&#39;");
 }
 
+function isNumericDriverId(value) {
+  return /^\d+$/.test(String(value ?? "").trim());
+}
+
+function normalizeDriverName(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildStandingsIdLookup(rows) {
+  const byId = new Map();
+  const byName = new Map();
+
+  for (const row of rows) {
+    const id = String(row.driverId ?? "").trim();
+    if (!isNumericDriverId(id)) continue;
+    byId.set(id, id);
+    const name = normalizeDriverName(row.driver);
+    if (name) byName.set(name, id);
+  }
+
+  return { byId, byName };
+}
+
+function resolveDriverCardId(profile, standingsLookup) {
+  const rawId = String(profile?.driver_id ?? "").trim();
+  if (isNumericDriverId(rawId)) return rawId;
+
+  const displayName = normalizeDriverName(profile?.display_name || profile?.iracing_name);
+  if (displayName && standingsLookup.byName.has(displayName)) {
+    return standingsLookup.byName.get(displayName);
+  }
+
+  return isNumericDriverId(rawId) ? rawId : "";
+}
+
 function isMarkedStreamer(driver) {
   return driver?.is_streamer === true;
 }
@@ -33,19 +72,34 @@ function streamerBadgeHtml(streamUrl) {
 }
 
 function driverProfileUrl(driverId) {
-  return `/drivers/${encodeURIComponent(String(driverId || ""))}`;
+  const id = String(driverId || "").trim();
+  if (!id) return "/drivers.html";
+  return `/drivers/${encodeURIComponent(id)}`;
 }
 
-function renderDrivers(drivers) {
+function renderDrivers(drivers, standingsLookup) {
   const grid = $("#driversGrid");
   if (!grid) return;
 
-  if (!drivers.length) {
+  const cards = drivers
+    .map((driver) => {
+      const driverId = resolveDriverCardId(driver, standingsLookup);
+      if (!driverId) return null;
+      return { ...driver, driver_id: driverId };
+    })
+    .filter(Boolean)
+    .sort((a, b) =>
+      String(a.display_name || a.iracing_name || "").localeCompare(
+        b.display_name || b.iracing_name || ""
+      )
+    );
+
+  if (!cards.length) {
     grid.innerHTML = `<p class="muted">No driver profiles available yet.</p>`;
     return;
   }
 
-  grid.innerHTML = drivers
+  grid.innerHTML = cards
     .map((d) => {
       const name = d.display_name || d.iracing_name || "Unknown";
       const photo = d.photoUrl || d.photo_url || driverImage(name);
@@ -57,7 +111,7 @@ function renderDrivers(drivers) {
       const profileUrl = driverProfileUrl(d.driver_id);
 
       return `<article class="driver-card${showStreamerBadge ? " is-streamer" : ""}">
-        <a class="driver-card-link" href="${escapeHtml(profileUrl)}">
+        <a class="driver-card-link" href="${escapeAttr(profileUrl)}">
           <div class="driver-card-media">
             <img src="${escapeHtml(photo)}" alt="" onerror="this.onerror=null;this.src='/assets/drivers/placeholder.png'" />
           </div>
@@ -79,11 +133,20 @@ async function loadDrivers() {
   grid.innerHTML = `<p class="muted">Loading drivers...</p>`;
 
   try {
-    const res = await fetch("/api/drivers");
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
+    const [driversRes, standingsRes] = await Promise.all([
+      fetch("/api/drivers"),
+      fetch("/api/standings"),
+    ]);
+
+    if (!driversRes.ok) throw new Error(`Drivers HTTP ${driversRes.status}`);
+
+    const data = await driversRes.json();
     const list = Array.isArray(data) ? data.filter((d) => d.active !== false) : [];
-    renderDrivers(list);
+    const standingsData = standingsRes.ok ? await standingsRes.json() : { rows: [] };
+    const standingsRows = Array.isArray(standingsData.rows) ? standingsData.rows : [];
+    const standingsLookup = buildStandingsIdLookup(standingsRows);
+
+    renderDrivers(list, standingsLookup);
   } catch (e) {
     console.error("Failed to load drivers:", e);
     grid.innerHTML = `<p class="muted">Failed to load drivers.</p>`;

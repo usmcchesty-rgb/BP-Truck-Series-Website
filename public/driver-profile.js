@@ -14,13 +14,80 @@ function escapeHtml(s) {
 function getDriverIdFromPath() {
   const params = new URLSearchParams(window.location.search);
   const fromQuery = params.get("driverId") || params.get("id");
-  if (fromQuery) return decodeURIComponent(fromQuery);
+  if (fromQuery) return decodeURIComponent(fromQuery).trim();
 
   const parts = window.location.pathname.split("/").filter(Boolean);
   if (parts[0] === "drivers" && parts[1]) {
-    return decodeURIComponent(parts[1]);
+    return decodeURIComponent(parts[1]).trim();
   }
   return "";
+}
+
+function normalizeLookupName(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/^@/, "")
+    .replace(/[^a-z0-9\s-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function twitterHandleFromUrl(value) {
+  const text = String(value || "").trim().toLowerCase();
+  if (!text) return "";
+  if (text.startsWith("@")) return text.slice(1);
+  const match = text.match(/(?:twitter\.com|x\.com)\/([^/?#]+)/i);
+  return match?.[1]?.replace(/^@/, "") || "";
+}
+
+function findProfileFallback(profiles, queryId) {
+  const raw = String(queryId ?? "").trim();
+  if (!raw || !Array.isArray(profiles) || !profiles.length) return null;
+
+  let match = profiles.find((row) => String(row.driver_id) === raw);
+  if (match) return match;
+
+  const lookupName = normalizeLookupName(raw);
+
+  if (raw.startsWith("@")) {
+    const handle = raw.slice(1).toLowerCase();
+    match = profiles.find((row) => {
+      const twitter = String(row.twitter_url || row.twitterUrl || "").trim().toLowerCase();
+      const twitterHandle = twitterHandleFromUrl(twitter);
+      return (
+        twitter === raw.toLowerCase() ||
+        twitter.includes(`/${handle}`) ||
+        twitter.includes(`@${handle}`) ||
+        twitterHandle === handle
+      );
+    });
+    if (match) return match;
+
+    match = profiles.find((row) => {
+      const names = [row.display_name, row.iracing_name].map(normalizeLookupName);
+      return names.includes(handle) || names.includes(lookupName);
+    });
+    if (match) return match;
+  }
+
+  match = profiles.find((row) => {
+    const names = [row.display_name, row.iracing_name].map(normalizeLookupName);
+    return names.includes(lookupName);
+  });
+  return match || null;
+}
+
+async function fetchDriverProfile(requestedId) {
+  const res = await fetch(`/api/drivers?driver_id=${encodeURIComponent(requestedId)}`);
+  if (res.ok) {
+    const profile = await res.json();
+    if (profile?.driver_id) return profile;
+  }
+
+  const listRes = await fetch("/api/drivers");
+  if (!listRes.ok) return null;
+  const profiles = await listRes.json();
+  return findProfileFallback(Array.isArray(profiles) ? profiles : [], requestedId);
 }
 
 function driverImage(name) {
@@ -87,8 +154,34 @@ const SOCIAL_ICON_SVGS = {
   twitch: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4 3h16v13.5l-4 4H12l-2 2H8v-2H4V3zm2 2v11h2v3l2-3h3l3-3V5H6zm9 2v6h-2V7h2zm-4 0v6H9V7h2z"/></svg>`,
 };
 
+function normalizeSocialUrl(value, platform) {
+  const url = String(value || "").trim();
+  if (!url) return "";
+  if (/^https?:\/\//i.test(url)) return url;
+  if (/^www\./i.test(url)) return `https://${url}`;
+
+  if (url.startsWith("@")) {
+    const handle = url.slice(1);
+    if (platform === "twitter") return `https://x.com/${encodeURIComponent(handle)}`;
+    if (platform === "instagram") return `https://instagram.com/${encodeURIComponent(handle)}`;
+    if (platform === "tiktok") return `https://tiktok.com/@${encodeURIComponent(handle)}`;
+    if (platform === "twitch") return `https://twitch.tv/${encodeURIComponent(handle)}`;
+    return url;
+  }
+
+  if (/^(twitch|youtube|instagram|facebook|twitter|x|tiktok)\./i.test(url)) {
+    return `https://${url}`;
+  }
+
+  if (platform === "twitter" && /^[a-z0-9_]+$/i.test(url)) {
+    return `https://x.com/${encodeURIComponent(url.replace(/^@/, ""))}`;
+  }
+
+  return url;
+}
+
 function socialButton(platform, url, label) {
-  const href = String(url || "").trim();
+  const href = normalizeSocialUrl(url, platform);
   if (!href) return "";
   const icon = SOCIAL_ICON_SVGS[platform] || "";
   return `<a class="driver-profile-social-btn driver-profile-social-btn--${platform}" href="${escapeAttr(href)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeAttr(label)}">${icon}</a>`;
@@ -606,32 +699,32 @@ function renderNotFound() {
 
 async function loadDriverProfile() {
   const panel = $("#driverProfilePanel");
-  const driverId = getDriverIdFromPath();
+  const requestedId = getDriverIdFromPath();
   if (!panel) return;
 
-  if (!driverId) {
+  if (!requestedId) {
     renderNotFound();
     return;
   }
 
   try {
-    const [profileRes, standingsRes, scheduleRes] = await Promise.all([
-      fetch(`/api/drivers?driver_id=${encodeURIComponent(driverId)}`),
+    const [profile, standingsRes, scheduleRes] = await Promise.all([
+      fetchDriverProfile(requestedId),
       fetch("/api/standings"),
       fetch("/api/schedule"),
     ]);
 
-    const profile = await profileRes.json();
-    if (!profileRes.ok || !profile?.driver_id) {
+    if (!profile?.driver_id) {
       renderNotFound();
       return;
     }
 
+    const canonicalDriverId = String(profile.driver_id);
     const standingsData = standingsRes.ok ? await standingsRes.json() : { rows: [], schedules: {} };
     const scheduleData = scheduleRes.ok ? await scheduleRes.json() : { races: [] };
     const rows = Array.isArray(standingsData.rows) ? standingsData.rows : [];
     const standingsRow =
-      rows.find((row) => String(row.driverId) === String(driverId)) || null;
+      rows.find((row) => String(row.driverId) === canonicalDriverId) || null;
     const leader = rows.find((row) => Number(row.position) === 1) || null;
 
     const stats = buildStats(

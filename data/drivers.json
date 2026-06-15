@@ -1,0 +1,11 @@
+{
+  "drivers": [
+    {
+      "name": "Mark Arthur",
+      "carNumber": "12",
+      "iracingCustomerId": 91227,
+      "slug": "mark-arthur",
+      "carImage": "/assets/images/cars/mark-arthur.png"
+    }
+  ]
+}

@@ -32,12 +32,79 @@ function normalizeOptionalText(value) {
   return text || null;
 }
 
+function normalizeLookupName(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/^@/, '')
+    .replace(/[^a-z0-9\s-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function twitterHandleFromUrl(value) {
+  const text = String(value || '').trim().toLowerCase();
+  if (!text) return '';
+  if (text.startsWith('@')) return text.slice(1);
+  const match = text.match(/(?:twitter\.com|x\.com)\/([^/?#]+)/i);
+  return match?.[1]?.replace(/^@/, '') || '';
+}
+
+function findDriverProfile(profiles, queryId) {
+  const raw = String(queryId ?? '').trim();
+  if (!raw) return null;
+
+  let match = profiles.find((row) => String(row.driver_id) === raw);
+  if (match) return match;
+
+  const lookupName = normalizeLookupName(raw);
+  const lookupSlug = slugify(raw.replace(/^@/, ''));
+
+  if (raw.startsWith('@')) {
+    const handle = raw.slice(1).toLowerCase();
+    match = profiles.find((row) => {
+      const twitter = String(row.twitter_url || row.twitterUrl || '').trim().toLowerCase();
+      const twitterHandle = twitterHandleFromUrl(twitter);
+      return (
+        twitter === raw.toLowerCase() ||
+        twitter.includes(`/${handle}`) ||
+        twitter.includes(`@${handle}`) ||
+        twitterHandle === handle
+      );
+    });
+    if (match) return match;
+
+    match = profiles.find((row) => {
+      const names = [row.display_name, row.iracing_name].map(normalizeLookupName);
+      return names.includes(handle) || names.includes(lookupName);
+    });
+    if (match) return match;
+  }
+
+  match = profiles.find((row) => {
+    const names = [row.display_name, row.iracing_name].map(normalizeLookupName);
+    return names.includes(lookupName);
+  });
+  if (match) return match;
+
+  if (lookupSlug) {
+    match = profiles.find(
+      (row) =>
+        slugify(row.display_name || row.iracing_name || '') === lookupSlug ||
+        slugify(row.driver_id || '') === lookupSlug
+    );
+    if (match) return match;
+  }
+
+  return null;
+}
+
 function normalizeDriverProfile(row) {
   if (!row) return null;
   const photo_url = stripPhotoUrlQuery(row.photo_url || '');
   const car_image_url = stripPhotoUrlQuery(row.car_image_url || '');
+  const driver_id = String(row.driver_id ?? '').trim();
   return {
-    driver_id: String(row.driver_id || row.iracing_id || row.slug || ''),
+    driver_id,
     iracing_name: row.iracing_name || row.driver_name || '',
     display_name: row.display_name || row.driver_name || '',
     car_number: row.car_number || row.truck_number || '',
@@ -204,7 +271,7 @@ export default async function handler(req, res) {
 
     const driverId = String(req.query?.driver_id ?? req.query?.id ?? '').trim();
     if (driverId) {
-      const profile = normalized.find((row) => String(row.driver_id) === driverId);
+      const profile = findDriverProfile(normalized, driverId);
       if (!profile) {
         return res.status(404).json({ error: 'Driver not found.' });
       }
