@@ -170,7 +170,7 @@ async function resolveCarImageUrl(profile) {
 function renderCarImageHeroSection(carImageUrl, driverName) {
   if (!carImageUrl) return "";
 
-  return `<section class="driver-profile-car-hero" aria-label="Race car">
+  return `<div class="driver-profile-car-hero" aria-label="Race car">
     <div class="driver-profile-car-hero-inner">
       <img
         class="driver-profile-car-hero-image"
@@ -180,7 +180,7 @@ function renderCarImageHeroSection(carImageUrl, driverName) {
         decoding="async"
       />
     </div>
-  </section>`;
+  </div>`;
 }
 
 function formatStatValue(value) {
@@ -814,8 +814,6 @@ function renderProfile(profile, stats, seasonLabel, carImageUrl = "") {
   panel.innerHTML = `
     <a class="driver-profile-back" href="/drivers.html">← Back to Drivers</a>
 
-    ${renderCarImageHeroSection(carImageUrl, name)}
-
     <section class="driver-profile-hero">
       <div class="driver-profile-hero-media">
         <img
@@ -825,7 +823,8 @@ function renderProfile(profile, stats, seasonLabel, carImageUrl = "") {
           onerror="this.onerror=null;this.src='${PLACEHOLDER_PHOTO}'"
         />
       </div>
-      <div class="driver-profile-hero-info">
+      <div class="driver-profile-hero-info${carImageUrl ? " driver-profile-hero-info--with-car" : ""}">
+        ${renderCarImageHeroSection(carImageUrl, name)}
         <div class="driver-profile-identity">
           ${
             number
