@@ -98,6 +98,91 @@ function driverImage(name) {
   return `/assets/drivers/${slug}.png`;
 }
 
+const CAR_IMAGE_BASE = "/assets/images/cars";
+const CAR_IMAGE_EXTENSIONS = [".png", ".webp", ".jpg", ".jpeg"];
+
+function slugifyDriverName(name) {
+  return String(name || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function normalizeCarNumber(value) {
+  return String(value || "")
+    .replace(/[^0-9]/g, "")
+    .replace(/^0+/, "") || "";
+}
+
+function buildLocalCarImageCandidates(profile) {
+  const name = profile.display_name || profile.iracing_name || "";
+  const slug = slugifyDriverName(name);
+  const carNum = normalizeCarNumber(profile.car_number);
+  const driverId = String(profile.driver_id || "").trim();
+  const bases = [];
+
+  if (slug && carNum) {
+    bases.push(`${slug}-${carNum}`);
+    bases.push(`${carNum}-${slug}`);
+  }
+  if (slug) bases.push(slug);
+  if (driverId) bases.push(driverId);
+  if (carNum) bases.push(carNum);
+
+  const candidates = [];
+  for (const base of bases) {
+    if (!base) continue;
+    for (const ext of CAR_IMAGE_EXTENSIONS) {
+      candidates.push(`${CAR_IMAGE_BASE}/${base}${ext}`);
+    }
+  }
+
+  return [...new Set(candidates)];
+}
+
+function probeImageUrl(url) {
+  const src = String(url || "").trim();
+  if (!src) return Promise.resolve("");
+
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(src);
+    img.onerror = () => resolve("");
+    img.src = src;
+  });
+}
+
+async function resolveCarImageUrl(profile) {
+  const remote = profileText(profile, "car_image_url", "carImageUrl");
+  if (remote) {
+    const loaded = await probeImageUrl(remote);
+    if (loaded) return loaded;
+  }
+
+  for (const candidate of buildLocalCarImageCandidates(profile)) {
+    const loaded = await probeImageUrl(candidate);
+    if (loaded) return loaded;
+  }
+
+  return "";
+}
+
+function renderCarImageHeroSection(carImageUrl, driverName) {
+  if (!carImageUrl) return "";
+
+  return `<section class="driver-profile-car-hero" aria-label="Race car">
+    <div class="driver-profile-car-hero-inner">
+      <img
+        class="driver-profile-car-hero-image"
+        src="${escapeAttr(carImageUrl)}"
+        alt="${escapeAttr(`${driverName} race car`)}"
+        loading="eager"
+        decoding="async"
+      />
+    </div>
+  </section>`;
+}
+
 function formatStatValue(value) {
   if (value === null || value === undefined || value === "") return null;
   if (typeof value === "number" && Number.isFinite(value)) return String(value);
@@ -369,25 +454,6 @@ function renderCareerNotesSection(profile) {
       profileText(profile, "fun_fact", "funFact"),
     ],
   ]);
-}
-
-function renderCarImageSection(profile) {
-  const carImage = profileText(profile, "car_image_url", "carImageUrl");
-  if (!carImage) return "";
-
-  return `<section class="driver-profile-car-section">
-    <div class="driver-profile-section-head">
-      <h2>Car</h2>
-    </div>
-    <div class="driver-profile-car-card">
-      <img
-        class="driver-profile-car-image"
-        src="${escapeAttr(carImage)}"
-        alt="Race car"
-        loading="lazy"
-      />
-    </div>
-  </section>`;
 }
 
 function renderMetaRow(profile) {
@@ -734,7 +800,7 @@ function renderRecentResults(recentRaces) {
   </section>`;
 }
 
-function renderProfile(profile, stats, seasonLabel) {
+function renderProfile(profile, stats, seasonLabel, carImageUrl = "") {
   const panel = $("#driverProfilePanel");
   if (!panel || !profile) return;
 
@@ -747,6 +813,8 @@ function renderProfile(profile, stats, seasonLabel) {
 
   panel.innerHTML = `
     <a class="driver-profile-back" href="/drivers.html">← Back to Drivers</a>
+
+    ${renderCarImageHeroSection(carImageUrl, name)}
 
     <section class="driver-profile-hero">
       <div class="driver-profile-hero-media">
@@ -786,7 +854,6 @@ function renderProfile(profile, stats, seasonLabel) {
     ${renderDriverInfoSection(profile)}
     ${renderCareerNotesSection(profile)}
     ${renderConnectSection(profile)}
-    ${renderCarImageSection(profile)}
     ${renderStatsBar(stats, seasonLabel)}
     ${renderRecentResults(stats.recentRaces)}
   `;
@@ -841,7 +908,8 @@ async function loadDriverProfile() {
     const seasonLabel =
       standingsData.settings?.seasonName || scheduleData.settings?.seasonName || "Season 11";
 
-    renderProfile(profile, stats, seasonLabel);
+    const carImageUrl = await resolveCarImageUrl(profile);
+    renderProfile(profile, stats, seasonLabel, carImageUrl);
   } catch (e) {
     console.error("Failed to load driver profile:", e);
     panel.innerHTML = `

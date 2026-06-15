@@ -1430,6 +1430,26 @@ a.home-news-item:hover h4{color:#fff}
   transition:color .15s ease;
 }
 .driver-profile-back:hover{color:var(--red)}
+.driver-profile-car-hero{
+  margin:0 auto 24px;
+  max-width:1050px;
+  width:100%;
+}
+.driver-profile-car-hero-inner{
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  width:100%;
+}
+.driver-profile-car-hero-image{
+  display:block;
+  width:100%;
+  max-width:1050px;
+  max-height:360px;
+  height:auto;
+  object-fit:contain;
+  object-position:center;
+}
 .driver-profile-hero{
   display:grid;
   grid-template-columns:minmax(240px,34%) 1fr;
@@ -1615,8 +1635,7 @@ a.home-news-item:hover h4{color:#fff}
 .driver-profile-streamer{margin-top:4px}
 .driver-profile-bio-section,
 .driver-profile-info-section,
-.driver-profile-connect-section,
-.driver-profile-car-section{
+.driver-profile-connect-section{
   margin-top:28px;
 }
 .driver-profile-bio-text{
@@ -1677,19 +1696,6 @@ a.home-news-item:hover h4{color:#fff}
   box-shadow:0 0 14px rgba(204,0,0,.55);
   transform:scale(1.08);
 }
-.driver-profile-car-card{
-  border:1px solid rgba(255,255,255,.08);
-  background:#0a0a0a;
-  border-radius:6px;
-  overflow:hidden;
-}
-.driver-profile-car-image{
-  display:block;
-  width:100%;
-  max-height:420px;
-  object-fit:contain;
-  background:#050505;
-}
 @media (max-width:900px){
   .driver-profile-hero{
     grid-template-columns:1fr;
@@ -1724,6 +1730,12 @@ a.home-news-item:hover h4{color:#fff}
   .driver-profile-stat-value{font-size:22px}
   .driver-profile-name{font-size:clamp(28px,8vw,40px)}
   .driver-profile-number{font-size:clamp(56px,16vw,88px)}
+  .driver-profile-car-hero{
+    margin-bottom:18px;
+  }
+  .driver-profile-car-hero-image{
+    max-height:240px;
+  }
   .driver-profile-social-btn{
     width:30px;
     height:30px;
