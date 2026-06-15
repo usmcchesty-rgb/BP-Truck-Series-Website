@@ -1064,6 +1064,28 @@ export const MIXED_SCOPE_ERROR_TYPES = new Set([
   'unsupported-mixed-scope',
 ]);
 
+export const HISTORICAL_SEASON_ERROR_TYPES = new Set([
+  'historical-season-points-mismatch',
+  'unsupported-best-points-claim',
+  'cross-season-points-comparison',
+]);
+
+export const SPOTLIGHT_SCOPE_ERROR_TYPES = new Set([
+  ...MIXED_SCOPE_ERROR_TYPES,
+  ...HISTORICAL_SEASON_ERROR_TYPES,
+]);
+
+function lookupParticipatedSeason(summary, seasonNum) {
+  const participated = summary?.participatedSeasons || [];
+  return (
+    participated.find((season) => season.bpSeasonNumber === seasonNum) ||
+    participated.find((season) =>
+      new RegExp(`season\\s*#?\\s*${seasonNum}\\b`, 'i').test(season.label || season.seasonName || '')
+    ) ||
+    null
+  );
+}
+
 const MIXED_SCOPE_WORD_NUM = 'one|two|three|four|five|six|seven|eight|nine|ten|\\d[\\d,]*';
 
 function pushMixedScopeError(unsupported, seen, entry) {
@@ -1087,32 +1109,81 @@ function scopesDiffer(careerValue, seasonValue) {
 }
 
 export function buildSpotlightVerifiedStatsRepairBlock(context = {}) {
+  const driverKey = context.spotlightDriverId ? String(context.spotlightDriverId) : null;
   const league =
     context.leagueCareerStats ||
-    context.factualGrounding?.drivers?.[String(context.spotlightDriverId)]?.leagueCareerStats ||
+    context.factualGrounding?.drivers?.[driverKey]?.leagueCareerStats ||
     null;
   const season =
     context.allowedSeasonStats ||
-    context.factualGrounding?.drivers?.[String(context.spotlightDriverId)]?.allowedSeasonStats ||
+    context.factualGrounding?.drivers?.[driverKey]?.allowedSeasonStats ||
     null;
+  const summary =
+    context.leagueCareerSummary ||
+    context.factualGrounding?.drivers?.[driverKey]?.leagueCareerSummary ||
+    null;
+  const currentSeasonBpNumber = context.currentSeasonBpNumber ?? null;
 
   if (!league?.careerStatsVerified || !season) {
     return '';
   }
 
-  return `Verified currentSeasonStats (must use: this season / current season / Season 11):
-- wins: ${season.winsTotal}
-- top5: ${season.top5Total}
-- top10: ${season.top10Total}
-- points: ${season.pointsTotal}
-- position: P${season.pointsPosition}
+  const lines = [
+    `Verified currentSeasonStats (label: this season / current season${currentSeasonBpNumber ? ` / Season ${currentSeasonBpNumber}` : ''}):`,
+    `- wins: ${season.winsTotal}`,
+    `- top5: ${season.top5Total}`,
+    `- top10: ${season.top10Total}`,
+    `- points: ${season.pointsTotal}`,
+    `- position: P${season.pointsPosition}`,
+    '',
+    'Verified leagueCareerStats (label: career / league career / Blazing Pedals career):',
+    `- starts: ${league.careerStarts}`,
+    `- wins: ${league.careerWins}`,
+    `- top5: ${league.careerTop5s}`,
+    `- top10: ${league.careerTop10s}`,
+    `- avgFinish: ${league.careerAverageFinish}`,
+    `- poles: ${league.careerPoles}`,
+    `- lapsLed: ${league.careerLapsLed}`,
+  ];
 
-Verified leagueCareerStats (must use: career / league career / Blazing Pedals career):
-- starts: ${league.careerStarts}
-- wins: ${league.careerWins}
-- top5: ${league.careerTop5s}
-- top10: ${league.careerTop10s}
-- avgFinish: ${league.careerAverageFinish}`;
+  if (summary?.careerSummaryVerified) {
+    lines.push(
+      '',
+      'Verified leagueCareerSummary (historical seasons — use finishing POSITION and season name; do NOT use current-season points for past seasons):',
+      `- bestSeasonFinish: P${summary.bestSeasonFinish}`,
+      `- bestSeasonName: ${summary.bestSeasonName}`,
+      `- championships: ${summary.championships}`,
+      `- seasonsAppeared: ${summary.seasonsAppeared}`,
+      `- seasonsStarted: ${(summary.seasonsStarted || []).join(', ')}`
+    );
+
+    if (summary.championshipSeasons?.length) {
+      lines.push(
+        `- championshipSeasons: ${summary.championshipSeasons.map((s) => `${s.label} P${s.position}`).join(', ')}`
+      );
+    }
+    if (summary.runnerUpSeasons?.length) {
+      lines.push(
+        `- runnerUpSeasons: ${summary.runnerUpSeasons
+          .map((s) => `${s.label} P${s.position} (${s.points} pts that season)`)
+          .join(', ')}`
+      );
+    }
+    if (summary.top3SeasonFinishes?.length) {
+      lines.push(
+        `- top3SeasonFinishes: ${summary.top3SeasonFinishes
+          .map((s) => `${s.label} P${s.position}`)
+          .join(', ')}`
+      );
+    }
+
+    lines.push(
+      '',
+      `CRITICAL: Current-season points (${season.pointsTotal}) apply ONLY to the current season${currentSeasonBpNumber ? ` (Season ${currentSeasonBpNumber})` : ''}. Never attach them to Season 8 or other historical seasons.`
+    );
+  }
+
+  return lines.join('\n');
 }
 
 const WORD_CAREER_WIN_PATTERNS = [
@@ -1631,6 +1702,142 @@ export function validateDriverSpotlightMixedScopeStats(text, context = {}) {
   return unsupported;
 }
 
+const FORBIDDEN_BEST_POINTS_PATTERNS = [
+  /\bcareer[- ]best points\b/gi,
+  /\bhighest[- ]points season\b/gi,
+  /\bbest points total\b/gi,
+  /\bbest[- ]scoring season\b/gi,
+  /\bmost points (?:in|across) (?:his|her|their) (?:career|league)\b/gi,
+  /\bcareer[- ]high points\b/gi,
+  /\bpoints[- ]wise best season\b/gi,
+  /\bbest season.{0,40}points total\b/gi,
+];
+
+export function validateDriverSpotlightHistoricalSeasonStats(text, context = {}) {
+  const unsupported = [];
+  const seen = new Set();
+  const summary =
+    context.leagueCareerSummary ||
+    context.careerHistory?.leagueCareerSummary ||
+    null;
+  const seasonStats = context.allowedSeasonStats || null;
+  const manualRaceNotes = context.manualRaceNotes || '';
+  const transcriptSummary = context.transcriptSummary || '';
+  const currentSeasonBpNumber = Number(context.currentSeasonBpNumber);
+  const currentSeasonPoints = Number(seasonStats?.pointsTotal);
+
+  if (!summary?.careerSummaryVerified || !seasonStats) {
+    return unsupported;
+  }
+
+  for (const pattern of FORBIDDEN_BEST_POINTS_PATTERNS) {
+    for (const match of String(text || '').matchAll(pattern)) {
+      if (claimSupportedInNotes(match[0], manualRaceNotes, transcriptSummary)) continue;
+      pushMixedScopeError(unsupported, seen, {
+        type: 'unsupported-best-points-claim',
+        message:
+          'Do not describe historical seasons using points totals — use finishing position and season name instead.',
+        claim: match[0].trim(),
+        field: 'historicalSeasonPoints',
+      });
+    }
+  }
+
+  const validateHistoricalSeasonPoints = (seasonNum, claimedPoints, claim) => {
+    if (!Number.isFinite(seasonNum) || !Number.isFinite(claimedPoints)) return;
+    if (Number.isFinite(currentSeasonBpNumber) && seasonNum === currentSeasonBpNumber) {
+      if (claimedPoints === currentSeasonPoints) return;
+      pushMixedScopeError(unsupported, seen, {
+        type: 'historical-season-points-mismatch',
+        message: `Claimed ${claimedPoints} points for current Season ${seasonNum}, but verified current-season total is ${currentSeasonPoints}.`,
+        claim: claim.trim(),
+        field: 'seasonPoints',
+        seasonNumber: seasonNum,
+      });
+      return;
+    }
+
+    const season = lookupParticipatedSeason(summary, seasonNum);
+    if (!season) return;
+
+    const verifiedPoints = Number(season.points);
+    if (claimedPoints === verifiedPoints) return;
+
+    if (claimedPoints === currentSeasonPoints) {
+      pushMixedScopeError(unsupported, seen, {
+        type: 'historical-season-points-mismatch',
+        message: `Season ${seasonNum} is cited with ${claimedPoints} points, but that is the current-season total — Season ${seasonNum} verified total is ${verifiedPoints}. Use position (P${season.position}) instead.`,
+        claim: claim.trim(),
+        field: 'historicalSeasonPoints',
+        seasonNumber: seasonNum,
+        verifiedSeasonPoints: verifiedPoints,
+        verifiedCurrentSeasonPoints: currentSeasonPoints,
+      });
+      return;
+    }
+
+    pushMixedScopeError(unsupported, seen, {
+      type: 'historical-season-points-mismatch',
+      message: `Claimed ${claimedPoints} points for Season ${seasonNum}, but verified total for that season is ${verifiedPoints}.`,
+      claim: claim.trim(),
+      field: 'historicalSeasonPoints',
+      seasonNumber: seasonNum,
+      verifiedSeasonPoints: verifiedPoints,
+    });
+  };
+
+  for (const match of String(text || '').matchAll(
+    /\bseason\s*#?\s*(\d+)\s+runner[- ]up\s+with\s+(\d[\d,]*)\s+points?\b/gi
+  )) {
+    if (claimSupportedInNotes(match[0], manualRaceNotes, transcriptSummary)) continue;
+    validateHistoricalSeasonPoints(
+      Number(match[1]),
+      parseNumericClaim(match[2]),
+      match[0]
+    );
+  }
+
+  for (const match of String(text || '').matchAll(
+    /\bseason\s*#?\s*(\d+)\b[^.!?]{0,140}\b(\d[\d,]*)\s+points?\b/gi
+  )) {
+    if (claimSupportedInNotes(match[0], manualRaceNotes, transcriptSummary)) continue;
+    validateHistoricalSeasonPoints(
+      Number(match[1]),
+      parseNumericClaim(match[2]),
+      match[0]
+    );
+  }
+
+  for (const match of String(text || '').matchAll(
+    /\b(\d[\d,]*)\s+points?\b[^.!?]{0,140}\bseason\s*#?\s*(\d+)\b/gi
+  )) {
+    if (claimSupportedInNotes(match[0], manualRaceNotes, transcriptSummary)) continue;
+    validateHistoricalSeasonPoints(
+      Number(match[2]),
+      parseNumericClaim(match[1]),
+      match[0]
+    );
+  }
+
+  for (const match of String(text || '').matchAll(
+    /\bseason\s*#?\s*(\d+)\b[^.!?]{0,100}\bseason\s*#?\s*(\d+)\b/gi
+  )) {
+    const window = match[0];
+    if (!/\bpoints?\b/i.test(window)) continue;
+    if (claimSupportedInNotes(window, manualRaceNotes, transcriptSummary)) continue;
+    if (Number(match[1]) === Number(match[2])) continue;
+    pushMixedScopeError(unsupported, seen, {
+      type: 'cross-season-points-comparison',
+      message:
+        'Cross-season point comparisons are invalid — cite championship finishing positions per season instead.',
+      claim: window.trim(),
+      field: 'historicalSeasonPoints',
+    });
+  }
+
+  return unsupported;
+}
+
 function seasonNumberFromClaim(text) {
   const match = String(text || '').match(/\bseason\s*#?\s*(\d+)\b/i);
   return match ? Number(match[1]) : null;
@@ -1861,6 +2068,7 @@ export const DRIVER_SPOTLIGHT_FIELD_VALIDATORS = [
   validateDriverSpotlightCareerStats,
   validateDriverSpotlightCareerSummary,
   validateDriverSpotlightMixedScopeStats,
+  validateDriverSpotlightHistoricalSeasonStats,
   validateDriverSpotlightStyleClaims,
 ];
 

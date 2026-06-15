@@ -304,12 +304,22 @@ function slimLeagueCareerSummary(summary) {
     seasonsAppeared: summary.seasonsAppeared,
     seasonsStarted: summary.seasonsStarted,
     championships: summary.championships,
-    championshipSeasons: summary.championshipSeasons,
-    runnerUpSeasons: summary.runnerUpSeasons,
-    top3SeasonFinishes: summary.top3SeasonFinishes,
+    championshipSeasons: (summary.championshipSeasons || []).map((season) => ({
+      label: season.label,
+      position: season.position,
+    })),
+    runnerUpSeasons: (summary.runnerUpSeasons || []).map((season) => ({
+      label: season.label,
+      position: season.position,
+    })),
+    top3SeasonFinishes: (summary.top3SeasonFinishes || []).map((season) => ({
+      label: season.label,
+      position: season.position,
+    })),
     bestSeasonFinish: summary.bestSeasonFinish,
     bestSeasonName: summary.bestSeasonName,
     label: 'Blazing Pedals league championship history',
+    note: 'Use finishing position and season name for historical seasons. Do not cite points totals for past seasons or compare points across seasons.',
   };
 }
 

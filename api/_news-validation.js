@@ -2,8 +2,25 @@ import { validateWriteupFactualGrounding } from './_power-rankings-factual-groun
 import {
   validateDriverSpotlightField,
   buildSpotlightVerifiedStatsRepairBlock,
-  MIXED_SCOPE_ERROR_TYPES,
+  SPOTLIGHT_SCOPE_ERROR_TYPES,
 } from './_driver-career-history.js';
+
+function resolveCurrentSeasonBpNumber(context = {}, spotlightGrounding = null) {
+  if (Number.isFinite(context.currentSeasonBpNumber)) {
+    return context.currentSeasonBpNumber;
+  }
+  const catalog = context.factualGrounding?.careerHistoryAudit;
+  const currentSeasonId = catalog?.currentSeasonId;
+  if (currentSeasonId && catalog?.seasons) {
+    const season = catalog.seasons.find(
+      (entry) => String(entry.seasonId) === String(currentSeasonId)
+    );
+    if (Number.isFinite(season?.bpSeasonNumber)) return season.bpSeasonNumber;
+  }
+  const name = catalog?.currentSeasonName || '';
+  const match = String(name).match(/season\s*#?\s*(\d+)/i);
+  return match ? Number(match[1]) : null;
+}
 import { ARTICLE_TYPES } from '../server/config/news-system-prompt.js';
 
 function normalizeText(value) {
@@ -194,6 +211,7 @@ export function validateNewsArticle(article, context = {}) {
         context.leagueCareerSummary ||
         null,
       allowedSeasonStats: spotlightGrounding?.allowedSeasonStats || null,
+      currentSeasonBpNumber: resolveCurrentSeasonBpNumber(context, spotlightGrounding),
       manualRaceNotes: manualNotes,
       transcriptSummary,
     };
@@ -317,7 +335,7 @@ export function validateNewsArticle(article, context = {}) {
       articleField: fact.articleField || null,
     })),
     mixedScopeClaims: unsupportedFacts
-      .filter((fact) => MIXED_SCOPE_ERROR_TYPES.has(fact.type))
+      .filter((fact) => SPOTLIGHT_SCOPE_ERROR_TYPES.has(fact.type))
       .map((fact) => ({
         type: fact.type,
         claim: fact.claim,
@@ -353,6 +371,9 @@ export const REPAIRABLE_NEWS_ERROR_TYPES = new Set([
   'unsupported-mixed-scope-season-career',
   'career-stat-labeled-as-season',
   'season-stat-labeled-as-career',
+  'historical-season-points-mismatch',
+  'unsupported-best-points-claim',
+  'cross-season-points-comparison',
   'unsupported-driver-style',
   'forbidden-meta',
 ]);
@@ -379,9 +400,10 @@ export function formatNewsValidationForRepair(validation, repairContext = {}) {
   const statsBlock = buildSpotlightVerifiedStatsRepairBlock(repairContext);
 
   return [
-    'Fix ALL fields (headline, subheadline, summary, body). Rewrite every affected field so season stats and career stats are clearly separated.',
+    'Fix ALL fields (headline, subheadline, summary, body). Rewrite every affected field so season stats, career stats, and historical-season references are internally consistent.',
     'Never label a league career total as "this season". Never label a current-season total as "career".',
-  statsBlock ? `\n${statsBlock}\n` : '',
+    'Never attach current-season points to a historical season. For past seasons, use finishing position and season name.',
+    statsBlock ? `\n${statsBlock}\n` : '',
     'Career totals in headline/subheadline/summary/body must exactly match leagueCareerStats.',
     'Current-season totals must exactly match currentSeasonStats and use this season/current season labeling.',
     '',

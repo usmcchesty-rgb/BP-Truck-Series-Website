@@ -20,7 +20,7 @@ import {
 } from './_news-validation.js';
 import {
   buildSpotlightVerifiedStatsRepairBlock,
-  MIXED_SCOPE_ERROR_TYPES,
+  SPOTLIGHT_SCOPE_ERROR_TYPES,
 } from './_driver-career-history.js';
 
 function parseBody(req) {
@@ -111,10 +111,14 @@ ${JSON.stringify(previousArticle, null, 2)}
 Return corrected JSON only with headline, subheadline, summary, and body.
 Rewrite ALL affected fields. Separate season stats from career stats in every field.
 
-Examples when career wins=5 and season wins=1:
+Historical seasons: use finishing position and season name only — never current-season points on Season 8 or other past seasons.
+
+Examples when career wins=5, season wins=1, Season 8 runner-up (P2), current Season 11 points=595:
 - ALLOWED season: "one win this season"
-- ALLOWED career: "five wins across his Blazing Pedals career"
-- REJECTED: "five wins this season"`,
+- ALLOWED career: "five career wins across his Blazing Pedals career"
+- ALLOWED history: "His best season came in Season 8, when he finished second in the championship standings"
+- REJECTED: "five wins this season"
+- REJECTED: "Season 8 runner-up with 595 points"`,
     });
   } else {
     messages.push({ role: 'user', content: userPrompt });
@@ -190,11 +194,24 @@ export async function repairNewsArticle(article, generationContext, articleType)
     allowedSeasonStats:
       generationContext.factualGrounding?.drivers?.[String(generationContext.spotlightDriverId)]
         ?.allowedSeasonStats || null,
+    leagueCareerSummary:
+      generationContext.factualGrounding?.drivers?.[String(generationContext.spotlightDriverId)]
+        ?.leagueCareerSummary || generationContext.leagueCareerSummary || null,
+    currentSeasonBpNumber: (() => {
+      const catalog = generationContext.factualGrounding?.careerHistoryAudit;
+      const currentSeasonId = catalog?.currentSeasonId;
+      const season = catalog?.seasons?.find(
+        (entry) => String(entry.seasonId) === String(currentSeasonId)
+      );
+      if (Number.isFinite(season?.bpSeasonNumber)) return season.bpSeasonNumber;
+      const match = String(catalog?.currentSeasonName || '').match(/season\s*#?\s*(\d+)/i);
+      return match ? Number(match[1]) : null;
+    })(),
   };
   let validation = validateNewsArticle(current, validationContext);
   const mixedScopeFieldsBeforeRepair = new Set(
     validation.errors
-      .filter((err) => MIXED_SCOPE_ERROR_TYPES.has(err.type) && err.articleField)
+      .filter((err) => SPOTLIGHT_SCOPE_ERROR_TYPES.has(err.type) && err.articleField)
       .map((err) => err.articleField)
   );
 
@@ -223,7 +240,7 @@ export async function repairNewsArticle(article, generationContext, articleType)
   const repairedMixedScopeFields = [...mixedScopeFieldsBeforeRepair].filter(
     (field) =>
       !validation.errors.some(
-        (err) => MIXED_SCOPE_ERROR_TYPES.has(err.type) && err.articleField === field
+        (err) => SPOTLIGHT_SCOPE_ERROR_TYPES.has(err.type) && err.articleField === field
       )
   );
 
@@ -332,6 +349,9 @@ function buildGenerationSources(generationContext, articleType, repaired, prompt
         'unsupported-mixed-scope-season-career',
         'career-stat-labeled-as-season',
         'season-stat-labeled-as-career',
+        'historical-season-points-mismatch',
+        'unsupported-best-points-claim',
+        'cross-season-points-comparison',
       ].includes(fact.type)
     ) || [];
 
