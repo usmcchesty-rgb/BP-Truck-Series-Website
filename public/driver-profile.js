@@ -802,6 +802,23 @@ function renderRecentResults(recentRaces) {
   </section>`;
 }
 
+function driverNameSizeClasses(name) {
+  const len = String(name || "").trim().length;
+  const nameClass =
+    len > 24
+      ? "driver-profile-name--very-long"
+      : len > 18
+        ? "driver-profile-name--long"
+        : "";
+  const stackClass =
+    len > 24
+      ? "driver-profile-identity-namestack--very-long"
+      : len > 18
+        ? "driver-profile-identity-namestack--long"
+        : "";
+  return { nameClass, stackClass };
+}
+
 function renderProfile(profile, stats, seasonLabel, carImageUrl = "") {
   const panel = $("#driverProfilePanel");
   if (!panel || !profile) return;
@@ -810,6 +827,11 @@ function renderProfile(profile, stats, seasonLabel, carImageUrl = "") {
   const photo =
     profile.photoUrl || profile.photo_url || driverImage(name);
   const number = String(profile.car_number || "").trim();
+  const { nameClass, stackClass } = driverNameSizeClasses(name);
+  const nameClasses = ["driver-profile-name", nameClass].filter(Boolean).join(" ");
+  const stackClasses = ["driver-profile-identity-namestack", stackClass]
+    .filter(Boolean)
+    .join(" ");
 
   document.title = `${name} — Blazing Pedals Truck Series`;
 
@@ -827,20 +849,22 @@ function renderProfile(profile, stats, seasonLabel, carImageUrl = "") {
       </div>
       <div class="driver-profile-hero-info${carImageUrl ? " driver-profile-hero-info--with-car" : ""}">
         <div class="driver-profile-identity">
-          ${
-            number
-              ? `<div class="driver-profile-number" aria-hidden="true">${escapeHtml(number)}</div>`
-              : ""
-          }
-          <div class="driver-profile-identity-namestack">
+          <div class="${escapeAttr(stackClasses)}">
             ${renderCarImageHeroSection(carImageUrl, name)}
-            <div class="driver-profile-identity-text">
-              <h1 class="driver-profile-name">${escapeHtml(name)}</h1>
+            <div class="driver-profile-identity-titlerow">
               ${
-                profile.iracing_name && profile.iracing_name !== name
-                  ? `<p class="driver-profile-alias">${escapeHtml(profile.iracing_name)}</p>`
+                number
+                  ? `<div class="driver-profile-number" aria-hidden="true">${escapeHtml(number)}</div>`
                   : ""
               }
+              <div class="driver-profile-identity-text">
+                <h1 class="${escapeAttr(nameClasses)}">${escapeHtml(name)}</h1>
+                ${
+                  profile.iracing_name && profile.iracing_name !== name
+                    ? `<p class="driver-profile-alias">${escapeHtml(profile.iracing_name)}</p>`
+                    : ""
+                }
+              </div>
             </div>
           </div>
         </div>

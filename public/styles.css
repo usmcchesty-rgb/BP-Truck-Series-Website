@@ -1470,9 +1470,30 @@ a.home-news-item:hover h4{color:#fff}
   min-width:0;
   justify-content:flex-end;
 }
+.driver-profile-identity-namestack--long{
+  max-width:min(520px,100%);
+}
+.driver-profile-identity-namestack--very-long{
+  max-width:min(480px,100%);
+}
+.driver-profile-identity-titlerow{
+  display:flex;
+  align-items:flex-end;
+  gap:clamp(14px,2vw,28px);
+  width:100%;
+  min-width:0;
+}
 .driver-profile-identity-namestack .driver-profile-identity-text{
   width:100%;
-  flex:0 0 auto;
+  flex:1 1 auto;
+  min-width:0;
+  max-width:18em;
+}
+.driver-profile-identity-namestack--long .driver-profile-identity-text{
+  max-width:15em;
+}
+.driver-profile-identity-namestack--very-long .driver-profile-identity-text{
+  max-width:13em;
 }
 .driver-profile-hero{
   display:grid;
@@ -1512,7 +1533,7 @@ a.home-news-item:hover h4{color:#fff}
   display:flex;
   align-items:flex-end;
   gap:clamp(14px,2vw,28px);
-  flex-wrap:wrap;
+  flex-wrap:nowrap;
 }
 .driver-profile-number{
   font:900 clamp(72px,10vw,120px)/.82 Impact,sans-serif;
@@ -1521,8 +1542,9 @@ a.home-news-item:hover h4{color:#fff}
   transform:skewX(-8deg);
   text-shadow:2px 2px 0 rgba(229,9,20,.35);
   flex-shrink:0;
+  align-self:flex-end;
 }
-.driver-profile-identity-text{min-width:0;flex:1 1 220px}
+.driver-profile-identity-text{min-width:0;flex:1 1 auto}
 .driver-profile-name{
   margin:0;
   font-size:clamp(34px,5vw,56px);
@@ -1531,6 +1553,19 @@ a.home-news-item:hover h4{color:#fff}
   letter-spacing:-.02em;
   text-transform:uppercase;
   color:#fff;
+  overflow-wrap:break-word;
+  word-break:normal;
+  hyphens:manual;
+}
+.driver-profile-name--long{
+  font-size:clamp(28px,4.2vw,44px);
+  line-height:.92;
+  letter-spacing:-.015em;
+}
+.driver-profile-name--very-long{
+  font-size:clamp(24px,3.6vw,38px);
+  line-height:.9;
+  letter-spacing:-.01em;
 }
 .driver-profile-alias{
   margin:8px 0 0;
@@ -1756,6 +1791,8 @@ a.home-news-item:hover h4{color:#fff}
   }
   .driver-profile-stat-value{font-size:22px}
   .driver-profile-name{font-size:clamp(28px,8vw,40px)}
+  .driver-profile-name--long{font-size:clamp(24px,6.5vw,34px);line-height:.92}
+  .driver-profile-name--very-long{font-size:clamp(22px,6vw,30px);line-height:.9}
   .driver-profile-number{font-size:clamp(56px,16vw,88px)}
   .driver-profile-car-hero{
     margin:0 0 6px;
