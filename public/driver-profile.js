@@ -286,25 +286,78 @@ function shouldLogCarAlignDiagnostics() {
   }
 }
 
-function getH1LineRects(h1) {
-  if (!h1) return [];
+function getLineRectsPrecise(h1) {
+  const textNode = h1?.firstChild;
+  if (!textNode || textNode.nodeType !== Node.TEXT_NODE) return [];
 
-  const raw = Array.from(h1.getClientRects()).filter(
-    (rect) => rect.width > 0 && rect.height > 1
-  );
-  if (!raw.length) return [];
+  const text = textNode.textContent || "";
+  if (!text) return [];
+
+  const range = document.createRange();
+  const lineMap = new Map();
+
+  for (let i = 0; i < text.length; i += 1) {
+    range.setStart(textNode, i);
+    range.setEnd(textNode, i + 1);
+    const rects = Array.from(range.getClientRects()).filter(
+      (rect) => rect.width > 0 && rect.height > 1
+    );
+
+    rects.forEach((rect) => {
+      const key = Math.round(rect.top);
+      const line = lineMap.get(key) || {
+        left: Infinity,
+        right: -Infinity,
+        top: rect.top,
+        width: 0,
+        height: rect.height,
+      };
+      line.left = Math.min(line.left, rect.left);
+      line.right = Math.max(line.right, rect.right);
+      line.width = line.right - line.left;
+      lineMap.set(key, line);
+    });
+  }
+
+  return Array.from(lineMap.values()).filter((line) => line.width > 0);
+}
+
+function getH1LineRects(h1) {
+  if (!h1) return { raw: [], lines: [] };
+
+  const precise = getLineRectsPrecise(h1);
+  if (precise.length) {
+    return { raw: precise, lines: precise };
+  }
+
+  const filterRects = (rects) =>
+    rects.filter((rect) => rect.width > 0 && rect.height > 1);
+
+  const fromElement = filterRects(Array.from(h1.getClientRects()));
+
+  let fromRange = [];
+  try {
+    const range = document.createRange();
+    range.selectNodeContents(h1);
+    fromRange = filterRects(Array.from(range.getClientRects()));
+  } catch {
+    fromRange = [];
+  }
+
+  const raw = fromRange.length > fromElement.length ? fromRange : fromElement;
+  if (!raw.length) return { raw: [], lines: [] };
+
+  const lineHeight = parseFloat(window.getComputedStyle(h1).lineHeight) || 0;
+  const topThreshold = Math.max(4, lineHeight * 0.35);
 
   const lines = [];
 
   raw.forEach((rect) => {
-    const existing = lines.find((line) => Math.abs(line.top - rect.top) < 2);
+    const existing = lines.find((line) => Math.abs(line.top - rect.top) < topThreshold);
     if (existing) {
       existing.left = Math.min(existing.left, rect.left);
       existing.right = Math.max(existing.right, rect.right);
-      existing.top = Math.min(existing.top, rect.top);
-      existing.bottom = Math.max(existing.bottom, rect.bottom);
       existing.width = existing.right - existing.left;
-      existing.height = existing.bottom - existing.top;
       return;
     }
 
@@ -318,7 +371,17 @@ function getH1LineRects(h1) {
     });
   });
 
-  return lines;
+  return { raw, lines };
+}
+
+function isWrappedDriverName(h1, lineRects) {
+  if (lineRects.lines.length > 1) return true;
+
+  const lineHeight = parseFloat(window.getComputedStyle(h1).lineHeight) || 0;
+  if (!lineHeight) return false;
+
+  const blockHeight = h1.getBoundingClientRect().height;
+  return blockHeight > lineHeight * 1.25;
 }
 
 function alignDriverProfileCar(driverName) {
@@ -329,11 +392,16 @@ function alignDriverProfileCar(driverName) {
   const carWrap = stack.querySelector("[data-car-wrap]");
   if (!h1 || !carWrap) return;
 
-  const lineRects = getH1LineRects(h1);
-  const lineCount = lineRects.length;
   const debug = shouldLogCarAlignDiagnostics();
 
-  if (lineCount <= 1) {
+  carWrap.style.transform = "none";
+  void carWrap.offsetHeight;
+
+  const { raw, lines } = getH1LineRects(h1);
+  const lineCount = lines.length;
+  const wrapped = isWrappedDriverName(h1, { lines });
+
+  if (!wrapped || !raw.length) {
     carWrap.style.transform = "";
     carWrap.removeAttribute("data-car-align-wrap");
 
@@ -341,33 +409,49 @@ function alignDriverProfileCar(driverName) {
       console.log("[BP Driver Profile Car Align]", {
         driverName,
         lineCount,
-        lineRects,
+        rectWidths: raw.map((rect) => rect.width),
+        lineRects: lines,
         visualCenter: null,
         carCenter: null,
-        translateX: 0,
+        appliedOffset: 0,
+        wrapped: false,
       });
     }
     return;
   }
 
-  const minLeft = Math.min(...lineRects.map((rect) => rect.left));
-  const maxRight = Math.max(...lineRects.map((rect) => rect.right));
-  const visualCenter = (minLeft + maxRight) / 2;
+  const leftMost = Math.min(...raw.map((rect) => rect.left));
+  const rightMost = Math.max(...raw.map((rect) => rect.right));
+  const visualCenter = (leftMost + rightMost) / 2;
   const carRect = carWrap.getBoundingClientRect();
   const carCenter = carRect.left + carRect.width / 2;
-  const translateX = visualCenter - carCenter;
+  const appliedOffset = visualCenter - carCenter;
 
-  carWrap.style.transform = `translateX(${translateX}px)`;
-  carWrap.setAttribute("data-car-align-wrap", "1");
+  if (Math.abs(appliedOffset) < 0.5) {
+    carWrap.style.transform = "";
+    carWrap.removeAttribute("data-car-align-wrap");
+  } else {
+    carWrap.style.transform = `translateX(${appliedOffset}px)`;
+    carWrap.setAttribute("data-car-align-wrap", "1");
+  }
 
   if (debug) {
     console.log("[BP Driver Profile Car Align]", {
       driverName,
       lineCount,
-      lineRects,
+      rectWidths: raw.map((rect) => rect.width),
+      lineRects: lines.map((rect) => ({
+        left: rect.left,
+        right: rect.right,
+        width: rect.width,
+        top: rect.top,
+      })),
+      leftMost,
+      rightMost,
       visualCenter,
       carCenter,
-      translateX,
+      appliedOffset,
+      wrapped: true,
     });
   }
 }
@@ -408,6 +492,8 @@ function scheduleDriverProfileCarAlignment(driverName) {
     });
     if (h1) carAlignObserver.observe(h1);
     carAlignObserver.observe(stack);
+    const carWrap = stack.querySelector("[data-car-wrap]");
+    if (carWrap) carAlignObserver.observe(carWrap);
   }
 
   if (!scheduleDriverProfileCarAlignment.resizeBound) {
