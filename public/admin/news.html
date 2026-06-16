@@ -62,6 +62,27 @@
       background: linear-gradient(135deg, #151515, #0a0a0a 60%, #220707);
       overflow: hidden;
     }
+    .article-image-preview.news-spotlight-portrait-wrap {
+      aspect-ratio: unset;
+      min-height: 0;
+      height: auto;
+      overflow: visible;
+      padding: 8px 8px 0;
+    }
+    .article-image-preview.news-spotlight-portrait-wrap img {
+      width: 100%;
+      height: auto;
+      max-height: 480px;
+      object-fit: contain;
+      object-position: center top;
+      transform: none;
+      transform-origin: center top;
+    }
+    .article-image-preview.news-spotlight-portrait-wrap--standing img {
+      object-position: calc(var(--standing-x) * 1%) calc(var(--standing-y) * 1%);
+      transform: scale(var(--standing-zoom));
+      transform-origin: calc(var(--standing-x) * 1%) calc(var(--standing-y) * 1%);
+    }
     .article-image-preview.is-empty {
       display: grid;
       place-items: center;

@@ -8,6 +8,8 @@
     placeholder: "Placeholder",
   };
 
+  const PORTRAIT_SOURCES = new Set(["custom-spotlight", "standing-photo"]);
+
   function stripUrlQuery(url) {
     const value = String(url || "").trim();
     if (!value) return "";
@@ -49,20 +51,6 @@
       standingPhotoX: Number.isFinite(x) ? Math.min(100, Math.max(0, x)) : 50,
       standingPhotoY: Number.isFinite(y) ? Math.min(100, Math.max(0, y)) : 50,
     };
-  }
-
-  function driverSlugPhotoUrl(profile = {}) {
-    const name =
-      profile.display_name ||
-      profile.displayName ||
-      profile.iracing_name ||
-      profile.iracingName ||
-      "";
-    const slug = String(name || "")
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "");
-    return slug ? `/assets/drivers/${slug}.png` : PLACEHOLDER_URL;
   }
 
   function resolveSpotlightImage(article = {}, driverProfile = null) {
@@ -128,6 +116,31 @@
     return SOURCE_LABELS[source] || SOURCE_LABELS.placeholder;
   }
 
+  function isPortraitDriverImage(displayImage = {}) {
+    if (displayImage.isPortraitDriverImage === true) return true;
+    return PORTRAIT_SOURCES.has(displayImage.source);
+  }
+
+  function standingCropStyle(displayImage = {}) {
+    if (displayImage.source !== "standing-photo") return "";
+    if (window.BPDriverStandingPhoto?.cropStyle) {
+      return window.BPDriverStandingPhoto.cropStyle({
+        standingPhotoZoom: displayImage.zoom,
+        standingPhotoX: displayImage.x,
+        standingPhotoY: displayImage.y,
+      });
+    }
+    return `--standing-zoom:${displayImage.zoom ?? 1};--standing-x:${displayImage.x ?? 50};--standing-y:${displayImage.y ?? 50};`;
+  }
+
+  function portraitWrapClass(displayImage = {}) {
+    const classes = ["news-spotlight-portrait-wrap"];
+    if (displayImage.source === "standing-photo") {
+      classes.push("news-spotlight-portrait-wrap--standing");
+    }
+    return classes.join(" ");
+  }
+
   function buildDisplayImage(article = {}, driverProfile = null) {
     const resolved = resolveSpotlightImage(article, driverProfile);
     return {
@@ -135,32 +148,72 @@
       sourceLabel: sourceLabel(resolved.source),
       storedUrl: resolved.url,
       url: displayUrl(resolved),
+      isPortraitDriverImage: PORTRAIT_SOURCES.has(resolved.source),
     };
   }
 
-  function toNewsArticleImageShape(displayImage = {}) {
-    return {
-      featuredImageUrl: stripUrlQuery(displayImage.storedUrl || displayImage.url || ""),
-      featuredImageUpdatedAt: displayImage.updatedAt || null,
-      featuredImageZoom: displayImage.zoom ?? 1,
-      featuredImageX: displayImage.x ?? 50,
-      featuredImageY: displayImage.y ?? 50,
+  function applyPortraitPreview(target, displayImage = {}, options = {}) {
+    if (!target) return displayImage;
+    const previewUrl = String(options.previewUrl || "").trim();
+    const url = previewUrl || displayImage.url || PLACEHOLDER_URL;
+    const wrapClass = portraitWrapClass(displayImage);
+    const standingStyle = standingCropStyle(displayImage);
+
+    target.className = `article-image-preview news-article-hero-wrap ${wrapClass}`;
+    target.style.cssText = standingStyle;
+    target.classList.remove("is-empty");
+
+    let img = target.querySelector("img");
+    if (!img) {
+      target.textContent = "";
+      img = document.createElement("img");
+      img.className = "news-article-image news-spotlight-portrait-image";
+      img.alt = options.alt || "Spotlight image preview";
+      target.appendChild(img);
+    } else {
+      img.className = "news-article-image news-spotlight-portrait-image";
+    }
+
+    img.onerror = function () {
+      this.onerror = null;
+      this.src = PLACEHOLDER_URL;
     };
+    if (img.src !== url) img.src = url;
+
+    return displayImage;
   }
 
   function applyPreview(target, article = {}, driverProfile = null, options = {}) {
-    if (!target || !window.NewsArticleImage) return null;
+    if (!target) return null;
     const previewUrl = String(options.previewUrl || "").trim();
     const displayImage = buildDisplayImage(article, driverProfile);
-    const imageShape = toNewsArticleImageShape(
-      previewUrl
-        ? {
-            ...displayImage,
-            url: previewUrl,
-            storedUrl: previewUrl,
-          }
-        : displayImage,
-    );
+    const resolved = previewUrl
+      ? {
+          ...displayImage,
+          url: previewUrl,
+          storedUrl: previewUrl,
+          source: displayImage.source || "custom-spotlight",
+          isPortraitDriverImage: true,
+        }
+      : displayImage;
+
+    if (isPortraitDriverImage(resolved)) {
+      return applyPortraitPreview(target, resolved, {
+        previewUrl: previewUrl || displayImage.url,
+        alt: options.alt,
+      });
+    }
+
+    if (!window.NewsArticleImage) return displayImage;
+
+    const imageShape = {
+      featuredImageUrl: stripUrlQuery(resolved.storedUrl || resolved.url || ""),
+      featuredImageUpdatedAt: resolved.updatedAt || null,
+      featuredImageZoom: resolved.zoom ?? 1,
+      featuredImageX: resolved.x ?? 50,
+      featuredImageY: resolved.y ?? 50,
+    };
+    target.className = "article-image-preview";
     NewsArticleImage.applyPreview(target, imageShape, {
       previewUrl: previewUrl || displayImage.url,
       settings: imageShape,
@@ -171,11 +224,15 @@
   window.BPDriverSpotlightImage = {
     PLACEHOLDER_URL,
     SOURCE_LABELS,
+    PORTRAIT_SOURCES,
     resolveSpotlightImage,
     buildDisplayImage,
     displayUrl,
     sourceLabel,
-    toNewsArticleImageShape,
+    isPortraitDriverImage,
+    standingCropStyle,
+    portraitWrapClass,
+    applyPortraitPreview,
     applyPreview,
   };
 })();

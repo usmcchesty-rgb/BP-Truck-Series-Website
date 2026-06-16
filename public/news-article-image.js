@@ -26,6 +26,20 @@
       .replace(/"/g, "&quot;");
   }
 
+  function isSpotlightPortrait(article = {}) {
+    if (article.articleType !== "driver-spotlight") return false;
+    const displayImage = article.displayImage;
+    if (!displayImage) return false;
+    if (window.BPDriverSpotlightImage?.isPortraitDriverImage) {
+      return window.BPDriverSpotlightImage.isPortraitDriverImage(displayImage);
+    }
+    return (
+      displayImage.isPortraitDriverImage === true ||
+      displayImage.source === "custom-spotlight" ||
+      displayImage.source === "standing-photo"
+    );
+  }
+
   function normalize(article = {}) {
     if (article.displayImage?.url) {
       const zoom = Number(article.displayImage.zoom);
@@ -39,6 +53,7 @@
         featuredImageZoom: Number.isFinite(zoom) && zoom > 0 ? zoom : 1,
         featuredImageX: Number.isFinite(x) ? Math.min(100, Math.max(0, x)) : 50,
         featuredImageY: Number.isFinite(y) ? Math.min(100, Math.max(0, y)) : 50,
+        displayImage: article.displayImage,
       };
     }
 
@@ -54,6 +69,7 @@
       featuredImageZoom: Number.isFinite(zoom) && zoom > 0 ? zoom : 1,
       featuredImageX: Number.isFinite(x) ? Math.min(100, Math.max(0, x)) : 50,
       featuredImageY: Number.isFinite(y) ? Math.min(100, Math.max(0, y)) : 50,
+      displayImage: article.displayImage || null,
     };
   }
 
@@ -71,6 +87,52 @@
   function cropStyle(article = {}, extra = {}) {
     const data = normalize({ ...article, ...extra });
     return `--img-zoom:${data.featuredImageZoom};--img-x:${data.featuredImageX};--img-y:${data.featuredImageY};`;
+  }
+
+  function standingCropStyle(displayImage = {}) {
+    if (window.BPDriverSpotlightImage?.standingCropStyle) {
+      return window.BPDriverSpotlightImage.standingCropStyle(displayImage);
+    }
+    if (window.BPDriverStandingPhoto?.cropStyle) {
+      return window.BPDriverStandingPhoto.cropStyle({
+        standingPhotoZoom: displayImage.zoom,
+        standingPhotoX: displayImage.x,
+        standingPhotoY: displayImage.y,
+      });
+    }
+    return "";
+  }
+
+  function portraitWrapClass(displayImage = {}) {
+    if (window.BPDriverSpotlightImage?.portraitWrapClass) {
+      return window.BPDriverSpotlightImage.portraitWrapClass(displayImage);
+    }
+    const classes = ["news-spotlight-portrait-wrap"];
+    if (displayImage.source === "standing-photo") {
+      classes.push("news-spotlight-portrait-wrap--standing");
+    }
+    return classes.join(" ");
+  }
+
+  function renderPortraitImageHtml(article = {}, options = {}) {
+    const previewUrl = String(options.previewUrl || "").trim();
+    const displayImage = article.displayImage || {};
+    const url = previewUrl || displayUrl(article);
+    if (!url) return options.placeholderHtml || "";
+
+    const wrapClass = [
+      options.wrapClass || "news-article-hero-wrap",
+      portraitWrapClass(displayImage),
+    ].join(" ");
+    const imgClass = `${options.imgClass || "news-article-image"} news-spotlight-portrait-image`;
+    const alt = escapeHtml(options.alt || article.headline || "Article image");
+    const standingStyle = standingCropStyle(displayImage);
+    const onerror =
+      article.articleType === "driver-spotlight"
+        ? ' onerror="this.onerror=null;this.src=\'/assets/drivers/placeholder.png\'"'
+        : "";
+
+    return `<div class="${wrapClass}" style="${standingStyle}"><img class="${imgClass}" src="${escapeHtml(url)}" alt="${alt}"${onerror}></div>`;
   }
 
   function renderImageHtml(article = {}, options = {}) {
@@ -116,6 +178,14 @@
 
   function renderArticleHero(article = {}, options = {}) {
     if (!hasImage(article) && !options.previewUrl) return "";
+    if (isSpotlightPortrait(article)) {
+      return renderPortraitImageHtml(article, {
+        wrapClass: "news-article-hero-wrap",
+        imgClass: "news-article-image",
+        alt: article.headline || "Article image",
+        ...options,
+      });
+    }
     return renderImageHtml(article, {
       wrapClass: "news-article-hero-wrap",
       imgClass: "news-article-image",
@@ -158,10 +228,12 @@
     hasImage,
     displayUrl,
     cropStyle,
+    isSpotlightPortrait,
     renderFeaturedMedia,
     renderCardMedia,
     renderArticleHero,
     renderImageHtml,
+    renderPortraitImageHtml,
     applyPreview,
   };
 })();

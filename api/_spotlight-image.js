@@ -111,6 +111,12 @@ export function spotlightDisplayUrl(resolved = {}) {
   return withPhotoCacheBust(clean, version);
 }
 
+export const SPOTLIGHT_PORTRAIT_SOURCES = new Set(['custom-spotlight', 'standing-photo']);
+
+export function isPortraitDriverImageSource(source) {
+  return SPOTLIGHT_PORTRAIT_SOURCES.has(source);
+}
+
 export function buildDisplayImage(article = {}, driverProfile = null) {
   const resolved = resolveSpotlightImage(article, driverProfile);
   return {
@@ -118,6 +124,7 @@ export function buildDisplayImage(article = {}, driverProfile = null) {
     sourceLabel: SPOTLIGHT_SOURCE_LABELS[resolved.source] || 'Placeholder',
     storedUrl: resolved.url,
     url: spotlightDisplayUrl(resolved),
+    isPortraitDriverImage: isPortraitDriverImageSource(resolved.source),
   };
 }
 
