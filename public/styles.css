@@ -1431,6 +1431,8 @@ a.home-news-item:hover h4{color:#fff}
   display:flex;
   justify-content:center;
   margin:16px 0 0;
+  transform:translateX(0);
+  will-change:transform;
 }
 .driver-profile-car-hero{
   margin:0 0 6px;
@@ -2195,6 +2197,73 @@ a.home-news-item:hover h4{color:#fff}
   align-items:center;
   gap:6px;
   flex-shrink:0;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+}
+.streamview-audio-controls{
+  display:flex;
+  align-items:center;
+  min-width:0;
+}
+.streamview-audio-group{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+}
+.streamview-sr-only{
+  position:absolute;
+  width:1px;
+  height:1px;
+  padding:0;
+  margin:-1px;
+  overflow:hidden;
+  clip:rect(0,0,0,0);
+  white-space:nowrap;
+  border:0;
+}
+.streamview-volume{
+  display:flex;
+  align-items:center;
+  margin:0;
+  cursor:pointer;
+}
+.streamview-volume-slider{
+  width:104px;
+  max-width:120px;
+  min-width:72px;
+  height:4px;
+  margin:0;
+  padding:0;
+  accent-color:var(--red);
+  cursor:pointer;
+  background:linear-gradient(90deg,#2a2a2a,#1a1a1a);
+  border-radius:2px;
+}
+.streamview-volume-slider:focus-visible{
+  outline:1px solid rgba(229,9,20,.75);
+  outline-offset:2px;
+}
+.streamview-volume-slider::-webkit-slider-thumb{
+  -webkit-appearance:none;
+  appearance:none;
+  width:10px;
+  height:10px;
+  border-radius:50%;
+  background:var(--red);
+  box-shadow:0 0 6px rgba(229,9,20,.45);
+  border:1px solid #ff4a4a;
+  cursor:pointer;
+}
+.streamview-volume-slider::-moz-range-thumb{
+  width:10px;
+  height:10px;
+  border-radius:50%;
+  background:var(--red);
+  box-shadow:0 0 6px rgba(229,9,20,.45);
+  border:1px solid #ff4a4a;
+  cursor:pointer;
 }
 .streamview-audio{
   font-size:8px;
@@ -2255,6 +2324,14 @@ a.home-news-item:hover h4{color:#fff}
   background:#000;
 }
 .streamview-player iframe{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  border:0;
+}
+.streamview-twitch-target,
+.streamview-twitch-target iframe{
   position:absolute;
   inset:0;
   width:100%;
@@ -2391,6 +2468,14 @@ a.home-news-item:hover h4{color:#fff}
   }
   .streamview-panel-head{
     flex-wrap:wrap;
+  }
+  .streamview-audio-group{
+    width:100%;
+    justify-content:flex-start;
+  }
+  .streamview-volume-slider{
+    width:88px;
+    min-width:64px;
   }
 }
 

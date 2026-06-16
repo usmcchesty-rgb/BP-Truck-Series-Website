@@ -1,6 +1,8 @@
 const $ = (s) => document.querySelector(s);
 
 const STORAGE_KEY = "bp-streamview-state";
+const VOLUME_STORAGE_KEY = "streamviewVolume";
+const DEFAULT_VOLUME = 60;
 const MAX_SLOTS = 4;
 
 let streamers = [];
@@ -8,7 +10,10 @@ let slots = [null, null, null, null];
 let selectedSlotIndex = 0;
 let activeAudioSlot = 0;
 let maximizedSlotIndex = null;
+let streamVolume = DEFAULT_VOLUME;
 let gridEventsBound = false;
+let twitchScriptLoading = null;
+const twitchPlayers = new Map();
 
 function escapeHtml(s) {
   return String(s ?? "")
@@ -20,6 +25,39 @@ function escapeHtml(s) {
 
 function escapeAttr(s) {
   return escapeHtml(s).replace(/'/g, "&#39;");
+}
+
+function clampVolume(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return DEFAULT_VOLUME;
+  return Math.max(0, Math.min(100, Math.round(n)));
+}
+
+function loadVolume() {
+  try {
+    const raw = localStorage.getItem(VOLUME_STORAGE_KEY);
+    if (raw !== null && raw !== "") {
+      streamVolume = clampVolume(raw);
+    }
+  } catch (e) {
+    console.warn("StreamView: could not load volume", e);
+  }
+}
+
+function saveVolume() {
+  try {
+    localStorage.setItem(VOLUME_STORAGE_KEY, String(streamVolume));
+  } catch (e) {
+    console.warn("StreamView: could not save volume", e);
+  }
+}
+
+function isEffectiveMuted(slotIndex) {
+  return slotIndex !== activeAudioSlot || streamVolume === 0;
+}
+
+function isTwitchParsed(parsed) {
+  return parsed?.type === "twitch" || parsed?.type === "twitch-video";
 }
 
 function getEmbedParentHosts() {
@@ -215,19 +253,204 @@ function setMaximized(slotIndex) {
   renderGrid();
 }
 
-function audioLabelHtml(isActive) {
-  return isActive
-    ? `<span class="streamview-audio streamview-audio--on" aria-label="Audio on">🔊 Audio On</span>`
-    : `<span class="streamview-audio" aria-label="Audio muted">🔇 Muted</span>`;
+function audioControlsHtml(isActive) {
+  if (!isActive) {
+    return `<span class="streamview-audio" aria-label="Audio muted">🔇 Muted</span>`;
+  }
+
+  return `<div class="streamview-audio-group">
+    <span class="streamview-audio streamview-audio--on" aria-label="Audio on">🔊 Audio On</span>
+    <label class="streamview-volume" title="Stream volume">
+      <span class="streamview-sr-only">Stream volume</span>
+      <input
+        type="range"
+        class="streamview-volume-slider"
+        min="0"
+        max="100"
+        value="${streamVolume}"
+        title="Stream volume"
+        aria-label="Stream volume"
+      />
+    </label>
+  </div>`;
+}
+
+function ensureTwitchScript() {
+  if (window.Twitch?.Player) return Promise.resolve();
+  if (twitchScriptLoading) return twitchScriptLoading;
+
+  twitchScriptLoading = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://player.twitch.tv/js/embed/v1.js";
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Twitch embed script failed to load"));
+    document.head.appendChild(script);
+  });
+
+  return twitchScriptLoading;
+}
+
+function applyEmbedAudioState(slotIndex, driver) {
+  if (!driver) return;
+
+  const parsed = parseStreamUrl(driver.stream_url);
+  const muted = isEffectiveMuted(slotIndex);
+
+  if (isTwitchParsed(parsed)) {
+    const player = twitchPlayers.get(slotIndex);
+    if (player?.setMuted && player?.setVolume) {
+      player.setMuted(muted);
+      if (!muted) {
+        player.setVolume(streamVolume / 100);
+      }
+      return;
+    }
+  }
+
+  const panel = document.querySelector(`#streamviewGrid [data-slot="${slotIndex}"]`);
+  const iframe = panel?.querySelector("iframe");
+  if (!iframe) return;
+
+  const nextSrc = buildEmbedSrc(parsed, muted);
+  if (nextSrc && iframe.getAttribute("src") !== nextSrc) {
+    iframe.setAttribute("src", nextSrc);
+  }
+}
+
+function applyAllEmbedAudio() {
+  slots.forEach((driverId, slotIndex) => {
+    if (!driverId) return;
+    const driver = getStreamerById(driverId);
+    if (driver) applyEmbedAudioState(slotIndex, driver);
+  });
+}
+
+async function initTwitchEmbeds() {
+  const targets = [];
+
+  slots.forEach((driverId, slotIndex) => {
+    if (!driverId) return;
+    const driver = getStreamerById(driverId);
+    if (!driver) return;
+    const parsed = parseStreamUrl(driver.stream_url);
+    if (!isTwitchParsed(parsed)) return;
+    targets.push({ slotIndex, parsed });
+  });
+
+  if (!targets.length) return;
+
+  try {
+    await ensureTwitchScript();
+  } catch (e) {
+    console.warn("StreamView: Twitch embed API unavailable", e);
+    targets.forEach(({ slotIndex, parsed }) => {
+      const container = document.getElementById(`streamview-twitch-${slotIndex}`);
+      renderTwitchIframeFallback(container, parsed, slotIndex);
+    });
+    return;
+  }
+
+  if (!window.Twitch?.Player) {
+    targets.forEach(({ slotIndex, parsed }) => {
+      const container = document.getElementById(`streamview-twitch-${slotIndex}`);
+      renderTwitchIframeFallback(container, parsed, slotIndex);
+    });
+    return;
+  }
+
+  targets.forEach(({ slotIndex, parsed }) => {
+    const containerId = `streamview-twitch-${slotIndex}`;
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    twitchPlayers.delete(slotIndex);
+
+    const muted = isEffectiveMuted(slotIndex);
+    const options = {
+      width: "100%",
+      height: "100%",
+      parent: getEmbedParentHosts(),
+      autoplay: true,
+      muted,
+      volume: streamVolume / 100,
+    };
+
+    if (parsed.type === "twitch") {
+      options.channel = parsed.channel;
+    } else {
+      options.video = `v${parsed.videoId}`;
+    }
+
+    try {
+      const player = new window.Twitch.Player(containerId, options);
+      twitchPlayers.set(slotIndex, player);
+      player.addEventListener(window.Twitch.Player.READY, () => {
+        player.setMuted(isEffectiveMuted(slotIndex));
+        if (!isEffectiveMuted(slotIndex)) {
+          player.setVolume(streamVolume / 100);
+        }
+      });
+    } catch (e) {
+      console.warn(`StreamView: could not init Twitch player for slot ${slotIndex + 1}`, e);
+      renderTwitchIframeFallback(container, parsed, slotIndex);
+    }
+  });
+}
+
+function renderTwitchIframeFallback(container, parsed, slotIndex) {
+  if (!container) return;
+  const src = buildEmbedSrc(parsed, isEffectiveMuted(slotIndex));
+  if (!src) return;
+
+  container.innerHTML = `<iframe
+    src="${escapeAttr(src)}"
+    title="Twitch stream"
+    allow="autoplay; fullscreen; picture-in-picture"
+    allowfullscreen
+    loading="lazy"
+  ></iframe>`;
+}
+
+function setStreamVolume(value, options = {}) {
+  streamVolume = clampVolume(value);
+  saveVolume();
+  if (!options.skipControlsSync) {
+    syncAudioControls();
+  }
+  applyAllEmbedAudio();
+}
+
+function syncAudioControls() {
+  const grid = $("#streamviewGrid");
+  if (!grid) return;
+
+  slots.forEach((driverId, slotIndex) => {
+    const panel = grid.querySelector(`[data-slot="${slotIndex}"]`);
+    if (!panel || !driverId) return;
+
+    const audioControls = panel.querySelector("[data-audio-controls]");
+    if (!audioControls) return;
+
+    const isActive = slotIndex === activeAudioSlot;
+    audioControls.innerHTML = audioControlsHtml(isActive);
+  });
 }
 
 function renderPlayer(driver, slotIndex) {
   const name = driver.display_name || driver.iracing_name || "Streamer";
   const streamUrl = String(driver.stream_url || "").trim();
   const parsed = parseStreamUrl(streamUrl);
-  const isAudioActive = slotIndex === activeAudioSlot;
-  const embedSrc = buildEmbedSrc(parsed, !isAudioActive);
+  const muted = isEffectiveMuted(slotIndex);
   const externalUrl = parsed.external || streamUrl;
+
+  if (isTwitchParsed(parsed)) {
+    return `<div class="streamview-player streamview-player--twitch">
+      <div id="streamview-twitch-${slotIndex}" class="streamview-twitch-target"></div>
+    </div>`;
+  }
+
+  const embedSrc = buildEmbedSrc(parsed, muted);
 
   if (embedSrc) {
     return `<div class="streamview-player">
@@ -273,7 +496,9 @@ function renderLoadedPanel(driver, slotIndex) {
     <div class="streamview-panel-head">
       <h3 class="streamview-panel-title"><span class="streamview-slot-label">Slot ${slotIndex + 1}</span> ${escapeHtml(number)}${escapeHtml(name)}</h3>
       <div class="streamview-panel-actions">
-        ${audioLabelHtml(slotIndex === activeAudioSlot)}
+        <div class="streamview-audio-controls" data-audio-controls>
+          ${audioControlsHtml(slotIndex === activeAudioSlot)}
+        </div>
         ${
           isMaximized
             ? `<button type="button" class="streamview-icon-btn" data-minimize="${slotIndex}" aria-label="Minimize stream">Minimize</button>`
@@ -304,6 +529,8 @@ function renderGrid() {
   const grid = $("#streamviewGrid");
   if (!grid) return;
 
+  twitchPlayers.clear();
+
   grid.className = "streamview-grid streamview-grid--quad";
   if (maximizedSlotIndex !== null) {
     grid.classList.add("streamview-grid--maximized");
@@ -320,6 +547,7 @@ function renderGrid() {
 
   bindGridEvents();
   updateViewportHeight();
+  initTwitchEmbeds().then(() => applyAllEmbedAudio());
 }
 
 function syncPanelState() {
@@ -333,31 +561,10 @@ function syncPanelState() {
     const hasDriver = Boolean(driverId && getStreamerById(driverId));
     panel.classList.toggle("is-selected", slotIndex === selectedSlotIndex);
     panel.classList.toggle("is-audio-active", hasDriver && slotIndex === activeAudioSlot);
-
-    const audioEl = panel.querySelector(".streamview-audio");
-    if (audioEl && hasDriver) {
-      const isActive = slotIndex === activeAudioSlot;
-      audioEl.className = isActive
-        ? "streamview-audio streamview-audio--on"
-        : "streamview-audio";
-      audioEl.setAttribute("aria-label", isActive ? "Audio on" : "Audio muted");
-      audioEl.textContent = isActive ? "🔊 Audio On" : "🔇 Muted";
-    }
-
-    if (hasDriver) {
-      const driver = getStreamerById(driverId);
-      const iframe = panel.querySelector("iframe");
-      if (iframe && driver) {
-        const parsed = parseStreamUrl(driver.stream_url);
-        const muted = slotIndex !== activeAudioSlot;
-        const nextSrc = buildEmbedSrc(parsed, muted);
-        if (nextSrc && iframe.getAttribute("src") !== nextSrc) {
-          iframe.setAttribute("src", nextSrc);
-        }
-      }
-    }
   });
 
+  syncAudioControls();
+  applyAllEmbedAudio();
   renderNav();
 }
 
@@ -387,13 +594,35 @@ function bindGridEvents() {
       return;
     }
 
-    if (event.target.closest("a") || event.target.closest("iframe")) return;
+    if (
+      event.target.closest("a") ||
+      event.target.closest("iframe") ||
+      event.target.closest(".streamview-volume-slider")
+    ) {
+      return;
+    }
 
     const panel = event.target.closest(".streamview-panel");
     if (!panel) return;
     const slotIndex = Number(panel.dataset.slot);
     if (Number.isFinite(slotIndex)) selectSlot(slotIndex);
   });
+
+  grid.addEventListener("input", (event) => {
+    if (!event.target.matches(".streamview-volume-slider")) return;
+    event.stopPropagation();
+    setStreamVolume(Number(event.target.value), { skipControlsSync: true });
+  });
+
+  grid.addEventListener(
+    "mousedown",
+    (event) => {
+      if (event.target.matches(".streamview-volume-slider")) {
+        event.stopPropagation();
+      }
+    },
+    true
+  );
 
   gridEventsBound = true;
 }
@@ -493,6 +722,7 @@ async function loadStreamers() {
       );
 
     loadState();
+    loadVolume();
     sanitizeSlots();
 
     const params = new URLSearchParams(window.location.search);

@@ -263,7 +263,7 @@ async function resolveCarImageUrl(profile) {
 function renderCarImageHeroSection(carImageUrl, driverName) {
   if (!carImageUrl) return "";
 
-  return `<div class="driver-profile-car-wrap">
+  return `<div class="driver-profile-car-wrap" data-car-wrap>
     <div class="driver-profile-car-hero" aria-label="Race car">
       <div class="driver-profile-car-hero-inner">
         <img
@@ -277,6 +277,151 @@ function renderCarImageHeroSection(carImageUrl, driverName) {
     </div>
   </div>`;
 }
+
+function shouldLogCarAlignDiagnostics() {
+  try {
+    return new URLSearchParams(window.location.search).get("debug") === "car-align";
+  } catch {
+    return false;
+  }
+}
+
+function getH1LineRects(h1) {
+  if (!h1) return [];
+
+  const raw = Array.from(h1.getClientRects()).filter(
+    (rect) => rect.width > 0 && rect.height > 1
+  );
+  if (!raw.length) return [];
+
+  const lines = [];
+
+  raw.forEach((rect) => {
+    const existing = lines.find((line) => Math.abs(line.top - rect.top) < 2);
+    if (existing) {
+      existing.left = Math.min(existing.left, rect.left);
+      existing.right = Math.max(existing.right, rect.right);
+      existing.top = Math.min(existing.top, rect.top);
+      existing.bottom = Math.max(existing.bottom, rect.bottom);
+      existing.width = existing.right - existing.left;
+      existing.height = existing.bottom - existing.top;
+      return;
+    }
+
+    lines.push({
+      left: rect.left,
+      right: rect.right,
+      top: rect.top,
+      bottom: rect.bottom,
+      width: rect.width,
+      height: rect.height,
+    });
+  });
+
+  return lines;
+}
+
+function alignDriverProfileCar(driverName) {
+  const stack = document.querySelector(".driver-profile-name-stack");
+  if (!stack) return;
+
+  const h1 = stack.querySelector(".driver-profile-name");
+  const carWrap = stack.querySelector("[data-car-wrap]");
+  if (!h1 || !carWrap) return;
+
+  const lineRects = getH1LineRects(h1);
+  const lineCount = lineRects.length;
+  const debug = shouldLogCarAlignDiagnostics();
+
+  if (lineCount <= 1) {
+    carWrap.style.transform = "";
+    carWrap.removeAttribute("data-car-align-wrap");
+
+    if (debug) {
+      console.log("[BP Driver Profile Car Align]", {
+        driverName,
+        lineCount,
+        lineRects,
+        visualCenter: null,
+        carCenter: null,
+        translateX: 0,
+      });
+    }
+    return;
+  }
+
+  const minLeft = Math.min(...lineRects.map((rect) => rect.left));
+  const maxRight = Math.max(...lineRects.map((rect) => rect.right));
+  const visualCenter = (minLeft + maxRight) / 2;
+  const carRect = carWrap.getBoundingClientRect();
+  const carCenter = carRect.left + carRect.width / 2;
+  const translateX = visualCenter - carCenter;
+
+  carWrap.style.transform = `translateX(${translateX}px)`;
+  carWrap.setAttribute("data-car-align-wrap", "1");
+
+  if (debug) {
+    console.log("[BP Driver Profile Car Align]", {
+      driverName,
+      lineCount,
+      lineRects,
+      visualCenter,
+      carCenter,
+      translateX,
+    });
+  }
+}
+
+let carAlignResizeTimer = null;
+let carAlignObserver = null;
+
+function scheduleDriverProfileCarAlignment(driverName) {
+  if (carAlignObserver) {
+    carAlignObserver.disconnect();
+    carAlignObserver = null;
+  }
+
+  const run = () => alignDriverProfileCar(driverName);
+
+  requestAnimationFrame(() => {
+    requestAnimationFrame(run);
+  });
+
+  const stack = document.querySelector(".driver-profile-name-stack");
+  if (!stack) return;
+
+  const h1 = stack.querySelector(".driver-profile-name");
+  const carImg = stack.querySelector(".driver-profile-car-hero-image");
+
+  if (carImg && !carImg.complete) {
+    carImg.addEventListener("load", run, { once: true });
+  }
+
+  if (document.fonts?.ready) {
+    document.fonts.ready.then(run).catch(() => {});
+  }
+
+  if (typeof ResizeObserver !== "undefined") {
+    carAlignObserver = new ResizeObserver(() => {
+      clearTimeout(carAlignResizeTimer);
+      carAlignResizeTimer = setTimeout(run, 50);
+    });
+    if (h1) carAlignObserver.observe(h1);
+    carAlignObserver.observe(stack);
+  }
+
+  if (!scheduleDriverProfileCarAlignment.resizeBound) {
+    scheduleDriverProfileCarAlignment.resizeBound = true;
+    window.addEventListener("resize", () => {
+      clearTimeout(carAlignResizeTimer);
+      carAlignResizeTimer = setTimeout(() => {
+        const currentName = document.querySelector(".driver-profile-name")?.textContent?.trim();
+        if (currentName) alignDriverProfileCar(currentName);
+      }, 100);
+    });
+  }
+}
+scheduleDriverProfileCarAlignment.resizeBound = false;
 
 function formatStatValue(value) {
   if (value === null || value === undefined || value === "") return null;
@@ -985,6 +1130,10 @@ function renderProfile(profile, stats, seasonLabel, carImageUrl = "") {
     ${renderStatsBar(stats, seasonLabel)}
     ${renderRecentResults(stats.recentRaces)}
   `;
+
+  if (carImageUrl) {
+    scheduleDriverProfileCarAlignment(name);
+  }
 }
 
 function renderNotFound() {
