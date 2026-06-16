@@ -1974,6 +1974,207 @@ a.home-news-item:hover h4{color:#fff}
   border-color:#ff2424;
   box-shadow:0 0 10px rgba(229,9,20,.25);
 }
+.streamer-card-link{
+  display:block;
+  color:inherit;
+  text-decoration:none;
+}
+.streamer-card-link:hover h2{color:#fff}
+.streamview-main{
+  padding:0 24px 48px;
+  max-width:1400px;
+  margin:0 auto;
+  width:100%;
+}
+.streamview-page{
+  padding:12px 18px 24px;
+}
+.streamview-head{
+  margin-bottom:12px;
+}
+.streamview-intro{
+  margin-bottom:0;
+  max-width:760px;
+}
+.streamview-nav{
+  display:flex;
+  gap:10px;
+  overflow-x:auto;
+  padding:10px 2px 14px;
+  margin-bottom:14px;
+  border-bottom:1px solid rgba(255,255,255,.08);
+  scrollbar-width:thin;
+}
+.streamview-nav-btn{
+  flex:0 0 auto;
+  padding:8px 14px;
+  border:1px solid #333;
+  border-radius:4px;
+  background:linear-gradient(#161616,#0a0a0a);
+  color:#ddd;
+  font-size:11px;
+  font-weight:900;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+  cursor:pointer;
+  white-space:nowrap;
+  transition:border-color .15s ease,box-shadow .15s ease,color .15s ease;
+}
+.streamview-nav-btn:hover{
+  border-color:#5a1010;
+  color:#fff;
+}
+.streamview-nav-btn.is-loaded{
+  border-color:rgba(229,9,20,.55);
+  color:#fff;
+  box-shadow:0 0 10px rgba(229,9,20,.18);
+}
+.streamview-grid{
+  display:grid;
+  gap:14px;
+  min-height:280px;
+}
+.streamview-grid--empty{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  min-height:320px;
+  border:1px dashed rgba(255,255,255,.12);
+  border-radius:6px;
+  background:rgba(8,8,8,.65);
+}
+.streamview-empty{
+  margin:0;
+  font-size:14px;
+  text-align:center;
+}
+.streamview-grid--count-1{
+  grid-template-columns:1fr;
+}
+.streamview-grid--count-2{
+  grid-template-columns:repeat(2,minmax(0,1fr));
+}
+.streamview-grid--count-3{
+  grid-template-columns:repeat(2,minmax(0,1fr));
+}
+.streamview-grid--count-4{
+  grid-template-columns:repeat(2,minmax(0,1fr));
+}
+.streamview-panel{
+  display:flex;
+  flex-direction:column;
+  min-height:0;
+  border:1px solid #333;
+  border-radius:6px;
+  background:rgba(10,10,10,.95);
+  overflow:hidden;
+  cursor:pointer;
+  transition:border-color .15s ease,box-shadow .15s ease;
+}
+.streamview-panel.is-audio-active{
+  border-color:rgba(229,9,20,.75);
+  box-shadow:0 0 16px rgba(229,9,20,.28);
+}
+.streamview-panel-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding:10px 12px;
+  border-bottom:1px solid rgba(255,255,255,.08);
+  background:rgba(0,0,0,.35);
+}
+.streamview-panel-title{
+  margin:0;
+  font-size:13px;
+  font-weight:900;
+  font-style:italic;
+  text-transform:uppercase;
+  color:#fff;
+  min-width:0;
+}
+.streamview-panel-actions{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-shrink:0;
+}
+.streamview-audio{
+  font-size:9px;
+  font-weight:900;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  color:#888;
+  white-space:nowrap;
+}
+.streamview-audio--on{
+  color:var(--red);
+  text-shadow:0 0 8px rgba(229,9,20,.35);
+}
+.streamview-remove-btn{
+  border:1px solid #444;
+  background:#111;
+  color:#ccc;
+  width:24px;
+  height:24px;
+  border-radius:3px;
+  font-size:12px;
+  line-height:1;
+  cursor:pointer;
+  padding:0;
+}
+.streamview-remove-btn:hover{
+  border-color:#ff2424;
+  color:#fff;
+  background:#2a0a0a;
+}
+.streamview-player{
+  position:relative;
+  width:100%;
+  aspect-ratio:16/9;
+  background:#000;
+}
+.streamview-player iframe{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  border:0;
+}
+.streamview-fallback{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  min-height:220px;
+  padding:24px 16px;
+  text-align:center;
+}
+.streamview-fallback-platform{
+  margin:0;
+  font-size:11px;
+  font-weight:900;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--red);
+}
+.streamview-open-btn{
+  display:inline-block;
+  padding:8px 14px;
+  border:1px solid #333;
+  background:linear-gradient(#1c1c1c,#080808);
+  color:#fff;
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  text-decoration:none;
+}
+.streamview-open-btn:hover{
+  background:linear-gradient(#d40000,#680000);
+  border-color:#ff2424;
+}
 .card .stat p{margin:0 0 10px}
 .card .stat p:last-child{margin-bottom:0}
 .card .stat b{display:block;font-size:22px;font-weight:900;color:#fff}
@@ -2038,6 +2239,16 @@ a.home-news-item:hover h4{color:#fff}
   .pedal-prophet-logo-hero{max-width:clamp(180px, 58vw, 200px)}
   .pedal-prophet-season{margin-top:4px;margin-bottom:3px}
   .pedal-prophet-tagline{font-size:12px;line-height:1.4}
+  .streamview-main{padding:0 16px 36px}
+  .streamview-page{padding:10px 12px 18px}
+  .streamview-grid--count-2,
+  .streamview-grid--count-3,
+  .streamview-grid--count-4{
+    grid-template-columns:1fr;
+  }
+  .streamview-panel-head{
+    flex-wrap:wrap;
+  }
 }
 
 /* News — Miles Apex */

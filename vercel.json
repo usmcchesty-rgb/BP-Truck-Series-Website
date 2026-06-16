@@ -7,6 +7,7 @@
     { "source": "/admin/news", "destination": "/admin/news.html" },
     { "source": "/admin/transcripts", "destination": "/admin/transcripts.html" },
     { "source": "/news/:slug", "destination": "/news-article.html?slug=:slug" },
-    { "source": "/drivers/:driverId", "destination": "/driver-profile.html?driverId=:driverId" }
+    { "source": "/drivers/:driverId", "destination": "/driver-profile.html?driverId=:driverId" },
+    { "source": "/streamview", "destination": "/streamview.html" }
   ]
 }

@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Blazing Pedals Truck Series — StreamView</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page-bg"></div>
+    <header class="topbar"></header>
+
+    <main class="streamview-main">
+      <section class="panel streamview-page">
+        <div class="streamview-head">
+          <h2>STREAMVIEW</h2>
+          <p class="page-intro streamview-intro">
+            Watch up to four league streams at once. Select streamers below — only one stream plays audio at a time.
+          </p>
+        </div>
+
+        <div id="streamviewNav" class="streamview-nav" aria-label="Streamer navigation"></div>
+
+        <div id="streamviewGrid" class="streamview-grid streamview-grid--empty">
+          <p class="streamview-empty muted">Select a streamer above to begin watching.</p>
+        </div>
+      </section>
+    </main>
+
+    <footer>FAST DRIVERS. CLOSE RACING. <span>BIG FUN.</span></footer>
+
+    <script src="/public-nav.js"></script>
+    <script>
+      BPPublicNav.init({
+        active: "streamers",
+        title: "STREAMVIEW",
+        subtitle: "MULTI-STREAM",
+        right: "tagline",
+      });
+    </script>
+    <script src="/streamview.js"></script>
+  </body>
+</html>

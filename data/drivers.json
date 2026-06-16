@@ -319,6 +319,46 @@
       "iracingCustomerId": 754321,
       "slug": "carter-phillips",
       "carImage": "/assets/images/cars/Carter Phillips.png"
+    },
+    {
+      "name": "Austin Darbyshire",
+      "iracingName": "Austin Darbyshire",
+      "carNumber": "64",
+      "iracingCustomerId": 235536,
+      "slug": "austin-darbyshire",
+      "carImage": "/assets/images/cars/Austin Darbyshire.png"
+    },
+    {
+      "name": "Chris Evans3",
+      "iracingName": "Chris Evans",
+      "carNumber": "98",
+      "iracingCustomerId": 401793,
+      "slug": "chris-evans3",
+      "carImage": "/assets/images/cars/Chris Evans3.png"
+    },
+    {
+      "name": "James South",
+      "iracingName": "James South",
+      "carNumber": "21",
+      "iracingCustomerId": 76205,
+      "slug": "james-south",
+      "carImage": "/assets/images/cars/James South.png"
+    },
+    {
+      "name": "Billy Hensley",
+      "iracingName": "Billy Hensley",
+      "carNumber": "91",
+      "iracingCustomerId": 233843,
+      "slug": "billy-hensley",
+      "carImage": "/assets/images/cars/Billy Hensley.png"
+    },
+    {
+      "name": "Justin Levine",
+      "iracingName": "Justin Levine",
+      "carNumber": "3",
+      "iracingCustomerId": 244220,
+      "slug": "justin-levine",
+      "carImage": "/assets/images/cars/Justin Levine.png"
     }
   ]
 }

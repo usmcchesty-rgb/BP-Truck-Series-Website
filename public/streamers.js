@@ -28,12 +28,12 @@ function inferPlatform(url) {
   return "Live Stream";
 }
 
-function streamerBadgeHtml(streamUrl) {
-  const badge = `<span class="streamer-badge">STREAMER</span>`;
-  const url = String(streamUrl || "").trim();
-  if (!url) return badge;
+function streamviewUrl(driverId) {
+  return `/streamview?streamer=${encodeURIComponent(String(driverId || ""))}`;
+}
 
-  return `<a class="streamer-badge-link" href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer" aria-label="Watch stream">${badge}</a>`;
+function streamerBadgeHtml(driverId) {
+  return `<a class="streamer-badge-link" href="${escapeAttr(streamviewUrl(driverId))}" aria-label="Open in StreamView"><span class="streamer-badge">STREAMER</span></a>`;
 }
 
 function renderStreamers(streamers) {
@@ -47,6 +47,7 @@ function renderStreamers(streamers) {
 
   grid.innerHTML = streamers
     .map((driver) => {
+      const driverId = String(driver.driver_id || "");
       const name = driver.display_name || driver.iracing_name || "Unknown";
       const photo =
         driver.photoUrl || driver.photo_url || driverImage(name);
@@ -55,20 +56,20 @@ function renderStreamers(streamers) {
         : "";
       const streamUrl = String(driver.stream_url || "").trim();
       const platform = streamUrl ? inferPlatform(streamUrl) : "Stream link pending";
-      const watchBtn = streamUrl
-        ? `<a class="streamer-link-btn" href="${escapeAttr(streamUrl)}" target="_blank" rel="noopener noreferrer">WATCH STREAM</a>`
-        : "";
+      const viewUrl = streamviewUrl(driverId);
 
       return `<article class="streamer-card">
-        ${streamerBadgeHtml(streamUrl)}
-        <div class="streamer-card-media">
-          <img src="${escapeHtml(photo)}" alt="" onerror="this.onerror=null;this.src='/assets/drivers/placeholder.png'" />
-        </div>
-        <div class="streamer-card-body">
-          <h2>${number}${escapeHtml(name)}</h2>
-          <p class="streamer-platform">${escapeHtml(platform)}</p>
-          ${watchBtn}
-        </div>
+        ${streamerBadgeHtml(driverId)}
+        <a class="streamer-card-link" href="${escapeAttr(viewUrl)}">
+          <div class="streamer-card-media">
+            <img src="${escapeHtml(photo)}" alt="" onerror="this.onerror=null;this.src='/assets/drivers/placeholder.png'" />
+          </div>
+          <div class="streamer-card-body">
+            <h2>${number}${escapeHtml(name)}</h2>
+            <p class="streamer-platform">${escapeHtml(platform)}</p>
+            <span class="streamer-link-btn">WATCH IN STREAMVIEW</span>
+          </div>
+        </a>
       </article>`;
     })
     .join("");
