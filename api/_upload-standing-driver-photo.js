@@ -183,6 +183,7 @@ async function upsertStandingPhotoProfile(sb, driverId, publicUrl, body) {
       body.standingPhotoY ?? body.standing_photo_y ?? existing?.standing_photo_y,
     ),
     standing_photo_updated_at: now,
+    standing_photo_enabled: true,
     is_streamer: existing?.is_streamer === true,
     stream_url: String(existing?.stream_url || "").trim(),
     active: existing?.active !== false,
@@ -334,4 +335,121 @@ export async function uploadStandingDriverPhoto(body) {
   }
 
   return saveToLocalFile(uploadBuffer, filename, body);
+}
+
+async function clearStandingPhotoProfile(sb, driverId, body = {}) {
+  const id = String(driverId);
+  const { data: existing, error: readError } = await sb
+    .from("driver_profiles")
+    .select("*")
+    .eq("driver_id", id)
+    .maybeSingle();
+
+  if (readError) {
+    throw new Error(`Supabase error: ${readError.message}`);
+  }
+
+  const displayName =
+    existing?.display_name || body.display_name || body.iracing_name || "";
+  const iracingName =
+    existing?.iracing_name || body.iracing_name || displayName || "";
+  const carNumber = existing?.car_number ?? body.car_number ?? "";
+
+  if (!iracingName) {
+    throw new Error("Missing driver profile.");
+  }
+
+  const now = new Date().toISOString();
+  const row = {
+    driver_id: id,
+    iracing_name: iracingName,
+    display_name: displayName || iracingName,
+    driver_name: displayName || iracingName,
+    slug: slugify(displayName || iracingName || id),
+    car_number: carNumber,
+    truck_number: carNumber,
+    photo_url: stripPhotoUrlQuery(existing?.photo_url || ""),
+    standing_photo_url: "",
+    standing_photo_zoom: 1,
+    standing_photo_x: 50,
+    standing_photo_y: 50,
+    standing_photo_updated_at: null,
+    standing_photo_enabled: false,
+    is_streamer: existing?.is_streamer === true,
+    stream_url: String(existing?.stream_url || "").trim(),
+    active: existing?.active !== false,
+    updated_at: now,
+  };
+
+  const { data, error } = await sb
+    .from("driver_profiles")
+    .upsert(row, { onConflict: "driver_id" })
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(`Supabase error: ${error.message}`);
+  }
+
+  return data;
+}
+
+function removeLocalStandingFile(filename) {
+  try {
+    const { resolved } = resolveLocalOutputPath(filename);
+    if (fs.existsSync(resolved)) {
+      fs.unlinkSync(resolved);
+    }
+  } catch (e) {
+    console.warn("[remove-standing-driver-photo] local file:", e.message);
+  }
+}
+
+export async function removeStandingDriverPhoto(body) {
+  const driverId = String(body.driver_id || "").trim();
+  if (!driverId) {
+    const err = new Error("Missing driver_id.");
+    err.status = 400;
+    throw err;
+  }
+
+  const filename = resolveStandingFilename(body);
+  const sb = supabase();
+
+  if (sb) {
+    const readyError = await assertSupabaseReady(sb);
+    if (readyError) {
+      const err = new Error(readyError.error);
+      err.status = 400;
+      err.details = readyError;
+      throw err;
+    }
+    await removeExistingStorageObject(sb, filename);
+    const profile = await clearStandingPhotoProfile(sb, driverId, body);
+    return {
+      removed: true,
+      filename,
+      standingPhotoEnabled: false,
+      profileUpdated: true,
+      storage: "supabase",
+      updatedAt: profile?.updated_at || null,
+    };
+  }
+
+  if (!isLocalDev()) {
+    const err = new Error(
+      "Supabase Storage is required to remove standing driver photos on the live site.",
+    );
+    err.status = 400;
+    throw err;
+  }
+
+  removeLocalStandingFile(filename);
+  return {
+    removed: true,
+    filename,
+    standingPhotoEnabled: false,
+    profileUpdated: false,
+    storage: "local",
+  };
 }

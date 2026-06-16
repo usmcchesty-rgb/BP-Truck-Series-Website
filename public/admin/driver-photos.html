@@ -181,6 +181,148 @@
         font-size: 11px;
         color: #777;
         margin-top: 4px;
+        line-height: 1.45;
+      }
+      .photo-mode-tabs {
+        display: flex;
+        gap: 0;
+        margin-bottom: 14px;
+        border-bottom: 1px solid #333;
+      }
+      .photo-mode-tab {
+        margin: 0;
+        padding: 10px 18px;
+        border: 1px solid #333;
+        border-bottom: 0;
+        background: linear-gradient(#161616, #0a0a0a);
+        color: #ccc;
+        font-size: 11px;
+        font-weight: 900;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        cursor: pointer;
+      }
+      .photo-mode-tab.is-active {
+        color: #fff;
+        background: linear-gradient(#d40000, #680000);
+        border-color: #ff2424;
+        box-shadow: 0 0 10px rgba(229, 9, 20, 0.2);
+      }
+      .photo-mode-panel[hidden] {
+        display: none !important;
+      }
+      .btn-danger {
+        border-color: #7a1010 !important;
+        background: linear-gradient(#3a0a0a, #180000) !important;
+        color: #ffb0b0 !important;
+      }
+      .standing-preview-shell {
+        display: inline-block;
+        background:
+          linear-gradient(45deg, #1a1a1a 25%, transparent 25%),
+          linear-gradient(-45deg, #1a1a1a 25%, transparent 25%),
+          linear-gradient(45deg, transparent 75%, #1a1a1a 75%),
+          linear-gradient(-45deg, transparent 75%, #1a1a1a 75%);
+        background-size: 16px 16px;
+        background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+        background-color: #0d0d0d;
+        border: 1px solid #333;
+        border-radius: 4px;
+        padding: 8px;
+      }
+      .standing-preview-frame {
+        position: relative;
+        width: 253px;
+        height: 280px;
+        overflow: hidden;
+        background: rgba(0, 0, 0, 0.25);
+      }
+      .standing-preview-wrap {
+        --standing-zoom: 1;
+        --standing-x: 50;
+        --standing-y: 50;
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+      }
+      .standing-preview-wrap img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        object-position: calc(var(--standing-x) * 1%) calc(var(--standing-y) * 1%);
+        transform: scale(var(--standing-zoom));
+        transform-origin: calc(var(--standing-x) * 1%) calc(var(--standing-y) * 1%);
+        display: block;
+      }
+      .standing-guide-overlay {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        z-index: 2;
+      }
+      .standing-guide-overlay::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 50%;
+        width: 1px;
+        background: rgba(229, 9, 20, 0.45);
+        box-shadow: 0 0 6px rgba(229, 9, 20, 0.25);
+      }
+      .standing-guide-line {
+        position: absolute;
+        left: 8%;
+        right: 8%;
+        height: 1px;
+        background: rgba(229, 9, 20, 0.28);
+      }
+      .standing-guide-line--head { top: 8%; }
+      .standing-guide-line--eyes { top: 18%; }
+      .standing-guide-line--shoulders { top: 28%; }
+      .standing-guide-line--waist { top: 48%; }
+      .standing-guide-line--knees { top: 68%; }
+      .standing-guide-line--feet { top: 92%; }
+      .standing-guide-label {
+        position: absolute;
+        right: 2px;
+        font-size: 7px;
+        font-weight: 900;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: rgba(229, 9, 20, 0.75);
+        transform: translateY(-50%);
+      }
+      .zoom-row input[type="range"] {
+        accent-color: var(--red);
+      }
+      .enable-toggle {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: #ddd;
+        font-weight: 700;
+        margin: 10px 0;
+        cursor: pointer;
+      }
+      .enable-toggle input {
+        width: 16px;
+        height: 16px;
+      }
+      .enable-toggle.is-disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+      @media (max-width: 640px) {
+        .standing-preview-frame {
+          width: min(253px, 100%);
+          height: auto;
+          aspect-ratio: 253 / 280;
+        }
       }
     </style>
   </head>
@@ -189,21 +331,53 @@
     <script src="/admin/admin-nav.js"></script>
 
     <main class="wrap">
-      <h1>Driver Photo Processor</h1>
+      <h1>Driver Photos</h1>
       <p id="loginStatus">Logged in: checking...</p>
       <p class="sub">
-        Upload a driver photo, remove the background, then drag and zoom the
-        cutout inside the 600&times;700 canvas. Pick a driver and click Save —
-        the PNG is written directly to that driver's existing Photo URL path
-        (e.g. <code>public/assets/drivers/mark-arthur.png</code>). Background
-        removal runs entirely in your browser — the first run downloads the AI
-        model (~40&nbsp;MB), so it may take a minute. Photos are saved directly
-        to Supabase Storage and appear on the live site immediately.
-        For full-body profile hero images, use
-        <a href="/admin/standing-driver-photos">Standing Driver Photos</a>.
+        Manage regular card cutout photos and optional full-body standing profile
+        hero images. Regular photos are cropped in the canvas editor and saved as
+        PNG cutouts. Standing photos keep the original PNG and use zoom/position
+        controls on the public profile page.
       </p>
 
-      <!-- STEP 1: Upload + remove background -->
+      <div class="photo-mode-tabs" role="tablist" aria-label="Photo type">
+        <button
+          type="button"
+          class="photo-mode-tab is-active"
+          data-photo-tab="regular"
+          role="tab"
+          aria-selected="true"
+        >
+          Regular Driver Photo
+        </button>
+        <button
+          type="button"
+          class="photo-mode-tab"
+          data-photo-tab="standing"
+          role="tab"
+          aria-selected="false"
+        >
+          Standing Driver Photo
+        </button>
+      </div>
+
+      <div class="panel">
+        <h2>Select Driver</h2>
+        <label class="field" for="driverSelect">Driver</label>
+        <select id="driverSelect" class="input">
+          <option value="">Loading drivers...</option>
+        </select>
+        <div class="hint">
+          Drivers come from the same records as Admin &gt; Drivers
+          (standings + saved profiles).
+        </div>
+        <label class="field">Display Name</label>
+        <input id="displayName" class="input" type="text" readonly />
+        <label class="field">Car Number</label>
+        <input id="carNumber" class="input" type="text" readonly />
+      </div>
+
+      <div id="tab-regular" class="photo-mode-panel" role="tabpanel">
       <div class="panel">
         <h2>1. Upload &amp; Remove Background</h2>
         <input id="file" class="input" type="file" accept="image/*" />
@@ -275,41 +449,22 @@
         </div>
       </div>
 
-      <!-- STEP 3: Pick driver + save -->
+      <!-- STEP 3: Save regular photo -->
       <div class="panel">
-        <h2>3. Select Driver &amp; Save</h2>
-        <label class="field" for="driverSelect">Driver</label>
-        <select id="driverSelect" class="input">
-          <option value="">Loading drivers...</option>
-        </select>
-        <div class="hint">
-          Drivers come from the same records as Admin &gt; Drivers
-          (standings + saved profiles).
-        </div>
-
-        <label class="field">Display Name</label>
-        <input id="displayName" class="input" type="text" readonly />
-
-        <label class="field">Car Number</label>
-        <input id="carNumber" class="input" type="text" readonly />
-
+        <h2>3. Save Regular Photo</h2>
         <label class="field">Existing Photo URL</label>
         <input id="photoUrl" class="input" type="text" readonly />
-
         <label class="field">Export Filename (from Photo URL)</label>
-        <div class="filename-preview" id="filenamePreview">
-          select a driver...
-        </div>
-
-        <button id="saveBtn" class="btn" type="button" disabled>
-          Save Driver Photo
+        <div class="filename-preview" id="filenamePreview">select a driver...</div>
+        <button id="saveBtn" class="btn" type="button" disabled>Save Driver Photo</button>
+        <button id="removeRegularBtn" class="btn btn-danger" type="button" disabled>
+          Remove Regular Photo
         </button>
         <div class="hint">
           Photos are saved directly to Supabase Storage. The guide overlay is
           never saved into the PNG.
         </div>
         <div id="msg"></div>
-
         <div id="savedPreviewWrap" hidden style="margin-top: 12px">
           <label class="field">Saved Photo</label>
           <div class="stage-box" style="padding: 8px">
@@ -321,8 +476,103 @@
           </div>
         </div>
       </div>
+      </div>
+
+      <div id="tab-standing" class="photo-mode-panel" role="tabpanel" hidden>
+        <div class="panel">
+          <h2>1. Upload Standing PNG</h2>
+          <input id="standingFile" class="input" type="file" accept="image/png" />
+          <div class="hint">
+            Transparent PNG recommended. Re-upload replaces the existing standing
+            photo in <code>driver-standing-photos/{driver-slug}.png</code>.
+          </div>
+          <label class="field">Standing Photo URL</label>
+          <input id="standingUrl" class="input" type="text" readonly />
+          <label class="field">Storage Path</label>
+          <div class="filename-preview" id="standingFilenamePreview">select a driver...</div>
+        </div>
+
+        <div class="panel">
+          <h2>2. Position &amp; Preview</h2>
+          <div class="editor-row">
+            <div class="standing-preview-shell">
+              <div class="standing-preview-frame" id="standingPreviewFrame">
+                <div class="standing-preview-wrap" id="standingPreviewWrap">
+                  <img id="standingPreviewImg" alt="Standing photo preview" hidden />
+                </div>
+                <div class="standing-guide-overlay" aria-hidden="true">
+                  <div class="standing-guide-line standing-guide-line--head">
+                    <span class="standing-guide-label">Head</span>
+                  </div>
+                  <div class="standing-guide-line standing-guide-line--eyes">
+                    <span class="standing-guide-label">Eyes</span>
+                  </div>
+                  <div class="standing-guide-line standing-guide-line--shoulders">
+                    <span class="standing-guide-label">Shoulders</span>
+                  </div>
+                  <div class="standing-guide-line standing-guide-line--waist">
+                    <span class="standing-guide-label">Waist</span>
+                  </div>
+                  <div class="standing-guide-line standing-guide-line--knees">
+                    <span class="standing-guide-label">Knees</span>
+                  </div>
+                  <div class="standing-guide-line standing-guide-line--feet">
+                    <span class="standing-guide-label">Feet</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="editor-controls">
+              <label class="field" for="standingZoom">Zoom</label>
+              <div class="zoom-row">
+                <input id="standingZoom" type="range" min="50" max="200" value="100" />
+                <span id="standingZoomLabel">1.00×</span>
+              </div>
+              <label class="field" for="standingPosX">Horizontal Position</label>
+              <div class="zoom-row">
+                <input id="standingPosX" type="range" min="0" max="100" value="50" />
+                <span id="standingPosXLabel">50%</span>
+              </div>
+              <label class="field" for="standingPosY">Vertical Position</label>
+              <div class="zoom-row">
+                <input id="standingPosY" type="range" min="0" max="100" value="50" />
+                <span id="standingPosYLabel">50%</span>
+              </div>
+              <button id="standingResetCropBtn" class="btn" type="button">Reset Crop</button>
+              <div class="hint">
+                Align head, shoulders, waist, knees, and feet to the red guide
+                lines. Center line helps keep drivers visually balanced.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>3. Profile &amp; Save</h2>
+          <label
+            id="standingEnabledWrap"
+            class="enable-toggle is-disabled"
+            title="Upload a standing photo first"
+          >
+            <input id="standingEnabled" type="checkbox" disabled />
+            Use Standing Photo on Profile Page
+          </label>
+          <p id="standingEnabledHint" class="hint">Upload standing photo first.</p>
+          <button id="standingSaveUploadBtn" class="btn" type="button" disabled>
+            Upload &amp; Save Standing Photo
+          </button>
+          <button id="standingSaveSettingsBtn" class="btn" type="button" disabled>
+            Save Crop Settings Only
+          </button>
+          <button id="standingRemoveBtn" class="btn btn-danger" type="button" disabled>
+            Remove Standing Photo
+          </button>
+          <div id="standingMsg"></div>
+        </div>
+      </div>
     </main>
 
+    <script src="/driver-standing-photo.js"></script>
     <script type="module">
       const $ = (s) => document.querySelector(s);
 
@@ -351,6 +601,29 @@
       const savedPreviewWrap = $("#savedPreviewWrap");
       const savedPreview = $("#savedPreview");
       const loginStatus = $("#loginStatus");
+      const removeRegularBtn = $("#removeRegularBtn");
+      const photoModeTabs = document.querySelectorAll("[data-photo-tab]");
+      const tabRegular = $("#tab-regular");
+      const tabStanding = $("#tab-standing");
+      const standingFile = $("#standingFile");
+      const standingUrlInput = $("#standingUrl");
+      const standingFilenamePreview = $("#standingFilenamePreview");
+      const standingPreviewImg = $("#standingPreviewImg");
+      const standingPreviewWrap = $("#standingPreviewWrap");
+      const standingZoom = $("#standingZoom");
+      const standingPosX = $("#standingPosX");
+      const standingPosY = $("#standingPosY");
+      const standingZoomLabel = $("#standingZoomLabel");
+      const standingPosXLabel = $("#standingPosXLabel");
+      const standingPosYLabel = $("#standingPosYLabel");
+      const standingResetCropBtn = $("#standingResetCropBtn");
+      const standingEnabled = $("#standingEnabled");
+      const standingEnabledWrap = $("#standingEnabledWrap");
+      const standingEnabledHint = $("#standingEnabledHint");
+      const standingSaveUploadBtn = $("#standingSaveUploadBtn");
+      const standingSaveSettingsBtn = $("#standingSaveSettingsBtn");
+      const standingRemoveBtn = $("#standingRemoveBtn");
+      const standingMsg = $("#standingMsg");
 
       const CANVAS_W = 600;
       const CANVAS_H = 700;
@@ -1018,7 +1291,344 @@
 
       // ---------------- Driver list (same records as Admin > Drivers) ----------------
 
-      let drivers = []; // [{ driver_id, display_name, car_number, photo_url }]
+      let drivers = [];
+      let pendingStandingDataUrl = "";
+      let activePhotoTab = "regular";
+
+      function setStandingMsg(text, type = "") {
+        standingMsg.textContent = text;
+        standingMsg.className = type;
+      }
+
+      function slugifyName(name) {
+        return String(name || "")
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "");
+      }
+
+      function standingFilenameFor(driver) {
+        const slug = slugifyName(driver?.display_name || driver?.iracing_name || driver?.driver_id);
+        return `driver-standing-photos/${slug || driver?.driver_id}.png`;
+      }
+
+      function readStandingCrop() {
+        return {
+          standingPhotoZoom: Number(standingZoom.value) / 100,
+          standingPhotoX: Number(standingPosX.value),
+          standingPhotoY: Number(standingPosY.value),
+        };
+      }
+
+      function applyStandingCropPreview() {
+        if (!window.BPDriverStandingPhoto) return;
+        const crop = readStandingCrop();
+        const style = BPDriverStandingPhoto.cropStyle({}, crop);
+        standingPreviewWrap.setAttribute("style", style);
+        standingZoomLabel.textContent = `${crop.standingPhotoZoom.toFixed(2)}×`;
+        standingPosXLabel.textContent = `${crop.standingPhotoX}%`;
+        standingPosYLabel.textContent = `${crop.standingPhotoY}%`;
+      }
+
+      function setStandingCropFromDriver(driver) {
+        if (!window.BPDriverStandingPhoto) return;
+        const crop = BPDriverStandingPhoto.normalize(driver || {});
+        standingZoom.value = String(Math.round(crop.standingPhotoZoom * 100));
+        standingPosX.value = String(crop.standingPhotoX);
+        standingPosY.value = String(crop.standingPhotoY);
+        applyStandingCropPreview();
+      }
+
+      function resetStandingCrop() {
+        standingZoom.value = "100";
+        standingPosX.value = "50";
+        standingPosY.value = "50";
+        applyStandingCropPreview();
+      }
+
+      function updateStandingPreviewImage(url) {
+        if (!url) {
+          standingPreviewImg.hidden = true;
+          standingPreviewImg.removeAttribute("src");
+          return;
+        }
+        standingPreviewImg.hidden = false;
+        standingPreviewImg.src = url;
+      }
+
+      function hasStandingAsset(driver) {
+        return Boolean(
+          stripPhotoUrlQuery(driver?.standing_photo_url || driver?.standingPhotoUrl || ""),
+        );
+      }
+
+      function updateStandingState() {
+        const driver = selectedDriver();
+        const hasStanding = hasStandingAsset(driver);
+        const hasFile = Boolean(pendingStandingDataUrl || standingFile.files?.[0]);
+
+        displayNameInput.value = driver?.display_name || "";
+        carNumberInput.value = driver?.car_number || "";
+        standingUrlInput.value =
+          driver?.standingPhotoUrl || driver?.standing_photo_url || "";
+        standingFilenamePreview.textContent = driver
+          ? standingFilenameFor(driver)
+          : "select a driver...";
+
+        if (driver && hasStanding && !pendingStandingDataUrl && !standingFile.files?.[0]) {
+          updateStandingPreviewImage(BPDriverStandingPhoto.displayUrl(driver));
+        } else if (!pendingStandingDataUrl && !standingFile.files?.[0]) {
+          updateStandingPreviewImage("");
+        }
+
+        if (hasStanding) {
+          setStandingCropFromDriver(driver);
+          standingEnabled.disabled = false;
+          standingEnabledWrap.classList.remove("is-disabled");
+          standingEnabled.checked = driver.standing_photo_enabled !== false;
+          standingEnabledHint.textContent =
+            "When enabled, the driver profile hero uses the standing photo.";
+        } else {
+          standingEnabled.disabled = true;
+          standingEnabled.checked = false;
+          standingEnabledWrap.classList.add("is-disabled");
+          standingEnabledHint.textContent = "Upload standing photo first.";
+        }
+
+        standingSaveUploadBtn.disabled = !driver || !hasFile;
+        standingSaveSettingsBtn.disabled = !driver || (!hasStanding && !hasFile);
+        standingRemoveBtn.disabled = !driver || !hasStanding;
+      }
+
+      function switchPhotoTab(tab) {
+        activePhotoTab = tab === "standing" ? "standing" : "regular";
+        photoModeTabs.forEach((btn) => {
+          const isActive = btn.dataset.photoTab === activePhotoTab;
+          btn.classList.toggle("is-active", isActive);
+          btn.setAttribute("aria-selected", isActive ? "true" : "false");
+        });
+        tabRegular.hidden = activePhotoTab !== "regular";
+        tabStanding.hidden = activePhotoTab !== "standing";
+        if (activePhotoTab === "standing") {
+          updateStandingState();
+        }
+      }
+
+      function fileToDataUrl(file) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result || ""));
+          reader.onerror = () => reject(new Error("Could not read file."));
+          reader.readAsDataURL(file);
+        });
+      }
+
+      async function saveStandingCropSettings() {
+        const driver = selectedDriver();
+        const pw = getSessionPw();
+        if (!driver || !pw) {
+          setStandingMsg("Log in on the Admin page first.", "error");
+          return;
+        }
+
+        const crop = readStandingCrop();
+        setStandingMsg("Saving crop settings...");
+        const res = await fetch("/api/drivers", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            password: pw,
+            driver_id: driver.driver_id,
+            iracing_name: driver.iracing_name,
+            display_name: driver.display_name || driver.iracing_name,
+            car_number: driver.car_number || "",
+            photo_url: driver.photo_url || "",
+            standing_photo_url: stripPhotoUrlQuery(
+              driver.standing_photo_url || driver.standingPhotoUrl || "",
+            ),
+            standing_photo_zoom: crop.standingPhotoZoom,
+            standing_photo_x: crop.standingPhotoX,
+            standing_photo_y: crop.standingPhotoY,
+            standing_photo_enabled: standingEnabled.checked,
+            standing_photo_updated_at:
+              driver.standing_photo_updated_at ||
+              driver.standingPhotoUpdatedAt ||
+              new Date().toISOString(),
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setStandingMsg(data.error || "Save failed.", "error");
+          return;
+        }
+        Object.assign(driver, data);
+        updateStandingState();
+        setStandingMsg("Standing photo crop settings saved.", "success");
+      }
+
+      async function uploadStandingPhoto() {
+        const driver = selectedDriver();
+        const pw = getSessionPw();
+        if (!driver || !pw) {
+          setStandingMsg("Log in on the Admin page first.", "error");
+          return;
+        }
+
+        let imageBase64 = pendingStandingDataUrl;
+        if (!imageBase64 && standingFile.files?.[0]) {
+          imageBase64 = await fileToDataUrl(standingFile.files[0]);
+        }
+        if (!imageBase64) {
+          setStandingMsg("Choose a PNG file first.", "error");
+          return;
+        }
+
+        const crop = readStandingCrop();
+        setStandingMsg("Uploading standing photo...");
+        const res = await fetch("/api/uploads", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "standing-driver-photo",
+            password: pw,
+            driver_id: driver.driver_id,
+            iracing_name: driver.iracing_name,
+            display_name: driver.display_name || driver.iracing_name,
+            car_number: driver.car_number || "",
+            imageBase64,
+            standingPhotoZoom: crop.standingPhotoZoom,
+            standingPhotoX: crop.standingPhotoX,
+            standingPhotoY: crop.standingPhotoY,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setStandingMsg(data.error || "Upload failed.", "error");
+          return;
+        }
+
+        driver.standing_photo_url = data.standingPhotoUrlStored || data.standingPhotoUrl;
+        driver.standingPhotoUrl = data.standingPhotoUrl;
+        driver.standing_photo_zoom = data.standingPhotoZoom;
+        driver.standingPhotoZoom = data.standingPhotoZoom;
+        driver.standing_photo_x = data.standingPhotoX;
+        driver.standingPhotoX = data.standingPhotoX;
+        driver.standing_photo_y = data.standingPhotoY;
+        driver.standingPhotoY = data.standingPhotoY;
+        driver.standing_photo_updated_at = data.updatedAt;
+        driver.standingPhotoUpdatedAt = data.updatedAt;
+        driver.standing_photo_enabled = true;
+        driver.standingPhotoEnabled = true;
+        pendingStandingDataUrl = "";
+        standingFile.value = "";
+        standingEnabled.checked = true;
+        updateStandingState();
+        setStandingMsg(`Standing photo saved to ${data.savedTo || "storage"}.`, "success");
+      }
+
+      async function removeStandingPhoto() {
+        const driver = selectedDriver();
+        const pw = getSessionPw();
+        if (!driver || !pw) {
+          setStandingMsg("Log in on the Admin page first.", "error");
+          return;
+        }
+        if (
+          !confirm(
+            `Remove the standing photo for ${driver.display_name || driver.iracing_name}? This cannot be undone.`,
+          )
+        ) {
+          return;
+        }
+
+        setStandingMsg("Removing standing photo...");
+        const res = await fetch("/api/uploads", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "remove-standing-driver-photo",
+            password: pw,
+            driver_id: driver.driver_id,
+            iracing_name: driver.iracing_name,
+            display_name: driver.display_name || driver.iracing_name,
+            car_number: driver.car_number || "",
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setStandingMsg(data.error || "Remove failed.", "error");
+          return;
+        }
+
+        driver.standing_photo_url = "";
+        driver.standingPhotoUrl = "";
+        driver.standing_photo_zoom = 1;
+        driver.standingPhotoZoom = 1;
+        driver.standing_photo_x = 50;
+        driver.standingPhotoX = 50;
+        driver.standing_photo_y = 50;
+        driver.standingPhotoY = 50;
+        driver.standing_photo_updated_at = null;
+        driver.standingPhotoUpdatedAt = null;
+        driver.standing_photo_enabled = false;
+        driver.standingPhotoEnabled = false;
+        pendingStandingDataUrl = "";
+        standingFile.value = "";
+        resetStandingCrop();
+        updateStandingState();
+        setStandingMsg("Standing photo removed.", "success");
+      }
+
+      async function removeRegularPhoto() {
+        const driver = selectedDriver();
+        const pw = getSessionPw();
+        if (!driver || !pw) {
+          setMsg("Log in on the Admin page first.", "error");
+          return;
+        }
+        if (!driver.photo_url) {
+          setMsg("This driver has no regular photo URL to remove.", "error");
+          return;
+        }
+        if (
+          !confirm(
+            `Remove the regular photo for ${driver.display_name || driver.iracing_name}? The profile will use the placeholder fallback.`,
+          )
+        ) {
+          return;
+        }
+
+        setMsg("Removing regular photo...");
+        const res = await fetch("/api/uploads", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "remove-driver-photo",
+            password: pw,
+            driver_id: driver.driver_id,
+            iracing_name: driver.iracing_name,
+            display_name: driver.display_name || driver.iracing_name,
+            car_number: driver.car_number || "",
+            photo_url: driver.photo_url,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setSaveError(data, data.error || "Remove failed.");
+          return;
+        }
+
+        driver.photo_url = "";
+        savedPreviewWrap.hidden = true;
+        updateSaveState();
+        setMsg("Regular photo removed. Profile pages will use the placeholder fallback.", "success");
+      }
+
+      async function saveStandingEnabled() {
+        const driver = selectedDriver();
+        if (!driver || !hasStandingAsset(driver)) return;
+        await saveStandingCropSettings();
+      }
 
       function stripPhotoUrlQuery(photoUrl) {
         return String(photoUrl || "")
@@ -1047,6 +1657,18 @@
             display_name: profile?.display_name || row.driver,
             car_number: profile?.car_number || "",
             photo_url: stripPhotoUrlQuery(profile?.photo_url || row.photoUrl || ""),
+            standing_photo_url: stripPhotoUrlQuery(profile?.standing_photo_url || ""),
+            standingPhotoUrl: profile?.standingPhotoUrl || "",
+            standing_photo_zoom: profile?.standing_photo_zoom,
+            standingPhotoZoom: profile?.standingPhotoZoom,
+            standing_photo_x: profile?.standing_photo_x,
+            standingPhotoX: profile?.standingPhotoX,
+            standing_photo_y: profile?.standing_photo_y,
+            standingPhotoY: profile?.standingPhotoY,
+            standing_photo_updated_at: profile?.standing_photo_updated_at,
+            standingPhotoUpdatedAt: profile?.standingPhotoUpdatedAt,
+            standing_photo_enabled: profile?.standing_photo_enabled,
+            standingPhotoEnabled: profile?.standingPhotoEnabled,
           };
         });
       }
@@ -1081,8 +1703,8 @@
             const opt = document.createElement("option");
             opt.value = d.driver_id;
             opt.textContent = d.car_number
-              ? `#${d.car_number} ${d.display_name}`
-              : d.display_name;
+              ? `#${d.car_number} ${d.display_name}${hasStandingAsset(d) ? " ★" : ""}`
+              : `${d.display_name}${hasStandingAsset(d) ? " ★" : ""}`;
             driverSelect.appendChild(opt);
           }
         } catch (e) {
@@ -1117,10 +1739,14 @@
           filenamePreview.textContent = filename;
         }
         saveBtn.disabled = !cutout || !filename;
+        removeRegularBtn.disabled = !d?.photo_url;
+        updateStandingState();
       }
 
       driverSelect.addEventListener("change", () => {
         savedPreviewWrap.hidden = true;
+        pendingStandingDataUrl = "";
+        if (standingFile) standingFile.value = "";
         updateSaveState();
       });
 
@@ -1195,6 +1821,41 @@
           saveBtn.disabled = false;
         }
       });
+
+      removeRegularBtn.addEventListener("click", removeRegularPhoto);
+
+      photoModeTabs.forEach((btn) => {
+        btn.addEventListener("click", () => switchPhotoTab(btn.dataset.photoTab));
+      });
+
+      [standingZoom, standingPosX, standingPosY].forEach((el) => {
+        el.addEventListener("input", applyStandingCropPreview);
+      });
+      standingResetCropBtn.addEventListener("click", resetStandingCrop);
+      standingSaveSettingsBtn.addEventListener("click", saveStandingCropSettings);
+      standingSaveUploadBtn.addEventListener("click", uploadStandingPhoto);
+      standingRemoveBtn.addEventListener("click", removeStandingPhoto);
+      standingEnabled.addEventListener("change", saveStandingEnabled);
+      standingFile.addEventListener("change", async () => {
+        const file = standingFile.files?.[0];
+        if (!file) {
+          pendingStandingDataUrl = "";
+          updateStandingState();
+          return;
+        }
+        try {
+          pendingStandingDataUrl = await fileToDataUrl(file);
+          updateStandingPreviewImage(pendingStandingDataUrl);
+          updateStandingState();
+          setStandingMsg("PNG loaded. Adjust crop, then save.", "success");
+        } catch (e) {
+          setStandingMsg(e.message || "Could not load file.", "error");
+        }
+      });
+
+      if (location.hash === "#standing") {
+        switchPhotoTab("standing");
+      }
 
       draw();
       syncGuideOpacityLabel();

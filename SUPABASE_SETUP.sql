@@ -107,6 +107,7 @@ alter table driver_profiles add column if not exists standing_photo_zoom numeric
 alter table driver_profiles add column if not exists standing_photo_x numeric default 50;
 alter table driver_profiles add column if not exists standing_photo_y numeric default 50;
 alter table driver_profiles add column if not exists standing_photo_updated_at timestamptz;
+alter table driver_profiles add column if not exists standing_photo_enabled boolean default true;
 
 -- Power Rankings (weekly Top 10 + optional honorable mentions)
 create table if not exists power_rankings_weeks (

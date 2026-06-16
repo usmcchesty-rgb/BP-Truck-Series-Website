@@ -34,8 +34,13 @@
     };
   }
 
+  function isStandingEnabled(profile = {}) {
+    const enabled = profile.standingPhotoEnabled ?? profile.standing_photo_enabled;
+    return enabled !== false;
+  }
+
   function hasStandingPhoto(profile = {}) {
-    return Boolean(normalize(profile).standingPhotoUrl);
+    return Boolean(normalize(profile).standingPhotoUrl) && isStandingEnabled(profile);
   }
 
   function displayUrl(profile = {}) {
@@ -52,6 +57,7 @@
 
   window.BPDriverStandingPhoto = {
     normalize,
+    isStandingEnabled,
     hasStandingPhoto,
     displayUrl,
     cropStyle,

@@ -140,6 +140,8 @@ function normalizeDriverProfile(row) {
     standingPhotoY: standingCrop.y,
     standing_photo_updated_at: standingUpdated,
     standingPhotoUpdatedAt: standingUpdated,
+    standing_photo_enabled: normalizeBoolean(row.standing_photo_enabled, true),
+    standingPhotoEnabled: normalizeBoolean(row.standing_photo_enabled, true),
     is_streamer: normalizeBoolean(row.is_streamer, false),
     stream_url: normalizeStreamUrl(row.stream_url),
     date_of_birth: normalizeOptionalText(row.date_of_birth) || '',
@@ -197,6 +199,9 @@ function buildUpsertRow(b) {
     b.standing_photo_y !== undefined ||
     b.standingPhotoY !== undefined;
 
+  const hasStandingEnabled =
+    b.standing_photo_enabled !== undefined || b.standingPhotoEnabled !== undefined;
+
   const row = {
     driver_id: String(b.driver_id),
     iracing_name: String(b.iracing_name),
@@ -251,6 +256,13 @@ function buildUpsertRow(b) {
     row.standing_photo_y = standingCrop.y;
     row.standing_photo_updated_at =
       b.standing_photo_updated_at ?? b.standingPhotoUpdatedAt ?? new Date().toISOString();
+  }
+
+  if (hasStandingEnabled) {
+    row.standing_photo_enabled = normalizeBoolean(
+      b.standing_photo_enabled ?? b.standingPhotoEnabled,
+      true,
+    );
   }
 
   return row;

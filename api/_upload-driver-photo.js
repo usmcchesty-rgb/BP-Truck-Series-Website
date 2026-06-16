@@ -327,3 +327,117 @@ export async function uploadDriverPhoto(body) {
 
   return saveToLocalFile(uploadBuffer, body.photoUrl);
 }
+
+function storageFilenameFromPhotoUrl(photoUrl) {
+  const clean = stripPhotoUrlQuery(photoUrl);
+  if (!clean) return "";
+  if (clean.includes(`/storage/v1/object/public/${STORAGE_BUCKET}/`)) {
+    try {
+      const parts = clean.split(`/storage/v1/object/public/${STORAGE_BUCKET}/`);
+      return decodeURIComponent(parts[1] || "").split("?")[0];
+    } catch {
+      return path.basename(clean);
+    }
+  }
+  return path.basename(clean);
+}
+
+async function clearDriverPhotoProfile(sb, driverId, body = {}) {
+  const id = String(driverId);
+  const { data: existing, error: readError } = await sb
+    .from("driver_profiles")
+    .select("*")
+    .eq("driver_id", id)
+    .maybeSingle();
+
+  if (readError) {
+    throw new Error(`Supabase error: ${readError.message}`);
+  }
+
+  const displayName =
+    existing?.display_name || body.display_name || body.iracing_name || "";
+  const iracingName =
+    existing?.iracing_name || body.iracing_name || displayName || "";
+  const carNumber = existing?.car_number ?? body.car_number ?? "";
+
+  if (!iracingName) {
+    throw new Error("Missing driver profile.");
+  }
+
+  const now = new Date().toISOString();
+  const row = {
+    driver_id: id,
+    iracing_name: iracingName,
+    display_name: displayName || iracingName,
+    driver_name: displayName || iracingName,
+    slug: slugify(displayName || iracingName || id),
+    car_number: carNumber,
+    truck_number: carNumber,
+    photo_url: "",
+    is_streamer: existing?.is_streamer === true,
+    stream_url: String(existing?.stream_url || "").trim(),
+    active: existing?.active !== false,
+    updated_at: now,
+  };
+
+  const { data, error } = await sb
+    .from("driver_profiles")
+    .upsert(row, { onConflict: "driver_id" })
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(`Supabase error: ${error.message}`);
+  }
+
+  return data;
+}
+
+export async function removeDriverPhoto(body) {
+  const driverId = String(body.driver_id || "").trim();
+  if (!driverId) {
+    const err = new Error("Missing driver_id.");
+    err.status = 400;
+    throw err;
+  }
+
+  const sb = supabase();
+  const photoUrl = stripPhotoUrlQuery(body.photo_url || body.photoUrl || "");
+
+  if (sb) {
+    const filename = storageFilenameFromPhotoUrl(photoUrl);
+    if (filename) {
+      const { error } = await sb.storage.from(STORAGE_BUCKET).remove([filename]);
+      if (error && !isStorageObjectMissingMessage(error.message)) {
+        console.warn("[remove-driver-photo] storage remove:", error.message);
+      }
+    }
+
+    const profile = await clearDriverPhotoProfile(sb, driverId, body);
+    return {
+      removed: true,
+      photoUrl: "",
+      profileUpdated: true,
+      storage: "supabase",
+      updatedAt: profile?.updated_at || null,
+    };
+  }
+
+  if (photoUrl && !/^https?:\/\//i.test(photoUrl)) {
+    try {
+      const { resolved } = resolvePhotoOutputPath(photoUrl);
+      if (fs.existsSync(resolved)) {
+        fs.unlinkSync(resolved);
+      }
+    } catch (e) {
+      console.warn("[remove-driver-photo] local file:", e.message);
+    }
+  }
+
+  return {
+    removed: true,
+    photoUrl: "",
+    profileUpdated: false,
+    storage: "local",
+  };
+}
