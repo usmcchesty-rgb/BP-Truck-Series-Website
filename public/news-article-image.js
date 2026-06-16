@@ -27,12 +27,27 @@
   }
 
   function normalize(article = {}) {
+    if (article.displayImage?.url) {
+      const zoom = Number(article.displayImage.zoom);
+      const x = Number(article.displayImage.x);
+      const y = Number(article.displayImage.y);
+      return {
+        featuredImageUrl: stripUrlQuery(
+          article.displayImage.storedUrl || article.displayImage.url || "",
+        ),
+        featuredImageUpdatedAt: article.displayImage.updatedAt || null,
+        featuredImageZoom: Number.isFinite(zoom) && zoom > 0 ? zoom : 1,
+        featuredImageX: Number.isFinite(x) ? Math.min(100, Math.max(0, x)) : 50,
+        featuredImageY: Number.isFinite(y) ? Math.min(100, Math.max(0, y)) : 50,
+      };
+    }
+
     const zoom = Number(article.featuredImageZoom ?? article.featured_image_zoom);
     const x = Number(article.featuredImageX ?? article.featured_image_x);
     const y = Number(article.featuredImageY ?? article.featured_image_y);
     return {
       featuredImageUrl: stripUrlQuery(
-        article.featuredImageUrl ?? article.featured_image_url ?? ""
+        article.featuredImageUrl ?? article.featured_image_url ?? "",
       ),
       featuredImageUpdatedAt:
         article.featuredImageUpdatedAt ?? article.featured_image_updated_at ?? null,
@@ -42,15 +57,15 @@
     };
   }
 
-  function hasImage(article = {}) {
-    return Boolean(normalize(article).featuredImageUrl);
-  }
-
   function displayUrl(article = {}) {
     const data = normalize(article);
     if (!data.featuredImageUrl) return "";
     const version = cacheVersion(data.featuredImageUpdatedAt) || Date.now();
     return withCacheBust(data.featuredImageUrl, version);
+  }
+
+  function hasImage(article = {}) {
+    return Boolean(normalize(article).featuredImageUrl);
   }
 
   function cropStyle(article = {}, extra = {}) {
@@ -67,8 +82,12 @@
     const imgClass = options.imgClass || "news-article-image-el";
     const alt = escapeHtml(options.alt || article.headline || "Article image");
     const style = cropStyle(article, options.settings);
+    const onerror =
+      article.articleType === "driver-spotlight"
+        ? ' onerror="this.onerror=null;this.src=\'/assets/drivers/placeholder.png\'"'
+        : "";
 
-    return `<div class="${wrapClass}" style="${style}"><img class="${imgClass}" src="${escapeHtml(url)}" alt="${alt}"></div>`;
+    return `<div class="${wrapClass}" style="${style}"><img class="${imgClass}" src="${escapeHtml(url)}" alt="${alt}"${onerror}></div>`;
   }
 
   function renderFeaturedMedia(article = {}, options = {}) {
@@ -121,6 +140,10 @@
         img.alt = "Article image preview";
         target.appendChild(img);
       }
+      img.onerror = function () {
+        this.onerror = null;
+        this.src = "/assets/drivers/placeholder.png";
+      };
       if (img.src !== url) img.src = url;
     } else {
       const img = target.querySelector("img");

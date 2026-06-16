@@ -7,6 +7,7 @@ import {
   loadRaceTranscript,
   saveRaceTranscript,
 } from './_race-transcripts.js';
+import { enrichSpotlightArticles } from './_spotlight-image.js';
 
 function parseBody(req) {
   if (!req.body) return {};
@@ -73,6 +74,8 @@ function normalizeArticle(row) {
     author: row.author || 'Miles Apex',
     raceNumber: row.race_number,
     spotlightDriverId: row.spotlight_driver_id || null,
+    spotlightImageUrl: stripPhotoUrlQuery(row.spotlight_image_url || ''),
+    spotlightImageUpdatedAt: row.spotlight_image_updated_at || null,
     published: row.published === true,
     featuredImageUrl: stripPhotoUrlQuery(row.featured_image_url || ''),
     featuredImageZoom: Number(row.featured_image_zoom) || 1,
@@ -150,7 +153,8 @@ async function handleGet(req, res) {
     if (slug) {
       const article = await loadArticleBySlug(slug, includeUnpublished);
       if (!article) return res.status(404).json({ error: 'Article not found.' });
-      return res.status(200).json({ configured: true, article });
+      const [enriched] = await enrichSpotlightArticles([article]);
+      return res.status(200).json({ configured: true, article: enriched });
     }
 
     if (id) {
@@ -158,7 +162,8 @@ async function handleGet(req, res) {
       if (!article || (!article.published && !includeUnpublished)) {
         return res.status(404).json({ error: 'Article not found.' });
       }
-      return res.status(200).json({ configured: true, article });
+      const [enriched] = await enrichSpotlightArticles([article]);
+      return res.status(200).json({ configured: true, article: enriched });
     }
 
     return res.status(400).json({ error: 'Missing slug or id for action=get.' });
@@ -166,11 +171,12 @@ async function handleGet(req, res) {
 
   if (isList) {
     const articles = await loadArticles(includeUnpublished);
-    const published = articles.filter((a) => a.published);
+    const enriched = await enrichSpotlightArticles(articles);
+    const published = enriched.filter((a) => a.published);
     return res.status(200).json({
       configured: true,
       featured: published[0] || null,
-      articles: includeUnpublished ? articles : published,
+      articles: includeUnpublished ? enriched : published,
     });
   }
 
@@ -203,6 +209,9 @@ async function saveArticle(body, publish = false) {
     author: String(body.author || 'Miles Apex').trim() || 'Miles Apex',
     race_number: body.raceNumber ?? body.race_number ?? null,
     spotlight_driver_id: body.spotlightDriverId ?? body.spotlight_driver_id ?? null,
+    spotlight_image_url: stripPhotoUrlQuery(
+      String(body.spotlightImageUrl ?? body.spotlight_image_url ?? '').trim()
+    ),
     featured_image_url: stripPhotoUrlQuery(
       String(body.featuredImageUrl ?? body.featured_image_url ?? '').trim()
     ),
@@ -211,6 +220,22 @@ async function saveArticle(body, publish = false) {
     featured_image_y: crop.featured_image_y,
     updated_at: now,
   };
+
+  if (body.spotlightImageUpdatedAt || body.spotlight_image_updated_at) {
+    row.spotlight_image_updated_at =
+      body.spotlightImageUpdatedAt || body.spotlight_image_updated_at;
+  } else if (
+    body.spotlightImageUrl !== undefined ||
+    body.spotlight_image_url !== undefined
+  ) {
+    const nextSpotlightUrl = row.spotlight_image_url;
+    if (nextSpotlightUrl && !id) {
+      row.spotlight_image_updated_at = now;
+    }
+    if (!nextSpotlightUrl) {
+      row.spotlight_image_updated_at = null;
+    }
+  }
 
   if (body.featuredImageUpdatedAt || body.featured_image_updated_at) {
     row.featured_image_updated_at =
@@ -234,7 +259,8 @@ async function saveArticle(body, publish = false) {
     const { error } = await sb.from('news_articles').update(row).eq('id', id);
     if (error) return { error: `Supabase error: ${error.message}`, status: 500 };
     const saved = await loadArticleById(id);
-    return { data: saved, status: 200 };
+    const [enriched] = await enrichSpotlightArticles([saved]);
+    return { data: enriched, status: 200 };
   }
 
   const { data, error } = await sb
@@ -260,7 +286,8 @@ async function saveArticle(body, publish = false) {
           .eq('id', saved.id);
         saved.slug = buildSlug(headline, saved.id);
       }
-      return { data: saved, status: 200 };
+      const [enriched] = await enrichSpotlightArticles([saved]);
+      return { data: enriched, status: 200 };
     }
     return { error: `Supabase error: ${error.message}`, status: 500 };
   }
@@ -272,7 +299,8 @@ async function saveArticle(body, publish = false) {
     saved.slug = finalSlug;
   }
 
-  return { data: saved, status: 200 };
+  const [enriched] = await enrichSpotlightArticles([saved]);
+  return { data: enriched, status: 200 };
 }
 
 async function handleGenerate(body) {

@@ -201,6 +201,26 @@
         </div>
       </div>
 
+      <div class="article-image-panel" id="spotlightImagePanel" hidden>
+        <h3>Spotlight Image</h3>
+        <p class="sub">Driver Spotlights automatically use the driver's standing photo or profile photo when no custom spotlight image is uploaded.</p>
+        <input type="hidden" id="spotlightImageUrl">
+        <input type="hidden" id="spotlightImageUpdatedAt">
+        <p class="sub"><strong>Current Spotlight Image Source:</strong> <span id="spotlightImageSourceLabel">—</span></p>
+        <div class="article-image-preview-row">
+          <div id="spotlightImagePreview" class="article-image-preview is-empty">No image</div>
+          <div class="article-image-controls">
+            <label class="field-label" for="spotlightImageFile">Upload Spotlight Image (PNG, optional)</label>
+            <div class="btn-row" style="margin-top:0;">
+              <input id="spotlightImageFile" type="file" accept="image/png,.png" style="max-width:100%;">
+              <button id="uploadSpotlightImageBtn" class="btn btn-secondary" type="button" disabled>Upload Spotlight Image</button>
+              <button id="removeSpotlightImageBtn" class="btn btn-danger" type="button" disabled>Remove Spotlight Image</button>
+            </div>
+            <pre id="spotlightImageMsg"></pre>
+          </div>
+        </div>
+      </div>
+
       <label class="field-label" for="manualNotes">Manual Notes</label>
       <textarea id="manualNotes" class="textarea" placeholder="Optional verified race facts and context. Saved broadcast transcripts are used first from Transcripts admin."></textarea>
 
@@ -245,7 +265,9 @@
   </main>
 
   <script src="/miles-apex-avatar.js"></script>
+  <script src="/driver-standing-photo.js"></script>
   <script src="/news-article-image.js"></script>
+  <script src="/spotlight-image.js"></script>
   <script>
     const $ = (s) => document.querySelector(s);
     const SESSION_KEY = 'bp_admin_pw';
@@ -254,6 +276,7 @@
     let pendingReporterPreviewUrl = null;
     let articleImageState = NewsArticleImage.normalize({});
     let pendingArticlePreviewUrl = null;
+    let pendingSpotlightPreviewUrl = null;
 
     function getSessionPw() { return sessionStorage.getItem(SESSION_KEY) || ''; }
 
@@ -264,7 +287,193 @@
       }
     }
 
-    function revokePendingArticlePreview() {
+    function revokePendingSpotlightPreview() {
+      if (pendingSpotlightPreviewUrl) {
+        URL.revokeObjectURL(pendingSpotlightPreviewUrl);
+        pendingSpotlightPreviewUrl = null;
+      }
+    }
+
+    function getSelectedSpotlightDriver() {
+      const driverId = String($('#spotlightDriverId')?.value || '').trim();
+      if (!driverId) return null;
+      return drivers.find((driver) => String(driver.driver_id) === driverId) || null;
+    }
+
+    function readSpotlightImageFromForm() {
+      return {
+        spotlightImageUrl: $('#spotlightImageUrl')?.value.trim() || '',
+        spotlightImageUpdatedAt: $('#spotlightImageUpdatedAt')?.value || null,
+      };
+    }
+
+    function readSpotlightArticleForPreview() {
+      return {
+        articleType: 'driver-spotlight',
+        ...readSpotlightImageFromForm(),
+      };
+    }
+
+    function setSpotlightImageMsg(text, isError = false) {
+      const msg = $('#spotlightImageMsg');
+      if (!msg) return;
+      msg.textContent = text;
+      msg.classList.toggle('error', isError);
+    }
+
+    function syncSpotlightUploadButtonState() {
+      const uploadBtn = $('#uploadSpotlightImageBtn');
+      const removeBtn = $('#removeSpotlightImageBtn');
+      if (uploadBtn) uploadBtn.disabled = !$('#spotlightImageFile')?.files?.[0];
+      if (removeBtn) {
+        removeBtn.disabled = !$('#spotlightImageUrl')?.value.trim();
+      }
+    }
+
+    function updateSpotlightImagePreview() {
+      const driver = getSelectedSpotlightDriver();
+      const article = readSpotlightArticleForPreview();
+      const displayImage = BPDriverSpotlightImage.applyPreview(
+        $('#spotlightImagePreview'),
+        article,
+        driver,
+        { previewUrl: pendingSpotlightPreviewUrl || '' }
+      );
+      const sourceLabel = $('#spotlightImageSourceLabel');
+      if (sourceLabel) {
+        sourceLabel.textContent = displayImage?.sourceLabel || 'Placeholder';
+      }
+      syncSpotlightUploadButtonState();
+    }
+
+    function resetSpotlightImageFields() {
+      revokePendingSpotlightPreview();
+      $('#spotlightImageUrl').value = '';
+      $('#spotlightImageUpdatedAt').value = '';
+      $('#spotlightImageFile').value = '';
+      setSpotlightImageMsg('');
+      updateSpotlightImagePreview();
+    }
+
+    function loadSpotlightImageFields(article = {}) {
+      revokePendingSpotlightPreview();
+      $('#spotlightImageUrl').value = String(
+        article.spotlightImageUrl || article.spotlight_image_url || ''
+      ).split('?')[0];
+      $('#spotlightImageUpdatedAt').value =
+        article.spotlightImageUpdatedAt || article.spotlight_image_updated_at || '';
+      $('#spotlightImageFile').value = '';
+      setSpotlightImageMsg('');
+      updateSpotlightImagePreview();
+    }
+
+    function onSpotlightImageFileSelected() {
+      const file = $('#spotlightImageFile')?.files?.[0];
+      revokePendingSpotlightPreview();
+      syncSpotlightUploadButtonState();
+      if (!file) {
+        updateSpotlightImagePreview();
+        return;
+      }
+      if (!/\.png$/i.test(file.name) && file.type !== 'image/png') {
+        setSpotlightImageMsg('Only PNG files are supported.', true);
+        $('#spotlightImageFile').value = '';
+        syncSpotlightUploadButtonState();
+        updateSpotlightImagePreview();
+        return;
+      }
+      pendingSpotlightPreviewUrl = URL.createObjectURL(file);
+      updateSpotlightImagePreview();
+      setSpotlightImageMsg(`Selected ${file.name}. Click Upload Spotlight Image to save.`);
+    }
+
+    async function uploadSpotlightImage() {
+      const file = $('#spotlightImageFile')?.files?.[0];
+      if (!file) {
+        setSpotlightImageMsg('Choose a PNG file first.', true);
+        return;
+      }
+
+      const uploadBtn = $('#uploadSpotlightImageBtn');
+      if (uploadBtn) uploadBtn.disabled = true;
+      setSpotlightImageMsg('Uploading spotlight image...');
+
+      try {
+        const imageBase64 = await readFileAsDataUrl(file);
+        const payload = {
+          action: 'spotlight-image',
+          password: getSessionPw(),
+          imageBase64,
+          draftKey: ensureArticleDraftKey(),
+        };
+        const articleId = Number($('#articleId').value);
+        if (articleId) payload.articleId = articleId;
+
+        const uploadRes = await fetch('/api/uploads', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const uploadData = await parseJsonResponse(uploadRes);
+        const storedUrl = String(
+          uploadData.spotlightImageUrlStored || uploadData.spotlightImageUrl || ''
+        ).split('?')[0];
+        if (!storedUrl) throw new Error('Upload succeeded but no image URL was returned.');
+
+        const updatedAt = uploadData.spotlightImageUpdatedAt || new Date().toISOString();
+        $('#spotlightImageUrl').value = storedUrl;
+        $('#spotlightImageUpdatedAt').value = updatedAt;
+        revokePendingSpotlightPreview();
+        $('#spotlightImageFile').value = '';
+        updateSpotlightImagePreview();
+        setSpotlightImageMsg('Spotlight image uploaded. Save the article to persist.');
+      } catch (e) {
+        setSpotlightImageMsg(e.message, true);
+      } finally {
+        syncSpotlightUploadButtonState();
+      }
+    }
+
+    async function removeSpotlightImage() {
+      if (!$('#spotlightImageUrl')?.value.trim()) return;
+      if (!confirm('Remove the custom spotlight image? The article will fall back to driver photos.')) {
+        return;
+      }
+
+      const removeBtn = $('#removeSpotlightImageBtn');
+      if (removeBtn) removeBtn.disabled = true;
+      setSpotlightImageMsg('Removing spotlight image...');
+
+      try {
+        const payload = {
+          action: 'remove-spotlight-image',
+          password: getSessionPw(),
+          draftKey: ensureArticleDraftKey(),
+        };
+        const articleId = Number($('#articleId').value);
+        if (articleId) payload.articleId = articleId;
+
+        const res = await fetch('/api/uploads', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await parseJsonResponse(res);
+        if (!res.ok) throw new Error(data.error || 'Remove failed.');
+
+        $('#spotlightImageUrl').value = '';
+        $('#spotlightImageUpdatedAt').value = '';
+        revokePendingSpotlightPreview();
+        $('#spotlightImageFile').value = '';
+        updateSpotlightImagePreview();
+        setSpotlightImageMsg('Custom spotlight image removed. Fallback image is now active.');
+      } catch (e) {
+        setSpotlightImageMsg(e.message, true);
+      } finally {
+        syncSpotlightUploadButtonState();
+      }
+    }
+
       if (pendingArticlePreviewUrl) {
         URL.revokeObjectURL(pendingArticlePreviewUrl);
         pendingArticlePreviewUrl = null;
@@ -683,6 +892,10 @@
     $('#featuredImageUrl')?.addEventListener('input', updateArticleImagePreview);
     $('#articleImageFile')?.addEventListener('change', onArticleImageFileSelected);
     $('#uploadArticleImageBtn')?.addEventListener('click', uploadArticleImage);
+    $('#spotlightImageFile')?.addEventListener('change', onSpotlightImageFileSelected);
+    $('#uploadSpotlightImageBtn')?.addEventListener('click', uploadSpotlightImage);
+    $('#removeSpotlightImageBtn')?.addEventListener('click', removeSpotlightImage);
+    $('#spotlightDriverId')?.addEventListener('change', updateSpotlightImagePreview);
 
     async function login() {
       const msg = $('#loginMsg');
@@ -723,10 +936,13 @@
         const data = await res.json();
         drivers = Array.isArray(data) ? data : [];
         const select = $('#spotlightDriverId');
+        const current = select?.value || '';
         select.innerHTML = '<option value="">—</option>' + drivers.map((d) => {
           const name = d.display_name || d.iracing_name || 'Unknown';
           return `<option value="${d.driver_id}">${name}</option>`;
         }).join('');
+        if (current) select.value = current;
+        if (isDriverSpotlightType()) updateSpotlightImagePreview();
       } catch {}
     }
 
@@ -765,6 +981,7 @@
       $('#body').value = '';
       $('#headlineOverride').value = '';
       resetArticleImageFields();
+      resetSpotlightImageFields();
       $('#previewLink').hidden = true;
       setMsg('');
     }
@@ -789,6 +1006,7 @@
         $('#summary').value = a.summary || '';
         $('#body').value = a.body || '';
         loadArticleImageFields(a);
+        loadSpotlightImageFields(a);
         const preview = $('#previewLink');
         if (a.slug) {
           preview.href = `/news/${encodeURIComponent(a.slug)}`;
@@ -812,17 +1030,24 @@
       const raceInput = $('#raceNumber');
       const raceHint = $('#raceNumberHint');
       const driverLabel = $('#spotlightDriverLabel');
+      const articleImagePanel = $('#articleImagePanel');
+      const spotlightImagePanel = $('#spotlightImagePanel');
 
       if (spotlight) {
         raceInput.value = '';
         raceField.classList.add('field-disabled');
         raceHint.hidden = false;
         driverLabel.textContent = 'Spotlight Driver (required)';
+        if (articleImagePanel) articleImagePanel.hidden = true;
+        if (spotlightImagePanel) spotlightImagePanel.hidden = false;
+        updateSpotlightImagePreview();
       } else {
         if (!raceInput.value) raceInput.value = '1';
         raceField.classList.remove('field-disabled');
         raceHint.hidden = true;
         driverLabel.textContent = 'Driver (optional)';
+        if (articleImagePanel) articleImagePanel.hidden = false;
+        if (spotlightImagePanel) spotlightImagePanel.hidden = true;
       }
     }
 
@@ -843,6 +1068,10 @@
         featuredImageY: Number($('#articleImageY').value),
         featuredImageUpdatedAt: $('#featuredImageUpdatedAt').value || undefined,
       };
+      if (spotlight) {
+        payload.spotlightImageUrl = $('#spotlightImageUrl').value.trim();
+        payload.spotlightImageUpdatedAt = $('#spotlightImageUpdatedAt').value || undefined;
+      }
       if (!spotlight) {
         payload.raceNumber = Number($('#raceNumber').value) || undefined;
       }
@@ -993,6 +1222,7 @@
         $('#articleId').value = data.id;
         if (data.id) {
           loadArticleImageFields(data);
+          loadSpotlightImageFields(data);
         }
         if (data.slug) {
           const preview = $('#previewLink');
