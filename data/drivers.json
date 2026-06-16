@@ -1,6 +1,14 @@
 {
   "drivers": [
     {
+      "name": "Mark Arthur",
+      "iracingName": "Mark Arthur",
+      "carNumber": "12",
+      "iracingCustomerId": 91227,
+      "slug": "mark-arthur",
+      "carImage": "/assets/images/cars/Mark Arthur.png"
+    },
+    {
       "name": "Cody Gibson",
       "iracingName": "Cody Gibson",
       "carNumber": "7",
@@ -41,20 +49,20 @@
       "carImage": "/assets/images/cars/Dalton Kilroe.png"
     },
     {
-      "name": "Brian Zimmerman",
+      "name": "Brian Zimmerman3",
       "iracingName": "Brian Zimmerman",
       "carNumber": "28",
       "iracingCustomerId": 327558,
-      "slug": "brian-zimmerman",
-      "carImage": "/assets/images/cars/Brian Zimmerman.png"
+      "slug": "brian-zimmerman3",
+      "carImage": "/assets/images/cars/Brian Zimmerman3.png"
     },
     {
-      "name": "Michael Boone",
+      "name": "Michael Boone2",
       "iracingName": "Michael Boone",
       "carNumber": "15",
       "iracingCustomerId": 842668,
-      "slug": "michael-boone",
-      "carImage": "/assets/images/cars/Michael Boone.png"
+      "slug": "michael-boone2",
+      "carImage": "/assets/images/cars/Michael Boone2.png"
     },
     {
       "name": "Chris Carroll3",
@@ -105,12 +113,12 @@
       "carImage": "/assets/images/cars/William Bruton.png"
     },
     {
-      "name": "Trevor Harmon",
+      "name": "Trevor Harmon2",
       "iracingName": "Trevor Harmon",
       "carNumber": "16",
       "iracingCustomerId": 230095,
-      "slug": "trevor-harmon",
-      "carImage": "/assets/images/cars/Trevor Harmon.png"
+      "slug": "trevor-harmon2",
+      "carImage": "/assets/images/cars/Trevor Harmon2.png"
     },
     {
       "name": "Scotty Stevens",
@@ -137,20 +145,12 @@
       "carImage": "/assets/images/cars/Logan M Wilson.png"
     },
     {
-      "name": "Matthew Kleinschmidt",
+      "name": "Matthew Kleinschmidt2",
       "iracingName": "Matthew Kleinschmidt",
       "carNumber": "59",
       "iracingCustomerId": 269720,
-      "slug": "matthew-kleinschmidt",
-      "carImage": "/assets/images/cars/Matthew Kleinschmidt.png"
-    },
-    {
-      "name": "Mark Arthur",
-      "iracingName": "Mark Arthur",
-      "carNumber": "12",
-      "iracingCustomerId": 91227,
-      "slug": "mark-arthur",
-      "carImage": "/assets/images/cars/Mark Arthur.png"
+      "slug": "matthew-kleinschmidt2",
+      "carImage": "/assets/images/cars/Matthew Kleinschmidt2.png"
     }
   ]
 }

@@ -115,12 +115,20 @@ function renderDrivers(drivers, standingsLookup) {
           <div class="driver-card-media">
             <img src="${escapeHtml(photo)}" alt="" onerror="this.onerror=null;this.src='/assets/drivers/placeholder.png'" />
           </div>
-          <div class="driver-card-body">
-            <h2>${number}${escapeHtml(name)}</h2>
-            ${d.iracing_name && d.iracing_name !== name ? `<p class="muted">${escapeHtml(d.iracing_name)}</p>` : ""}
-          </div>
         </a>
-        ${badge}
+        <div class="driver-card-body">
+          <div class="driver-card-title-row">
+            <a class="driver-card-name-link" href="${escapeAttr(profileUrl)}">
+              <h2>${number}${escapeHtml(name)}</h2>
+            </a>
+            ${badge}
+          </div>
+          ${
+            d.iracing_name && d.iracing_name !== name
+              ? `<a class="driver-card-name-link" href="${escapeAttr(profileUrl)}"><p class="muted">${escapeHtml(d.iracing_name)}</p></a>`
+              : ""
+          }
+        </div>
       </article>`;
     })
     .join("");
