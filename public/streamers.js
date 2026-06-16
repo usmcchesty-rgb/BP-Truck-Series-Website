@@ -28,8 +28,12 @@ function inferPlatform(url) {
   return "Live Stream";
 }
 
-function streamerBadgeHtml() {
-  return `<span class="streamer-badge">STREAMER</span>`;
+function streamerBadgeHtml(streamUrl) {
+  const badge = `<span class="streamer-badge">STREAMER</span>`;
+  const url = String(streamUrl || "").trim();
+  if (!url) return badge;
+
+  return `<a class="streamer-badge-link" href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer" aria-label="Watch stream">${badge}</a>`;
 }
 
 function renderStreamers(streamers) {
@@ -56,8 +60,8 @@ function renderStreamers(streamers) {
         : "";
 
       return `<article class="streamer-card">
+        ${streamerBadgeHtml(streamUrl)}
         <div class="streamer-card-media">
-          ${streamerBadgeHtml()}
           <img src="${escapeHtml(photo)}" alt="" onerror="this.onerror=null;this.src='/assets/drivers/placeholder.png'" />
         </div>
         <div class="streamer-card-body">
