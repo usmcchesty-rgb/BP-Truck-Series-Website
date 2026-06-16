@@ -439,6 +439,7 @@ function updateViewportHeight() {
   const topbar = $(".topbar");
   const head = $(".streamview-head");
   const nav = $("#streamviewNav");
+  const page = $(".streamview-page");
   const footer = document.querySelector("footer");
 
   const topbarH = topbar?.offsetHeight || 0;
@@ -446,11 +447,16 @@ function updateViewportHeight() {
   const navH = nav?.offsetHeight || 0;
   const footerH = footer?.offsetHeight || 0;
   const mainStyles = window.getComputedStyle(main);
+  const pageStyles = page ? window.getComputedStyle(page) : null;
   const padTop = parseFloat(mainStyles.paddingTop) || 0;
   const padBottom = parseFloat(mainStyles.paddingBottom) || 0;
-  const reserved = topbarH + headH + navH + footerH + padTop + padBottom + 4;
+  const pagePad =
+    (parseFloat(pageStyles?.paddingTop) || 0) + (parseFloat(pageStyles?.paddingBottom) || 0);
+  const reserved = topbarH + headH + navH + footerH + padTop + padBottom + pagePad + 4;
+  const gridH = Math.max(320, window.innerHeight - reserved);
 
   document.documentElement.style.setProperty("--streamview-chrome", `${reserved}px`);
+  document.documentElement.style.setProperty("--streamview-grid-h", `${gridH}px`);
 }
 
 function bindGlobalEvents() {

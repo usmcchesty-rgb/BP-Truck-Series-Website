@@ -903,13 +903,13 @@ function driverNameSizeClasses(name) {
       : len > 18
         ? "driver-profile-name--long"
         : "";
-  const stackClass =
+  const nameStackClass =
     len > 24
-      ? "driver-profile-identity-namestack--very-long"
+      ? "driver-profile-name-stack--very-long"
       : len > 18
-        ? "driver-profile-identity-namestack--long"
+        ? "driver-profile-name-stack--long"
         : "";
-  return { nameClass, stackClass };
+  return { nameClass, nameStackClass };
 }
 
 function renderProfile(profile, stats, seasonLabel, carImageUrl = "") {
@@ -920,9 +920,9 @@ function renderProfile(profile, stats, seasonLabel, carImageUrl = "") {
   const photo =
     profile.photoUrl || profile.photo_url || driverImage(name);
   const number = String(profile.car_number || "").trim();
-  const { nameClass, stackClass } = driverNameSizeClasses(name);
+  const { nameClass, nameStackClass } = driverNameSizeClasses(name);
   const nameClasses = ["driver-profile-name", nameClass].filter(Boolean).join(" ");
-  const stackClasses = ["driver-profile-identity-namestack", stackClass]
+  const nameStackClasses = ["driver-profile-name-stack", nameStackClass]
     .filter(Boolean)
     .join(" ");
 
@@ -942,7 +942,7 @@ function renderProfile(profile, stats, seasonLabel, carImageUrl = "") {
       </div>
       <div class="driver-profile-hero-info${carImageUrl ? " driver-profile-hero-info--with-car" : ""}">
         <div class="driver-profile-identity">
-          <div class="${escapeAttr(stackClasses)}">
+          <div class="driver-profile-identity-namestack">
             <div class="driver-profile-identity-titlerow">
               ${
                 number
@@ -950,15 +950,21 @@ function renderProfile(profile, stats, seasonLabel, carImageUrl = "") {
                   : ""
               }
               <div class="driver-profile-identity-namecol">
-                <div class="driver-profile-identity-text">
-                  ${renderCarImageHeroSection(carImageUrl, name)}
-                  <h1 class="${escapeAttr(nameClasses)}">${escapeHtml(name)}</h1>
-                  ${
-                    profile.iracing_name && profile.iracing_name !== name
-                      ? `<p class="driver-profile-alias">${escapeHtml(profile.iracing_name)}</p>`
-                      : ""
-                  }
-                </div>
+                ${
+                  carImageUrl
+                    ? `<div class="${escapeAttr(nameStackClasses)}">
+                        ${renderCarImageHeroSection(carImageUrl, name)}
+                        <h1 class="${escapeAttr(nameClasses)}">${escapeHtml(name)}</h1>
+                      </div>`
+                    : `<div class="driver-profile-identity-text">
+                        <h1 class="${escapeAttr(nameClasses)}">${escapeHtml(name)}</h1>
+                      </div>`
+                }
+                ${
+                  profile.iracing_name && profile.iracing_name !== name
+                    ? `<p class="driver-profile-alias">${escapeHtml(profile.iracing_name)}</p>`
+                    : ""
+                }
               </div>
             </div>
           </div>
