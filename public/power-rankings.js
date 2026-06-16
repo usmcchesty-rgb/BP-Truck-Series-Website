@@ -1,5 +1,7 @@
 const $ = (s) => document.querySelector(s);
 
+let currentWeek = null;
+
 function escapeHtml(s) {
   return String(s)
     .replace(/&/g, "&amp;")
@@ -132,7 +134,45 @@ function renderProphetTake(week) {
   if (signature) signature.hidden = !week?.entries?.length;
 }
 
+function setDiscordExportVisible(visible) {
+  const btn = $("#prDiscordExportBtn");
+  const status = $("#prDiscordExportStatus");
+  if (btn) btn.hidden = !visible;
+  if (!visible && status) status.hidden = true;
+}
+
+function setDiscordExportStatus(text, state = "") {
+  const status = $("#prDiscordExportStatus");
+  if (!status) return;
+  status.textContent = text || "";
+  status.hidden = !text;
+  status.classList.toggle("is-busy", state === "busy");
+  status.classList.toggle("is-error", state === "error");
+}
+
+async function exportDiscordImage() {
+  const btn = $("#prDiscordExportBtn");
+  if (!currentWeek?.entries?.length) {
+    setDiscordExportStatus("No rankings available to export.", "error");
+    return;
+  }
+
+  if (btn) btn.disabled = true;
+  setDiscordExportStatus("Preparing Discord image…", "busy");
+
+  try {
+    await BPPowerRankingsDiscordExport.exportWeek(currentWeek);
+    setDiscordExportStatus("Download started.", "");
+  } catch (error) {
+    console.warn("Discord export failed:", error);
+    setDiscordExportStatus(error.message || "Export failed.", "error");
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 function renderWeek(week, archive) {
+  currentWeek = week?.entries?.length ? week : null;
   const listEl = $("#prList");
   const rankingsBlock = $("#prRankingsBlock");
   const emptyEl = $("#prEmpty");
@@ -147,11 +187,14 @@ function renderWeek(week, archive) {
     renderProphetTake(null);
     renderHeader(null);
     renderArchive(archive, null);
+    setDiscordExportVisible(false);
     return;
   }
 
   if (emptyEl) emptyEl.hidden = true;
   if (rankingsBlock) rankingsBlock.hidden = false;
+  setDiscordExportVisible(true);
+  setDiscordExportStatus("");
   renderHeader(week);
   renderProphetTake(week);
   if (listEl) listEl.innerHTML = week.entries.map(renderEntry).join("");
@@ -201,3 +244,5 @@ async function loadPowerRankings() {
 }
 
 loadPowerRankings();
+
+document.getElementById("prDiscordExportBtn")?.addEventListener("click", exportDiscordImage);

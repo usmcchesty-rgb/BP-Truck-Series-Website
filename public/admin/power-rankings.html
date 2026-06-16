@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Power Rankings Admin</title>
   <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/power-rankings-discord-export.css">
   <style>
     .wrap { padding: 18px; max-width: 1200px; margin: 0 auto; }
     .sub { color: var(--muted); font-size: 12px; margin-bottom: 16px; line-height: 1.45; }
@@ -17,7 +18,7 @@
     .btn-secondary { background: linear-gradient(#1c1c1c, #080808); }
     .btn-danger { background: linear-gradient(#5a1010, #2a0505); border-color: #733; }
     #adminMsg, #loginMsg { margin-top: 10px; font-size: 12px; color: #ccc; white-space: pre-wrap; }
-    #adminMsg.error, #loginMsg.error { color: #ff6060; }
+    #adminMsg.error, #loginMsg.error, #discordExportStatus.error { color: #ff6060; }
     .transcript-diagnostics {
       margin-top: 12px;
       padding: 10px 12px;
@@ -270,8 +271,10 @@
       <div class="btn-row">
         <button class="btn" type="button" onclick="saveWeek(false)">Save Draft</button>
         <button class="btn" type="button" onclick="saveWeek(true)">Publish Rankings</button>
+        <button id="discordExportBtn" class="btn btn-secondary" type="button" onclick="exportDiscordImage()">Export for Discord</button>
         <button class="btn btn-danger" type="button" onclick="deleteWeek()">Delete Week</button>
       </div>
+      <p id="discordExportStatus" class="sub" hidden></p>
       <pre id="adminMsg"></pre>
       <div id="generationSourcesPanel" class="generation-sources" hidden>
         <h3>Generation Sources</h3>
@@ -288,6 +291,7 @@
     const $ = (s) => document.querySelector(s);
     const SESSION_KEY = 'bp_admin_pw';
     let driverOptions = [];
+    let driverProfilesById = {};
     let currentWeekId = null;
     let savedWeeks = [];
     let suggestedRaceNumber = 1;
@@ -1387,6 +1391,7 @@
       const profileById = Object.fromEntries(
         (Array.isArray(profiles) ? profiles : []).map((p) => [String(p.driver_id), p])
       );
+      driverProfilesById = profileById;
 
       driverOptions = (standingsData.rows || []).map((row) => {
         const profile = profileById[String(row.driverId)] || null;
@@ -1677,10 +1682,58 @@
       }
     }
 
+    function setDiscordExportStatus(text, isError = false) {
+      const status = $('#discordExportStatus');
+      if (!status) return;
+      status.textContent = text || '';
+      status.hidden = !text;
+      status.classList.toggle('error', isError);
+    }
+
+    async function exportDiscordImage() {
+      const btn = $('#discordExportBtn');
+      const formData = collectFormData();
+      if (!formData.raceNumber) {
+        setDiscordExportStatus('Enter a valid race number before exporting.', true);
+        return;
+      }
+
+      let profileById = driverProfilesById;
+      if (!Object.keys(profileById).length) {
+        try {
+          const res = await fetch('/api/drivers');
+          const profiles = await res.json();
+          profileById = Object.fromEntries(
+            (Array.isArray(profiles) ? profiles : []).map((p) => [String(p.driver_id), p])
+          );
+        } catch {}
+      }
+
+      const week = BPPowerRankingsDiscordExport.buildWeekFromAdminForm(
+        formData,
+        driverOptions,
+        profileById
+      );
+
+      if (btn) btn.disabled = true;
+      setDiscordExportStatus('Preparing Discord image…');
+
+      try {
+        await BPPowerRankingsDiscordExport.exportWeek(week);
+        setDiscordExportStatus('Download started.');
+      } catch (e) {
+        setDiscordExportStatus(e.message || 'Export failed.', true);
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
     initSession();
 
     $('#raceNumber')?.addEventListener('input', refreshSavedTranscriptStatus);
     $('#raceNumber')?.addEventListener('change', refreshSavedTranscriptStatus);
   </script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="/power-rankings-discord-export.js"></script>
 </body>
 </html>

@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Blazing Pedals Truck Series — The Pedal Prophet Power Rankings</title>
     <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/power-rankings-discord-export.css" />
   </head>
   <body>
     <div class="page-bg"></div>
@@ -73,6 +74,12 @@
                   <p class="power-rankings-date" id="prPublishedDate"></p>
                 </div>
               </div>
+              <div class="power-rankings-export-row">
+                <button id="prDiscordExportBtn" class="btn btn-secondary" type="button" hidden>
+                  Export for Discord
+                </button>
+                <span id="prDiscordExportStatus" class="power-rankings-export-status" hidden></span>
+              </div>
               <div id="prList" class="power-rankings-list"></div>
             </div>
 
@@ -117,6 +124,8 @@
         right: "tagline",
       });
     </script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <script src="/power-rankings-discord-export.js"></script>
     <script src="/power-rankings.js"></script>
   </body>
 </html>

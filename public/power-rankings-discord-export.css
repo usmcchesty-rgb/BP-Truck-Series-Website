@@ -1,0 +1,236 @@
+/* Off-screen host for html2canvas capture — not visible on page */
+.pr-discord-export-host {
+  position: fixed;
+  left: -18000px;
+  top: 0;
+  z-index: -9999;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.pr-discord-export-root {
+  position: relative;
+  width: 1600px;
+  box-sizing: border-box;
+  padding: 44px 48px 56px;
+  background: linear-gradient(180deg, #121212 0%, #060606 100%);
+  color: #f4f4f4;
+  font-family: Arial Narrow, Roboto Condensed, Impact, Arial, sans-serif;
+  letter-spacing: 0.2px;
+}
+
+.pr-discord-export-banner {
+  margin: 0 0 28px;
+}
+
+.pr-discord-export-kicker {
+  margin: 0;
+  font-size: 52px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #fff;
+  line-height: 1;
+  text-shadow: 0 2px 18px rgba(229, 9, 20, 0.18);
+}
+
+.pr-discord-export-race-line {
+  margin: 14px 0 0;
+  font-size: 22px;
+  font-weight: 700;
+  font-style: italic;
+  color: #ececec;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+}
+
+.pr-discord-export-presented {
+  margin: 18px 0 0;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #9a9a9a;
+}
+
+.pr-discord-export-published {
+  margin: 8px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #777;
+}
+
+.pr-discord-export-divider {
+  margin-top: 22px;
+  height: 3px;
+  width: 100%;
+  background: linear-gradient(
+    90deg,
+    #e50914 0%,
+    rgba(229, 9, 20, 0.45) 38%,
+    rgba(229, 9, 20, 0.12) 72%,
+    transparent 100%
+  );
+  border-radius: 2px;
+}
+
+.pr-discord-export-root .power-rankings-list {
+  display: grid;
+  gap: 12px;
+}
+
+.pr-discord-export-root .power-ranking-card {
+  display: grid;
+  grid-template-columns: 56px 120px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+  padding: 16px;
+  border: 1px solid #353535;
+  background: linear-gradient(180deg, rgba(12, 12, 12, 0.95) 0%, rgba(6, 6, 6, 0.95) 100%);
+  border-radius: 6px;
+}
+
+.pr-discord-export-root .power-ranking-card-first {
+  border-color: #ffd23f;
+  box-shadow: 0 0 16px rgba(255, 210, 63, 0.18);
+}
+
+.pr-discord-export-root .power-ranking-rank {
+  font-size: 28px;
+  font-weight: 900;
+  color: #e50914;
+  line-height: 1;
+  padding-top: 8px;
+}
+
+.pr-discord-export-root .power-ranking-photo {
+  width: 100%;
+  max-width: 120px;
+  height: 140px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 8px #000);
+}
+
+.pr-discord-export-root .power-ranking-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.pr-discord-export-root .power-ranking-title-row h3 {
+  margin: 0;
+  font-size: 22px;
+  font-style: italic;
+  color: #fff;
+}
+
+.pr-discord-export-root .num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  min-width: 34px;
+  height: 18px;
+  padding: 0 6px;
+  margin-left: 6px;
+  margin-right: 6px;
+  line-height: 1;
+  clip-path: polygon(5px 0, 100% 0, calc(100% - 5px) 100%, 0 100%);
+}
+
+.pr-discord-export-root .power-ranking-movement {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 46px;
+  padding: 3px 9px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 900;
+  color: #aaa;
+  white-space: nowrap;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  flex-shrink: 0;
+}
+
+.pr-discord-export-root .power-ranking-movement.positive {
+  color: #45d65a;
+  border-color: rgba(0, 200, 83, 0.28);
+  background: rgba(0, 200, 83, 0.08);
+}
+
+.pr-discord-export-root .power-ranking-movement.negative {
+  color: #ff2323;
+  border-color: rgba(255, 35, 35, 0.28);
+  background: rgba(255, 35, 35, 0.08);
+}
+
+.pr-discord-export-root .power-ranking-movement.new {
+  color: #93c5fd;
+  border-color: rgba(96, 165, 250, 0.35);
+  background: rgba(96, 165, 250, 0.1);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.pr-discord-export-root .power-ranking-subtitle {
+  margin: 8px 0 0;
+  color: #ffd23f;
+  font-size: 15px;
+  font-weight: 900;
+  font-style: italic;
+}
+
+.pr-discord-export-root .power-ranking-writeup {
+  margin: 10px 0 0;
+  color: #ccc;
+  font-size: 14px;
+  line-height: 1.52;
+  font-weight: 400;
+}
+
+.pr-discord-export-brand-footer {
+  position: absolute;
+  right: 48px;
+  bottom: 22px;
+  margin: 0;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #fff;
+  opacity: 0.12;
+  pointer-events: none;
+  user-select: none;
+}
+
+.power-rankings-export-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 0 0 18px;
+}
+
+.power-rankings-export-row .btn {
+  font-size: 12px;
+  padding: 8px 14px;
+}
+
+.power-rankings-export-status {
+  font-size: 12px;
+  color: #888;
+}
+
+.power-rankings-export-status.is-busy {
+  color: #ccc;
+}
+
+.power-rankings-export-status.is-error {
+  color: #ff6060;
+}
