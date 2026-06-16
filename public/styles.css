@@ -1429,12 +1429,12 @@ a.home-news-item:hover h4{color:#fff}
   width:100%;
   display:flex;
   justify-content:center;
-  margin-top:16px;
+  margin:16px 0 0;
 }
 .driver-profile-car-hero{
   margin:0 0 6px;
   width:100%;
-  max-width:605px;
+  max-width:100%;
 }
 .driver-profile-car-hero-inner{
   display:flex;
@@ -1445,7 +1445,7 @@ a.home-news-item:hover h4{color:#fff}
 .driver-profile-car-hero-image{
   display:block;
   width:100%;
-  max-width:605px;
+  max-width:100%;
   max-height:198px;
   height:auto;
   object-fit:contain;
@@ -1478,20 +1478,21 @@ a.home-news-item:hover h4{color:#fff}
 .driver-profile-identity-namecol{
   display:flex;
   flex-direction:column;
-  align-items:center;
+  align-items:flex-start;
+  min-width:0;
+  flex:0 1 auto;
+}
+.driver-profile-identity-namestack .driver-profile-identity-text,
+.driver-profile-identity-namecol .driver-profile-identity-text{
+  display:inline-flex;
+  flex-direction:column;
+  align-items:stretch;
   width:fit-content;
   max-width:min(840px,100%);
   min-width:0;
 }
-.driver-profile-identity-namecol .driver-profile-car-wrap{
-  align-self:stretch;
-}
-.driver-profile-identity-namestack .driver-profile-identity-text,
-.driver-profile-identity-namecol .driver-profile-identity-text{
-  flex:0 1 auto;
+.driver-profile-identity-namecol .driver-profile-identity-text > .driver-profile-name{
   width:100%;
-  max-width:min(840px,100%);
-  align-self:stretch;
 }
 .driver-profile-hero{
   display:grid;
@@ -1542,7 +1543,7 @@ a.home-news-item:hover h4{color:#fff}
   flex-shrink:0;
   align-self:flex-end;
 }
-.driver-profile-identity-text{min-width:0;flex:1 1 auto}
+.driver-profile-identity-text{min-width:0}
 .driver-profile-name{
   margin:0;
   font-size:clamp(34px,5vw,56px);
@@ -1987,11 +1988,11 @@ a.home-news-item:hover h4{color:#fff}
   display:none;
 }
 .streamview-main{
-  padding:0 20px 12px;
-  max-width:1600px;
+  padding:0 1vw 2px;
+  width:min(1800px,98vw);
+  max-width:none;
   margin:0 auto;
-  width:100%;
-  height:calc(100vh - var(--streamview-chrome, 200px));
+  height:calc(100vh - var(--streamview-chrome, 168px));
   min-height:0;
   box-sizing:border-box;
 }
@@ -2000,57 +2001,55 @@ a.home-news-item:hover h4{color:#fff}
   flex-direction:column;
   height:100%;
   min-height:0;
-  padding:8px 12px 10px;
+  padding:2px 4px 4px;
   border:0;
   background:transparent;
   box-shadow:none;
 }
 .streamview-head{
   flex:0 0 auto;
-  margin-bottom:6px;
-}
-.streamview-head h2{
-  margin-bottom:4px;
+  margin:0 0 2px;
 }
 .streamview-intro{
-  margin-bottom:0;
-  max-width:900px;
-  font-size:12px;
-  line-height:1.45;
+  margin:0;
+  max-width:none;
+  font-size:11px;
+  line-height:1.35;
+  color:#aaa;
 }
 .streamview-nav{
   display:flex;
   align-items:center;
-  gap:10px;
+  gap:8px;
   flex:0 0 auto;
   overflow-x:auto;
-  padding:6px 2px 10px;
-  margin-bottom:8px;
+  padding:4px 0 6px;
+  margin-bottom:4px;
   border-bottom:1px solid rgba(255,255,255,.08);
   scrollbar-width:thin;
 }
 .streamview-nav-status{
   flex:0 0 auto;
-  padding:6px 10px;
+  padding:4px 8px;
   border:1px solid rgba(229,9,20,.45);
-  border-radius:4px;
+  border-radius:3px;
   background:rgba(20,0,0,.35);
   color:#fff;
-  font-size:9px;
+  font-size:8px;
   font-weight:900;
   letter-spacing:.08em;
   text-transform:uppercase;
   white-space:nowrap;
-  box-shadow:0 0 10px rgba(229,9,20,.15);
+  box-shadow:0 0 8px rgba(229,9,20,.12);
 }
 .streamview-nav-btn{
   flex:0 0 auto;
-  padding:7px 12px;
+  padding:5px 10px;
   border:1px solid #333;
-  border-radius:4px;
+  border-radius:3px;
   background:linear-gradient(#161616,#0a0a0a);
   color:#ddd;
-  font-size:10px;
+  font-size:9px;
   font-weight:900;
   letter-spacing:.04em;
   text-transform:uppercase;
@@ -2072,10 +2071,17 @@ a.home-news-item:hover h4{color:#fff}
 }
 .streamview-grid{
   display:grid;
-  gap:10px;
+  gap:6px;
   flex:1 1 auto;
   min-height:0;
   height:100%;
+}
+.streamview-page:has(.streamview-grid--maximized) .streamview-head{
+  display:none;
+}
+.streamview-page:has(.streamview-grid--maximized) .streamview-nav{
+  margin-bottom:2px;
+  padding-bottom:4px;
 }
 .streamview-grid--quad{
   grid-template-columns:repeat(2,minmax(0,1fr));
@@ -2138,21 +2144,21 @@ a.home-news-item:hover h4{color:#fff}
   display:flex;
   align-items:center;
   justify-content:space-between;
-  gap:8px;
+  gap:6px;
   flex:0 0 auto;
-  padding:6px 10px;
+  padding:3px 8px;
   border-bottom:1px solid rgba(255,255,255,.08);
   background:rgba(0,0,0,.45);
 }
 .streamview-panel-title{
   margin:0;
-  font-size:11px;
+  font-size:10px;
   font-weight:900;
   font-style:italic;
   text-transform:uppercase;
   color:#fff;
   min-width:0;
-  line-height:1.25;
+  line-height:1.2;
 }
 .streamview-slot-label{
   color:#888;
@@ -2202,10 +2208,10 @@ a.home-news-item:hover h4{color:#fff}
   border:1px solid #444;
   background:#111;
   color:#ccc;
-  width:22px;
-  height:22px;
+  width:20px;
+  height:20px;
   border-radius:3px;
-  font-size:11px;
+  font-size:10px;
   line-height:1;
   cursor:pointer;
   padding:0;
@@ -2329,7 +2335,8 @@ a.home-news-item:hover h4{color:#fff}
   .pedal-prophet-season{margin-top:4px;margin-bottom:3px}
   .pedal-prophet-tagline{font-size:12px;line-height:1.4}
   .streamview-main{
-    padding:0 16px 10px;
+    padding:0 1vw 8px;
+    width:100%;
     height:auto;
     min-height:calc(100vh - 120px);
   }

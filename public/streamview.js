@@ -448,7 +448,7 @@ function updateViewportHeight() {
   const mainStyles = window.getComputedStyle(main);
   const padTop = parseFloat(mainStyles.paddingTop) || 0;
   const padBottom = parseFloat(mainStyles.paddingBottom) || 0;
-  const reserved = topbarH + headH + navH + footerH + padTop + padBottom + 12;
+  const reserved = topbarH + headH + navH + footerH + padTop + padBottom + 4;
 
   document.documentElement.style.setProperty("--streamview-chrome", `${reserved}px`);
 }

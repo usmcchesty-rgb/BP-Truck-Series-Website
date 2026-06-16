@@ -950,8 +950,8 @@ function renderProfile(profile, stats, seasonLabel, carImageUrl = "") {
                   : ""
               }
               <div class="driver-profile-identity-namecol">
-                ${renderCarImageHeroSection(carImageUrl, name)}
                 <div class="driver-profile-identity-text">
+                  ${renderCarImageHeroSection(carImageUrl, name)}
                   <h1 class="${escapeAttr(nameClasses)}">${escapeHtml(name)}</h1>
                   ${
                     profile.iracing_name && profile.iracing_name !== name
