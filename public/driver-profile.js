@@ -1143,13 +1143,39 @@ function driverNameSizeClasses(name) {
   return { nameClass, nameStackClass };
 }
 
+function renderHeroPhoto(profile, name) {
+  const standing = window.BPDriverStandingPhoto;
+  if (standing?.hasStandingPhoto(profile)) {
+    const url = standing.displayUrl(profile);
+    const style = standing.cropStyle(profile);
+    return `<div class="driver-profile-hero-media driver-profile-hero-media--standing">
+      <div class="driver-profile-standing-photo-wrap" style="${escapeAttr(style)}">
+        <img
+          class="driver-profile-standing-photo"
+          src="${escapeAttr(url)}"
+          alt="${escapeAttr(name)}"
+          onerror="this.onerror=null;this.src='${PLACEHOLDER_PHOTO}'"
+        />
+      </div>
+    </div>`;
+  }
+
+  const photo = profile.photoUrl || profile.photo_url || driverImage(name);
+  return `<div class="driver-profile-hero-media">
+    <img
+      class="driver-profile-photo"
+      src="${escapeHtml(photo)}"
+      alt="${escapeHtml(name)}"
+      onerror="this.onerror=null;this.src='${PLACEHOLDER_PHOTO}'"
+    />
+  </div>`;
+}
+
 function renderProfile(profile, stats, seasonLabel, carImageUrl = "") {
   const panel = $("#driverProfilePanel");
   if (!panel || !profile) return;
 
   const name = profile.display_name || profile.iracing_name || "Driver";
-  const photo =
-    profile.photoUrl || profile.photo_url || driverImage(name);
   const number = String(profile.car_number || "").trim();
   const { nameClass, nameStackClass } = driverNameSizeClasses(name);
   const nameClasses = ["driver-profile-name", nameClass].filter(Boolean).join(" ");
@@ -1163,14 +1189,7 @@ function renderProfile(profile, stats, seasonLabel, carImageUrl = "") {
     <a class="driver-profile-back" href="/drivers.html">← Back to Drivers</a>
 
     <section class="driver-profile-hero">
-      <div class="driver-profile-hero-media">
-        <img
-          class="driver-profile-photo"
-          src="${escapeHtml(photo)}"
-          alt="${escapeHtml(name)}"
-          onerror="this.onerror=null;this.src='${PLACEHOLDER_PHOTO}'"
-        />
-      </div>
+      ${renderHeroPhoto(profile, name)}
       <div class="driver-profile-hero-info${carImageUrl ? " driver-profile-hero-info--with-car" : ""}">
         <div class="driver-profile-identity">
           <div class="driver-profile-identity-namestack">

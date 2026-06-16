@@ -1,4 +1,5 @@
 import { uploadDriverPhoto } from "./_upload-driver-photo.js";
+import { uploadStandingDriverPhoto } from "./_upload-standing-driver-photo.js";
 import { uploadHeaderLogo } from "./_upload-header-logo.js";
 import { uploadReporterImage } from "./_upload-reporter-image.js";
 import { uploadNewsArticleImage } from "./_upload-news-article-image.js";
@@ -41,13 +42,15 @@ export default async function handler(req, res) {
 
     const action = resolveAction(body);
     if (!action) {
-      json(res, 400, { error: 'Missing action. Use "driver-photo", "header-logo", "reporter-image", or "news-article-image".' });
+      json(res, 400, { error: 'Missing action. Use "driver-photo", "standing-driver-photo", "header-logo", "reporter-image", or "news-article-image".' });
       return;
     }
 
     let result;
     if (action === "driver-photo") {
       result = await uploadDriverPhoto(body);
+    } else if (action === "standing-driver-photo") {
+      result = await uploadStandingDriverPhoto(body);
     } else if (action === "header-logo") {
       result = await uploadHeaderLogo(body);
     } else if (action === "reporter-image") {

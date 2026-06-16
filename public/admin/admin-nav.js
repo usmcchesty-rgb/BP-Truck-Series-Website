@@ -7,6 +7,7 @@
     { id: "drivers", label: "Drivers", href: "/admin#drivers" },
     { id: "track-images", label: "Track Images", href: "/admin/track-images" },
     { id: "driver-photos", label: "Driver Photos", href: "/admin/driver-photos" },
+    { id: "standing-driver-photos", label: "Standing Photos", href: "/admin/standing-driver-photos" },
     { id: "power-rankings", label: "Power Rankings", href: "/admin/power-rankings" },
     { id: "news", label: "News", href: "/admin/news" },
     { id: "transcripts", label: "Transcripts", href: "/admin/transcripts" },
@@ -167,6 +168,7 @@
       return hash === "#drivers" ? "drivers" : "dashboard";
     }
     if (path.endsWith("/driver-photos")) return "driver-photos";
+    if (path.endsWith("/standing-driver-photos")) return "standing-driver-photos";
     if (path.endsWith("/power-rankings")) return "power-rankings";
     if (path.endsWith("/news")) return "news";
     if (path.endsWith("/transcripts")) return "transcripts";

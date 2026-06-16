@@ -44,6 +44,10 @@ on conflict (id) do nothing;
 -- values ('driver-photos', 'driver-photos', true)
 -- on conflict (id) do update set public = true;
 --
+-- insert into storage.buckets (id, name, public)
+-- values ('driver-standing-photos', 'driver-standing-photos', true)
+-- on conflict (id) do update set public = true;
+--
 -- create policy "Public read driver photos"
 -- on storage.objects for select
 -- using (bucket_id = 'driver-photos');
@@ -98,6 +102,11 @@ alter table driver_profiles add column if not exists car_image_url text;
 alter table driver_profiles add column if not exists form_email text;
 alter table driver_profiles add column if not exists form_submitted_at timestamptz;
 alter table driver_profiles add column if not exists form_permission_granted boolean default false;
+alter table driver_profiles add column if not exists standing_photo_url text;
+alter table driver_profiles add column if not exists standing_photo_zoom numeric default 1;
+alter table driver_profiles add column if not exists standing_photo_x numeric default 50;
+alter table driver_profiles add column if not exists standing_photo_y numeric default 50;
+alter table driver_profiles add column if not exists standing_photo_updated_at timestamptz;
 
 -- Power Rankings (weekly Top 10 + optional honorable mentions)
 create table if not exists power_rankings_weeks (

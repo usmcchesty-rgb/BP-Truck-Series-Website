@@ -98,11 +98,25 @@ function findDriverProfile(profiles, queryId) {
   return null;
 }
 
+function normalizeStandingCrop(row = {}) {
+  const zoom = Number(row.standing_photo_zoom ?? row.standingPhotoZoom);
+  const x = Number(row.standing_photo_x ?? row.standingPhotoX);
+  const y = Number(row.standing_photo_y ?? row.standingPhotoY);
+  return {
+    zoom: Number.isFinite(zoom) && zoom > 0 ? zoom : 1,
+    x: Number.isFinite(x) ? Math.min(100, Math.max(0, x)) : 50,
+    y: Number.isFinite(y) ? Math.min(100, Math.max(0, y)) : 50,
+  };
+}
+
 function normalizeDriverProfile(row) {
   if (!row) return null;
   const photo_url = stripPhotoUrlQuery(row.photo_url || '');
   const car_image_url = stripPhotoUrlQuery(row.car_image_url || '');
+  const standing_photo_url = stripPhotoUrlQuery(row.standing_photo_url || '');
+  const standingCrop = normalizeStandingCrop(row);
   const driver_id = String(row.driver_id ?? '').trim();
+  const standingUpdated = row.standing_photo_updated_at || null;
   return {
     driver_id,
     iracing_name: row.iracing_name || row.driver_name || '',
@@ -114,6 +128,18 @@ function normalizeDriverProfile(row) {
       : '',
     car_image_url,
     carImageUrl: car_image_url || '',
+    standing_photo_url,
+    standingPhotoUrl: standing_photo_url
+      ? withPhotoCacheBust(standing_photo_url, photoCacheVersion(standingUpdated))
+      : '',
+    standing_photo_zoom: standingCrop.zoom,
+    standingPhotoZoom: standingCrop.zoom,
+    standing_photo_x: standingCrop.x,
+    standingPhotoX: standingCrop.x,
+    standing_photo_y: standingCrop.y,
+    standingPhotoY: standingCrop.y,
+    standing_photo_updated_at: standingUpdated,
+    standingPhotoUpdatedAt: standingUpdated,
     is_streamer: normalizeBoolean(row.is_streamer, false),
     stream_url: normalizeStreamUrl(row.stream_url),
     date_of_birth: normalizeOptionalText(row.date_of_birth) || '',
@@ -160,6 +186,16 @@ function normalizeDriverProfile(row) {
 function buildUpsertRow(b) {
   const displayName = b.display_name || b.iracing_name;
   const carNumber = b.car_number || '';
+  const standingCrop = normalizeStandingCrop(b);
+  const hasStandingUrl =
+    b.standing_photo_url !== undefined || b.standingPhotoUrl !== undefined;
+  const hasStandingCrop =
+    b.standing_photo_zoom !== undefined ||
+    b.standingPhotoZoom !== undefined ||
+    b.standing_photo_x !== undefined ||
+    b.standingPhotoX !== undefined ||
+    b.standing_photo_y !== undefined ||
+    b.standingPhotoY !== undefined;
 
   const row = {
     driver_id: String(b.driver_id),
@@ -200,6 +236,22 @@ function buildUpsertRow(b) {
     form_permission_granted: normalizeBoolean(b.form_permission_granted ?? b.formPermissionGranted),
     updated_at: new Date().toISOString(),
   };
+
+  if (hasStandingUrl) {
+    row.standing_photo_url = stripPhotoUrlQuery(
+      b.standing_photo_url ?? b.standingPhotoUrl ?? '',
+    );
+    row.standing_photo_updated_at =
+      b.standing_photo_updated_at ?? b.standingPhotoUpdatedAt ?? new Date().toISOString();
+  }
+
+  if (hasStandingCrop) {
+    row.standing_photo_zoom = standingCrop.zoom;
+    row.standing_photo_x = standingCrop.x;
+    row.standing_photo_y = standingCrop.y;
+    row.standing_photo_updated_at =
+      b.standing_photo_updated_at ?? b.standingPhotoUpdatedAt ?? new Date().toISOString();
+  }
 
   return row;
 }
