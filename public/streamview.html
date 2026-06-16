@@ -6,7 +6,7 @@
     <title>Blazing Pedals Truck Series — StreamView</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
-  <body>
+  <body class="streamview-page-body">
     <div class="page-bg"></div>
     <header class="topbar"></header>
 
@@ -15,15 +15,13 @@
         <div class="streamview-head">
           <h2>STREAMVIEW</h2>
           <p class="page-intro streamview-intro">
-            Watch up to four league streams at once. Select streamers below — only one stream plays audio at a time.
+            Select a slot, pick streamers from the bar, and watch up to four broadcasts. One stream carries audio at a time.
           </p>
         </div>
 
         <div id="streamviewNav" class="streamview-nav" aria-label="Streamer navigation"></div>
 
-        <div id="streamviewGrid" class="streamview-grid streamview-grid--empty">
-          <p class="streamview-empty muted">Select a streamer above to begin watching.</p>
-        </div>
+        <div id="streamviewGrid" class="streamview-grid streamview-grid--quad"></div>
       </section>
     </main>
 
