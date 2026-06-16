@@ -1407,11 +1407,62 @@
       renderWeekList();
     }
 
+    let generateProgressTimer = null;
+
+    function stopGenerateProgress() {
+      if (generateProgressTimer) {
+        clearInterval(generateProgressTimer);
+        generateProgressTimer = null;
+      }
+    }
+
+    function setGenerateProgressText(text) {
+      const status = $('#generateDraftStatus');
+      if (!status) return;
+      status.innerHTML = `<span class="generate-spinner" aria-hidden="true"></span> ${text}`;
+    }
+
+    function startGenerateProgress() {
+      stopGenerateProgress();
+      const driverNames = [];
+      document.querySelectorAll('.ranking-row').forEach((row) => {
+        const select = row.querySelector('.driver-select');
+        const rank = row.dataset.rank;
+        const label = select?.selectedOptions?.[0]?.textContent?.trim();
+        if (label && label !== 'Select driver') {
+          driverNames[Number(rank) - 1] = label;
+        }
+      });
+
+      const steps = [
+        'Building compact race summary...',
+        'Selecting top 10 rankings...',
+        ...Array.from({ length: 10 }, (_, index) => {
+          const name = driverNames[index] || 'driver';
+          return `Generating ${index + 1} of 10: ${name}`;
+        }),
+        'Validating writeups and generating Prophet\'s Take...',
+      ];
+
+      let stepIndex = 0;
+      setGenerateProgressText(steps[0]);
+      generateProgressTimer = setInterval(() => {
+        stepIndex = Math.min(stepIndex + 1, steps.length - 1);
+        setGenerateProgressText(steps[stepIndex]);
+      }, 9000);
+    }
+
     function setGenerating(isGenerating) {
       const btn = $('#generateDraftBtn');
       const status = $('#generateDraftStatus');
       if (btn) btn.disabled = isGenerating;
       if (status) status.hidden = !isGenerating;
+      if (!isGenerating) {
+        stopGenerateProgress();
+        if (status) {
+          status.innerHTML = '<span class="generate-spinner" aria-hidden="true"></span> Generating draft...';
+        }
+      }
     }
 
     async function generateAiDraft() {
@@ -1430,6 +1481,7 @@
 
       setGenerating(true);
       setMsg('Gathering standings, results, saved transcript, and previous rankings...');
+      startGenerateProgress();
 
       try {
         const res = await fetch('/api/power-rankings-generate', {
@@ -1523,7 +1575,11 @@
           Array.isArray(data.repairFailedRanks) && data.repairFailedRanks.length
             ? ` Repair incomplete for: ${data.repairFailedRanks.join(', ')}.`
             : '';
-        setMsg(`AI draft loaded.${confidenceNote}${transcriptNote}${previousNote}${existingNote}${repairNote}${repairFailedNote}${writeupWarningNote}${prophetTakeNote}${warningNote}`);
+        const tokenNote =
+          data.generationMode === 'sequential-driver-calls'
+            ? ` Generated via ${data.callsMade ?? '?'} sequential calls (max prompt ~${data.maxPromptTokens ?? '?'} tokens).`
+            : '';
+        setMsg(`AI draft loaded.${tokenNote}${confidenceNote}${transcriptNote}${previousNote}${existingNote}${repairNote}${repairFailedNote}${writeupWarningNote}${prophetTakeNote}${warningNote}`);
       } catch (e) {
         setMsg(e.message, true);
       } finally {

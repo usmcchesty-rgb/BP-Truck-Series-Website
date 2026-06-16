@@ -2,6 +2,8 @@ import * as cheerio from 'cheerio';
 import { fetchHtml, getDriverProfiles, getSettings, supabase } from './_lib.js';
 import POWER_RANKING_SYSTEM_PROMPT, {
   POWER_RANKING_PROMPT_VERSION,
+  POWER_RANKING_STRUCTURE_SYSTEM_PROMPT,
+  POWER_RANKING_WRITEUP_SYSTEM_PROMPT,
 } from '../server/config/power-ranking-system-prompt.js';
 import {  fetchGreenFlagPlaylistVideos,
   fetchYouTubeTranscript,
@@ -38,6 +40,19 @@ import {
   formatMovementForRepair,
 } from './_power-rankings-movement.js';
 import { generateProphetTake } from './_power-rankings-prophet-take.js';
+import {
+  OPENAI_INTER_CALL_DELAY_MS,
+  buildCompactDriverContext,
+  buildCompactRankingStructurePayload,
+  buildCompactSharedRaceSummary,
+  buildCompactWriteupPayload,
+  guardPromptMessages,
+  stripOptionalFromWriteupPayload,
+} from './_power-rankings-compact-context.js';
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function parseBody(req) {
   if (!req.body) return {};
@@ -717,6 +732,219 @@ function buildContextPayload({
     manualRaceNotes: manualRaceNotes || null,
     transcriptUsed: transcriptUsed === true,
     transcriptMode: transcriptMode || (transcriptUsed ? 'youtube' : 'none'),
+  };
+}
+
+async function callOpenAiJson({ messages, temperature = 0.7, maxTokens = 1200, logLabel = 'openai' }) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error('OPENAI_API_KEY is not configured in Vercel environment variables.');
+  }
+
+  const guarded = guardPromptMessages(messages);
+  console.log(
+    `[power-rankings-generate] ${logLabel} prompt size`,
+    JSON.stringify({
+      estimatedTokens: guarded.estimatedTokens,
+      strippedOptionalContext: guarded.strippedOptionalContext,
+    })
+  );
+
+  const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      temperature,
+      max_tokens: maxTokens,
+      response_format: { type: 'json_object' },
+      messages: guarded.messages,
+    }),
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data?.error?.message || `OpenAI request failed (${response.status})`);
+  }
+
+  const content = data?.choices?.[0]?.message?.content;
+  if (!content) {
+    throw new Error('OpenAI returned an empty response.');
+  }
+
+  try {
+    return { parsed: JSON.parse(content), estimatedTokens: guarded.estimatedTokens };
+  } catch {
+    throw new Error('OpenAI returned invalid JSON.');
+  }
+}
+
+async function callOpenAiRankingStructure(structurePayload, diagnostics) {
+  const userContent = `Generate Race ${structurePayload.raceNumber} power rankings structure (subtitles only, empty writeups).
+
+Use prompt version ${POWER_RANKING_PROMPT_VERSION}. Power Rankings are NOT points standings — weight recent form heavily.
+
+${JSON.stringify(structurePayload)}`;
+
+  const messages = [
+    { role: 'system', content: POWER_RANKING_STRUCTURE_SYSTEM_PROMPT },
+    { role: 'user', content: userContent },
+  ];
+
+  const guarded = guardPromptMessages(messages);
+  diagnostics.maxPromptTokens = Math.max(diagnostics.maxPromptTokens, guarded.estimatedTokens);
+  diagnostics.totalEstimatedPromptTokens += guarded.estimatedTokens;
+  if (guarded.strippedOptionalContext) diagnostics.strippedOptionalContext = true;
+
+  const { parsed, estimatedTokens } = await callOpenAiJson({
+    messages: guarded.messages,
+    temperature: 0.75,
+    maxTokens: 1800,
+    logLabel: 'ranking-structure',
+  });
+  diagnostics.maxPromptTokens = Math.max(diagnostics.maxPromptTokens, estimatedTokens);
+  return parsed;
+}
+
+async function generatePowerRankings(generationContext, raceNumber) {
+  const {
+    standings,
+    previousRankings,
+    recentFormAnalysis,
+    factualGrounding,
+    alignedRaces,
+    scheduleRaces,
+    contextMeta,
+    manualRaceNotes,
+    driverLookup,
+    previousRankByDriver,
+  } = generationContext;
+
+  const diagnostics = {
+    generationMode: 'sequential-driver-calls',
+    totalDriversGenerated: 0,
+    callsMade: 0,
+    maxPromptTokens: 0,
+    totalEstimatedPromptTokens: 0,
+    strippedOptionalContext: false,
+    perDriverPromptSizes: {},
+  };
+
+  const compactShared = buildCompactSharedRaceSummary({
+    raceNumber,
+    scheduleRaces,
+    standings,
+    alignedRaces,
+    recentFormAnalysis,
+    previousRankings,
+    contextMeta,
+    manualRaceNotes,
+    driverLookup,
+  });
+
+  const structurePayload = buildCompactRankingStructurePayload({
+    raceNumber,
+    standings,
+    factualGrounding,
+    compactShared,
+  });
+
+  const structureDraft = await callOpenAiRankingStructure(structurePayload, diagnostics);
+  diagnostics.callsMade += 1;
+  await delay(OPENAI_INTER_CALL_DELAY_MS);
+
+  const entries = Array.isArray(structureDraft?.entries) ? structureDraft.entries : [];
+  if (entries.length !== 10) {
+    throw new Error('AI ranking structure must include exactly 10 ranked drivers.');
+  }
+
+  const honorableMentions = Array.isArray(structureDraft?.honorableMentions)
+    ? structureDraft.honorableMentions.slice(0, 3)
+    : [];
+
+  const sortedEntries = [...entries].sort((a, b) => Number(a.rank) - Number(b.rank));
+
+  for (const entry of sortedEntries) {
+    const rank = Number(entry.rank);
+    const driverId = String(entry.driverId || entry.driver_id || '').trim();
+    const driver = driverLookup.get(driverId);
+    if (!driver) {
+      throw new Error(`AI draft rank ${rank} has an invalid driverId.`);
+    }
+
+    const grounding = factualGrounding?.drivers?.[driverId];
+    const previousPowerRank = previousRankByDriver[driverId];
+    const compactDriver = buildCompactDriverContext({
+      rank,
+      driver,
+      previousPowerRank,
+      grounding,
+      includeOptional: true,
+    });
+
+    const writeupResult = await callOpenAiSingleWriteup({
+      driverName: driver.driverName,
+      rank,
+      subtitle: String(entry.subtitle || '').trim(),
+      compactShared,
+      compactDriver,
+      manualRaceNotes,
+      transcriptUsed: contextMeta?.transcriptUsed === true,
+      raceNumber,
+      diagnostics,
+      rankKey: String(rank),
+    });
+
+    entry.driverId = driverId;
+    entry.writeup = writeupResult.writeup;
+    diagnostics.totalDriversGenerated += 1;
+    diagnostics.callsMade += 1;
+    await delay(OPENAI_INTER_CALL_DELAY_MS);
+  }
+
+  for (let index = 0; index < honorableMentions.length; index += 1) {
+    const mention = honorableMentions[index];
+    const driverId = String(mention?.driverId || mention?.driver_id || '').trim();
+    const driver = driverLookup.get(driverId);
+    if (!driver) continue;
+
+    const grounding = factualGrounding?.drivers?.[driverId];
+    const compactDriver = buildCompactDriverContext({
+      rank: 'HM',
+      driver,
+      previousPowerRank: previousRankByDriver[driverId],
+      grounding,
+      includeOptional: true,
+    });
+
+    const writeupResult = await callOpenAiSingleWriteup({
+      driverName: driver.driverName,
+      rank: 'HM',
+      subtitle: 'Honorable Mention',
+      compactShared,
+      compactDriver,
+      manualRaceNotes,
+      transcriptUsed: contextMeta?.transcriptUsed === true,
+      raceNumber,
+      diagnostics,
+      rankKey: `HM${index + 1}`,
+      honorableMention: true,
+    });
+
+    mention.driverId = driverId;
+    mention.writeup = writeupResult.writeup;
+    diagnostics.callsMade += 1;
+    await delay(OPENAI_INTER_CALL_DELAY_MS);
+  }
+
+  return {
+    aiDraft: { entries: sortedEntries, honorableMentions },
+    compactShared,
+    generationDiagnostics: diagnostics,
   };
 }
 
@@ -1422,9 +1650,14 @@ export async function callOpenAiSingleWriteup({
   subtitle,
   verifiedFacts,
   driverStats,
+  compactShared,
+  compactDriver,
   manualRaceNotes,
   transcriptUsed,
   raceNumber,
+  diagnostics = null,
+  rankKey = String(rank),
+  honorableMention = false,
 }) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -1432,23 +1665,43 @@ export async function callOpenAiSingleWriteup({
   }
 
   const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
-  const notesExcerpt = String(manualRaceNotes || '').trim().slice(0, 2500);
+  let writeupPayload = compactDriver
+    ? buildCompactWriteupPayload({
+        raceNumber,
+        rank,
+        subtitle,
+        compactShared,
+        compactDriver,
+        manualRaceNotes,
+        transcriptUsed,
+        includeOptional: true,
+      })
+    : null;
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model,
-      temperature: 0.65,
-      max_tokens: 280,
-      messages: [
-        { role: 'system', content: POWER_RANKING_SYSTEM_PROMPT },
-        {
-          role: 'user',
-          content: `Write ONE Power Rankings writeup paragraph for Race ${raceNumber}.
+  let userContent;
+  if (writeupPayload) {
+    userContent = honorableMention
+      ? `Write ONE Honorable Mention paragraph for Race ${raceNumber}.
+
+Rules (prompt version ${POWER_RANKING_PROMPT_VERSION}):
+- 40-80 words, 2-3 sentences
+- Explain why this driver is dangerous right now but just outside the Top 10
+- Use only facts from the JSON context below
+- Do NOT invent race results
+
+${JSON.stringify(writeupPayload)}`
+      : `Write ONE Power Rankings writeup paragraph for Race ${raceNumber}.
+
+Rules (prompt version ${POWER_RANKING_PROMPT_VERSION}):
+- 50-100 words, 2-4 sentences
+- Do NOT start with the driver's name
+- Use 1-3 verified facts from the driver context below
+- Explain WHY this driver is ranked here THIS week
+
+${JSON.stringify(writeupPayload)}`;
+  } else {
+    const notesExcerpt = String(manualRaceNotes || '').trim().slice(0, 2500);
+    userContent = `Write ONE Power Rankings writeup paragraph for Race ${raceNumber}.
 
 Rules (prompt version ${POWER_RANKING_PROMPT_VERSION}):
 - 50-100 words, 2-4 sentences
@@ -1471,9 +1724,56 @@ Driver stats:
 ${driverStats}
 ${notesExcerpt ? `\nManual race notes:\n${notesExcerpt}` : ''}
 
-Return only the writeup paragraph.`,
-        },
-      ],
+Return only the writeup paragraph.`;
+  }
+
+  const messages = [
+    { role: 'system', content: POWER_RANKING_WRITEUP_SYSTEM_PROMPT },
+    { role: 'user', content: userContent },
+  ];
+
+  const guarded = guardPromptMessages(messages, {
+    stripOptional: () => {
+      if (!writeupPayload) return messages;
+      writeupPayload = stripOptionalFromWriteupPayload(writeupPayload);
+      const strippedUser = honorableMention
+        ? `Write ONE Honorable Mention paragraph for Race ${raceNumber}. Use only facts in the JSON below.\n\n${JSON.stringify(writeupPayload)}`
+        : `Write ONE Power Rankings writeup for Race ${raceNumber}. Use only facts in the JSON below.\n\n${JSON.stringify(writeupPayload)}`;
+      return [
+        { role: 'system', content: POWER_RANKING_WRITEUP_SYSTEM_PROMPT },
+        { role: 'user', content: strippedUser },
+      ];
+    },
+  });
+
+  if (diagnostics) {
+    diagnostics.maxPromptTokens = Math.max(diagnostics.maxPromptTokens, guarded.estimatedTokens);
+    diagnostics.totalEstimatedPromptTokens += guarded.estimatedTokens;
+    diagnostics.perDriverPromptSizes[rankKey] = guarded.estimatedTokens;
+    if (guarded.strippedOptionalContext) diagnostics.strippedOptionalContext = true;
+  }
+
+  console.log(
+    '[power-rankings-generate] writeup prompt size',
+    JSON.stringify({
+      rank: rankKey,
+      driverName,
+      estimatedTokens: guarded.estimatedTokens,
+      strippedOptionalContext: guarded.strippedOptionalContext,
+    })
+  );
+
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      temperature: 0.65,
+      max_tokens: 280,
+      messages: guarded.messages,
     }),
   });
 
@@ -1490,7 +1790,7 @@ Return only the writeup paragraph.`,
     throw new Error('OpenAI writeup generation returned an empty response.');
   }
 
-  return content;
+  return { writeup: content, estimatedTokens: guarded.estimatedTokens };
 }
 
 export async function loadPowerRankingsGenerationContext(
@@ -2262,7 +2562,15 @@ export default async function handler(req, res) {
       })
     );
 
-    const aiDraft = await callOpenAi(contextPayload);
+    const { aiDraft, generationDiagnostics } = await generatePowerRankings(
+      generationContext,
+      raceNumber
+    );
+
+    console.log(
+      '[power-rankings-generate] sequential generation diagnostics',
+      JSON.stringify(generationDiagnostics)
+    );
     const existingWeek = await loadExistingWeekForRace(raceNumber);
     const draft = await normalizeDraft(aiDraft, driverLookup, previousRankings, {
       transcriptUsed: contextMeta.transcriptUsed,
@@ -2436,6 +2744,7 @@ export default async function handler(req, res) {
       selectedVideoTitle: contextMeta.selectedVideoTitle,
       selectionMethod: contextMeta.selectionMethod,
       nonPointsAdjustmentApplied: contextMeta.nonPointsAdjustmentApplied,
+      ...generationDiagnostics,
     });
   } catch (error) {
     console.error('[power-rankings-generate]', error);

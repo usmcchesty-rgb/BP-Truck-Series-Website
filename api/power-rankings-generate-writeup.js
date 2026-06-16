@@ -1,9 +1,12 @@
 import { formatVerifiedFactsForRepair } from './_power-rankings-factual-grounding.js';
 import {
+  buildCompactDriverContext,
+  buildCompactSharedRaceSummary,
+} from './_power-rankings-compact-context.js';
+import {
   buildWriteupContextForEntry,
   buildWriteupWarnings,
   callOpenAiSingleWriteup,
-  formatDriverStatsForRepair,
   loadPowerRankingsGenerationContext,
   repairWriteupQuality,
 } from './power-rankings-generate.js';
@@ -70,21 +73,39 @@ export default async function handler(req, res) {
       previousRank
     );
 
-    const verifiedFacts = formatVerifiedFactsForRepair(writeupContext.driverGrounding, rank);
-    const driverStats = formatDriverStatsForRepair(driver, entry, previousRank);
+    const grounding = generationContext.factualGrounding?.drivers?.[String(driverId)];
+    const compactShared = buildCompactSharedRaceSummary({
+      raceNumber,
+      scheduleRaces: generationContext.scheduleRaces,
+      standings: generationContext.standings,
+      alignedRaces: generationContext.alignedRaces,
+      recentFormAnalysis: generationContext.recentFormAnalysis,
+      previousRankings: generationContext.previousRankings,
+      contextMeta: generationContext.contextMeta,
+      manualRaceNotes: generationContext.manualRaceNotes,
+      driverLookup: generationContext.driverLookup,
+    });
+    const compactDriver = buildCompactDriverContext({
+      rank,
+      driver,
+      previousPowerRank: previousRank,
+      grounding,
+      includeOptional: true,
+    });
 
-    let generatedWriteup = await callOpenAiSingleWriteup({
+    const generated = await callOpenAiSingleWriteup({
       driverName: driver.driverName,
       rank,
       subtitle,
-      verifiedFacts,
-      driverStats,
+      compactShared,
+      compactDriver,
       manualRaceNotes: generationContext.manualRaceNotes,
       transcriptUsed: generationContext.contextMeta?.transcriptUsed === true,
       raceNumber,
+      rankKey: String(rank),
     });
 
-    entry.writeup = String(generatedWriteup || '').trim();
+    entry.writeup = String(generated.writeup || '').trim();
     const repaired = await repairWriteupQuality(entry, driver, writeupContext);
     const warnings = buildWriteupWarnings(repaired);
 
@@ -99,6 +120,8 @@ export default async function handler(req, res) {
       repaired: repaired.repairAttempted === true,
       repairAttempts: repaired.repairAttempts,
       repairReasons: repaired.repairReasons,
+      estimatedPromptTokens: generated.estimatedTokens ?? null,
+      generationMode: 'sequential-driver-calls',
     });
   } catch (error) {
     console.error('[power-rankings-generate-writeup]', error);
