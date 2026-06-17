@@ -1051,7 +1051,7 @@ function renderStatsBar(stats, seasonLabel) {
   const items = [
     statTile("Points Position", stats.position ? formatOrdinal(stats.position) : null),
     statTile("Points", stats.points, { allowZero: true }),
-    statTile("Points Behind Leader", stats.pointsBehind, { allowZero: true }),
+    statTile("Behind Leader", stats.pointsBehind, { allowZero: true }),
     statTile("Races", stats.races, { allowZero: true }),
     statTile("Wins", stats.wins, { allowZero: true }),
     statTile("Top 5s", stats.top5, { allowZero: true }),

@@ -157,10 +157,9 @@
     const previewUrl = String(options.previewUrl || "").trim();
     const url = previewUrl || displayImage.url || PLACEHOLDER_URL;
     const wrapClass = portraitWrapClass(displayImage);
-    const standingStyle = standingCropStyle(displayImage);
 
     target.className = `article-image-preview news-article-hero-wrap ${wrapClass}`;
-    target.style.cssText = standingStyle;
+    target.style.cssText = "";
     target.classList.remove("is-empty");
 
     let img = target.querySelector("img");
@@ -197,28 +196,10 @@
         }
       : displayImage;
 
-    if (isPortraitDriverImage(resolved)) {
-      return applyPortraitPreview(target, resolved, {
-        previewUrl: previewUrl || displayImage.url,
-        alt: options.alt,
-      });
-    }
-
-    if (!window.NewsArticleImage) return displayImage;
-
-    const imageShape = {
-      featuredImageUrl: stripUrlQuery(resolved.storedUrl || resolved.url || ""),
-      featuredImageUpdatedAt: resolved.updatedAt || null,
-      featuredImageZoom: resolved.zoom ?? 1,
-      featuredImageX: resolved.x ?? 50,
-      featuredImageY: resolved.y ?? 50,
-    };
-    target.className = "article-image-preview";
-    NewsArticleImage.applyPreview(target, imageShape, {
+    return applyPortraitPreview(target, resolved, {
       previewUrl: previewUrl || displayImage.url,
-      settings: imageShape,
+      alt: options.alt,
     });
-    return displayImage;
   }
 
   window.BPDriverSpotlightImage = {

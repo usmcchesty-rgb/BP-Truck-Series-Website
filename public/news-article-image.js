@@ -26,17 +26,23 @@
       .replace(/"/g, "&quot;");
   }
 
+  function isDriverSpotlightArticle(article = {}) {
+    return article.articleType === "driver-spotlight";
+  }
+
   function isSpotlightPortrait(article = {}) {
-    if (article.articleType !== "driver-spotlight") return false;
+    if (!isDriverSpotlightArticle(article)) return false;
+    if (!hasImage(article)) return false;
     const displayImage = article.displayImage;
-    if (!displayImage) return false;
+    if (!displayImage) return true;
     if (window.BPDriverSpotlightImage?.isPortraitDriverImage) {
       return window.BPDriverSpotlightImage.isPortraitDriverImage(displayImage);
     }
     return (
       displayImage.isPortraitDriverImage === true ||
       displayImage.source === "custom-spotlight" ||
-      displayImage.source === "standing-photo"
+      displayImage.source === "standing-photo" ||
+      displayImage.source === "driver-photo"
     );
   }
 
@@ -126,13 +132,12 @@
     ].join(" ");
     const imgClass = `${options.imgClass || "news-article-image"} news-spotlight-portrait-image`;
     const alt = escapeHtml(options.alt || article.headline || "Article image");
-    const standingStyle = standingCropStyle(displayImage);
     const onerror =
       article.articleType === "driver-spotlight"
         ? ' onerror="this.onerror=null;this.src=\'/assets/drivers/placeholder.png\'"'
         : "";
 
-    return `<div class="${wrapClass}" style="${standingStyle}"><img class="${imgClass}" src="${escapeHtml(url)}" alt="${alt}"${onerror}></div>`;
+    return `<div class="${wrapClass}"><img class="${imgClass}" src="${escapeHtml(url)}" alt="${alt}"${onerror}></div>`;
   }
 
   function renderImageHtml(article = {}, options = {}) {
@@ -178,7 +183,7 @@
 
   function renderArticleHero(article = {}, options = {}) {
     if (!hasImage(article) && !options.previewUrl) return "";
-    if (isSpotlightPortrait(article)) {
+    if (isDriverSpotlightArticle(article)) {
       return renderPortraitImageHtml(article, {
         wrapClass: "news-article-hero-wrap",
         imgClass: "news-article-image",
@@ -228,6 +233,7 @@
     hasImage,
     displayUrl,
     cropStyle,
+    isDriverSpotlightArticle,
     isSpotlightPortrait,
     renderFeaturedMedia,
     renderCardMedia,
