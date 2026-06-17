@@ -879,7 +879,44 @@ a.home-news-item:hover h4{color:#fff}
   min-width:0;
 }
 .power-rankings-block .power-rankings-tabs{
+  display:flex;
+  align-items:stretch;
+  justify-content:flex-start;
+  width:fit-content;
+  max-width:100%;
+  gap:6px;
   margin:0 0 16px;
+  border-bottom:1px solid var(--red);
+}
+.power-rankings-block .power-rankings-tabs button{
+  flex:0 0 auto;
+  min-width:120px;
+  max-width:160px;
+  width:auto;
+  padding:5px 10px;
+  margin:0;
+  text-align:center;
+  clip-path:polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+}
+.power-rankings-block .power-rankings-tabs button:first-child,
+.power-rankings-block .power-rankings-tabs button + button{
+  margin-left:0;
+  padding-left:10px;
+  padding-right:10px;
+  border-left:1px solid #333;
+  clip-path:polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+  z-index:auto;
+}
+.power-rankings-block .power-rankings-tabs button:not(.active){
+  background:linear-gradient(#1c1c1c,#080808);
+  border-color:#333;
+  box-shadow:none;
+}
+.power-rankings-block .power-rankings-tabs button.active{
+  z-index:1;
+  background:linear-gradient(#d40000,#680000);
+  border-color:#ff2424;
+  box-shadow:0 0 10px rgba(229,9,20,.25);
 }
 .power-rankings-tab-panel.tab{
   width:100%;
