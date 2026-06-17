@@ -57,6 +57,28 @@
       color: #ccc;
       white-space: pre-wrap;
     }
+    .score-diagnostics {
+      margin-top: 12px;
+      padding: 10px 12px;
+      border: 1px solid #3a4a3a;
+      background: #101810;
+      border-radius: 6px;
+    }
+    .score-diagnostics summary {
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 900;
+      color: #7fd37f;
+      margin-bottom: 8px;
+    }
+    .score-diagnostics pre {
+      margin: 8px 0 0;
+      font-size: 11px;
+      color: #ccc;
+      white-space: pre-wrap;
+      max-height: 480px;
+      overflow: auto;
+    }
     .pw-row { max-width: 320px; margin-bottom: 14px; }
     .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; max-width: 520px; }
     .ranking-row {
@@ -291,6 +313,10 @@
         <h3>Generation Sources</h3>
         <pre id="generationSources"></pre>
       </div>
+      <details id="scoreDiagnosticsPanel" class="score-diagnostics" hidden>
+        <summary>Power Score Diagnostics</summary>
+        <pre id="scoreDiagnostics"></pre>
+      </details>
       <div id="transcriptDiagnosticsPanel" class="transcript-diagnostics" hidden>
         <h3>Transcript Diagnostics</h3>
         <pre id="transcriptDiagnostics"></pre>
@@ -707,7 +733,101 @@
           nested?.prophetTakeWordCount ?? data?.prophetTakeWordCount ?? null,
         prophetTakeParagraphCount:
           nested?.prophetTakeParagraphCount ?? data?.prophetTakeParagraphCount ?? null,
+        rankingSelectionMode:
+          nested?.rankingSelectionMode ?? data?.rankingSelectionMode ?? null,
+        scoreDiagnostics:
+          nested?.powerScoreDiagnostics ?? data?.scoreDiagnostics ?? null,
       };
+    }
+
+    function formatScoreBreakdown(breakdown) {
+      if (!breakdown) return 'n/a';
+      return `recent=${breakdown.recentForm}, season=${breakdown.seasonPerformance}, impact=${breakdown.raceImpact}, champ=${breakdown.championship}, momentum=${breakdown.momentum}`;
+    }
+
+    function formatScoreDiagnosticsText(diagnostics) {
+      if (!diagnostics) return 'No power score diagnostics available.';
+
+      const lines = [
+        `Selection mode: ${diagnostics.selectionMode || 'unknown'}`,
+        diagnostics.weights
+          ? `Weights: recent=${diagnostics.weights.recentForm}, season=${diagnostics.weights.seasonPerformance}, impact=${diagnostics.weights.raceImpact}, championship=${diagnostics.weights.championship}, momentum=${diagnostics.weights.momentum}`
+          : '',
+        '',
+        'Selected Top 10:',
+      ];
+
+      for (const row of diagnostics.top10 || []) {
+        lines.push(
+          `  #${row.rank} ${row.driverName} — score ${row.powerScore} (prev PR #${row.previousRank ?? 'NEW'})`,
+          `    breakdown: ${formatScoreBreakdown(row.scoreBreakdown)}`,
+          `    retentionBonus: ${row.retentionBonus ?? 0}, dropProtection: ${row.dropProtectionApplied ? 'yes' : 'no'}`,
+          row.dropReasons?.length ? `    dropReasons: ${row.dropReasons.join('; ')}` : '',
+          row.componentDetails?.recentForm?.last3RaceAverageFinish != null
+            ? `    last3 avg: ${row.componentDetails.recentForm.last3RaceAverageFinish}, DNPs: ${row.componentDetails.recentForm.last3RaceDnpCount ?? 0}`
+            : '',
+          row.componentDetails?.raceImpact?.finish != null
+            ? `    latest race: P${row.componentDetails.raceImpact.finish}${row.componentDetails.raceImpact.lapsLed ? `, led ${row.componentDetails.raceImpact.lapsLed}` : ''}`
+            : ''
+        );
+      }
+
+      if (diagnostics.droppedFromPreviousTop10?.length) {
+        lines.push('', 'Dropped from previous Top 10:');
+        for (const row of diagnostics.droppedFromPreviousTop10) {
+          lines.push(
+            `  ${row.driverName} (was #${row.previousRank}) — score ${row.powerScore ?? 'n/a'}`,
+            row.replacedByProtection
+              ? `    bumped by drop protection for ${row.replacedFor}`
+              : row.canDropOut === false
+                ? '    eligible for protection but not in final Top 10'
+                : row.dropReasons?.length
+                  ? `    allowed drop: ${row.dropReasons.join('; ')}`
+                  : '    fell out on calculated score'
+          );
+        }
+      }
+
+      if (diagnostics.honorableMentionCandidates?.length) {
+        lines.push('', 'Honorable mention candidates (by score):');
+        for (const row of diagnostics.honorableMentionCandidates) {
+          lines.push(`  ${row.driverName} — score ${row.powerScore}`);
+        }
+      }
+
+      lines.push('', 'All candidates (by score):');
+      for (const row of diagnostics.allCandidates || []) {
+        lines.push(
+          `  ${row.scoreRank}. ${row.driverName} — ${row.powerScore} [${formatScoreBreakdown(row.scoreBreakdown)}] prev PR #${row.previousRank ?? '—'}${row.protectedFromDropout ? ' (protected)' : ''}`
+        );
+      }
+
+      return lines.filter(Boolean).join('\n');
+    }
+
+    function renderScoreDiagnostics(data) {
+      const panel = $('#scoreDiagnosticsPanel');
+      const pre = $('#scoreDiagnostics');
+      if (!panel || !pre) return;
+
+      const diagnostics =
+        data?.scoreDiagnostics ||
+        data?.generationSources?.powerScoreDiagnostics ||
+        null;
+
+      if (!diagnostics) {
+        panel.hidden = true;
+        pre.textContent = '';
+        return;
+      }
+
+      pre.textContent = formatScoreDiagnosticsText(diagnostics);
+      panel.hidden = false;
+    }
+
+    function hideScoreDiagnostics() {
+      const panel = $('#scoreDiagnosticsPanel');
+      if (panel) panel.hidden = true;
     }
 
     function formatLast3RaceAverageFinish(last3Map) {
@@ -1044,6 +1164,7 @@
     function hideGenerationSources() {
       const panel = $('#generationSourcesPanel');
       if (panel) panel.hidden = true;
+      hideScoreDiagnostics();
     }
 
     async function verifyPassword(pw) {
@@ -1452,7 +1573,8 @@
 
       const steps = [
         'Building compact race summary...',
-        'Selecting top 10 rankings...',
+        'Calculating power scores...',
+        'Generating subtitles for selected Top 10...',
         ...Array.from({ length: 10 }, (_, index) => {
           const name = driverNames[index] || 'driver';
           return `Generating ${index + 1} of 10: ${name}`;
@@ -1547,6 +1669,7 @@
         });
 
         renderGenerationSources(data);
+        renderScoreDiagnostics(data);
         renderTranscriptDiagnostics(data);
 
         const diagnostics = buildTranscriptDiagnosticsView(data);

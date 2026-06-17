@@ -35,7 +35,7 @@ function parseFinish(value) {
   return Number.isFinite(finish) && finish >= 1 ? finish : null;
 }
 
-function sampleResultFromBucket(bucket) {
+export function sampleResultFromBucket(bucket) {
   if (!bucket || typeof bucket !== 'object') return null;
   return Object.values(bucket).find((result) => result?.finish_pos != null) || null;
 }

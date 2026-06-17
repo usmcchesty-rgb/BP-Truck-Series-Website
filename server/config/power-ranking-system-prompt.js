@@ -602,6 +602,25 @@ Rules:
 - Compare movement intent against previousPowerRankings when available.
 - Do not mirror points order blindly — recent form matters most.`;
 
+export const POWER_RANKING_SUBTITLE_SYSTEM_PROMPT = `You are the BP Truck Series Power Rankings editor.
+
+The Top 10 drivers and ranks are ALREADY SELECTED by calculated power scores. Do NOT change drivers or ranks.
+
+Your only job: write a unique 2-6 word subtitle for each ranked driver.
+
+Return JSON only:
+{
+  "entries": [
+    { "rank": 1, "driverId": "string", "subtitle": "2-6 words, unique storyline" }
+  ]
+}
+
+Rules:
+- Exactly 10 entries matching the provided ranks and driverIds.
+- Subtitles: 2-6 words, specific storyline, no possessives, no driver names, no car numbers.
+- Each subtitle must be unique within the Top 10.
+- Do not include writeup fields.`;
+
 export const POWER_RANKING_WRITEUP_SYSTEM_PROMPT = `You write NASCAR.com-style Power Rankings paragraphs for the BP Truck Series.
 
 Rules:

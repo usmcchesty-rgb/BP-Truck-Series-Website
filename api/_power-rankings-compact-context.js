@@ -271,6 +271,26 @@ function summarizeCandidateDriver(row, grounding) {
   return summary;
 }
 
+export function buildCompactSubtitlePayload({ raceNumber, selectedTop10, compactShared }) {
+  return {
+    raceNumber,
+    season: 'Blazing Pedals Truck Series',
+    selectionMode: 'calculated-power-score',
+    sharedRaceSummary: compactShared,
+    entries: selectedTop10.map((row) => ({
+      rank: row.rank,
+      driverId: row.driverId,
+      driverName: row.driverName,
+      carNumber: row.carNumber,
+      powerScore: row.powerScore,
+      previousRank: row.previousRank,
+      scoreBreakdown: row.scoreBreakdown,
+    })),
+    rules:
+      'Subtitles only. Ranks and driverIds are fixed — do not change order or swap drivers.',
+  };
+}
+
 export function buildCompactRankingStructurePayload({
   raceNumber,
   standings,

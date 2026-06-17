@@ -2,7 +2,7 @@ import * as cheerio from 'cheerio';
 import { fetchHtml, getDriverProfiles, getSettings, supabase } from './_lib.js';
 import POWER_RANKING_SYSTEM_PROMPT, {
   POWER_RANKING_PROMPT_VERSION,
-  POWER_RANKING_STRUCTURE_SYSTEM_PROMPT,
+  POWER_RANKING_SUBTITLE_SYSTEM_PROMPT,
   POWER_RANKING_WRITEUP_SYSTEM_PROMPT,
 } from '../server/config/power-ranking-system-prompt.js';
 import {  fetchGreenFlagPlaylistVideos,
@@ -43,12 +43,13 @@ import { generateProphetTake } from './_power-rankings-prophet-take.js';
 import {
   OPENAI_INTER_CALL_DELAY_MS,
   buildCompactDriverContext,
-  buildCompactRankingStructurePayload,
   buildCompactSharedRaceSummary,
+  buildCompactSubtitlePayload,
   buildCompactWriteupPayload,
   guardPromptMessages,
   stripOptionalFromWriteupPayload,
 } from './_power-rankings-compact-context.js';
+import { buildPowerRankingSelection } from './_power-rankings-scoring.js';
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -783,15 +784,17 @@ async function callOpenAiJson({ messages, temperature = 0.7, maxTokens = 1200, l
   }
 }
 
-async function callOpenAiRankingStructure(structurePayload, diagnostics) {
-  const userContent = `Generate Race ${structurePayload.raceNumber} power rankings structure (subtitles only, empty writeups).
+async function callOpenAiSubtitles(subtitlePayload, diagnostics) {
+  const userContent = `Write subtitles for Race ${subtitlePayload.raceNumber} power rankings.
 
-Use prompt version ${POWER_RANKING_PROMPT_VERSION}. Power Rankings are NOT points standings — weight recent form heavily.
+Drivers and ranks are FIXED by calculated power scores. Return subtitles only.
 
-${JSON.stringify(structurePayload)}`;
+Use prompt version ${POWER_RANKING_PROMPT_VERSION}.
+
+${JSON.stringify(subtitlePayload)}`;
 
   const messages = [
-    { role: 'system', content: POWER_RANKING_STRUCTURE_SYSTEM_PROMPT },
+    { role: 'system', content: POWER_RANKING_SUBTITLE_SYSTEM_PROMPT },
     { role: 'user', content: userContent },
   ];
 
@@ -802,9 +805,9 @@ ${JSON.stringify(structurePayload)}`;
 
   const { parsed, estimatedTokens } = await callOpenAiJson({
     messages: guarded.messages,
-    temperature: 0.75,
-    maxTokens: 1800,
-    logLabel: 'ranking-structure',
+    temperature: 0.7,
+    maxTokens: 900,
+    logLabel: 'ranking-subtitles',
   });
   diagnostics.maxPromptTokens = Math.max(diagnostics.maxPromptTokens, estimatedTokens);
   return parsed;
@@ -822,16 +825,32 @@ async function generatePowerRankings(generationContext, raceNumber) {
     manualRaceNotes,
     driverLookup,
     previousRankByDriver,
+    standingsResult,
   } = generationContext;
 
   const diagnostics = {
-    generationMode: 'sequential-driver-calls',
+    generationMode: 'calculated-score-plus-ai-writeups',
     totalDriversGenerated: 0,
     callsMade: 0,
     maxPromptTokens: 0,
     totalEstimatedPromptTokens: 0,
     strippedOptionalContext: false,
     perDriverPromptSizes: {},
+  };
+
+  const scoreSelection = buildPowerRankingSelection({
+    standings,
+    factualGrounding,
+    alignedRaces,
+    schedules: standingsResult?.schedules || {},
+    previousRankByDriver,
+    recentFormAnalysis,
+  });
+
+  diagnostics.powerScoreSelection = {
+    selectionMode: scoreSelection.selectionMode,
+    weights: scoreSelection.weights,
+    droppedFromPreviousTop10: scoreSelection.droppedFromPreviousTop10,
   };
 
   const compactShared = buildCompactSharedRaceSummary({
@@ -846,25 +865,46 @@ async function generatePowerRankings(generationContext, raceNumber) {
     driverLookup,
   });
 
-  const structurePayload = buildCompactRankingStructurePayload({
+  const subtitlePayload = buildCompactSubtitlePayload({
     raceNumber,
-    standings,
-    factualGrounding,
+    selectedTop10: scoreSelection.top10,
     compactShared,
   });
 
-  const structureDraft = await callOpenAiRankingStructure(structurePayload, diagnostics);
+  const subtitleDraft = await callOpenAiSubtitles(subtitlePayload, diagnostics);
   diagnostics.callsMade += 1;
   await delay(OPENAI_INTER_CALL_DELAY_MS);
 
-  const entries = Array.isArray(structureDraft?.entries) ? structureDraft.entries : [];
+  const subtitleByRank = Object.fromEntries(
+    (Array.isArray(subtitleDraft?.entries) ? subtitleDraft.entries : []).map((entry) => [
+      Number(entry.rank),
+      String(entry.subtitle || '').trim(),
+    ])
+  );
+
+  const entries = scoreSelection.top10.map((row) => ({
+    rank: row.rank,
+    driverId: row.driverId,
+    subtitle: subtitleByRank[row.rank] || '',
+    writeup: '',
+    powerScore: row.powerScore,
+    scoreBreakdown: row.scoreBreakdown,
+    previousRank: row.previousRank,
+    retentionBonus: row.retentionBonus,
+    dropProtectionApplied: row.dropProtectionApplied,
+    dropReasons: row.dropReasons,
+  }));
+
   if (entries.length !== 10) {
-    throw new Error('AI ranking structure must include exactly 10 ranked drivers.');
+    throw new Error('Calculated ranking selection must include exactly 10 ranked drivers.');
   }
 
-  const honorableMentions = Array.isArray(structureDraft?.honorableMentions)
-    ? structureDraft.honorableMentions.slice(0, 3)
-    : [];
+  const honorableMentions = scoreSelection.honorableMentionCandidates.map((row) => ({
+    driverId: row.driverId,
+    writeup: '',
+    powerScore: row.powerScore,
+    scoreBreakdown: row.scoreBreakdown,
+  }));
 
   const sortedEntries = [...entries].sort((a, b) => Number(a.rank) - Number(b.rank));
 
@@ -945,6 +985,7 @@ async function generatePowerRankings(generationContext, raceNumber) {
     aiDraft: { entries: sortedEntries, honorableMentions },
     compactShared,
     generationDiagnostics: diagnostics,
+    scoreSelection,
   };
 }
 
@@ -2043,6 +2084,37 @@ function buildSourceQuality({
   };
 }
 
+function formatScoreDiagnostics(scoreSelection) {
+  if (!scoreSelection) return null;
+
+  const formatRow = (row) => ({
+    rank: row.rank ?? null,
+    driverId: row.driverId,
+    driverName: row.driverName,
+    powerScore: row.powerScore,
+    scoreBreakdown: row.scoreBreakdown,
+    previousRank: row.previousRank,
+    retentionBonus: row.retentionBonus,
+    dropProtectionApplied: row.dropProtectionApplied === true,
+    dropReasons: row.dropReasons || [],
+    protectedFromDropout: row.protectedFromDropout === true,
+    canDropOut: row.canDropOut === true,
+    componentDetails: row.componentDetails || null,
+  });
+
+  return {
+    selectionMode: scoreSelection.selectionMode,
+    weights: scoreSelection.weights,
+    top10: (scoreSelection.top10 || []).map(formatRow),
+    allCandidates: (scoreSelection.candidates || []).map((row, index) => ({
+      ...formatRow(row),
+      scoreRank: index + 1,
+    })),
+    droppedFromPreviousTop10: scoreSelection.droppedFromPreviousTop10 || [],
+    honorableMentionCandidates: (scoreSelection.honorableMentionCandidates || []).map(formatRow),
+  };
+}
+
 function buildGenerationSources({
   raceNumber,
   standings,
@@ -2055,6 +2127,7 @@ function buildGenerationSources({
   recentFormAnalysis,
   resultsAudit,
   recentRaceFinishDiagnostics,
+  scoreSelection,
 }) {
   const recentResultsRaceNumbers = getRecentPointsRaceResults(
     scheduleRaces,
@@ -2163,6 +2236,8 @@ function buildGenerationSources({
     raceStatus: raceNumberDebug?.raceStatus ?? null,
     canAdvanceToNextRace: raceNumberDebug?.canAdvanceToNextRace ?? null,
     advanceReason: raceNumberDebug?.advanceReason ?? null,
+    powerScoreDiagnostics: formatScoreDiagnostics(scoreSelection),
+    rankingSelectionMode: scoreSelection?.selectionMode ?? 'calculated-power-score',
   };
 }
 
@@ -2562,7 +2637,7 @@ export default async function handler(req, res) {
       })
     );
 
-    const { aiDraft, generationDiagnostics } = await generatePowerRankings(
+    const { aiDraft, generationDiagnostics, scoreSelection } = await generatePowerRankings(
       generationContext,
       raceNumber
     );
@@ -2671,6 +2746,7 @@ export default async function handler(req, res) {
       recentFormAnalysis,
       resultsAudit,
       recentRaceFinishDiagnostics,
+      scoreSelection,
     });
 
     console.log(
@@ -2727,6 +2803,8 @@ export default async function handler(req, res) {
       confidenceScore: generationSources.confidenceScore,
       confidenceReason: generationSources.confidenceReason,
       dataQualityScore: generationSources.dataQualityScore,
+      scoreDiagnostics: generationSources.powerScoreDiagnostics,
+      rankingSelectionMode: generationSources.rankingSelectionMode,
       transcriptDiagnostics: contextMeta.transcriptDiagnostics,
       transcriptUsed: contextMeta.transcriptUsed,
       transcriptMode: contextMeta.transcriptMode ?? null,
