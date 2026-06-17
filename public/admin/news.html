@@ -292,10 +292,83 @@
   <script>
     const $ = (s) => document.querySelector(s);
     const SESSION_KEY = 'bp_admin_pw';
+    const PLACEHOLDER_IMAGE = '/assets/drivers/placeholder.png';
+
+    function getNewsArticleImage() {
+      return window.BPNewsArticleImage || window.NewsArticleImage || null;
+    }
+
+    function getSpotlightImage() {
+      return window.BPSpotlightImage || window.BPDriverSpotlightImage || null;
+    }
+
+    function getStandingPhoto() {
+      return window.BPDriverStandingPhoto || null;
+    }
+
+    function normalizeArticleImage(article = {}) {
+      const helper = getNewsArticleImage();
+      if (helper?.normalize) return helper.normalize(article);
+      return {
+        featuredImageUrl: String(article.featuredImageUrl || article.featured_image_url || '').split('?')[0],
+        featuredImageUpdatedAt: article.featuredImageUpdatedAt || article.featured_image_updated_at || null,
+        featuredImageZoom: 1,
+        featuredImageX: 50,
+        featuredImageY: 50,
+      };
+    }
+
+    function applyArticleImagePreview(target, article = {}, options = {}) {
+      const helper = getNewsArticleImage();
+      if (helper?.applyPreview) {
+        helper.applyPreview(target, article, options);
+        return;
+      }
+      if (!target) return;
+      const url = String(options.previewUrl || article.featuredImageUrl || '').trim();
+      if (url) {
+        target.classList.remove('is-empty');
+        let img = target.querySelector('img');
+        if (!img) {
+          target.textContent = '';
+          img = document.createElement('img');
+          img.alt = 'Article image preview';
+          target.appendChild(img);
+        }
+        img.onerror = function () { this.onerror = null; this.src = PLACEHOLDER_IMAGE; };
+        if (img.src !== url) img.src = url;
+      } else {
+        const img = target.querySelector('img');
+        if (img) img.remove();
+        target.classList.add('is-empty');
+        target.textContent = 'No image';
+      }
+    }
+
+    function applySpotlightImagePreview(target, article = {}, driver = null, options = {}) {
+      const helper = getSpotlightImage();
+      if (helper?.applyPreview) {
+        return helper.applyPreview(target, article, driver, options);
+      }
+      if (!target) return null;
+      const url = String(options.previewUrl || driver?.photo_url || driver?.photoUrl || PLACEHOLDER_IMAGE).trim();
+      target.classList.remove('is-empty');
+      let img = target.querySelector('img');
+      if (!img) {
+        target.textContent = '';
+        img = document.createElement('img');
+        img.alt = 'Spotlight image preview';
+        target.appendChild(img);
+      }
+      img.onerror = function () { this.onerror = null; this.src = PLACEHOLDER_IMAGE; };
+      if (img.src !== url) img.src = url;
+      return { sourceLabel: 'Placeholder', url };
+    }
+
     let drivers = [];
-    let reporterSettings = MilesApexAvatar.normalizeSettings({});
+    let reporterSettings = window.MilesApexAvatar?.normalizeSettings?.({}) || {};
     let pendingReporterPreviewUrl = null;
-    let articleImageState = NewsArticleImage.normalize({});
+    let articleImageState = normalizeArticleImage({});
     let pendingArticlePreviewUrl = null;
     let pendingSpotlightPreviewUrl = null;
 
@@ -354,7 +427,7 @@
     function updateSpotlightImagePreview() {
       const driver = getSelectedSpotlightDriver();
       const article = readSpotlightArticleForPreview();
-      const displayImage = BPDriverSpotlightImage.applyPreview(
+      const displayImage = applySpotlightImagePreview(
         $('#spotlightImagePreview'),
         article,
         driver,
@@ -495,6 +568,7 @@
       }
     }
 
+    function revokePendingArticlePreview() {
       if (pendingArticlePreviewUrl) {
         URL.revokeObjectURL(pendingArticlePreviewUrl);
         pendingArticlePreviewUrl = null;
@@ -577,23 +651,28 @@
     }
 
     function currentReporterSettings() {
+      if (!window.MilesApexAvatar?.mergeSettings) return { ...reporterSettings, ...readReporterCropFromForm() };
       return MilesApexAvatar.mergeSettings(reporterSettings, readReporterCropFromForm());
     }
 
     function updateReporterPreview() {
       reporterSettings = currentReporterSettings();
       updateReporterSliderLabels();
-      const previewUrl = pendingReporterPreviewUrl || MilesApexAvatar.displayUrl(reporterSettings);
-      MilesApexAvatar.applyPreview($('#reporterPreview'), reporterSettings, { previewUrl });
-      MilesApexAvatar.applyPreview($('#editorReporterPreview'), reporterSettings, { previewUrl });
+      const previewUrl = pendingReporterPreviewUrl || (MilesApexAvatar?.displayUrl?.(reporterSettings) || '');
+      if (MilesApexAvatar?.applyPreview) {
+        MilesApexAvatar.applyPreview($('#reporterPreview'), reporterSettings, { previewUrl });
+        MilesApexAvatar.applyPreview($('#editorReporterPreview'), reporterSettings, { previewUrl });
+      }
     }
 
     async function loadReporterSettings() {
       try {
-        MilesApexAvatar.clearCache();
+        MilesApexAvatar?.clearCache?.();
         const res = await fetch('/api/settings');
         const data = await parseJsonResponse(res);
-        reporterSettings = MilesApexAvatar.mergeSettings(reporterSettings, data);
+        reporterSettings = MilesApexAvatar?.mergeSettings
+          ? MilesApexAvatar.mergeSettings(reporterSettings, data)
+          : { ...reporterSettings, ...data };
         $('#reporterZoom').value = reporterSettings.milesApexImageZoom;
         $('#reporterX').value = reporterSettings.milesApexImageX;
         $('#reporterY').value = reporterSettings.milesApexImageY;
@@ -673,11 +752,18 @@
         ).split('?')[0];
         if (!storedUrl) throw new Error('Upload succeeded but no image URL was returned.');
 
-        reporterSettings = MilesApexAvatar.mergeSettings(reporterSettings, {
-          milesApexImageUrl: storedUrl,
-          milesApexImageUpdatedAt: uploadData.milesApexImageUpdatedAt || new Date().toISOString(),
-          ...readReporterCropFromForm(),
-        });
+        reporterSettings = MilesApexAvatar?.mergeSettings
+          ? MilesApexAvatar.mergeSettings(reporterSettings, {
+              milesApexImageUrl: storedUrl,
+              milesApexImageUpdatedAt: uploadData.milesApexImageUpdatedAt || new Date().toISOString(),
+              ...readReporterCropFromForm(),
+            })
+          : {
+              ...reporterSettings,
+              milesApexImageUrl: storedUrl,
+              milesApexImageUpdatedAt: uploadData.milesApexImageUpdatedAt || new Date().toISOString(),
+              ...readReporterCropFromForm(),
+            };
 
         const settingsRes = await fetch('/api/settings', {
           method: 'POST',
@@ -691,8 +777,10 @@
           }),
         });
         const settingsData = await parseJsonResponse(settingsRes);
-        reporterSettings = MilesApexAvatar.mergeSettings(reporterSettings, settingsData);
-        MilesApexAvatar.clearCache();
+        reporterSettings = MilesApexAvatar?.mergeSettings
+          ? MilesApexAvatar.mergeSettings(reporterSettings, settingsData)
+          : { ...reporterSettings, ...settingsData };
+        MilesApexAvatar?.clearCache?.();
 
         revokePendingReporterPreview();
         $('#reporterImageFile').value = '';
@@ -728,8 +816,10 @@
           body: JSON.stringify(settingsPayload),
         });
         const data = await parseJsonResponse(res);
-        reporterSettings = MilesApexAvatar.mergeSettings(reporterSettings, data);
-        MilesApexAvatar.clearCache();
+        reporterSettings = MilesApexAvatar?.mergeSettings
+          ? MilesApexAvatar.mergeSettings(reporterSettings, data)
+          : { ...reporterSettings, ...data };
+        MilesApexAvatar?.clearCache?.();
         updateReporterPreview();
         setReporterMsg('Reporter crop settings saved.');
       } catch (e) {
@@ -768,13 +858,15 @@
     }
 
     function updateArticleImagePreview() {
-      articleImageState = NewsArticleImage.normalize({
+      articleImageState = normalizeArticleImage({
         ...articleImageState,
         ...readArticleImageFromForm(),
       });
+      const helper = getNewsArticleImage();
       const previewUrl =
-        pendingArticlePreviewUrl || NewsArticleImage.displayUrl(articleImageState);
-      NewsArticleImage.applyPreview($('#articleImagePreview'), articleImageState, { previewUrl });
+        pendingArticlePreviewUrl ||
+        (helper?.displayUrl ? helper.displayUrl(articleImageState) : articleImageState.featuredImageUrl || '');
+      applyArticleImagePreview($('#articleImagePreview'), articleImageState, { previewUrl });
       updateArticleImageSliderLabels();
     }
 
@@ -792,7 +884,7 @@
 
     function resetArticleImageFields() {
       revokePendingArticlePreview();
-      articleImageState = NewsArticleImage.normalize({});
+      articleImageState = normalizeArticleImage({});
       $('#featuredImageUrl').value = '';
       $('#featuredImageUpdatedAt').value = '';
       $('#articleImageZoom').value = '1';
@@ -807,7 +899,7 @@
 
     function loadArticleImageFields(article = {}) {
       revokePendingArticlePreview();
-      articleImageState = NewsArticleImage.normalize(article);
+      articleImageState = normalizeArticleImage(article);
       $('#featuredImageUrl').value = articleImageState.featuredImageUrl || '';
       $('#featuredImageUpdatedAt').value = articleImageState.featuredImageUpdatedAt || '';
       $('#articleImageZoom').value = articleImageState.featuredImageZoom;
@@ -892,7 +984,7 @@
         }
 
         revokePendingArticlePreview();
-        articleImageState = NewsArticleImage.normalize({
+        articleImageState = normalizeArticleImage({
           ...readArticleImageFromForm(),
           featuredImageUrl: storedUrl,
           featuredImageUpdatedAt: updatedAt,

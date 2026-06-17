@@ -235,4 +235,5 @@
     applyPortraitPreview,
     applyPreview,
   };
+  window.BPSpotlightImage = window.BPDriverSpotlightImage;
 })();

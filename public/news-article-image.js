@@ -236,4 +236,5 @@
     renderPortraitImageHtml,
     applyPreview,
   };
+  window.BPNewsArticleImage = window.NewsArticleImage;
 })();
