@@ -884,36 +884,48 @@ a.home-news-item:hover h4{color:#fff}
   justify-content:flex-start;
   width:fit-content;
   max-width:100%;
-  gap:6px;
+  gap:0;
   margin:0 0 16px;
   border-bottom:1px solid var(--red);
 }
 .power-rankings-block .power-rankings-tabs button{
-  flex:0 0 auto;
-  min-width:120px;
-  max-width:160px;
-  width:auto;
-  padding:5px 10px;
+  position:relative;
+  flex:0 0 180px;
+  width:180px;
+  min-width:170px;
+  max-width:190px;
+  padding:5px 14px;
   margin:0;
   text-align:center;
+  white-space:nowrap;
   clip-path:polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
 }
-.power-rankings-block .power-rankings-tabs button:first-child,
-.power-rankings-block .power-rankings-tabs button + button{
-  margin-left:0;
-  padding-left:10px;
-  padding-right:10px;
-  border-left:1px solid #333;
+.power-rankings-block .power-rankings-tabs button:first-child{
+  z-index:2;
   clip-path:polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
-  z-index:auto;
+}
+.power-rankings-block .power-rankings-tabs button + button{
+  margin-left:-8px;
+  padding-left:22px;
+  padding-right:14px;
+  border-left:0;
+  clip-path:polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+  z-index:1;
 }
 .power-rankings-block .power-rankings-tabs button:not(.active){
   background:linear-gradient(#1c1c1c,#080808);
   border-color:#333;
   box-shadow:none;
 }
+.power-rankings-block .power-rankings-tabs button:not(.active):hover{
+  z-index:2;
+  background:linear-gradient(#d40000,#680000);
+  border-color:#ff2424;
+  color:#fff;
+  box-shadow:0 0 10px rgba(229,9,20,.25);
+}
 .power-rankings-block .power-rankings-tabs button.active{
-  z-index:1;
+  z-index:3;
   background:linear-gradient(#d40000,#680000);
   border-color:#ff2424;
   box-shadow:0 0 10px rgba(229,9,20,.25);
