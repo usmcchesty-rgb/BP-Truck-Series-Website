@@ -745,6 +745,14 @@
       return `recent=${breakdown.recentForm}, season=${breakdown.seasonPerformance}, impact=${breakdown.raceImpact}, champ=${breakdown.championship}, momentum=${breakdown.momentum}`;
     }
 
+    function formatSeasonDiagnostics(season) {
+      if (!season || season.seasonRawTotal == null) return '';
+      const raw = Number(season.seasonRawTotal).toFixed(2);
+      const normalized = Number(season.seasonNormalizedScore).toFixed(2);
+      const oldCapped = Number(season.oldClampScoreForComparison).toFixed(2);
+      return `    Season raw: ${raw}\n    Season normalized: ${normalized}\n    Old capped score: ${oldCapped}`;
+    }
+
     function formatScoreDiagnosticsText(diagnostics) {
       if (!diagnostics) return 'No power score diagnostics available.';
 
@@ -752,6 +760,9 @@
         `Selection mode: ${diagnostics.selectionMode || 'unknown'}`,
         diagnostics.weights
           ? `Weights: recent=${diagnostics.weights.recentForm}, season=${diagnostics.weights.seasonPerformance}, impact=${diagnostics.weights.raceImpact}, championship=${diagnostics.weights.championship}, momentum=${diagnostics.weights.momentum}`
+          : '',
+        diagnostics.seasonRawTargetMax != null
+          ? `Season raw target max: ${diagnostics.seasonRawTargetMax}`
           : '',
         '',
         'Selected Top 10:',
@@ -768,7 +779,8 @@
             : '',
           row.componentDetails?.raceImpact?.finish != null
             ? `    latest race: P${row.componentDetails.raceImpact.finish}${row.componentDetails.raceImpact.lapsLed ? `, led ${row.componentDetails.raceImpact.lapsLed}` : ''}`
-            : ''
+            : '',
+          formatSeasonDiagnostics(row.componentDetails?.season)
         );
       }
 

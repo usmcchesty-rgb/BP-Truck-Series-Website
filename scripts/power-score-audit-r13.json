@@ -1,0 +1,987 @@
+﻿{
+  "generatedAt": "2026-06-17T15:38:03.782Z",
+  "raceNumber": 13,
+  "previousPowerRankingsRace": null,
+  "weights": {
+    "recentForm": 0.4,
+    "seasonPerformance": 0.25,
+    "raceImpact": 0.15,
+    "championship": 0.1,
+    "momentum": 0.1
+  },
+  "alignedRecentRaces": [
+    {
+      "raceNumber": 11,
+      "track": "Charlotte Motor Speedway Oval Night",
+      "alignmentMethod": "schedules-api-schedule-id-match"
+    },
+    {
+      "raceNumber": 12,
+      "track": "Iowa Speedway Oval Night",
+      "alignmentMethod": "schedules-api-schedule-id-match"
+    },
+    {
+      "raceNumber": 13,
+      "track": "Indianapolis Motor Speedway NASCAR Oval",
+      "alignmentMethod": "schedules-api-schedule-id-match"
+    }
+  ],
+  "top10Selected": [
+    {
+      "rank": 1,
+      "driverName": "Dalton Kilroe",
+      "powerScore": 71.55,
+      "dropProtectionApplied": false
+    },
+    {
+      "rank": 2,
+      "driverName": "Taylor Butcher-Benjamin",
+      "powerScore": 64.08,
+      "dropProtectionApplied": false
+    },
+    {
+      "rank": 3,
+      "driverName": "Ty Marasco",
+      "powerScore": 60.24,
+      "dropProtectionApplied": false
+    },
+    {
+      "rank": 4,
+      "driverName": "Kyle Wellman",
+      "powerScore": 56.88,
+      "dropProtectionApplied": false
+    },
+    {
+      "rank": 5,
+      "driverName": "Matthew Kleinschmidt2",
+      "powerScore": 56.1,
+      "dropProtectionApplied": false
+    },
+    {
+      "rank": 6,
+      "driverName": "Trevor Harmon2",
+      "powerScore": 52.33,
+      "dropProtectionApplied": false
+    },
+    {
+      "rank": 7,
+      "driverName": "Mark Arthur",
+      "powerScore": 48.44,
+      "dropProtectionApplied": false
+    },
+    {
+      "rank": 8,
+      "driverName": "Brian Zimmerman3",
+      "powerScore": 48.02,
+      "dropProtectionApplied": false
+    },
+    {
+      "rank": 9,
+      "driverName": "Chris Carroll3",
+      "powerScore": 47.86,
+      "dropProtectionApplied": false
+    },
+    {
+      "rank": 10,
+      "driverName": "Justin Levine",
+      "powerScore": 44.62,
+      "dropProtectionApplied": false
+    }
+  ],
+  "droppedFromPreviousTop10": [],
+  "targetDrivers": {
+    "Dustin Ping": {
+      "driverId": "21637",
+      "scoreRank": 13,
+      "finalPowerRank": null,
+      "inTop10": false,
+      "protectedFromDropout": false,
+      "dropProtectionApplied": false,
+      "canDropOut": true,
+      "dropReasons": [
+        "not in previous Top 10"
+      ],
+      "recentFormScore": 44.5,
+      "seasonPerformanceScore": 36.82,
+      "raceImpactScore": 62.97,
+      "championshipScore": 4.8,
+      "momentumScore": 0,
+      "retentionBonus": 0,
+      "finalPowerScore": 36.93,
+      "weightedContributions": {
+        "recentFormContribution": 17.8,
+        "seasonContribution": 9.205,
+        "raceImpactContribution": 9.4455,
+        "championshipContribution": 0.48,
+        "momentumContribution": 0
+      },
+      "weightedSumCheck": 36.93,
+      "previousPowerRank": null,
+      "pointsStandingsPosition": 22,
+      "points": 262,
+      "seasonWins": 0,
+      "seasonTop5": 2,
+      "seasonTop10": 2,
+      "verifiedRecentRaceFinishes": [
+        {
+          "raceNumber": 12,
+          "track": "Iowa Speedway Oval Night",
+          "finish": 2
+        },
+        {
+          "raceNumber": 13,
+          "track": "Indianapolis Motor Speedway NASCAR Oval",
+          "finish": 2
+        }
+      ],
+      "numericInputs": {
+        "recentForm": {
+          "last3Finishes": [
+            2,
+            2
+          ],
+          "last3RaceAverageFinish": 2,
+          "last3RaceStarts": 2,
+          "last3RaceDnpCount": 1,
+          "recentWins": 0,
+          "recentTop5s": 2,
+          "recentTop10s": 0,
+          "dnpPenalty": 15,
+          "dnfPenalty": 0
+        },
+        "season": {
+          "pointsPosition": 22,
+          "wins": 0,
+          "top5": 2,
+          "top10": 2,
+          "races": 6,
+          "avgFinish": 11.2,
+          "bestFinish": 2
+        },
+        "raceImpact": {
+          "latestRaceNumber": 13,
+          "track": "Indianapolis Motor Speedway NASCAR Oval",
+          "finish": 2,
+          "startingPos": 3,
+          "positionsGained": 1,
+          "lapsLed": 0,
+          "stageFinishes": [
+            {
+              "stage": 1,
+              "finish": 4
+            },
+            {
+              "stage": 2,
+              "finish": 5
+            }
+          ],
+          "missedLatestRace": false,
+          "dnf": false
+        },
+        "championship": {
+          "pointsPosition": 22,
+          "playoffCut": 16,
+          "playoffRelevant": false,
+          "cutlineBonus": 0
+        },
+        "momentum": {
+          "previousRank": null,
+          "retentionBonus": 0
+        }
+      }
+    },
+    "Mark Arthur": {
+      "driverId": "12987",
+      "scoreRank": 7,
+      "finalPowerRank": 7,
+      "inTop10": true,
+      "protectedFromDropout": false,
+      "dropProtectionApplied": false,
+      "canDropOut": true,
+      "dropReasons": [
+        "not in previous Top 10"
+      ],
+      "recentFormScore": 31.45,
+      "seasonPerformanceScore": 100,
+      "raceImpactScore": 20.37,
+      "championshipScore": 78,
+      "momentumScore": 0,
+      "retentionBonus": 0,
+      "finalPowerScore": 48.44,
+      "weightedContributions": {
+        "recentFormContribution": 12.58,
+        "seasonContribution": 25,
+        "raceImpactContribution": 3.0555,
+        "championshipContribution": 7.8,
+        "momentumContribution": 0
+      },
+      "weightedSumCheck": 48.44,
+      "previousPowerRank": null,
+      "pointsStandingsPosition": 6,
+      "points": 488,
+      "seasonWins": 1,
+      "seasonTop5": 3,
+      "seasonTop10": 5,
+      "verifiedRecentRaceFinishes": [
+        {
+          "raceNumber": 11,
+          "track": "Charlotte Motor Speedway Oval Night",
+          "finish": 6
+        },
+        {
+          "raceNumber": 12,
+          "track": "Iowa Speedway Oval Night",
+          "finish": 18
+        },
+        {
+          "raceNumber": 13,
+          "track": "Indianapolis Motor Speedway NASCAR Oval",
+          "finish": 14
+        }
+      ],
+      "numericInputs": {
+        "recentForm": {
+          "last3Finishes": [
+            6,
+            18,
+            14
+          ],
+          "last3RaceAverageFinish": 12.7,
+          "last3RaceStarts": 3,
+          "last3RaceDnpCount": 0,
+          "recentWins": 0,
+          "recentTop5s": 0,
+          "recentTop10s": 1,
+          "dnpPenalty": 0,
+          "dnfPenalty": 0
+        },
+        "season": {
+          "pointsPosition": 6,
+          "wins": 1,
+          "top5": 3,
+          "top10": 5,
+          "races": 13,
+          "avgFinish": 11.3,
+          "bestFinish": 1
+        },
+        "raceImpact": {
+          "latestRaceNumber": 13,
+          "track": "Indianapolis Motor Speedway NASCAR Oval",
+          "finish": 14,
+          "startingPos": 5,
+          "positionsGained": -9,
+          "lapsLed": 0,
+          "stageFinishes": [
+            {
+              "stage": 1,
+              "finish": 7
+            },
+            {
+              "stage": 2,
+              "finish": 18
+            }
+          ],
+          "missedLatestRace": false,
+          "dnf": false
+        },
+        "championship": {
+          "pointsPosition": 6,
+          "playoffCut": 16,
+          "playoffRelevant": true,
+          "cutlineBonus": 6
+        },
+        "momentum": {
+          "previousRank": null,
+          "retentionBonus": 0
+        }
+      }
+    },
+    "Justin Levine": {
+      "driverId": "30961",
+      "scoreRank": 10,
+      "finalPowerRank": 10,
+      "inTop10": true,
+      "protectedFromDropout": false,
+      "dropProtectionApplied": false,
+      "canDropOut": true,
+      "dropReasons": [
+        "not in previous Top 10"
+      ],
+      "recentFormScore": 72,
+      "seasonPerformanceScore": 58.35,
+      "raceImpactScore": 5,
+      "championshipScore": 4.8,
+      "momentumScore": 0,
+      "retentionBonus": 0,
+      "finalPowerScore": 44.62,
+      "weightedContributions": {
+        "recentFormContribution": 28.8,
+        "seasonContribution": 14.5875,
+        "raceImpactContribution": 0.75,
+        "championshipContribution": 0.48,
+        "momentumContribution": 0
+      },
+      "weightedSumCheck": 44.62,
+      "previousPowerRank": null,
+      "pointsStandingsPosition": 24,
+      "points": 236,
+      "seasonWins": 2,
+      "seasonTop5": 4,
+      "seasonTop10": 4,
+      "verifiedRecentRaceFinishes": [
+        {
+          "raceNumber": 11,
+          "track": "Charlotte Motor Speedway Oval Night",
+          "finish": 1
+        },
+        {
+          "raceNumber": 12,
+          "track": "Iowa Speedway Oval Night",
+          "finish": 1
+        }
+      ],
+      "numericInputs": {
+        "recentForm": {
+          "last3Finishes": [
+            1,
+            1
+          ],
+          "last3RaceAverageFinish": 1,
+          "last3RaceStarts": 2,
+          "last3RaceDnpCount": 1,
+          "recentWins": 2,
+          "recentTop5s": 0,
+          "recentTop10s": 0,
+          "dnpPenalty": 15,
+          "dnfPenalty": 0
+        },
+        "season": {
+          "pointsPosition": 24,
+          "wins": 2,
+          "top5": 4,
+          "top10": 4,
+          "races": 6,
+          "avgFinish": 7.2,
+          "bestFinish": 1
+        },
+        "raceImpact": {
+          "latestRaceNumber": 13,
+          "track": "Indianapolis Motor Speedway NASCAR Oval",
+          "finish": null,
+          "startingPos": null,
+          "positionsGained": null,
+          "lapsLed": null,
+          "stageFinishes": [],
+          "missedLatestRace": true,
+          "dnf": false
+        },
+        "championship": {
+          "pointsPosition": 24,
+          "playoffCut": 16,
+          "playoffRelevant": false,
+          "cutlineBonus": 0
+        },
+        "momentum": {
+          "previousRank": null,
+          "retentionBonus": 0
+        }
+      }
+    },
+    "Dalton Kilroe": {
+      "driverId": "39623",
+      "scoreRank": 1,
+      "finalPowerRank": 1,
+      "inTop10": true,
+      "protectedFromDropout": false,
+      "dropProtectionApplied": false,
+      "canDropOut": true,
+      "dropReasons": [
+        "not in previous Top 10"
+      ],
+      "recentFormScore": 64.95,
+      "seasonPerformanceScore": 100,
+      "raceImpactScore": 72.35,
+      "championshipScore": 97.2,
+      "momentumScore": 0,
+      "retentionBonus": 0,
+      "finalPowerScore": 71.55,
+      "weightedContributions": {
+        "recentFormContribution": 25.98,
+        "seasonContribution": 25,
+        "raceImpactContribution": 10.8525,
+        "championshipContribution": 9.72,
+        "momentumContribution": 0
+      },
+      "weightedSumCheck": 71.55,
+      "previousPowerRank": null,
+      "pointsStandingsPosition": 2,
+      "points": 602,
+      "seasonWins": 2,
+      "seasonTop5": 8,
+      "seasonTop10": 10,
+      "verifiedRecentRaceFinishes": [
+        {
+          "raceNumber": 11,
+          "track": "Charlotte Motor Speedway Oval Night",
+          "finish": 4
+        },
+        {
+          "raceNumber": 12,
+          "track": "Iowa Speedway Oval Night",
+          "finish": 3
+        },
+        {
+          "raceNumber": 13,
+          "track": "Indianapolis Motor Speedway NASCAR Oval",
+          "finish": 4
+        }
+      ],
+      "numericInputs": {
+        "recentForm": {
+          "last3Finishes": [
+            4,
+            3,
+            4
+          ],
+          "last3RaceAverageFinish": 3.7,
+          "last3RaceStarts": 3,
+          "last3RaceDnpCount": 0,
+          "recentWins": 0,
+          "recentTop5s": 3,
+          "recentTop10s": 0,
+          "dnpPenalty": 0,
+          "dnfPenalty": 0
+        },
+        "season": {
+          "pointsPosition": 2,
+          "wins": 2,
+          "top5": 8,
+          "top10": 10,
+          "races": 13,
+          "avgFinish": 6.4,
+          "bestFinish": 1
+        },
+        "raceImpact": {
+          "latestRaceNumber": 13,
+          "track": "Indianapolis Motor Speedway NASCAR Oval",
+          "finish": 4,
+          "startingPos": 6,
+          "positionsGained": 2,
+          "lapsLed": 15,
+          "stageFinishes": [
+            {
+              "stage": 1,
+              "finish": 3
+            },
+            {
+              "stage": 2,
+              "finish": 2
+            }
+          ],
+          "missedLatestRace": false,
+          "dnf": false
+        },
+        "championship": {
+          "pointsPosition": 2,
+          "playoffCut": 16,
+          "playoffRelevant": true,
+          "cutlineBonus": 6
+        },
+        "momentum": {
+          "previousRank": null,
+          "retentionBonus": 0
+        }
+      }
+    }
+  },
+  "top20ByPowerScore": [
+    {
+      "scoreRank": 1,
+      "finalRank": 1,
+      "inTop10": true,
+      "driverName": "Dalton Kilroe",
+      "driverId": "39623",
+      "powerScore": 71.55,
+      "scoreBreakdown": {
+        "recentForm": 64.95,
+        "seasonPerformance": 100,
+        "raceImpact": 72.35,
+        "championship": 97.2,
+        "momentum": 0
+      },
+      "previousPowerRank": null,
+      "retentionBonus": 0,
+      "protectedFromDropout": false,
+      "recentFinishes": [
+        4,
+        3,
+        4
+      ],
+      "last3Avg": 3.7,
+      "pointsPosition": 2
+    },
+    {
+      "scoreRank": 2,
+      "finalRank": 2,
+      "inTop10": true,
+      "driverName": "Taylor Butcher-Benjamin",
+      "driverId": "36776",
+      "powerScore": 64.08,
+      "scoreBreakdown": {
+        "recentForm": 53.05,
+        "seasonPerformance": 100,
+        "raceImpact": 57.47,
+        "championship": 92.4,
+        "momentum": 0
+      },
+      "previousPowerRank": null,
+      "retentionBonus": 0,
+      "protectedFromDropout": false,
+      "recentFinishes": [
+        7,
+        7,
+        5
+      ],
+      "last3Avg": 6.3,
+      "pointsPosition": 3
+    },
+    {
+      "scoreRank": 3,
+      "finalRank": 3,
+      "inTop10": true,
+      "driverName": "Ty Marasco",
+      "driverId": "39628",
+      "powerScore": 60.24,
+      "scoreBreakdown": {
+        "recentForm": 43.5,
+        "seasonPerformance": 100,
+        "raceImpact": 73.3,
+        "championship": 68.4,
+        "momentum": 0
+      },
+      "previousPowerRank": null,
+      "retentionBonus": 0,
+      "protectedFromDropout": false,
+      "recentFinishes": [
+        15,
+        1
+      ],
+      "last3Avg": 8,
+      "pointsPosition": 8
+    },
+    {
+      "scoreRank": 4,
+      "finalRank": 4,
+      "inTop10": true,
+      "driverName": "Kyle Wellman",
+      "driverId": "44943",
+      "powerScore": 56.88,
+      "scoreBreakdown": {
+        "recentForm": 39.95,
+        "seasonPerformance": 100,
+        "raceImpact": 47.57,
+        "championship": 87.6,
+        "momentum": 0
+      },
+      "previousPowerRank": null,
+      "retentionBonus": 0,
+      "protectedFromDropout": false,
+      "recentFinishes": [
+        11,
+        10,
+        8
+      ],
+      "last3Avg": 9.7,
+      "pointsPosition": 4
+    },
+    {
+      "scoreRank": 5,
+      "finalRank": 5,
+      "inTop10": true,
+      "driverName": "Matthew Kleinschmidt2",
+      "driverId": "36764",
+      "powerScore": 56.1,
+      "scoreBreakdown": {
+        "recentForm": 28.25,
+        "seasonPerformance": 100,
+        "raceImpact": 73.63,
+        "championship": 87.6,
+        "momentum": 0
+      },
+      "previousPowerRank": null,
+      "retentionBonus": 0,
+      "protectedFromDropout": false,
+      "recentFinishes": [
+        12,
+        3
+      ],
+      "last3Avg": 7.5,
+      "pointsPosition": 4
+    },
+    {
+      "scoreRank": 6,
+      "finalRank": 6,
+      "inTop10": true,
+      "driverName": "Trevor Harmon2",
+      "driverId": "33242",
+      "powerScore": 52.33,
+      "scoreBreakdown": {
+        "recentForm": 45.45,
+        "seasonPerformance": 88.05,
+        "raceImpact": 38.5,
+        "championship": 63.6,
+        "momentum": 0
+      },
+      "previousPowerRank": null,
+      "retentionBonus": 0,
+      "protectedFromDropout": false,
+      "recentFinishes": [
+        8,
+        8,
+        10
+      ],
+      "last3Avg": 8.7,
+      "pointsPosition": 9
+    },
+    {
+      "scoreRank": 7,
+      "finalRank": 7,
+      "inTop10": true,
+      "driverName": "Mark Arthur",
+      "driverId": "12987",
+      "powerScore": 48.44,
+      "scoreBreakdown": {
+        "recentForm": 31.45,
+        "seasonPerformance": 100,
+        "raceImpact": 20.37,
+        "championship": 78,
+        "momentum": 0
+      },
+      "previousPowerRank": null,
+      "retentionBonus": 0,
+      "protectedFromDropout": false,
+      "recentFinishes": [
+        6,
+        18,
+        14
+      ],
+      "last3Avg": 12.7,
+      "pointsPosition": 6
+    },
+    {
+      "scoreRank": 8,
+      "finalRank": 8,
+      "inTop10": true,
+      "driverName": "Brian Zimmerman3",
+      "driverId": "41238",
+      "powerScore": 48.02,
+      "scoreBreakdown": {
+        "recentForm": 45.45,
+        "seasonPerformance": 70.05,
+        "raceImpact": 49.4,
+        "championship": 49.2,
+        "momentum": 0
+      },
+      "previousPowerRank": null,
+      "retentionBonus": 0,
+      "protectedFromDropout": false,
+      "recentFinishes": [
+        14,
+        5,
+        7
+      ],
+      "last3Avg": 8.7,
+      "pointsPosition": 12
+    },
+    {
+      "scoreRank": 9,
+      "finalRank": 9,
+      "inTop10": true,
+      "driverName": "Chris Carroll3",
+      "driverId": "39765",
+      "powerScore": 47.86,
+      "scoreBreakdown": {
+        "recentForm": 24.5,
+        "seasonPerformance": 100,
+        "raceImpact": 20.43,
+        "championship": 100,
+        "momentum": 0
+      },
+      "previousPowerRank": null,
+      "retentionBonus": 0,
+      "protectedFromDropout": false,
+      "recentFinishes": [
+        2,
+        18
+      ],
+      "last3Avg": 10,
+      "pointsPosition": 1
+    },
+    {
+      "scoreRank": 10,
+      "finalRank": 10,
+      "inTop10": true,
+      "driverName": "Justin Levine",
+      "driverId": "30961",
+      "powerScore": 44.62,
+      "scoreBreakdown": {
+        "recentForm": 72,
+        "seasonPerformance": 58.35,
+        "raceImpact": 5,
+        "championship": 4.8,
+        "momentum": 0
+      },
+      "previousPowerRank": null,
+      "retentionBonus": 0,
+      "protectedFromDropout": false,
+      "recentFinishes": [
+        1,
+        1
+      ],
+      "last3Avg": 1,
+      "pointsPosition": 24
+    },
+    {
+      "scoreRank": 11,
+      "finalRank": null,
+      "inTop10": false,
+      "driverName": "Chris Berg",
+      "driverId": "36378",
+      "powerScore": 39.77,
+      "scoreBreakdown": {
+        "recentForm": 16.75,
+        "seasonPerformance": 100,
+        "raceImpact": 5,
+        "championship": 73.2,
+        "momentum": 0
+      },
+      "previousPowerRank": null,
+      "retentionBonus": 0,
+      "protectedFromDropout": false,
+      "recentFinishes": [
+        19,
+        6
+      ],
+      "last3Avg": 12.5,
+      "pointsPosition": 7
+    },
+    {
+      "scoreRank": 12,
+      "finalRank": null,
+      "inTop10": false,
+      "driverName": "Bryan Dees",
+      "driverId": "38639",
+      "powerScore": 37.2,
+      "scoreBreakdown": {
+        "recentForm": 11.5,
+        "seasonPerformance": 73.75,
+        "raceImpact": 58.43,
+        "championship": 54,
+        "momentum": 0
+      },
+      "previousPowerRank": null,
+      "retentionBonus": 0,
+      "protectedFromDropout": false,
+      "recentFinishes": [
+        6
+      ],
+      "last3Avg": 6,
+      "pointsPosition": 11
+    },
+    {
+      "scoreRank": 13,
+      "finalRank": null,
+      "inTop10": false,
+      "driverName": "Dustin Ping",
+      "driverId": "21637",
+      "powerScore": 36.93,
+      "scoreBreakdown": {
+        "recentForm": 44.5,
+        "seasonPerformance": 36.82,
+        "raceImpact": 62.97,
+        "championship": 4.8,
+        "momentum": 0
+      },
+      "previousPowerRank": null,
+      "retentionBonus": 0,
+      "protectedFromDropout": false,
+      "recentFinishes": [
+        2,
+        2
+      ],
+      "last3Avg": 2,
+      "pointsPosition": 22
+    },
+    {
+      "scoreRank": 14,
+      "finalRank": null,
+      "inTop10": false,
+      "driverName": "Mike Massengill",
+      "driverId": "37866",
+      "powerScore": 33.96,
+      "scoreBreakdown": {
+        "recentForm": 27.45,
+        "seasonPerformance": 50.88,
+        "raceImpact": 42,
+        "championship": 39.6,
+        "momentum": 0
+      },
+      "previousPowerRank": null,
+      "retentionBonus": 0,
+      "protectedFromDropout": false,
+      "recentFinishes": [
+        12,
+        13,
+        13
+      ],
+      "last3Avg": 12.7,
+      "pointsPosition": 14
+    },
+    {
+      "scoreRank": 15,
+      "finalRank": null,
+      "inTop10": false,
+      "driverName": "Larry Bell",
+      "driverId": "37997",
+      "powerScore": 33.27,
+      "scoreBreakdown": {
+        "recentForm": 32.05,
+        "seasonPerformance": 50.29,
+        "raceImpact": 29.33,
+        "championship": 34.8,
+        "momentum": 0
+      },
+      "previousPowerRank": null,
+      "retentionBonus": 0,
+      "protectedFromDropout": false,
+      "recentFinishes": [
+        13,
+        9,
+        15
+      ],
+      "last3Avg": 12.3,
+      "pointsPosition": 15
+    },
+    {
+      "scoreRank": 16,
+      "finalRank": null,
+      "inTop10": false,
+      "driverName": "Cody Gibson",
+      "driverId": "18540",
+      "powerScore": 33.05,
+      "scoreBreakdown": {
+        "recentForm": 39.95,
+        "seasonPerformance": 29.6,
+        "raceImpact": 61.27,
+        "championship": 4.8,
+        "momentum": 0
+      },
+      "previousPowerRank": null,
+      "retentionBonus": 0,
+      "protectedFromDropout": false,
+      "recentFinishes": [
+        3,
+        15,
+        11
+      ],
+      "last3Avg": 9.7,
+      "pointsPosition": 22
+    },
+    {
+      "scoreRank": 17,
+      "finalRank": null,
+      "inTop10": false,
+      "driverName": "Logan M Wilson",
+      "driverId": "85687",
+      "powerScore": 32.03,
+      "scoreBreakdown": {
+        "recentForm": 35,
+        "seasonPerformance": 50.57,
+        "raceImpact": 15.92,
+        "championship": 30,
+        "momentum": 0
+      },
+      "previousPowerRank": null,
+      "retentionBonus": 0,
+      "protectedFromDropout": false,
+      "recentFinishes": [
+        18,
+        4,
+        17
+      ],
+      "last3Avg": 13,
+      "pointsPosition": 16
+    },
+    {
+      "scoreRank": 18,
+      "finalRank": null,
+      "inTop10": false,
+      "driverName": "Hunter Lagunes",
+      "driverId": "72175",
+      "powerScore": 29.8,
+      "scoreBreakdown": {
+        "recentForm": 0,
+        "seasonPerformance": 92.68,
+        "raceImpact": 5,
+        "championship": 58.8,
+        "momentum": 0
+      },
+      "previousPowerRank": null,
+      "retentionBonus": 0,
+      "protectedFromDropout": false,
+      "recentFinishes": [
+        21
+      ],
+      "last3Avg": 21,
+      "pointsPosition": 10
+    },
+    {
+      "scoreRank": 19,
+      "finalRank": null,
+      "inTop10": false,
+      "driverName": "William Bruton",
+      "driverId": "63816",
+      "powerScore": 29.67,
+      "scoreBreakdown": {
+        "recentForm": 12,
+        "seasonPerformance": 55.44,
+        "raceImpact": 43.83,
+        "championship": 44.4,
+        "momentum": 0
+      },
+      "previousPowerRank": null,
+      "retentionBonus": 0,
+      "protectedFromDropout": false,
+      "recentFinishes": [
+        14,
+        12
+      ],
+      "last3Avg": 13,
+      "pointsPosition": 13
+    },
+    {
+      "scoreRank": 20,
+      "finalRank": null,
+      "inTop10": false,
+      "driverName": "Scotty Stevens",
+      "driverId": "56040",
+      "powerScore": 26.24,
+      "scoreBreakdown": {
+        "recentForm": 25.25,
+        "seasonPerformance": 30.87,
+        "raceImpact": 52.93,
+        "championship": 4.8,
+        "momentum": 0
+      },
+      "previousPowerRank": null,
+      "retentionBonus": 0,
+      "protectedFromDropout": false,
+      "recentFinishes": [
+        10,
+        9
+      ],
+      "last3Avg": 9.5,
+      "pointsPosition": 41
+    }
+  ]
+}

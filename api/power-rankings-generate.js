@@ -49,7 +49,7 @@ import {
   guardPromptMessages,
   stripOptionalFromWriteupPayload,
 } from './_power-rankings-compact-context.js';
-import { buildPowerRankingSelection } from './_power-rankings-scoring.js';
+import { buildPowerRankingSelection, SEASON_RAW_TARGET_MAX } from './_power-rankings-scoring.js';
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -2105,6 +2105,7 @@ function formatScoreDiagnostics(scoreSelection) {
   return {
     selectionMode: scoreSelection.selectionMode,
     weights: scoreSelection.weights,
+    seasonRawTargetMax: SEASON_RAW_TARGET_MAX,
     top10: (scoreSelection.top10 || []).map(formatRow),
     allCandidates: (scoreSelection.candidates || []).map((row, index) => ({
       ...formatRow(row),

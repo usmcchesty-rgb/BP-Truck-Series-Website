@@ -15,6 +15,8 @@ const WEIGHTS = {
   momentum: 0.1,
 };
 
+export const SEASON_RAW_TARGET_MAX = 175;
+
 const DNF_FINISH_THRESHOLD = 35;
 const PLAYOFF_CUT_DEFAULT = DEFAULTS.playoffCut || 16;
 
@@ -149,6 +151,22 @@ function buildRecentFormComponent(grounding, alignedRaces, driverId) {
 }
 
 function buildSeasonComponent(standingsRow, schedules, driverId) {
+  const explained = explainSeasonPerformanceScore(standingsRow, schedules, driverId);
+  return {
+    score: explained.seasonNormalizedScore,
+    details: explained.details,
+    diagnostics: {
+      seasonRawTotal: explained.seasonRawTotal,
+      seasonRawTargetMax: explained.seasonRawTargetMax,
+      seasonNormalizedScore: explained.seasonNormalizedScore,
+      seasonWasCapped: explained.seasonWasCapped,
+      oldClampScoreForComparison: explained.oldClampScoreForComparison,
+      components: explained.components,
+    },
+  };
+}
+
+export function explainSeasonPerformanceScore(standingsRow, schedules, driverId) {
   const position = Number(standingsRow?.position);
   const wins = Number(standingsRow?.wins) || 0;
   const top5 = Number(standingsRow?.top5) || 0;
@@ -166,21 +184,57 @@ function buildSeasonComponent(standingsRow, schedules, driverId) {
     bestFinish: seasonFinishes.bestFinish,
   };
 
-  let score = 0;
-  if (Number.isFinite(position) && position >= 1) {
-    score += clamp((21 - Math.min(position, 20)) * 4.5);
-  }
-  score += Math.min(wins, 5) * 6;
-  score += Math.min(top5, 12) * 2.2;
-  score += Math.min(top10, 20) * 0.9;
-  if (seasonFinishes.avgFinish != null) {
-    score += invertFinishScore(seasonFinishes.avgFinish) * 0.22;
-  }
-  if (seasonFinishes.bestFinish != null) {
-    score += invertFinishScore(seasonFinishes.bestFinish) * 0.12;
-  }
+  const positionPoints = Number.isFinite(position) && position >= 1
+    ? clamp((21 - Math.min(position, 20)) * 4.5)
+    : 0;
+  const winPoints = Math.min(wins, 5) * 6;
+  const top5Points = Math.min(top5, 12) * 2.2;
+  const top10Points = Math.min(top10, 20) * 0.9;
+  const avgFinishPoints =
+    seasonFinishes.avgFinish != null
+      ? invertFinishScore(seasonFinishes.avgFinish) * 0.22
+      : 0;
+  const bestFinishPoints =
+    seasonFinishes.bestFinish != null
+      ? invertFinishScore(seasonFinishes.bestFinish) * 0.12
+      : 0;
 
-  return { score: clamp(score), details };
+  const components = {
+    positionPoints,
+    winPoints,
+    top5Points,
+    top10Points,
+    avgFinishPoints: Number(avgFinishPoints.toFixed(4)),
+    bestFinishPoints: Number(bestFinishPoints.toFixed(4)),
+  };
+
+  const rawTotal = Number(
+    (
+      positionPoints +
+      winPoints +
+      top5Points +
+      top10Points +
+      avgFinishPoints +
+      bestFinishPoints
+    ).toFixed(4)
+  );
+
+  const oldClampScoreForComparison = clamp(rawTotal);
+  const seasonNormalizedScore = clamp((rawTotal / SEASON_RAW_TARGET_MAX) * 100);
+  const seasonWasCapped = rawTotal / SEASON_RAW_TARGET_MAX > 1;
+
+  return {
+    seasonRawTotal: rawTotal,
+    rawTotal,
+    seasonRawTargetMax: SEASON_RAW_TARGET_MAX,
+    seasonNormalizedScore: Number(seasonNormalizedScore.toFixed(2)),
+    seasonWasCapped,
+    oldClampScoreForComparison,
+    cappedScore: Number(seasonNormalizedScore.toFixed(2)),
+    wasCapped: seasonWasCapped,
+    components,
+    details,
+  };
 }
 
 function buildRaceImpactComponent(latestRace, schedules, driverId) {
@@ -409,7 +463,10 @@ export function scorePowerRankingCandidate({
     protectedFromDropout: dropEval.protected === true,
     componentDetails: {
       recentForm: recentForm.details,
-      season: season.details,
+      season: {
+        ...season.details,
+        ...season.diagnostics,
+      },
       raceImpact: raceImpact.details,
       championship: championship.details,
       momentum: momentum.details,
