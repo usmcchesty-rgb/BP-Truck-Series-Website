@@ -32,12 +32,6 @@
               </p>
             </header>
 
-            <nav class="power-rankings-tabs page-tabs" role="tablist" aria-label="Power Rankings sections">
-              <button type="button" class="active" role="tab" id="prTabBtnRankings" aria-selected="true" aria-controls="prTabRankings" data-pr-tab="rankings">Rankings</button>
-              <button type="button" role="tab" id="prTabBtnHowItWorks" aria-selected="false" aria-controls="prTabHowItWorks" data-pr-tab="how-it-works">How It Works</button>
-            </nav>
-
-            <div id="prTabRankings" class="tab active power-rankings-tab-panel" role="tabpanel" aria-labelledby="prTabBtnRankings">
             <div class="power-rankings-main">
             <div id="prEmpty" class="placeholder-panel" hidden>
               <p>No power rankings have been published yet. Check back after the next race.</p>
@@ -79,46 +73,53 @@
                   <p class="power-rankings-date" id="prPublishedDate"></p>
                 </div>
               </div>
-              <div id="prList" class="power-rankings-list"></div>
-            </div>
 
-            <section id="prHonorableSection" class="power-rankings-honorable" hidden>
-              <h3>HONORABLE MENTIONS</h3>
-              <div id="prHonorableList" class="power-rankings-honorable-list"></div>
-            </section>
+              <nav class="power-rankings-tabs standings-table-tabs" role="tablist" aria-label="Power Rankings sections">
+                <button type="button" class="active" role="tab" id="prTabBtnRankings" aria-selected="true" aria-controls="prTabRankings" data-pr-tab="rankings">Rankings</button>
+                <button type="button" role="tab" id="prTabBtnHowItWorks" aria-selected="false" aria-controls="prTabHowItWorks" data-pr-tab="how-it-works">How It Works</button>
+              </nav>
 
-            <footer id="prProphetSignature" class="pedal-prophet-signature" hidden>
-              <hr class="pedal-prophet-signature-rule" />
-              <img
-                class="pedal-prophet-logo pedal-prophet-logo-sm"
-                src="/assets/logos/pedal-prophet-logo.png"
-                alt="The Pedal Prophet"
-                width="72"
-                height="28"
-                decoding="async"
-              />
-              <p class="pedal-prophet-signature-name">THE PEDAL PROPHET</p>
-              <p class="pedal-prophet-signature-role">Power Rankings &amp; Race Analysis</p>
-              <p class="pedal-prophet-signature-signoff">See you after the next green flag.</p>
-            </footer>
-            </div>
-            </div>
+              <div id="prTabRankings" class="tab active power-rankings-tab-panel" role="tabpanel" aria-labelledby="prTabBtnRankings">
+                <div id="prList" class="power-rankings-list"></div>
 
-            <div id="prTabHowItWorks" class="tab power-rankings-tab-panel" role="tabpanel" aria-labelledby="prTabBtnHowItWorks">
-              <section class="power-rankings-formula-section" aria-label="How Power Rankings are calculated">
-                <div id="prFormulaImageWrap" class="power-rankings-formula-wrap" hidden>
+                <section id="prHonorableSection" class="power-rankings-honorable" hidden>
+                  <h3>HONORABLE MENTIONS</h3>
+                  <div id="prHonorableList" class="power-rankings-honorable-list"></div>
+                </section>
+
+                <footer id="prProphetSignature" class="pedal-prophet-signature" hidden>
+                  <hr class="pedal-prophet-signature-rule" />
                   <img
-                    id="prFormulaImage"
-                    class="power-rankings-formula-image"
-                    src=""
-                    alt="Power Rankings scoring formula"
+                    class="pedal-prophet-logo pedal-prophet-logo-sm"
+                    src="/assets/logos/pedal-prophet-logo.png"
+                    alt="The Pedal Prophet"
+                    width="72"
+                    height="28"
                     decoding="async"
                   />
-                </div>
-                <p id="prFormulaFallback" class="power-rankings-formula-fallback" hidden>
-                  Power Rankings are calculated using recent form, season performance, race impact, championship position, and momentum.
-                </p>
-              </section>
+                  <p class="pedal-prophet-signature-name">THE PEDAL PROPHET</p>
+                  <p class="pedal-prophet-signature-role">Power Rankings &amp; Race Analysis</p>
+                  <p class="pedal-prophet-signature-signoff">See you after the next green flag.</p>
+                </footer>
+              </div>
+
+              <div id="prTabHowItWorks" class="tab power-rankings-tab-panel" role="tabpanel" aria-labelledby="prTabBtnHowItWorks">
+                <section class="power-rankings-formula-section" aria-label="How Power Rankings are calculated">
+                  <div id="prFormulaImageWrap" class="power-rankings-formula-wrap" hidden>
+                    <img
+                      id="prFormulaImage"
+                      class="power-rankings-formula-image"
+                      src=""
+                      alt="Power Rankings scoring formula"
+                      decoding="async"
+                    />
+                  </div>
+                  <p id="prFormulaFallback" class="power-rankings-formula-fallback" hidden>
+                    Power Rankings are calculated using recent form, season performance, race impact, championship position, and momentum.
+                  </p>
+                </section>
+              </div>
+            </div>
             </div>
           </div>
 

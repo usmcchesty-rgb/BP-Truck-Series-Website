@@ -878,21 +878,15 @@ a.home-news-item:hover h4{color:#fff}
   width:100%;
   min-width:0;
 }
-.power-rankings-tabs{
-  justify-content:center;
+.power-rankings-block .power-rankings-tabs{
   margin:0 0 16px;
-}
-.power-rankings-tabs button{
-  min-width:132px;
-  padding:7px 16px;
-  font-size:10px;
 }
 .power-rankings-tab-panel.tab{
   width:100%;
   min-width:0;
 }
 .power-rankings-formula-section{
-  padding:8px 0 4px;
+  padding:4px 0 0;
 }
 .power-rankings-formula-wrap{
   width:100%;
@@ -1134,9 +1128,9 @@ a.home-news-item:hover h4{color:#fff}
   display:flex;
   align-items:flex-end;
   gap:12px;
-  margin:0 0 18px;
-  padding-bottom:12px;
-  border-bottom:1px solid #333;
+  margin:0 0 8px;
+  padding-bottom:0;
+  border-bottom:0;
 }
 .power-rankings-section-meta{min-width:0}
 .power-rankings-section-title{
