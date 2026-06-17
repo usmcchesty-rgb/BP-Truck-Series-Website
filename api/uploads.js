@@ -7,6 +7,10 @@ import { uploadHeaderLogo } from "./_upload-header-logo.js";
 import { uploadReporterImage } from "./_upload-reporter-image.js";
 import { uploadNewsArticleImage } from "./_upload-news-article-image.js";
 import {
+  uploadPowerRankingsFormulaImage,
+  removePowerRankingsFormulaImage,
+} from "./_upload-power-rankings-formula-image.js";
+import {
   uploadSpotlightImage,
   removeSpotlightImage,
 } from "./_upload-spotlight-image.js";
@@ -49,7 +53,7 @@ export default async function handler(req, res) {
 
     const action = resolveAction(body);
     if (!action) {
-      json(res, 400, { error: 'Missing action. Use "driver-photo", "remove-driver-photo", "standing-driver-photo", "remove-standing-driver-photo", "header-logo", "reporter-image", "news-article-image", "spotlight-image", or "remove-spotlight-image".' });
+      json(res, 400, { error: 'Missing action. Use "driver-photo", "remove-driver-photo", "standing-driver-photo", "remove-standing-driver-photo", "header-logo", "reporter-image", "news-article-image", "power-rankings-formula-image", "remove-power-rankings-formula-image", "spotlight-image", or "remove-spotlight-image".' });
       return;
     }
 
@@ -68,6 +72,10 @@ export default async function handler(req, res) {
       result = await uploadReporterImage(body);
     } else if (action === "news-article-image") {
       result = await uploadNewsArticleImage(body);
+    } else if (action === "power-rankings-formula-image") {
+      result = await uploadPowerRankingsFormulaImage(body);
+    } else if (action === "remove-power-rankings-formula-image") {
+      result = await removePowerRankingsFormulaImage(body);
     } else if (action === "spotlight-image") {
       result = await uploadSpotlightImage(body);
     } else if (action === "remove-spotlight-image") {

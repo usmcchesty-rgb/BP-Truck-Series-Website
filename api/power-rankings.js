@@ -1,4 +1,11 @@
-import { slugify, supabase, withPhotoCacheBust, photoCacheVersion } from './_lib.js';
+import {
+  getSettings,
+  resolvePowerRankingsFormulaImageDisplayUrl,
+  slugify,
+  supabase,
+  withPhotoCacheBust,
+  photoCacheVersion,
+} from './_lib.js';
 import {
   formatMovementDisplay,
   MOVEMENT_NEW_SENTINEL,
@@ -322,14 +329,24 @@ async function saveWeekBundle(body, publish = false) {
   return { data: saved, status: 200 };
 }
 
+async function loadFormulaImageMeta() {
+  const settings = await getSettings();
+  return {
+    formulaImageUrl: resolvePowerRankingsFormulaImageDisplayUrl(settings),
+    formulaImageIsCustom: Boolean(settings.powerRankingsFormulaImageUrl),
+  };
+}
+
 export default async function handler(req, res) {
   if (req.method === 'GET') {
+    const formulaMeta = await loadFormulaImageMeta();
     const sb = supabase();
     if (!sb) {
       return res.status(200).json({
         configured: false,
         current: null,
         archive: [],
+        ...formulaMeta,
       });
     }
 
@@ -352,12 +369,12 @@ export default async function handler(req, res) {
         label: weekLabel(w),
       }));
 
-      return res.status(200).json({ configured: true, current: week, archive });
+      return res.status(200).json({ configured: true, current: week, archive, ...formulaMeta });
     }
 
     const { weeks, entries, honorable } = await loadPublishedWeeks(includeUnpublished);
     if (!weeks.length) {
-      return res.status(200).json({ configured: true, current: null, archive: [] });
+      return res.status(200).json({ configured: true, current: null, archive: [], ...formulaMeta });
     }
 
     const normalizedWeeks = weeks.map((week) => normalizeWeek(week, entries, honorable, profiles));
@@ -375,6 +392,7 @@ export default async function handler(req, res) {
       current,
       archive,
       weeks: includeUnpublished ? normalizedWeeks : undefined,
+      ...formulaMeta,
     });
   }
 

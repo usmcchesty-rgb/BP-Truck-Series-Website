@@ -214,6 +214,33 @@
       .ranking-row-head { display: none; }
       .mention-row { grid-template-columns: 1fr; }
     }
+    .formula-image-panel { margin-bottom: 14px; }
+    .formula-preview-wrap {
+      width: 100%;
+      max-width: 520px;
+      margin: 12px 0;
+      padding: 10px;
+      border: 1px solid #333;
+      background: linear-gradient(180deg, #121212 0%, #080808 100%);
+    }
+    .formula-preview-wrap img {
+      display: block;
+      width: 100%;
+      height: auto;
+      object-fit: contain;
+    }
+    .formula-preview-wrap.is-empty {
+      display: grid;
+      place-items: center;
+      min-height: 120px;
+      color: #777;
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    #formulaImageMsg { margin-top: 10px; font-size: 12px; color: #ccc; white-space: pre-wrap; }
+    #formulaImageMsg.error { color: #ff6060; }
   </style>
 </head>
 <body>
@@ -233,6 +260,19 @@
   <main id="adminView" class="wrap" hidden>
     <h1>Power Rankings</h1>
     <p class="sub">Create and publish weekly Top 10 power rankings with custom subtitles and writeups. Honorable mentions are optional (0–3).</p>
+
+    <div class="panel formula-image-panel">
+      <h2>Formula Image</h2>
+      <p class="sub">Displayed on the public Power Rankings <strong>How It Works</strong> tab. Falls back to <code>/assets/power-rankings/formula.png</code> when no custom image is uploaded.</p>
+      <div id="formulaImagePreview" class="formula-preview-wrap is-empty">No formula image</div>
+      <label class="field-label" for="formulaImageFile">Upload Formula Image (PNG)</label>
+      <div class="btn-row" style="margin-top:0;">
+        <input id="formulaImageFile" type="file" accept="image/png,.png">
+        <button id="uploadFormulaImageBtn" class="btn btn-secondary" type="button" disabled>Upload Formula Image</button>
+        <button id="removeFormulaImageBtn" class="btn btn-danger" type="button" disabled>Remove Formula Image</button>
+      </div>
+      <pre id="formulaImageMsg"></pre>
+    </div>
 
     <div class="panel">
       <h2>Saved Weeks</h2>
@@ -1822,11 +1862,174 @@
         await loadDrivers();
         await loadSavedWeeks();
         await refreshSuggestedRaceNumber();
+        await loadFormulaImageSettings();
         if (!currentWeekId) startNewWeek();
       } catch (e) {
         setMsg(e.message, true);
       }
     }
+
+    const DEFAULT_FORMULA_IMAGE_URL = '/assets/power-rankings/formula.png';
+    let formulaImageSettings = {
+      powerRankingsFormulaImageUrl: '',
+      powerRankingsFormulaImageUpdatedAt: null,
+    };
+
+    function stripUrlQuery(url) {
+      return String(url || '').trim().split('?')[0].split('#')[0];
+    }
+
+    function formulaImagePreviewUrl(settings = formulaImageSettings) {
+      const custom = stripUrlQuery(settings.powerRankingsFormulaImageUrl || '');
+      const url = custom || DEFAULT_FORMULA_IMAGE_URL;
+      const version = settings.powerRankingsFormulaImageUpdatedAt
+        ? new Date(settings.powerRankingsFormulaImageUpdatedAt).getTime()
+        : null;
+      if (!custom || !version) return url;
+      return `${url}?v=${encodeURIComponent(version)}`;
+    }
+
+    function setFormulaImageMsg(text, isError = false) {
+      const msg = $('#formulaImageMsg');
+      if (!msg) return;
+      msg.textContent = text || '';
+      msg.classList.toggle('error', isError);
+    }
+
+    function syncFormulaImageButtons() {
+      const uploadBtn = $('#uploadFormulaImageBtn');
+      const removeBtn = $('#removeFormulaImageBtn');
+      if (uploadBtn) uploadBtn.disabled = !$('#formulaImageFile')?.files?.[0];
+      if (removeBtn) {
+        removeBtn.disabled = !stripUrlQuery(formulaImageSettings.powerRankingsFormulaImageUrl || '');
+      }
+    }
+
+    function updateFormulaImagePreview() {
+      const preview = $('#formulaImagePreview');
+      if (!preview) return;
+
+      const url = formulaImagePreviewUrl();
+      preview.classList.remove('is-empty');
+      let img = preview.querySelector('img');
+      if (!img) {
+        preview.textContent = '';
+        img = document.createElement('img');
+        img.alt = 'Power Rankings formula preview';
+        preview.appendChild(img);
+      }
+      img.onerror = function () {
+        this.onerror = null;
+        preview.classList.add('is-empty');
+        preview.textContent = 'Formula image unavailable';
+        const imgEl = preview.querySelector('img');
+        if (imgEl) imgEl.remove();
+      };
+      if (img.src !== url) img.src = url;
+      syncFormulaImageButtons();
+    }
+
+    async function loadFormulaImageSettings() {
+      try {
+        const res = await fetch('/api/settings');
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Could not load settings.');
+        formulaImageSettings = {
+          powerRankingsFormulaImageUrl: stripUrlQuery(data.powerRankingsFormulaImageUrl || ''),
+          powerRankingsFormulaImageUpdatedAt: data.powerRankingsFormulaImageUpdatedAt || null,
+        };
+        updateFormulaImagePreview();
+      } catch (e) {
+        setFormulaImageMsg(e.message, true);
+      }
+    }
+
+    async function uploadFormulaImage() {
+      const file = $('#formulaImageFile')?.files?.[0];
+      if (!file) {
+        setFormulaImageMsg('Choose a PNG file first.', true);
+        return;
+      }
+      if (file.type !== 'image/png') {
+        setFormulaImageMsg('Only PNG files are supported.', true);
+        return;
+      }
+
+      const uploadBtn = $('#uploadFormulaImageBtn');
+      if (uploadBtn) uploadBtn.disabled = true;
+      setFormulaImageMsg('Uploading formula image...');
+
+      try {
+        const base64 = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = () => reject(new Error('Could not read file.'));
+          reader.readAsDataURL(file);
+        });
+
+        const res = await fetch('/api/uploads', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            password: getSessionPw(),
+            action: 'power-rankings-formula-image',
+            imageBase64: base64,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Upload failed.');
+
+        formulaImageSettings = {
+          powerRankingsFormulaImageUrl: stripUrlQuery(
+            data.powerRankingsFormulaImageUrlStored || data.powerRankingsFormulaImageUrl || '',
+          ),
+          powerRankingsFormulaImageUpdatedAt:
+            data.powerRankingsFormulaImageUpdatedAt || new Date().toISOString(),
+        };
+        $('#formulaImageFile').value = '';
+        updateFormulaImagePreview();
+        setFormulaImageMsg(data.savedTo ? `Saved to ${data.savedTo}.` : 'Formula image uploaded.');
+      } catch (e) {
+        setFormulaImageMsg(e.message, true);
+      } finally {
+        syncFormulaImageButtons();
+      }
+    }
+
+    async function removeFormulaImage() {
+      const removeBtn = $('#removeFormulaImageBtn');
+      if (removeBtn) removeBtn.disabled = true;
+      setFormulaImageMsg('Removing custom formula image...');
+
+      try {
+        const res = await fetch('/api/uploads', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            password: getSessionPw(),
+            action: 'remove-power-rankings-formula-image',
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Remove failed.');
+
+        formulaImageSettings = {
+          powerRankingsFormulaImageUrl: '',
+          powerRankingsFormulaImageUpdatedAt: null,
+        };
+        $('#formulaImageFile').value = '';
+        updateFormulaImagePreview();
+        setFormulaImageMsg('Custom formula image removed. Public page will use the default image.');
+      } catch (e) {
+        setFormulaImageMsg(e.message, true);
+      } finally {
+        syncFormulaImageButtons();
+      }
+    }
+
+    $('#formulaImageFile')?.addEventListener('change', syncFormulaImageButtons);
+    $('#uploadFormulaImageBtn')?.addEventListener('click', uploadFormulaImage);
+    $('#removeFormulaImageBtn')?.addEventListener('click', removeFormulaImage);
 
     function setDiscordExportStatus(text, isError = false) {
       const status = $('#discordExportStatus');

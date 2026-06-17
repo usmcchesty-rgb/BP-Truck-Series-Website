@@ -34,6 +34,11 @@ export default async function handler(req, res) {
     const y = Number(body.milesApexImageY);
     patch.milesApexImageY = Number.isFinite(y) ? Math.min(100, Math.max(0, y)) : 50;
   }
+  if (body.powerRankingsFormulaImageUrl !== undefined) {
+    const nextUrl = stripPhotoUrlQuery(String(body.powerRankingsFormulaImageUrl || '').trim());
+    patch.powerRankingsFormulaImageUrl = nextUrl;
+    patch.powerRankingsFormulaImageUpdatedAt = nextUrl ? new Date().toISOString() : null;
+  }
   const { data, error } = await sb.from('site_settings').upsert(patch).select().single();
   if (error) return res.status(500).json({ error: error.message });
   res.status(200).json(data);

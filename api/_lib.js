@@ -20,6 +20,8 @@ export const DEFAULTS = {
   milesApexImageZoom: 1,
   milesApexImageX: 50,
   milesApexImageY: 50,
+  powerRankingsFormulaImageUrl: '',
+  powerRankingsFormulaImageUpdatedAt: null,
 };
 
 export function supabase() {
@@ -113,6 +115,23 @@ export function resolveMilesApexImageDisplayUrl(settings = {}) {
   if (!url) return '';
   const version = photoCacheVersion(settings.milesApexImageUpdatedAt) || Date.now();
   return withPhotoCacheBust(url, version);
+}
+
+export const DEFAULT_POWER_RANKINGS_FORMULA_IMAGE_URL =
+  '/assets/power-rankings/formula.png';
+
+export function resolvePowerRankingsFormulaImageUrl(settings = {}) {
+  const custom = stripPhotoUrlQuery(settings.powerRankingsFormulaImageUrl || '');
+  return custom || DEFAULT_POWER_RANKINGS_FORMULA_IMAGE_URL;
+}
+
+export function resolvePowerRankingsFormulaImageDisplayUrl(settings = {}) {
+  const stored = stripPhotoUrlQuery(settings.powerRankingsFormulaImageUrl || '');
+  const url = stored || DEFAULT_POWER_RANKINGS_FORMULA_IMAGE_URL;
+  const version = stored
+    ? photoCacheVersion(settings.powerRankingsFormulaImageUpdatedAt) || Date.now()
+    : null;
+  return version ? withPhotoCacheBust(url, version) : url;
 }
 
 export function num(v) {

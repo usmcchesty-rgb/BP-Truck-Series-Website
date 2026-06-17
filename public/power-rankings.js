@@ -1,5 +1,9 @@
 const $ = (s) => document.querySelector(s);
 
+const FORMULA_FALLBACK_TEXT =
+  "Power Rankings are calculated using recent form, season performance, race impact, championship position, and momentum.";
+const DEFAULT_FORMULA_IMAGE_URL = "/assets/power-rankings/formula.png";
+
 function escapeHtml(s) {
   return String(s)
     .replace(/&/g, "&amp;")
@@ -170,6 +174,70 @@ function renderWeek(week, archive) {
   renderArchive(archive, week.id);
 }
 
+function setActiveTab(tabName) {
+  const rankingsPanel = $("#prTabRankings");
+  const howPanel = $("#prTabHowItWorks");
+  const rankingsBtn = $("#prTabBtnRankings");
+  const howBtn = $("#prTabBtnHowItWorks");
+  const isHow = tabName === "how-it-works";
+
+  rankingsPanel?.classList.toggle("active", !isHow);
+  howPanel?.classList.toggle("active", isHow);
+  rankingsBtn?.classList.toggle("active", !isHow);
+  howBtn?.classList.toggle("active", isHow);
+  if (rankingsBtn) rankingsBtn.setAttribute("aria-selected", isHow ? "false" : "true");
+  if (howBtn) howBtn.setAttribute("aria-selected", isHow ? "true" : "false");
+
+  const params = new URLSearchParams(window.location.search);
+  if (isHow) params.set("tab", "how-it-works");
+  else params.delete("tab");
+  const query = params.toString();
+  const nextUrl = `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`;
+  window.history.replaceState(null, "", nextUrl);
+}
+
+function initTabs() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("tab") === "how-it-works") {
+    setActiveTab("how-it-works");
+  }
+
+  document.querySelectorAll("[data-pr-tab]").forEach((button) => {
+    button.addEventListener("click", () => {
+      setActiveTab(button.getAttribute("data-pr-tab") || "rankings");
+    });
+  });
+}
+
+function showFormulaFallback() {
+  const wrap = $("#prFormulaImageWrap");
+  const img = $("#prFormulaImage");
+  const fallback = $("#prFormulaFallback");
+  if (wrap) wrap.hidden = true;
+  if (img) img.removeAttribute("src");
+  if (fallback) {
+    fallback.textContent = FORMULA_FALLBACK_TEXT;
+    fallback.hidden = false;
+  }
+}
+
+function renderFormulaImage(formulaImageUrl) {
+  const wrap = $("#prFormulaImageWrap");
+  const img = $("#prFormulaImage");
+  const fallback = $("#prFormulaFallback");
+  const url = String(formulaImageUrl || DEFAULT_FORMULA_IMAGE_URL).trim();
+
+  if (!img || !wrap || !fallback) return;
+
+  fallback.hidden = true;
+  wrap.hidden = false;
+  img.onerror = () => {
+    img.onerror = null;
+    showFormulaFallback();
+  };
+  img.src = url;
+}
+
 async function loadPowerRankings() {
   const params = new URLSearchParams(window.location.search);
   const weekId = params.get("week");
@@ -185,10 +253,12 @@ async function loadPowerRankings() {
 
     if (weekId) {
       renderWeek(data.current, data.archive || []);
+      renderFormulaImage(data.formulaImageUrl);
       return;
     }
 
     renderWeek(data.current, data.archive || []);
+    renderFormulaImage(data.formulaImageUrl);
   } catch (error) {
     console.warn("Power rankings load failed:", error);
     renderWeek(null, []);
@@ -197,7 +267,9 @@ async function loadPowerRankings() {
       intro.textContent =
         "Weekly rankings, race analysis, and championship insight from The Pedal Prophet. Rankings are not available right now.";
     }
+    renderFormulaImage(DEFAULT_FORMULA_IMAGE_URL);
   }
 }
 
+initTabs();
 loadPowerRankings();

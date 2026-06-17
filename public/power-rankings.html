@@ -32,6 +32,12 @@
               </p>
             </header>
 
+            <nav class="power-rankings-tabs page-tabs" role="tablist" aria-label="Power Rankings sections">
+              <button type="button" class="active" role="tab" id="prTabBtnRankings" aria-selected="true" aria-controls="prTabRankings" data-pr-tab="rankings">Rankings</button>
+              <button type="button" role="tab" id="prTabBtnHowItWorks" aria-selected="false" aria-controls="prTabHowItWorks" data-pr-tab="how-it-works">How It Works</button>
+            </nav>
+
+            <div id="prTabRankings" class="tab active power-rankings-tab-panel" role="tabpanel" aria-labelledby="prTabBtnRankings">
             <div class="power-rankings-main">
             <div id="prEmpty" class="placeholder-panel" hidden>
               <p>No power rankings have been published yet. Check back after the next race.</p>
@@ -95,6 +101,24 @@
               <p class="pedal-prophet-signature-role">Power Rankings &amp; Race Analysis</p>
               <p class="pedal-prophet-signature-signoff">See you after the next green flag.</p>
             </footer>
+            </div>
+            </div>
+
+            <div id="prTabHowItWorks" class="tab power-rankings-tab-panel" role="tabpanel" aria-labelledby="prTabBtnHowItWorks">
+              <section class="power-rankings-formula-section" aria-label="How Power Rankings are calculated">
+                <div id="prFormulaImageWrap" class="power-rankings-formula-wrap" hidden>
+                  <img
+                    id="prFormulaImage"
+                    class="power-rankings-formula-image"
+                    src=""
+                    alt="Power Rankings scoring formula"
+                    decoding="async"
+                  />
+                </div>
+                <p id="prFormulaFallback" class="power-rankings-formula-fallback" hidden>
+                  Power Rankings are calculated using recent form, season performance, race impact, championship position, and momentum.
+                </p>
+              </section>
             </div>
           </div>
 
