@@ -15,6 +15,8 @@
     .input, .textarea, .select { width: 100%; margin-bottom: 8px; padding: 8px; background: #090909; color: #fff; border: 1px solid #555; border-radius: 4px; font-size: 12px; }
     .textarea { min-height: 72px; resize: vertical; font-family: inherit; }
     .btn-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+    .discord-export-panel { margin-top: 18px; padding-top: 14px; border-top: 1px solid #333; }
+    .discord-export-panel h3 { margin: 0 0 6px; font-size: 15px; color: #ff3030; }
     .btn-secondary { background: linear-gradient(#1c1c1c, #080808); }
     .btn-danger { background: linear-gradient(#5a1010, #2a0505); border-color: #733; }
     #adminMsg, #loginMsg { margin-top: 10px; font-size: 12px; color: #ccc; white-space: pre-wrap; }
@@ -268,13 +270,22 @@
       <div id="mentionRows"></div>
       <button class="btn btn-secondary" type="button" onclick="addMentionRow()">Add Honorable Mention</button>
 
+      <div class="discord-export-panel">
+        <h3>Discord Export</h3>
+        <p class="sub">Export the current form as a Discord-ready PNG or text post. All 10 drivers must be selected.</p>
+        <div class="btn-row" style="margin-top:0;">
+          <button id="discordExportPngBtn" class="btn btn-secondary" type="button" onclick="exportDiscordImage()">Export Discord PNG</button>
+          <button id="discordCopyTextBtn" class="btn btn-secondary" type="button" onclick="copyDiscordText()">Copy Discord Text</button>
+          <button id="discordDownloadTextBtn" class="btn btn-secondary" type="button" onclick="downloadDiscordText()">Download Discord Text</button>
+        </div>
+        <p id="discordExportStatus" class="sub" hidden></p>
+      </div>
+
       <div class="btn-row">
         <button class="btn" type="button" onclick="saveWeek(false)">Save Draft</button>
         <button class="btn" type="button" onclick="saveWeek(true)">Publish Rankings</button>
-        <button id="discordExportBtn" class="btn btn-secondary" type="button" onclick="exportDiscordImage()">Export for Discord</button>
         <button class="btn btn-danger" type="button" onclick="deleteWeek()">Delete Week</button>
       </div>
-      <p id="discordExportStatus" class="sub" hidden></p>
       <pre id="adminMsg"></pre>
       <div id="generationSourcesPanel" class="generation-sources" hidden>
         <h3>Generation Sources</h3>
@@ -1690,12 +1701,10 @@
       status.classList.toggle('error', isError);
     }
 
-    async function exportDiscordImage() {
-      const btn = $('#discordExportBtn');
+    async function buildAdminExportWeek() {
       const formData = collectFormData();
       if (!formData.raceNumber) {
-        setDiscordExportStatus('Enter a valid race number before exporting.', true);
-        return;
+        throw new Error('Enter a valid race number before exporting.');
       }
 
       let profileById = driverProfilesById;
@@ -1709,22 +1718,62 @@
         } catch {}
       }
 
-      const week = BPPowerRankingsDiscordExport.buildWeekFromAdminForm(
+      return BPPowerRankingsDiscordExport.buildWeekFromAdminForm(
         formData,
         driverOptions,
         profileById
       );
+    }
 
-      if (btn) btn.disabled = true;
-      setDiscordExportStatus('Preparing Discord image…');
+    function setDiscordExportBusy(isBusy) {
+      ['discordExportPngBtn', 'discordCopyTextBtn', 'discordDownloadTextBtn'].forEach((id) => {
+        const btn = document.getElementById(id);
+        if (btn) btn.disabled = isBusy;
+      });
+    }
+
+    async function exportDiscordImage() {
+      setDiscordExportBusy(true);
+      setDiscordExportStatus('Preparing Discord PNG…');
 
       try {
+        const week = await buildAdminExportWeek();
         await BPPowerRankingsDiscordExport.exportWeek(week);
-        setDiscordExportStatus('Download started.');
+        setDiscordExportStatus('PNG download started.');
       } catch (e) {
-        setDiscordExportStatus(e.message || 'Export failed.', true);
+        setDiscordExportStatus(e.message || 'PNG export failed.', true);
       } finally {
-        if (btn) btn.disabled = false;
+        setDiscordExportBusy(false);
+      }
+    }
+
+    async function copyDiscordText() {
+      setDiscordExportBusy(true);
+      setDiscordExportStatus('Copying Discord text…');
+
+      try {
+        const week = await buildAdminExportWeek();
+        await BPPowerRankingsDiscordExport.copyDiscordText(week);
+        setDiscordExportStatus('Discord text copied to clipboard.');
+      } catch (e) {
+        setDiscordExportStatus(e.message || 'Copy failed.', true);
+      } finally {
+        setDiscordExportBusy(false);
+      }
+    }
+
+    async function downloadDiscordText() {
+      setDiscordExportBusy(true);
+      setDiscordExportStatus('Preparing Discord text file…');
+
+      try {
+        const week = await buildAdminExportWeek();
+        await BPPowerRankingsDiscordExport.downloadDiscordText(week);
+        setDiscordExportStatus('Text file download started.');
+      } catch (e) {
+        setDiscordExportStatus(e.message || 'Download failed.', true);
+      } finally {
+        setDiscordExportBusy(false);
       }
     }
 

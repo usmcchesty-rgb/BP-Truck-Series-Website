@@ -208,29 +208,3 @@
   pointer-events: none;
   user-select: none;
 }
-
-.power-rankings-export-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin: 0 0 18px;
-}
-
-.power-rankings-export-row .btn {
-  font-size: 12px;
-  padding: 8px 14px;
-}
-
-.power-rankings-export-status {
-  font-size: 12px;
-  color: #888;
-}
-
-.power-rankings-export-status.is-busy {
-  color: #ccc;
-}
-
-.power-rankings-export-status.is-error {
-  color: #ff6060;
-}

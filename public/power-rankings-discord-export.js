@@ -279,6 +279,65 @@
     URL.revokeObjectURL(url);
   }
 
+  function formatDiscordEntryText(entry) {
+    const normalized = normalizeEntry(entry);
+    const num = normalized.carNumber ? ` #${normalized.carNumber}` : "";
+    const movement =
+      normalized.movementText && normalized.movementText !== "—"
+        ? ` (${normalized.movementText})`
+        : "";
+    const lines = [`**#${normalized.rank} ${normalized.driverName}${num}**${movement}`];
+    if (normalized.subtitle) lines.push(`*${normalized.subtitle}*`);
+    if (normalized.writeup) lines.push(normalized.writeup);
+    return lines.join("\n");
+  }
+
+  async function buildDiscordText(week) {
+    const raceNumber = Number(week.raceNumber);
+    const trackName = await resolveTrackName(raceNumber, week);
+    const raceLine = trackName
+      ? `Race ${raceNumber} • ${trackName}`
+      : `Race ${raceNumber}`;
+    const published = formatPublishedDate(week.publishedDate);
+    const entries = (week.entries || [])
+      .slice()
+      .sort((a, b) => Number(a.rank) - Number(b.rank))
+      .slice(0, 10);
+
+    const lines = [
+      "**POWER RANKINGS**",
+      raceLine,
+      "Presented by The Pedal Prophet",
+    ];
+    if (published) lines.push(`Published ${published}`);
+    lines.push("");
+
+    for (const entry of entries) {
+      lines.push(formatDiscordEntryText(entry));
+      lines.push("");
+    }
+
+    lines.push("_Blazing Pedals Truck Series_");
+    return lines.join("\n").trim() + "\n";
+  }
+
+  async function copyDiscordText(week) {
+    const text = await buildDiscordText(week);
+    if (!navigator.clipboard?.writeText) {
+      throw new Error("Clipboard access is not available in this browser.");
+    }
+    await navigator.clipboard.writeText(text);
+    return text;
+  }
+
+  async function downloadDiscordText(week) {
+    const raceNumber = validateWeek(week);
+    const text = await buildDiscordText(week);
+    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+    downloadBlob(blob, `bp-power-rankings-race-${raceNumber}.txt`);
+    return text;
+  }
+
   function validateWeek(week) {
     if (!week) throw new Error("No rankings loaded to export.");
     const raceNumber = Number(week.raceNumber);
@@ -412,5 +471,8 @@
     renderEntryHtml,
     resolveTrackName,
     buildPointsRaceTrackMap,
+    buildDiscordText,
+    copyDiscordText,
+    downloadDiscordText,
   };
 })();
