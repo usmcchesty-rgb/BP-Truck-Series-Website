@@ -8,7 +8,7 @@
     { id: "track-images", label: "Track Images", href: "/admin/track-images" },
     { id: "driver-photos", label: "Driver Photos", href: "/admin/driver-photos" },
     { id: "power-rankings", label: "Power Rankings", href: "/admin/power-rankings" },
-    { id: "fantasy", label: "Fantasy", href: "/admin/fantasy" },
+    { id: "fantasy", label: "Fantasy", href: "/admin/fantasy.html" },
     { id: "news", label: "News", href: "/admin/news" },
     { id: "transcripts", label: "Transcripts", href: "/admin/transcripts" },
   ];
@@ -169,7 +169,7 @@
     }
     if (path.endsWith("/driver-photos")) return "driver-photos";
     if (path.endsWith("/power-rankings")) return "power-rankings";
-    if (path.endsWith("/fantasy")) return "fantasy";
+    if (path.endsWith("/fantasy.html")) return "fantasy";
     if (path.endsWith("/news")) return "news";
     if (path.endsWith("/transcripts")) return "transcripts";
     if (path.endsWith("/track-images")) return "track-images";
