@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Fantasy Admin — BP Fantasy Coming Soon</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <style>
+      .wrap {
+        padding: 18px;
+        max-width: 1100px;
+        margin: 0 auto;
+      }
+      .sub {
+        color: var(--muted);
+        font-size: 12px;
+        margin-bottom: 16px;
+        line-height: 1.45;
+      }
+      .panel {
+        padding: 14px;
+        margin-bottom: 14px;
+      }
+      .panel h2 {
+        margin: 0 0 12px;
+        font-size: 18px;
+        color: #ff3030;
+      }
+      .admin-section {
+        display: none;
+      }
+      .admin-section.active {
+        display: block;
+      }
+      .placeholder-big {
+        padding: 26px 18px;
+        text-align: center;
+        border: 1px solid #333;
+        border-radius: 8px;
+        background: linear-gradient(135deg, rgba(229, 9, 20, .16), rgba(0,0,0,.35) 55%);
+      }
+      .placeholder-big h1 {
+        margin: 10px 0 8px;
+        color: #fff;
+        font-size: clamp(30px, 4.2vw, 56px);
+        font-style: italic;
+        text-transform: uppercase;
+        letter-spacing: -.02em;
+      }
+      .placeholder-big p {
+        margin: 0 auto;
+        color: #bbb;
+        max-width: 740px;
+        font-size: 14px;
+        line-height: 1.6;
+      }
+      .btn-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        justify-content: center;
+        margin-top: 16px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="admin-nav-root"></div>
+    <script src="/admin/admin-nav.js"></script>
+
+    <main id="loginView" class="wrap" hidden>
+      <h1>Admin Login</h1>
+      <p class="sub">Enter the admin password to unlock the Fantasy admin tools for this browser session.</p>
+      <div class="pw-row" style="max-width: 320px; margin-bottom: 14px;">
+        <input
+          id="loginPw"
+          class="input"
+          type="password"
+          placeholder="Admin password"
+          autocomplete="current-password"
+        />
+        <button class="btn" type="button" onclick="login()">Unlock</button>
+        <pre id="loginMsg"></pre>
+      </div>
+    </main>
+
+    <main id="adminView" class="wrap" hidden>
+      <h1>Fantasy Admin</h1>
+      <p class="sub">BP Fantasy is coming soon. No backend calls, auth, or scoring yet.</p>
+
+      <div class="panel admin-section active">
+        <h2>BP Fantasy</h2>
+        <div class="placeholder-big">
+          <div class="pedal-prophet-presented-ribbon">COMING SOON</div>
+          <h1>BP Fantasy</h1>
+          <p>
+            This admin page is locked behind the existing admin access/session pattern.
+            When fantasy gameplay, participants, and scoring are ready, this page will expose the management tools.
+          </p>
+          <div class="btn-row">
+            <button class="btn btn-secondary" type="button" onclick="location.href='../../fantasy.html'">
+              View Public Fantasy
+            </button>
+            <button class="btn" type="button" onclick="location.href='/admin/'">
+              Back to Admin
+            </button>
+          </div>
+        </div>
+        <pre id="adminMsg" style="margin-top:14px;"></pre>
+      </div>
+    </main>
+
+    <script>
+      const $ = (s) => document.querySelector(s);
+
+      // --- Admin session (sessionStorage only; cleared when the tab/session closes) ---
+      const SESSION_KEY = 'bp_admin_pw';
+
+      function getSessionPw() {
+        return sessionStorage.getItem(SESSION_KEY) || '';
+      }
+
+      async function verifyPassword(pw) {
+        const res = await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: pw, verifyOnly: true })
+        });
+        return res.ok;
+      }
+
+      function showLogin() {
+        $('#loginView').hidden = false;
+        $('#adminView').hidden = true;
+        if (window.AdminNav) AdminNav.setLoggedIn(false);
+        else if ($('#logoutBtn')) $('#logoutBtn').hidden = true;
+        $('#loginPw').focus();
+      }
+
+      function showAdmin() {
+        $('#loginView').hidden = true;
+        $('#adminView').hidden = false;
+        if (window.AdminNav) AdminNav.setLoggedIn(true);
+      }
+
+      async function login() {
+        const msg = $('#loginMsg');
+        const pw = $('#loginPw').value;
+        if (!pw) {
+          msg.textContent = 'Enter the admin password.';
+          msg.classList.add('error');
+          return;
+        }
+
+        msg.textContent = 'Checking...';
+        msg.classList.remove('error');
+
+        try {
+          const ok = await verifyPassword(pw);
+          if (!ok) throw new Error('Bad password');
+          sessionStorage.setItem(SESSION_KEY, pw);
+          $('#loginPw').value = '';
+          msg.textContent = '';
+          showAdmin();
+        } catch (e) {
+          msg.textContent = e.message || 'Login failed';
+          msg.classList.add('error');
+        }
+      }
+
+      function logout() {
+        sessionStorage.removeItem(SESSION_KEY);
+        showLogin();
+      }
+
+      async function initSession() {
+        const pw = getSessionPw();
+        if (!pw) {
+          showLogin();
+          return;
+        }
+
+        try {
+          if (await verifyPassword(pw)) {
+            showAdmin();
+            return;
+          }
+        } catch {}
+
+        sessionStorage.removeItem(SESSION_KEY);
+        showLogin();
+      }
+
+      $('#loginPw')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') login();
+      });
+
+      initSession();
+    </script>
+  </body>
+</html>
+

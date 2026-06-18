@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Blazing Pedals Truck Series Fantasy — Coming Soon</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="page-bg"></div>
+    <header class="topbar"></header>
+
+    <main>
+      <section class="placeholder-panel" aria-label="BP Fantasy coming soon">
+        <div>
+          <div class="pedal-prophet-presented-ribbon">BP FANTASY</div>
+          <h1 style="margin: 10px 0 10px; font-size: clamp(30px, 4.2vw, 56px); font-style: italic; text-transform: uppercase; letter-spacing: -.02em; color: #fff;">COMING SOON</h1>
+          <p class="page-intro">
+            BP Fantasy is getting revved up. Set your lineup, track picks, and climb the leaderboard after the next season details go live.
+          </p>
+
+          <div class="home-cta-row" style="justify-content:center;">
+            <button type="button" class="home-card-btn" style="max-width: 320px;" onclick="location.href='standings.html'">
+              VIEW STANDINGS
+            </button>
+            <button type="button" class="home-card-btn" style="max-width: 320px;" onclick="location.href='schedule.html'">
+              VIEW SCHEDULE
+            </button>
+          </div>
+
+          <p class="muted" style="margin:18px 0 0; max-width: 740px; text-align:center; line-height:1.55;">
+            Want updates? Check back here for the launch announcement. (No sign-in or scoring yet.)
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <footer>FAST DRIVERS. CLOSE RACING. <span>BIG FUN.</span></footer>
+
+    <script src="public-nav.js"></script>
+    <script>
+      BPPublicNav.init({
+        active: "fantasy",
+        title: "BP FANTASY",
+        subtitle: "COMING SOON",
+        subtitleId: "seasonLabel",
+        right: "tagline",
+      });
+    </script>
+    <script src="fantasy.js"></script>
+  </body>
+</html>
+

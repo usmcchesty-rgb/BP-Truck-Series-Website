@@ -7,6 +7,7 @@
     { key: "drivers", label: "Drivers", href: "/drivers.html" },
     { key: "streamers", label: "Streamers", href: "/streamers.html" },
     { key: "power-rankings", label: "Power Rankings", href: "/power-rankings.html" },
+    { key: "fantasy", label: "Fantasy", href: "/fantasy.html" },
     { key: "news", label: "News", href: "/news.html" },
   ];
 
