@@ -1,0 +1,301 @@
+/* BP Fantasy (Phase 2) — front-end only landing + preview styling.
+   Kept in public/ so it can be used without touching /api.
+*/
+
+.fantasy-phase2{
+  padding:0 18px 8px;
+}
+
+.fantasy-main{
+  max-width:1500px;
+  margin:0 auto;
+}
+
+.fantasy-hero{
+  padding:26px 22px;
+  margin:0 auto 18px;
+  max-width:1180px;
+  border:1px solid rgba(229,9,20,.25);
+  background:
+    radial-gradient(ellipse at 20% 0%, rgba(229,9,20,.18) 0%, transparent 56%),
+    linear-gradient(135deg, rgba(229,9,20,.12) 0%, rgba(12,12,12,.95) 56%, rgba(0,0,0,.92) 100%);
+  border-radius:8px;
+  box-shadow:0 0 18px rgba(0,0,0,.35);
+}
+
+.fantasy-hero-inner{
+  text-align:left;
+}
+
+.fantasy-ribbon{
+  display:inline-block;
+  padding:8px 16px;
+  border:1px solid rgba(229,9,20,.4);
+  border-radius:999px;
+  color:#ccc;
+  background:linear-gradient(135deg, rgba(229,9,20,.16), rgba(0,0,0,.55));
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.05);
+}
+
+.fantasy-hero-title{
+  margin:12px 0 8px;
+  color:#fff;
+  font-size:clamp(30px,4.2vw,54px);
+  font-style:italic;
+  text-transform:uppercase;
+  letter-spacing:-.02em;
+  line-height:1.05;
+}
+
+.fantasy-badge-row{margin:0 0 6px}
+
+.fantasy-status{
+  display:inline-block;
+  padding:6px 12px;
+  border:1px solid rgba(229,9,20,.45);
+  border-radius:6px;
+  background:rgba(20,0,0,.25);
+  color:#fff;
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+
+.fantasy-hero-sub{
+  margin:0;
+  color:#ddd;
+  font-size:15px;
+  font-weight:700;
+  line-height:1.55;
+  max-width:760px;
+}
+
+.fantasy-cta-row{
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin-top:18px;
+}
+
+.fantasy-cta{
+  padding:9px 12px;
+  min-width:min(260px,100%);
+  text-transform:uppercase;
+  font-weight:900;
+  letter-spacing:.08em;
+  font-size:10px;
+  color:#fff;
+  border:1px solid #333;
+  border-radius:0;
+  cursor:pointer;
+  background:linear-gradient(#1c1c1c,#080808);
+  clip-path:polygon(8px 0,100% 0,calc(100% - 8px) 100%,0 100%);
+}
+
+.fantasy-cta:hover{
+  border-color:#ff2424;
+  background:linear-gradient(#d40000,#680000);
+  box-shadow:0 0 12px rgba(229,9,20,.25);
+}
+
+.fantasy-footnote{
+  margin-top:14px;
+  color:#aaa;
+  font-size:12px;
+  line-height:1.5;
+}
+
+.fantasy-grid{
+  max-width:1180px;
+  margin:0 auto;
+  display:grid;
+  grid-template-columns:1fr;
+  gap:14px;
+}
+
+.fantasy-card{
+  padding:16px 16px;
+  border:1px solid #333;
+  border-radius:8px;
+  background:rgba(12,12,12,.86);
+  box-shadow:0 0 12px rgba(0,0,0,.28);
+}
+
+.fantasy-card--wide{max-width:none}
+
+.fantasy-card-head{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  margin-bottom:14px;
+}
+
+.fantasy-card-title{
+  margin:0;
+  color:#fff;
+  font-size:18px;
+  font-style:italic;
+  font-weight:900;
+  letter-spacing:.18em;
+  text-transform:uppercase;
+}
+
+.fantasy-card-sub{
+  color:#aaa;
+  font-size:12px;
+  line-height:1.45;
+}
+
+.fantasy-how-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:12px;
+}
+
+.fantasy-how{
+  padding:14px 12px;
+  border:1px solid #2b2b2b;
+  border-radius:6px;
+  background:linear-gradient(180deg, rgba(18,18,18,.95) 0%, rgba(6,6,6,.95) 100%);
+}
+
+.fantasy-how-icon{
+  width:34px;
+  height:34px;
+  border-radius:50%;
+  border:1px solid rgba(229,9,20,.45);
+  background:rgba(20,0,0,.25);
+  display:grid;
+  place-items:center;
+  font-weight:900;
+  color:#fff;
+  letter-spacing:.02em;
+  margin-bottom:10px;
+}
+
+.fantasy-how h3{
+  margin:0 0 8px;
+  color:#fff;
+  font-size:13px;
+  font-style:italic;
+  font-weight:900;
+}
+
+.fantasy-how p{
+  margin:0;
+  color:#ccc;
+  font-size:12px;
+  line-height:1.55;
+}
+
+.fantasy-table-wrap{overflow-x:auto}
+
+.fantasy-table{
+  width:100%;
+  min-width:540px;
+  border-collapse:collapse;
+}
+
+.fantasy-table th{
+  padding:10px 10px;
+  border-bottom:1px solid rgba(255,255,255,.08);
+  text-align:left;
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  color:#fff;
+  background:linear-gradient(135deg, rgba(229,9,20,.18) 0%, rgba(0,0,0,.0) 68%);
+}
+
+.fantasy-table td{
+  padding:12px 10px;
+  border-bottom:1px solid rgba(255,255,255,.05);
+  color:#ddd;
+  font-size:13px;
+  font-weight:700;
+}
+
+.fantasy-table tr:last-child td{border-bottom:0}
+
+.fantasy-muted{color:#aaa}
+
+.fantasy-rules{
+  display:grid;
+  grid-template-columns:1fr;
+  gap:10px;
+}
+
+.fantasy-rule{
+  display:grid;
+  grid-template-columns:220px 1fr;
+  gap:14px;
+  padding:12px 12px;
+  border:1px solid #2b2b2b;
+  border-radius:6px;
+  background:rgba(0,0,0,.18);
+}
+
+.fantasy-rule-k{
+  color:#fff;
+  font-weight:900;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  font-size:10px;
+}
+
+.fantasy-rule-v{
+  color:#ccc;
+  font-size:13px;
+  font-weight:700;
+  line-height:1.55;
+}
+
+.fantasy-card--ghost{
+  background:linear-gradient(180deg, rgba(18,18,18,.55) 0%, rgba(6,6,6,.78) 100%);
+}
+
+.fantasy-ghost-row{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:10px;
+}
+
+.fantasy-ghost-item{
+  padding:14px 12px;
+  border:1px dashed rgba(255,255,255,.15);
+  border-radius:8px;
+  background:rgba(0,0,0,.18);
+}
+
+.fantasy-ghost-label{
+  color:#aaa;
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  margin-bottom:8px;
+}
+
+.fantasy-ghost-value{
+  color:#fff;
+  font-weight:900;
+  font-size:13px;
+  line-height:1.4;
+}
+
+@media (max-width:860px){
+  .fantasy-hero-inner{padding:0}
+  .fantasy-how-grid{grid-template-columns:1fr}
+  .fantasy-rule{grid-template-columns:1fr}
+  .fantasy-ghost-row{grid-template-columns:1fr}
+  .fantasy-table{min-width:0}
+  .fantasy-cta{min-width:0;width:100%}
+  .fantasy-card-title{letter-spacing:.14em}
+}
+
