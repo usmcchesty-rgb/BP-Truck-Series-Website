@@ -7,14 +7,15 @@
 }
 
 .fantasy-main{
-  max-width:1500px;
+  width:min(1240px, calc(100% - 64px));
+  max-width:1240px;
   margin:0 auto;
 }
 
 .fantasy-hero{
   padding:26px 22px;
   margin:0 auto 18px;
-  max-width:1180px;
+  max-width:none;
   border:1px solid rgba(229,9,20,.25);
   background:
     radial-gradient(ellipse at 20% 0%, rgba(229,9,20,.18) 0%, transparent 56%),
@@ -111,12 +112,31 @@
 }
 
 .fantasy-grid{
-  max-width:1180px;
+  max-width:1240px;
   margin:0 auto;
   display:grid;
   grid-template-columns:1fr;
   gap:14px;
 }
+
+/* Desktop split for lower content (scoring/rules + preview table) */
+.fantasy-grid{
+  grid-auto-flow:dense;
+}
+
+@media (min-width: 980px){
+  /* Place the first (How it Works) full width, split the next two cards */
+  .fantasy-grid > .fantasy-card:nth-child(1){
+    grid-column: 1 / -1;
+  }
+  .fantasy-grid > .fantasy-card:nth-child(2){
+    grid-column: 1 / 2;
+  }
+  .fantasy-grid > .fantasy-card:nth-child(3){
+    grid-column: 2 / 3;
+  }
+}
+
 
 .fantasy-card{
   padding:16px 16px;
@@ -153,9 +173,10 @@
 
 .fantasy-how-grid{
   display:grid;
-  grid-template-columns:repeat(2,minmax(0,1fr));
+  grid-template-columns:repeat(4,minmax(0,1fr));
   gap:12px;
 }
+
 
 .fantasy-how{
   padding:14px 12px;
@@ -231,6 +252,13 @@
   gap:10px;
 }
 
+@media (min-width: 980px){
+  .fantasy-rule{
+    grid-template-columns:190px 1fr;
+  }
+}
+
+
 .fantasy-rule{
   display:grid;
   grid-template-columns:220px 1fr;
@@ -298,4 +326,12 @@
   .fantasy-cta{min-width:0;width:100%}
   .fantasy-card-title{letter-spacing:.14em}
 }
+
+@media (min-width: 980px){
+  /* Desktop split for scoring preview vs rules (card 2 vs 3) */
+  .fantasy-grid > .fantasy-card:nth-child(2){
+    display:block;
+  }
+}
+
 
