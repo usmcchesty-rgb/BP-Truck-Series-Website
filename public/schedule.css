@@ -58,13 +58,13 @@ main > .tab.active{
 }
 
 .schedule-summary-stats b{
-  color:#fff;
+  color:var(--bp-text-primary);
   font-weight:900;
   font-size:16px;
 }
 
 .schedule-summary-stats span{
-  color:#ccc;
+  color:var(--bp-text-secondary);
   font-size:9px;
   font-weight:800;
   letter-spacing:.3px;
