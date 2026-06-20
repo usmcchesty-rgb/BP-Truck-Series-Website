@@ -31,7 +31,6 @@
   text-transform: uppercase;
   color: #fff;
   line-height: 1;
-  text-shadow: 0 2px 18px rgba(229, 9, 20, 0.18);
 }
 
 .pr-discord-export-race-line {
@@ -188,10 +187,11 @@
 
 .pr-discord-export-root .power-ranking-writeup {
   margin: 10px 0 0;
-  color: #ccc;
+  color: #d6d6d6;
   font-size: 14px;
-  line-height: 1.52;
+  line-height: 1.65;
   font-weight: 400;
+  text-shadow: none;
 }
 
 .pr-discord-export-brand-footer {

@@ -45,7 +45,6 @@
       }
       .admin-shell-nav__brand span {
         color: #e50914;
-        text-shadow: 0 0 10px rgba(229, 9, 20, 0.35);
       }
       .admin-shell-nav__actions {
         display: flex;
