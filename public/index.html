@@ -141,18 +141,25 @@
 
     <article class="home-card card last-winner-card" aria-label="Latest race winner">
       <h3>LATEST RACE WINNER</h3>
-      <div class="last-winner">
-        <a id="homeLastWinnerPhotoLink" class="last-winner-photo-link" href="drivers.html">
-          <img id="homeLastWinnerImg" src="/assets/drivers/placeholder.png" alt="" />
-        </a>
-        <div class="last-winner-copy">
-          <a id="homeLastWinnerNameLink" class="last-winner-name-link" href="drivers.html">
-            <b id="homeLastWinnerName">—</b>
+      <div class="last-winner last-winner--home">
+        <div class="last-winner-driver">
+          <a id="homeLastWinnerPhotoLink" class="last-winner-photo-wrap" href="drivers.html">
+            <img id="homeLastWinnerImg" src="/assets/drivers/placeholder.png" alt="" />
           </a>
-          <span id="homeLastWinnerFinish" class="last-winner-finish"></span>
-          <span id="homeLastWinnerTrack">Track TBD</span>
-          <span id="homeLastWinnerDate">Date TBD</span>
-          <div class="home-winner-stats" id="homeLastWinnerStats" hidden></div>
+          <div class="last-winner-identity">
+            <a id="homeLastWinnerNameLink" class="last-winner-name-link" href="drivers.html">
+              <b id="homeLastWinnerName">—</b>
+            </a>
+            <span id="homeLastWinnerFinish" class="last-winner-finish-badge" hidden>1ST</span>
+            <span id="homeLastWinnerPositionChange" class="last-winner-position-change" hidden></span>
+          </div>
+        </div>
+        <div class="last-winner-details">
+          <div class="last-winner-meta">
+            <span id="homeLastWinnerTrack" class="last-winner-track">Track TBD</span>
+            <span id="homeLastWinnerDate" class="last-winner-date">Date TBD</span>
+          </div>
+          <div class="home-winner-stats-grid" id="homeLastWinnerStats" hidden></div>
         </div>
       </div>
     </article>

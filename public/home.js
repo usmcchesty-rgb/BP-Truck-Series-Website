@@ -157,35 +157,48 @@ function formatPositionsChange(value) {
   return change > 0 ? `(+${change})` : `(${change})`;
 }
 
-function renderWinnerStat(label, value, formatter) {
+function renderWinnerStat(label, value, formatter, options = {}) {
   if (value == null || value === "") return "";
   const display = formatter ? formatter(value) : String(value);
-  return `<div class="home-winner-stat">
+  const highlightClass = options.highlight ? " home-winner-stat--highlight" : "";
+  return `<div class="home-winner-stat${highlightClass}">
     <span class="home-winner-stat-label">${escapeHtml(label)}</span>
     <strong class="home-winner-stat-value">${escapeHtml(display)}</strong>
   </div>`;
 }
 
 function renderWinnerStatsGrid(summary = {}) {
-  const row1 = [
+  const cells = [
     renderWinnerStat("Start", summary.startingPos, (v) => `P${v}`),
     renderWinnerStat("Laps Led", summary.lapsLed),
     renderWinnerStat("Incidents", summary.incidents),
-    renderWinnerStat("Points", summary.racePoints),
-  ].filter(Boolean);
-
-  const row2 = [
+    renderWinnerStat("Points", summary.racePoints, null, { highlight: true }),
     renderWinnerStat("Stage 1", summary.stage1Finish, formatOrdinal),
     renderWinnerStat("Stage 2", summary.stage2Finish, formatOrdinal),
     renderWinnerStat("Stage Pts", summary.stagePoints),
-    renderWinnerStat("Total Pts", summary.totalPoints),
+    renderWinnerStat("Total Pts", summary.totalPoints, null, { highlight: true }),
   ].filter(Boolean);
 
-  if (!row1.length && !row2.length) return "";
+  if (!cells.length) return "";
+  return cells.join("");
+}
 
-  return `${row1.length ? `<div class="home-winner-stats-row">${row1.join("")}</div>` : ""}${
-    row2.length ? `<div class="home-winner-stats-row home-winner-stats-row--secondary">${row2.join("")}</div>` : ""
-  }`;
+function setLastWinnerFinishBadge(finishEl, changeEl, finish, positionsGained) {
+  if (finishEl) {
+    const finishText = formatOrdinal(finish || 1).toUpperCase();
+    finishEl.textContent = finishText || "1ST";
+    finishEl.hidden = false;
+  }
+  if (changeEl) {
+    const changeText = formatPositionsChange(positionsGained);
+    if (changeText) {
+      changeEl.textContent = changeText;
+      changeEl.hidden = false;
+    } else {
+      changeEl.textContent = "";
+      changeEl.hidden = true;
+    }
+  }
 }
 
 function renderLastWinner(raceResults, lastRace) {
@@ -193,6 +206,7 @@ function renderLastWinner(raceResults, lastRace) {
   const trackEl = $("#homeLastWinnerTrack");
   const dateEl = $("#homeLastWinnerDate");
   const finishEl = $("#homeLastWinnerFinish");
+  const changeEl = $("#homeLastWinnerPositionChange");
   const imgEl = $("#homeLastWinnerImg");
   const statsEl = $("#homeLastWinnerStats");
   const photoLink = $("#homeLastWinnerPhotoLink");
@@ -212,12 +226,7 @@ function renderLastWinner(raceResults, lastRace) {
       raceResults?.selectedRaceName || lastRace?.track || "Track TBD";
     dateEl.textContent = date || "Date TBD";
     imgEl.src = summary.photoUrl || driverImage(summary.driverName);
-
-    if (finishEl) {
-      const finishText = formatOrdinal(summary.finish) || "1st";
-      const changeText = formatPositionsChange(summary.positionsGained);
-      finishEl.textContent = changeText ? `${finishText} ${changeText}` : finishText;
-    }
+    setLastWinnerFinishBadge(finishEl, changeEl, summary.finish, summary.positionsGained);
 
     if (statsEl) {
       const statsHtml = renderWinnerStatsGrid(summary);
@@ -235,7 +244,7 @@ function renderLastWinner(raceResults, lastRace) {
     trackEl.textContent = lastRace.track || "Track TBD";
     dateEl.textContent = date;
     imgEl.src = driverImage(lastRace.winner);
-    if (finishEl) finishEl.textContent = "1st";
+    setLastWinnerFinishBadge(finishEl, changeEl, 1, null);
     if (statsEl) {
       statsEl.innerHTML = "";
       statsEl.hidden = true;
@@ -245,7 +254,8 @@ function renderLastWinner(raceResults, lastRace) {
     trackEl.textContent = "Track TBD";
     dateEl.textContent = "Date TBD";
     imgEl.src = "/assets/drivers/placeholder.png";
-    if (finishEl) finishEl.textContent = "";
+    if (finishEl) finishEl.hidden = true;
+    if (changeEl) changeEl.hidden = true;
     if (statsEl) {
       statsEl.innerHTML = "";
       statsEl.hidden = true;
