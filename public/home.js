@@ -346,11 +346,7 @@ function renderHomeNewsThumb(article) {
   if (!NewsArticleImage.hasImage(article)) {
     return `<div class="home-news-thumb home-news-thumb--placeholder" aria-hidden="true"><span>BP</span></div>`;
   }
-  return NewsArticleImage.renderImageHtml(article, {
-    wrapClass: "home-news-thumb-wrap",
-    imgClass: "home-news-thumb-img",
-    alt: article.headline || "Article image",
-  });
+  return NewsArticleImage.renderThumbMedia(article);
 }
 
 function renderHomeNewsMeta(article) {

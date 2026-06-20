@@ -5,6 +5,16 @@
   const WRAP_CONTAIN_CLASS = "news-image-wrap--contain";
   const IMG_FILL_CLASS = "news-image--fill";
   const IMG_CONTAIN_CLASS = "news-image--contain";
+  const SPOTLIGHT_THUMB_WRAP_CLASS = "news-spotlight-thumb-wrap";
+  const SPOTLIGHT_THUMB_IMG_CLASS = "news-spotlight-thumb-image";
+
+  const RENDER_CONTEXT = {
+    CARD: "card",
+    THUMB: "thumb",
+    HERO: "hero",
+    PREVIEW: "preview",
+    FEATURED: "featured",
+  };
 
   function stripUrlQuery(url) {
     const value = String(url || "").trim();
@@ -42,16 +52,29 @@
     return raw === DISPLAY_CONTAIN ? DISPLAY_CONTAIN : DISPLAY_FILL;
   }
 
-  function isContainMode(article = {}) {
-    return normalizeDisplayMode(article) === DISPLAY_CONTAIN;
+  function isCompactContext(context) {
+    return context === RENDER_CONTEXT.CARD || context === RENDER_CONTEXT.THUMB;
+  }
+
+  function shouldUseSpotlightCover(article = {}, context = null) {
+    return isDriverSpotlightArticle(article) && isCompactContext(context);
+  }
+
+  function effectiveDisplayMode(article = {}, context = null) {
+    if (shouldUseSpotlightCover(article, context)) return DISPLAY_FILL;
+    return normalizeDisplayMode(article);
+  }
+
+  function isContainMode(article = {}, context = null) {
+    return effectiveDisplayMode(article, context) === DISPLAY_CONTAIN;
   }
 
   function mergeArticle(article = {}, extra = {}) {
     return { ...article, ...extra };
   }
 
-  function modeClasses(article = {}) {
-    const contain = isContainMode(article);
+  function modeClasses(article = {}, context = null) {
+    const contain = isContainMode(article, context);
     return {
       contain,
       wrapClass: contain ? WRAP_CONTAIN_CLASS : WRAP_FILL_CLASS,
@@ -127,31 +150,41 @@
     return Boolean(normalize(article).featuredImageUrl);
   }
 
-  function wrapClassForMode(baseClass, article = {}) {
-    const mode = modeClasses(article);
-    return [baseClass, mode.wrapClass].filter(Boolean).join(" ");
+  function wrapClassForMode(baseClass, article = {}, context = null) {
+    const mode = modeClasses(article, context);
+    const classes = [baseClass, mode.wrapClass];
+    if (shouldUseSpotlightCover(article, context)) {
+      classes.push(SPOTLIGHT_THUMB_WRAP_CLASS);
+    }
+    return classes.filter(Boolean).join(" ");
   }
 
-  function imgClassForMode(baseClass, article = {}) {
-    const mode = modeClasses(article);
+  function imgClassForMode(baseClass, article = {}, context = null) {
+    if (shouldUseSpotlightCover(article, context)) {
+      return [baseClass, SPOTLIGHT_THUMB_IMG_CLASS].filter(Boolean).join(" ");
+    }
+    const mode = modeClasses(article, context);
     return [baseClass, mode.imgClass].filter(Boolean).join(" ");
   }
 
-  function cropStyle(article = {}, extra = {}) {
+  function cropStyle(article = {}, extra = {}, context = null) {
     const merged = mergeArticle(article, extra);
-    if (isContainMode(merged)) return "";
+    if (isContainMode(merged, context) || shouldUseSpotlightCover(merged, context)) return "";
     const data = normalize(merged);
     return `--img-zoom:${data.featuredImageZoom};--img-x:${data.featuredImageX};--img-y:${data.featuredImageY};`;
   }
 
-  function applyModeClasses(target, article = {}, img = null) {
+  function applyModeClasses(target, article = {}, img = null, context = null) {
     if (!target) return;
-    const mode = modeClasses(article);
+    const mode = modeClasses(article, context);
+    const spotlightCover = shouldUseSpotlightCover(article, context);
     target.classList.toggle(WRAP_CONTAIN_CLASS, mode.contain);
     target.classList.toggle(WRAP_FILL_CLASS, !mode.contain);
+    target.classList.toggle(SPOTLIGHT_THUMB_WRAP_CLASS, spotlightCover);
     if (img) {
       img.classList.toggle(IMG_CONTAIN_CLASS, mode.contain);
-      img.classList.toggle(IMG_FILL_CLASS, !mode.contain);
+      img.classList.toggle(IMG_FILL_CLASS, !mode.contain && !spotlightCover);
+      img.classList.toggle(SPOTLIGHT_THUMB_IMG_CLASS, spotlightCover);
     }
   }
 
@@ -202,6 +235,7 @@
 
   function renderImageHtml(article = {}, options = {}) {
     const previewUrl = String(options.previewUrl || "").trim();
+    const context = options.context || null;
     const merged = mergeArticle(article, options.settings || {});
     const normalized = normalize(merged);
     const renderArticle = mergeArticle(merged, normalized);
@@ -211,16 +245,32 @@
     const wrapClass = wrapClassForMode(
       options.wrapClass || "news-article-image-wrap",
       renderArticle,
+      context,
     );
-    const imgClass = imgClassForMode(options.imgClass || "news-article-image-el", renderArticle);
+    const imgClass = imgClassForMode(
+      options.imgClass || "news-article-image-el",
+      renderArticle,
+      context,
+    );
     const alt = escapeHtml(options.alt || article.headline || "Article image");
-    const style = cropStyle(renderArticle);
+    const style = cropStyle(renderArticle, {}, context);
     const onerror =
       article.articleType === "driver-spotlight"
         ? ' onerror="this.onerror=null;this.src=\'/assets/drivers/placeholder.png\'"'
         : "";
 
     return `<div class="${wrapClass}"${style ? ` style="${style}"` : ""}><img class="${imgClass}" src="${escapeHtml(url)}" alt="${alt}"${onerror}></div>`;
+  }
+
+  function renderCompactMedia(article = {}, options = {}) {
+    const context = options.context || RENDER_CONTEXT.CARD;
+    if (!hasImage(article) && !options.previewUrl) {
+      return (
+        options.placeholderHtml ||
+        `<div class="news-card-thumb" aria-hidden="true"><span>BP</span></div>`
+      );
+    }
+    return renderImageHtml(article, { ...options, context });
   }
 
   function renderFeaturedMedia(article = {}, options = {}) {
@@ -231,6 +281,7 @@
       wrapClass: "news-featured-image-wrap",
       imgClass: "news-featured-image",
       alt: article.headline || "Featured article",
+      context: RENDER_CONTEXT.FEATURED,
       ...options,
     });
   }
@@ -239,10 +290,24 @@
     if (!hasImage(article) && !options.previewUrl) {
       return `<div class="news-card-thumb" aria-hidden="true"><span>BP</span></div>`;
     }
-    return renderImageHtml(article, {
+    return renderCompactMedia(article, {
       wrapClass: "news-card-image-wrap",
       imgClass: "news-card-image",
       alt: article.headline || "Article image",
+      context: RENDER_CONTEXT.CARD,
+      ...options,
+    });
+  }
+
+  function renderThumbMedia(article = {}, options = {}) {
+    if (!hasImage(article) && !options.previewUrl) {
+      return `<div class="home-news-thumb home-news-thumb--placeholder" aria-hidden="true"><span>BP</span></div>`;
+    }
+    return renderCompactMedia(article, {
+      wrapClass: "home-news-thumb-wrap",
+      imgClass: "home-news-thumb-img",
+      alt: article.headline || "Article image",
+      context: RENDER_CONTEXT.THUMB,
       ...options,
     });
   }
@@ -254,6 +319,7 @@
         wrapClass: "news-article-hero-wrap",
         imgClass: "news-article-image",
         alt: article.headline || "Article image",
+        context: RENDER_CONTEXT.HERO,
         ...options,
       });
     }
@@ -261,6 +327,7 @@
       wrapClass: "news-article-hero-wrap",
       imgClass: "news-article-image",
       alt: article.headline || "Article image",
+      context: RENDER_CONTEXT.HERO,
       ...options,
     });
   }
@@ -268,16 +335,17 @@
   function applyPreview(target, article = {}, options = {}) {
     if (!target) return;
     const previewUrl = String(options.previewUrl || "").trim();
+    const context = options.context || RENDER_CONTEXT.PREVIEW;
     const merged = mergeArticle(article, options.settings || {});
     const normalized = normalize(merged);
     const renderArticle = mergeArticle(merged, normalized);
     const url = previewUrl || displayUrl(renderArticle);
 
-    applyModeClasses(target, renderArticle);
-    if (isContainMode(renderArticle)) {
+    applyModeClasses(target, renderArticle, null, context);
+    if (isContainMode(renderArticle, context)) {
       target.style.cssText = "";
     } else {
-      target.style.cssText = cropStyle(renderArticle);
+      target.style.cssText = cropStyle(renderArticle, {}, context);
     }
 
     if (url) {
@@ -289,7 +357,7 @@
         img.alt = "Article image preview";
         target.appendChild(img);
       }
-      applyModeClasses(target, renderArticle, img);
+      applyModeClasses(target, renderArticle, img, context);
       img.onerror = function () {
         this.onerror = null;
         this.src = "/assets/drivers/placeholder.png";
@@ -310,9 +378,15 @@
     WRAP_CONTAIN_CLASS,
     IMG_FILL_CLASS,
     IMG_CONTAIN_CLASS,
+    SPOTLIGHT_THUMB_WRAP_CLASS,
+    SPOTLIGHT_THUMB_IMG_CLASS,
+    RENDER_CONTEXT,
     normalize,
     normalizeDisplayMode,
+    effectiveDisplayMode,
     isContainMode,
+    isCompactContext,
+    shouldUseSpotlightCover,
     modeClasses,
     hasImage,
     displayUrl,
@@ -324,6 +398,8 @@
     isSpotlightPortrait,
     renderFeaturedMedia,
     renderCardMedia,
+    renderThumbMedia,
+    renderCompactMedia,
     renderArticleHero,
     renderImageHtml,
     renderPortraitImageHtml,
