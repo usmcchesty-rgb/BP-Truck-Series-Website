@@ -139,35 +139,227 @@ function renderNextRace(nextRace, raceStartTime) {
   renderNextRaceImage(nextRace.track);
 }
 
-function renderLastWinner(lastRace, leaderFallback) {
+function formatOrdinal(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 1) return "";
+  const mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 13) return `${n}th`;
+  const mod10 = n % 10;
+  if (mod10 === 1) return `${n}st`;
+  if (mod10 === 2) return `${n}nd`;
+  if (mod10 === 3) return `${n}rd`;
+  return `${n}th`;
+}
+
+function formatPositionsChange(value) {
+  const change = Number(value);
+  if (!Number.isFinite(change) || change === 0) return "";
+  return change > 0 ? `(+${change})` : `(${change})`;
+}
+
+function renderWinnerStat(label, value, formatter) {
+  if (value == null || value === "") return "";
+  const display = formatter ? formatter(value) : String(value);
+  return `<div class="home-winner-stat">
+    <span class="home-winner-stat-label">${escapeHtml(label)}</span>
+    <strong class="home-winner-stat-value">${escapeHtml(display)}</strong>
+  </div>`;
+}
+
+function renderWinnerStatsGrid(summary = {}) {
+  const row1 = [
+    renderWinnerStat("Start", summary.startingPos, (v) => `P${v}`),
+    renderWinnerStat("Laps Led", summary.lapsLed),
+    renderWinnerStat("Incidents", summary.incidents),
+    renderWinnerStat("Points", summary.racePoints),
+  ].filter(Boolean);
+
+  const row2 = [
+    renderWinnerStat("Stage 1", summary.stage1Finish, formatOrdinal),
+    renderWinnerStat("Stage 2", summary.stage2Finish, formatOrdinal),
+    renderWinnerStat("Stage Pts", summary.stagePoints),
+    renderWinnerStat("Total Pts", summary.totalPoints),
+  ].filter(Boolean);
+
+  if (!row1.length && !row2.length) return "";
+
+  return `${row1.length ? `<div class="home-winner-stats-row">${row1.join("")}</div>` : ""}${
+    row2.length ? `<div class="home-winner-stats-row home-winner-stats-row--secondary">${row2.join("")}</div>` : ""
+  }`;
+}
+
+function renderLastWinner(raceResults, lastRace) {
   const nameEl = $("#homeLastWinnerName");
   const trackEl = $("#homeLastWinnerTrack");
   const dateEl = $("#homeLastWinnerDate");
+  const finishEl = $("#homeLastWinnerFinish");
   const imgEl = $("#homeLastWinnerImg");
+  const statsEl = $("#homeLastWinnerStats");
+  const photoLink = $("#homeLastWinnerPhotoLink");
+  const nameLink = $("#homeLastWinnerNameLink");
   if (!nameEl || !trackEl || !dateEl || !imgEl) return;
 
-  if (lastRace?.winner) {
+  const summary = raceResults?.winnerSummary || null;
+  const profileUrl = summary?.profileUrl || "drivers.html";
+
+  if (photoLink) photoLink.href = profileUrl;
+  if (nameLink) nameLink.href = profileUrl;
+
+  if (summary) {
+    const { date } = splitDateTime(raceResults?.selectedRaceDate || lastRace?.date || "");
+    nameEl.textContent = summary.driverName || "—";
+    trackEl.textContent =
+      raceResults?.selectedRaceName || lastRace?.track || "Track TBD";
+    dateEl.textContent = date || "Date TBD";
+    imgEl.src = summary.photoUrl || driverImage(summary.driverName);
+
+    if (finishEl) {
+      const finishText = formatOrdinal(summary.finish) || "1st";
+      const changeText = formatPositionsChange(summary.positionsGained);
+      finishEl.textContent = changeText ? `${finishText} ${changeText}` : finishText;
+    }
+
+    if (statsEl) {
+      const statsHtml = renderWinnerStatsGrid(summary);
+      if (statsHtml) {
+        statsEl.innerHTML = statsHtml;
+        statsEl.hidden = false;
+      } else {
+        statsEl.innerHTML = "";
+        statsEl.hidden = true;
+      }
+    }
+  } else if (lastRace?.winner) {
     const { date } = splitDateTime(lastRace.date);
     nameEl.textContent = lastRace.winner;
     trackEl.textContent = lastRace.track || "Track TBD";
     dateEl.textContent = date;
     imgEl.src = driverImage(lastRace.winner);
-  } else if (leaderFallback) {
-    nameEl.textContent = leaderFallback.driver;
-    trackEl.textContent = "Track TBD";
-    dateEl.textContent = "Date TBD";
-    imgEl.src = leaderFallback.photoUrl || driverImage(leaderFallback.driver);
+    if (finishEl) finishEl.textContent = "1st";
+    if (statsEl) {
+      statsEl.innerHTML = "";
+      statsEl.hidden = true;
+    }
   } else {
     nameEl.textContent = "—";
     trackEl.textContent = "Track TBD";
     dateEl.textContent = "Date TBD";
     imgEl.src = "/assets/drivers/placeholder.png";
+    if (finishEl) finishEl.textContent = "";
+    if (statsEl) {
+      statsEl.innerHTML = "";
+      statsEl.hidden = true;
+    }
   }
 
   imgEl.onerror = function () {
     this.onerror = null;
     this.src = "/assets/drivers/placeholder.png";
   };
+}
+
+function renderHomeSpotlightPlaceholder() {
+  const active = $("#homeSpotlightActive");
+  const placeholder = $("#homeSpotlightPlaceholder");
+  if (active) active.hidden = true;
+  if (placeholder) placeholder.hidden = false;
+}
+
+function renderHomeSpotlight(article, driver) {
+  const active = $("#homeSpotlightActive");
+  const placeholder = $("#homeSpotlightPlaceholder");
+  const imgEl = $("#homeSpotlightImg");
+  const nameEl = $("#homeSpotlightDriverName");
+  const carEl = $("#homeSpotlightCarNumber");
+  const headlineEl = $("#homeSpotlightHeadline");
+  const dekEl = $("#homeSpotlightDek");
+  const linkEl = $("#homeSpotlightArticleLink");
+
+  if (!article || !active || !placeholder) {
+    renderHomeSpotlightPlaceholder();
+    return;
+  }
+
+  const driverName =
+    driver?.display_name ||
+    driver?.displayName ||
+    driver?.iracing_name ||
+    "Driver Spotlight";
+  const carNumber = String(driver?.car_number || driver?.carNumber || "").trim();
+  const imageUrl =
+    article.displayImage?.url ||
+    driver?.photo_url ||
+    driver?.photoUrl ||
+    driverImage(driverName);
+  const dek = article.subheadline || article.summary || "";
+  const articleHref = article.slug ? articleUrl(article.slug) : "news.html";
+
+  if (imgEl) {
+    imgEl.src = imageUrl;
+    imgEl.alt = `${driverName} — Driver Spotlight`;
+    imgEl.onerror = function () {
+      this.onerror = null;
+      this.src = "/assets/drivers/placeholder.png";
+    };
+  }
+  if (nameEl) nameEl.textContent = driverName;
+  if (carEl) {
+    if (carNumber) {
+      carEl.innerHTML = `<span class="num">${escapeHtml(carNumber)}</span>`;
+      carEl.hidden = false;
+    } else {
+      carEl.textContent = "";
+      carEl.hidden = true;
+    }
+  }
+  if (headlineEl) headlineEl.textContent = article.headline || "";
+  if (dekEl) {
+    dekEl.textContent = dek;
+    dekEl.hidden = !dek;
+  }
+  if (linkEl) linkEl.href = articleHref;
+
+  active.hidden = false;
+  placeholder.hidden = true;
+}
+
+async function loadHomeSpotlight() {
+  try {
+    const [newsRes, driversRes] = await Promise.all([
+      fetch("/api/news"),
+      fetch("/api/drivers"),
+    ]);
+    if (!newsRes.ok) throw new Error(`News HTTP ${newsRes.status}`);
+    const newsData = await newsRes.json();
+    const drivers = driversRes.ok ? await driversRes.json() : [];
+    const driverById = Object.fromEntries(
+      (Array.isArray(drivers) ? drivers : []).map((driver) => [
+        String(driver.driver_id),
+        driver,
+      ])
+    );
+
+    const spotlightArticle = (newsData.articles || [])
+      .filter((article) => article.published && article.articleType === "driver-spotlight")
+      .sort((a, b) => {
+        const aTime = new Date(a.publishedAt || 0).getTime();
+        const bTime = new Date(b.publishedAt || 0).getTime();
+        return bTime - aTime;
+      })[0];
+
+    if (!spotlightArticle) {
+      renderHomeSpotlightPlaceholder();
+      return;
+    }
+
+    const driver = spotlightArticle.spotlightDriverId
+      ? driverById[String(spotlightArticle.spotlightDriverId)] || null
+      : null;
+    renderHomeSpotlight(spotlightArticle, driver);
+  } catch (e) {
+    console.warn("Home driver spotlight load failed:", e);
+    renderHomeSpotlightPlaceholder();
+  }
 }
 
 function renderStandingsTop10(rows) {
@@ -194,32 +386,7 @@ function renderStandingsTop10(rows) {
 }
 
 function renderPointsLeader(leader) {
-  const nameEl = $("#homePointsLeaderName");
-  const ptsEl = $("#homePointsLeaderPts");
-  const imgEl = $("#homePointsLeaderImg");
-  if (!leader || !nameEl || !ptsEl || !imgEl) return;
-
-  nameEl.textContent = leader.driver;
-  ptsEl.textContent = `${leader.points} PTS`;
-  imgEl.src = leader.photoUrl || driverImage(leader.driver);
-  imgEl.onerror = function () {
-    this.onerror = null;
-    this.src = "/assets/drivers/placeholder.png";
-  };
-
-  const spotlightImg = $("#homeSpotlightImg");
-  const spotlightCopy = $("#homeSpotlightCopy");
-  if (spotlightImg) {
-    spotlightImg.src = leader.photoUrl || driverImage(leader.driver);
-    spotlightImg.onerror = function () {
-      this.onerror = null;
-      this.src = "/assets/drivers/placeholder.png";
-    };
-  }
-  if (spotlightCopy) {
-    spotlightCopy.textContent = `${leader.driver} leads the BP Truck Series with ${leader.points} points. Full driver spotlight stories coming soon.`;
-    spotlightCopy.classList.remove("home-placeholder");
-  }
+  void leader;
 }
 
 function renderQuickStats(rows) {
@@ -458,11 +625,11 @@ async function loadHome() {
     const lastRace = completed[completed.length - 1] || null;
 
     renderNextRace(scheduleData.next || null, scheduleData.settings?.raceStartTime || "");
-    renderLastWinner(lastRace, leader);
+    renderLastWinner(scheduleData.raceResults || null, lastRace);
   } catch (e) {
     console.warn("Home schedule load failed:", e);
     renderNextRace(null, "");
-    renderLastWinner(null, leader);
+    renderLastWinner(null, null);
   }
 }
 
@@ -470,4 +637,5 @@ renderHomeSponsors();
 loadGreenFlagBroadcast();
 loadPowerRankingsWidget();
 loadHomeNews();
+loadHomeSpotlight();
 loadHome();

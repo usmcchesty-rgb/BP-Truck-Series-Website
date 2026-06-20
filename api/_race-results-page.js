@@ -12,7 +12,7 @@ import {
   getLatestCompletedPointsRace,
   getPointsRaceByNumber,
 } from './_schedule-points-races.js';
-import { extractFinishRacesFromSchedules } from './_simracerhub-schedule-results.js';
+import { extractFinishRacesFromSchedules, extractSegmentResultsForDriver, findScheduleEntryByScheduleId } from './_simracerhub-schedule-results.js';
 
 function formatDriverName(rawName) {
   const raw = String(rawName || '').trim();
@@ -210,6 +210,53 @@ function buildFinishingOrderRows(finishRace, standingsRows, profiles) {
     }));
 }
 
+function sumStagePoints(segments = []) {
+  const withPoints = segments.filter((segment) => segment.points != null);
+  if (!withPoints.length) return null;
+  return withPoints.reduce((sum, segment) => sum + Number(segment.points || 0), 0);
+}
+
+function buildWinnerRaceSummary(winnerRow, scheduleEntry) {
+  if (!winnerRow) return null;
+
+  const segments = scheduleEntry
+    ? extractSegmentResultsForDriver(scheduleEntry, winnerRow.driverId)
+    : [];
+  const stagePoints = sumStagePoints(segments);
+  const racePoints = winnerRow.points ?? null;
+  const startingPos = winnerRow.startingPos ?? null;
+  const finish = winnerRow.finish ?? null;
+  let positionsGained = null;
+  if (Number.isFinite(startingPos) && Number.isFinite(finish)) {
+    positionsGained = startingPos - finish;
+  }
+
+  let totalPoints = null;
+  if (racePoints != null && stagePoints != null) {
+    totalPoints = racePoints + stagePoints;
+  } else if (racePoints != null) {
+    totalPoints = racePoints;
+  }
+
+  return {
+    driverId: winnerRow.driverId,
+    driverName: winnerRow.driverName,
+    carNumber: winnerRow.carNumber || null,
+    photoUrl: winnerRow.photoUrl,
+    profileUrl: `/drivers/${encodeURIComponent(String(winnerRow.driverId))}`,
+    finish,
+    startingPos,
+    positionsGained,
+    lapsLed: winnerRow.lapsLed ?? null,
+    incidents: winnerRow.incidents ?? null,
+    racePoints,
+    stage1Finish: segments[0]?.finish ?? null,
+    stage2Finish: segments[1]?.finish ?? null,
+    stagePoints,
+    totalPoints,
+  };
+}
+
 export async function buildRaceResultsPayload({
   enrichedRaces,
   scheduleHtml,
@@ -246,6 +293,7 @@ export async function buildRaceResultsPayload({
       latestCompletedRaceNumber: null,
       completedRaces: [],
       rows: [],
+      winnerSummary: null,
     };
   }
 
@@ -276,6 +324,7 @@ export async function buildRaceResultsPayload({
       latestCompletedRaceNumber: latestCompletedRace?.officialPointsRaceNumber ?? null,
       completedRaces: completedRaceOptions,
       rows: [],
+      winnerSummary: null,
     };
   }
 
@@ -294,6 +343,12 @@ export async function buildRaceResultsPayload({
   );
   const finishRace = findFinishRaceForAligned(alignedRace, finishRaces);
   const rows = buildFinishingOrderRows(finishRace, standingsRows, profiles);
+  const winnerRow = rows.find((row) => row.isWinner) || rows[0] || null;
+  const scheduleEntry = findScheduleEntryByScheduleId(
+    data.schedules || {},
+    alignedRace?.schedulesApiScheduleId || finishRace?.scheduleId || snapshotScheduleId
+  );
+  const winnerSummary = buildWinnerRaceSummary(winnerRow, scheduleEntry);
 
   return {
     resultsAvailable: rows.length > 0,
@@ -312,5 +367,6 @@ export async function buildRaceResultsPayload({
     latestCompletedRaceNumber: latestCompletedRace?.officialPointsRaceNumber ?? null,
     completedRaces: completedRaceOptions,
     rows,
+    winnerSummary,
   };
 }

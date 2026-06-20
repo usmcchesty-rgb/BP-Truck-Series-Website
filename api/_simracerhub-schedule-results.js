@@ -125,6 +125,43 @@ export function extractOfficialRaceFinishes(schedule) {
   };
 }
 
+export function findScheduleEntryByScheduleId(schedules, scheduleId) {
+  if (!scheduleId) return null;
+  for (const schedule of Object.values(schedules || {})) {
+    if (String(schedule.schedule_id) === String(scheduleId)) return schedule;
+  }
+  return null;
+}
+
+export function extractSegmentResultsForDriver(schedule, driverId) {
+  if (!schedule?.drivers || driverId == null) return [];
+
+  const segmentBuckets = [];
+  for (const [, bucket] of Object.entries(schedule.drivers)) {
+    const sample = sampleResultFromBucket(bucket);
+    if (!sample) continue;
+    if (String(sample.session || '').toUpperCase() !== 'SEGMENT') continue;
+    segmentBuckets.push({
+      sessionNum: Number(sample.session_num ?? 0),
+      bucket,
+    });
+  }
+
+  segmentBuckets.sort((a, b) => a.sessionNum - b.sessionNum);
+
+  return segmentBuckets
+    .map((entry, index) => {
+      const normalized = normalizeDriverRaceResult(entry.bucket[String(driverId)]);
+      if (!normalized?.finish) return null;
+      return {
+        stage: index + 1,
+        finish: normalized.finish,
+        points: normalized.points,
+      };
+    })
+    .filter(Boolean);
+}
+
 export function extractFinishRacesFromSchedules(schedules) {
   const races = [];
 

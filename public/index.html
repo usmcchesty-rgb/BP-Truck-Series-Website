@@ -142,25 +142,37 @@
     <article class="home-card card last-winner-card" aria-label="Latest race winner">
       <h3>LATEST RACE WINNER</h3>
       <div class="last-winner">
-        <img id="homeLastWinnerImg" src="/assets/drivers/placeholder.png" alt="" />
-        <div>
-          <b id="homeLastWinnerName">—</b>
+        <a id="homeLastWinnerPhotoLink" class="last-winner-photo-link" href="drivers.html">
+          <img id="homeLastWinnerImg" src="/assets/drivers/placeholder.png" alt="" />
+        </a>
+        <div class="last-winner-copy">
+          <a id="homeLastWinnerNameLink" class="last-winner-name-link" href="drivers.html">
+            <b id="homeLastWinnerName">—</b>
+          </a>
+          <span id="homeLastWinnerFinish" class="last-winner-finish"></span>
           <span id="homeLastWinnerTrack">Track TBD</span>
           <span id="homeLastWinnerDate">Date TBD</span>
+          <div class="home-winner-stats" id="homeLastWinnerStats" hidden></div>
         </div>
       </div>
     </article>
 
     <article class="home-card card home-spotlight-card" aria-label="Driver spotlight">
       <h3>DRIVER SPOTLIGHT</h3>
-      <img src="/assets/drivers/placeholder.png" alt="" id="homeSpotlightImg" />
-      <div class="leader">
-        <div class="big" id="homePointsLeaderPts">— PTS</div>
+      <div id="homeSpotlightActive" hidden>
+        <img src="/assets/drivers/placeholder.png" alt="" id="homeSpotlightImg" />
+        <p id="homeSpotlightDriverName" class="home-spotlight-name">—</p>
+        <p id="homeSpotlightCarNumber" class="home-spotlight-car" hidden></p>
+        <h4 id="homeSpotlightHeadline" class="home-spotlight-headline"></h4>
+        <p id="homeSpotlightDek" class="home-spotlight-dek"></p>
+        <a id="homeSpotlightArticleLink" class="home-card-btn home-spotlight-link">READ SPOTLIGHT</a>
       </div>
-      <p id="homePointsLeaderName" class="home-spotlight-name">—</p>
-      <p class="home-placeholder" id="homeSpotlightCopy">
-        Driver spotlight stories coming soon. Featured profiles and weekly spotlights will highlight top performers and rising stars in the BP Truck Series.
-      </p>
+      <div id="homeSpotlightPlaceholder">
+        <img src="/assets/drivers/placeholder.png" alt="" id="homeSpotlightPlaceholderImg" />
+        <p class="home-placeholder" id="homeSpotlightCopy">
+          Driver spotlight stories coming soon.
+        </p>
+      </div>
     </article>
 
     <article class="home-card panel home-section home-league-updates" aria-label="League updates">
