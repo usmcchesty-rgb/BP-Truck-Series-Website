@@ -89,6 +89,7 @@
       text-transform: uppercase;
     }
     .article-image-controls { flex: 1 1 280px; max-width: 520px; }
+    .article-image-controls.is-crop-disabled .slider-row { opacity: 0.45; pointer-events: none; }
     #articleImageMsg { margin-top: 10px; font-size: 12px; color: #ccc; white-space: pre-wrap; }
     #articleImageMsg.error { color: #ff6060; }
   </style>
@@ -170,11 +171,12 @@
             <option value="championship-watch">Championship Watch</option>
             <option value="breaking-news">Breaking News</option>
             <option value="league-announcement">League Announcement</option>
+            <option value="news">News</option>
           </select>
         </div>
         <div id="raceNumberField">
-          <label class="field-label" for="raceNumber">Race Number</label>
-          <input id="raceNumber" class="input" type="number" min="1" value="1">
+          <label class="field-label" for="raceNumber">Race Number (optional)</label>
+          <input id="raceNumber" class="input" type="number" min="1" placeholder="Optional">
           <p id="raceNumberHint" class="field-hint" hidden>Not used for Driver Spotlight — generation uses current season standings and league career history.</p>
         </div>
         <div>
@@ -190,7 +192,12 @@
         <input type="hidden" id="featuredImageUpdatedAt">
         <div class="article-image-preview-row">
           <div id="articleImagePreview" class="article-image-preview is-empty">No image</div>
-          <div class="article-image-controls">
+          <div class="article-image-controls" id="articleImageControls">
+            <label class="field-label" for="featuredImageDisplayMode">Image Display Mode</label>
+            <select id="featuredImageDisplayMode" class="select">
+              <option value="fill">Fill Container</option>
+              <option value="contain">Fit Entire Image</option>
+            </select>
             <label class="field-label" for="featuredImageUrl">Featured Image URL</label>
             <input id="featuredImageUrl" class="input" type="url" placeholder="https://...">
             <label class="field-label" for="articleImageFile">Upload Article Image (PNG)</label>
@@ -212,6 +219,8 @@
             </div>
             <div class="btn-row" style="margin-top:0;">
               <button class="btn btn-secondary" type="button" onclick="resetArticleImageCrop()">Reset Crop</button>
+              <button class="btn btn-secondary" type="button" onclick="setArticleImageFill()">Fill Container</button>
+              <button class="btn btn-secondary" type="button" onclick="setArticleImageContain()">Fit Entire Image</button>
             </div>
             <pre id="articleImageMsg"></pre>
           </div>
@@ -237,6 +246,9 @@
           </div>
         </div>
       </div>
+
+      <label class="field-label" for="newsTopic">News Topic</label>
+      <input id="newsTopic" class="input" type="text" placeholder="e.g. Father's Day, Midseason Update, Sponsor Spotlight">
 
       <label class="field-label" for="manualNotes">Manual Notes</label>
       <textarea id="manualNotes" class="textarea" placeholder="Optional verified race facts and context. Saved broadcast transcripts are used first from Transcripts admin."></textarea>
@@ -305,12 +317,14 @@
     function normalizeArticleImage(article = {}) {
       const helper = getNewsArticleImage();
       if (helper?.normalize) return helper.normalize(article);
+      const mode = String(article.featuredImageDisplayMode || article.featured_image_display_mode || 'fill').toLowerCase();
       return {
         featuredImageUrl: String(article.featuredImageUrl || article.featured_image_url || '').split('?')[0],
         featuredImageUpdatedAt: article.featuredImageUpdatedAt || article.featured_image_updated_at || null,
-        featuredImageZoom: 1,
-        featuredImageX: 50,
-        featuredImageY: 50,
+        featuredImageZoom: Number(article.featuredImageZoom ?? article.featured_image_zoom) || 1,
+        featuredImageX: Number(article.featuredImageX ?? article.featured_image_x ?? 50),
+        featuredImageY: Number(article.featuredImageY ?? article.featured_image_y ?? 50),
+        featuredImageDisplayMode: mode === 'contain' ? 'contain' : 'fill',
       };
     }
 
@@ -838,13 +852,44 @@
     $('#reporterImageFile')?.addEventListener('change', onReporterFileSelected);
 
     function readArticleImageFromForm() {
+      const mode = $('#featuredImageDisplayMode')?.value === 'contain' ? 'contain' : 'fill';
       return {
         featuredImageUrl: $('#featuredImageUrl').value.trim(),
         featuredImageZoom: Number($('#articleImageZoom').value) || 1,
         featuredImageX: Number($('#articleImageX').value),
         featuredImageY: Number($('#articleImageY').value),
         featuredImageUpdatedAt: $('#featuredImageUpdatedAt').value || null,
+        featuredImageDisplayMode: mode,
       };
+    }
+
+    function syncArticleImageCropControls() {
+      const contain = $('#featuredImageDisplayMode')?.value === 'contain';
+      const controls = $('#articleImageControls');
+      const sliders = ['articleImageZoom', 'articleImageX', 'articleImageY'];
+      if (controls) controls.classList.toggle('is-crop-disabled', contain);
+      sliders.forEach((id) => {
+        const el = $('#' + id);
+        if (el) el.disabled = contain;
+      });
+    }
+
+    function setArticleImageDisplayMode(mode) {
+      const select = $('#featuredImageDisplayMode');
+      if (!select) return;
+      select.value = mode === 'contain' ? 'contain' : 'fill';
+      syncArticleImageCropControls();
+      updateArticleImagePreview();
+    }
+
+    function setArticleImageFill() {
+      setArticleImageDisplayMode('fill');
+      setArticleImageMsg('Display mode set to Fill Container. Adjust crop sliders as needed.');
+    }
+
+    function setArticleImageContain() {
+      setArticleImageDisplayMode('contain');
+      setArticleImageMsg('Display mode set to Fit Entire Image. Crop sliders disabled.');
     }
 
     function updateArticleImageSliderLabels() {
@@ -864,6 +909,7 @@
         (helper?.displayUrl ? helper.displayUrl(articleImageState) : articleImageState.featuredImageUrl || '');
       applyArticleImagePreview($('#articleImagePreview'), articleImageState, { previewUrl });
       updateArticleImageSliderLabels();
+      syncArticleImageCropControls();
     }
 
     function syncArticleUploadButtonState() {
@@ -886,9 +932,11 @@
       $('#articleImageZoom').value = '1';
       $('#articleImageX').value = '50';
       $('#articleImageY').value = '50';
+      if ($('#featuredImageDisplayMode')) $('#featuredImageDisplayMode').value = 'fill';
       $('#articleImageFile').value = '';
       $('#articleDraftKey').value = `draft-${Date.now()}`;
       syncArticleUploadButtonState();
+      syncArticleImageCropControls();
       updateArticleImagePreview();
       setArticleImageMsg('');
     }
@@ -898,6 +946,10 @@
       articleImageState = normalizeArticleImage(article);
       $('#featuredImageUrl').value = articleImageState.featuredImageUrl || '';
       $('#featuredImageUpdatedAt').value = articleImageState.featuredImageUpdatedAt || '';
+      if ($('#featuredImageDisplayMode')) {
+        $('#featuredImageDisplayMode').value =
+          articleImageState.featuredImageDisplayMode === 'contain' ? 'contain' : 'fill';
+      }
       $('#articleImageZoom').value = articleImageState.featuredImageZoom;
       $('#articleImageX').value = articleImageState.featuredImageX;
       $('#articleImageY').value = articleImageState.featuredImageY;
@@ -908,6 +960,7 @@
         ensureArticleDraftKey();
       }
       syncArticleUploadButtonState();
+      syncArticleImageCropControls();
       updateArticleImagePreview();
     }
 
@@ -997,6 +1050,12 @@
 
     ['articleImageZoom', 'articleImageX', 'articleImageY'].forEach((id) => {
       $('#' + id)?.addEventListener('input', updateArticleImagePreview);
+    });
+    $('#featuredImageDisplayMode')?.addEventListener('change', () => {
+      syncArticleImageCropControls();
+      updateArticleImagePreview();
+      const contain = $('#featuredImageDisplayMode')?.value === 'contain';
+      setArticleImageMsg(contain ? 'Fit Entire Image — crop sliders disabled.' : 'Fill Container — crop sliders active.');
     });
     $('#featuredImageUrl')?.addEventListener('input', updateArticleImagePreview);
     $('#articleImageFile')?.addEventListener('change', onArticleImageFileSelected);
@@ -1089,6 +1148,7 @@
       $('#summary').value = '';
       $('#body').value = '';
       $('#headlineOverride').value = '';
+      $('#newsTopic').value = '';
       resetArticleImageFields();
       resetSpotlightImageFields();
       $('#previewLink').hidden = true;
@@ -1107,9 +1167,10 @@
         if (a.articleType === 'driver-spotlight') {
           $('#raceNumber').value = '';
         } else {
-          $('#raceNumber').value = a.raceNumber || 1;
+          $('#raceNumber').value = a.raceNumber != null && a.raceNumber !== '' ? a.raceNumber : '';
         }
         $('#spotlightDriverId').value = a.spotlightDriverId || '';
+        $('#newsTopic').value = a.newsTopic || '';
         $('#headline').value = a.headline || '';
         $('#subheadline').value = a.subheadline || '';
         $('#summary').value = a.summary || '';
@@ -1151,7 +1212,6 @@
         if (spotlightImagePanel) spotlightImagePanel.hidden = false;
         updateSpotlightImagePreview();
       } else {
-        if (!raceInput.value) raceInput.value = '1';
         raceField.classList.remove('field-disabled');
         raceHint.hidden = true;
         driverLabel.textContent = 'Driver (optional)';
@@ -1176,13 +1236,16 @@
         featuredImageX: Number($('#articleImageX').value),
         featuredImageY: Number($('#articleImageY').value),
         featuredImageUpdatedAt: $('#featuredImageUpdatedAt').value || undefined,
+        featuredImageDisplayMode: $('#featuredImageDisplayMode')?.value === 'contain' ? 'contain' : 'fill',
+        newsTopic: $('#newsTopic').value.trim(),
       };
       if (spotlight) {
         payload.spotlightImageUrl = $('#spotlightImageUrl').value.trim();
         payload.spotlightImageUpdatedAt = $('#spotlightImageUpdatedAt').value || undefined;
       }
-      if (!spotlight) {
-        payload.raceNumber = Number($('#raceNumber').value) || undefined;
+      const raceVal = $('#raceNumber').value;
+      if (!spotlight && raceVal !== '') {
+        payload.raceNumber = Number(raceVal);
       }
       return payload;
     }
@@ -1281,11 +1344,11 @@
           articleType: $('#articleType').value,
           spotlightDriverId: $('#spotlightDriverId').value || null,
           manualNotes: $('#manualNotes').value,
+          newsTopic: $('#newsTopic').value.trim(),
           headlineOverride: $('#headlineOverride').value
         };
-        if (!isDriverSpotlightType()) {
-          payload.raceNumber = Number($('#raceNumber').value) || 1;
-        }
+        const raceVal = $('#raceNumber').value;
+        if (raceVal !== '') payload.raceNumber = Number(raceVal);
         const res = await fetch('/api/news', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

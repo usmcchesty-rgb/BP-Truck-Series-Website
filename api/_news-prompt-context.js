@@ -474,10 +474,18 @@ export function buildNewsUserPromptFromContext(generationContext, promptContext,
   const typeConfig = options.typeConfig;
   const articleType = promptContext.articleType || options.articleType || 'race-recap';
   const raceNumber = Number(options.raceNumber ?? generationContext.raceNumber);
+  const requestedRaceNumber = options.requestedRaceNumber ?? generationContext.requestedRaceNumber;
+  const hasRequestedRace =
+    requestedRaceNumber != null &&
+    requestedRaceNumber !== '' &&
+    Number.isInteger(Number(requestedRaceNumber)) &&
+    Number(requestedRaceNumber) >= 1;
+  const newsTopic = String(options.newsTopic ?? generationContext.newsTopic ?? '').trim();
   const headlineOverride = String(options.headlineOverride || '').trim();
-  const spotlight = generationContext.standings?.find(
+  const optionalDriver = generationContext.standings?.find(
     (row) => String(row.driverId) === String(promptContext.spotlightDriverId)
   );
+  const spotlight = optionalDriver;
   const spotlightGrounding =
     generationContext.factualGrounding?.drivers?.[String(promptContext.spotlightDriverId)] || null;
 
@@ -523,6 +531,44 @@ Manual notes / transcript (use only when relevant to the spotlight driver):
 ${promptContext.truncatedTranscript.text || '(none)'}
 
 Return JSON only with headline, subheadline, summary, and body. Use the same verified leagueCareerStats career totals in every field.`;
+  }
+
+  const useRaceFocus =
+    (articleType === 'race-recap' || articleType === 'weekend-preview') && hasRequestedRace;
+
+  if (!useRaceFocus) {
+    const raceRow = hasRequestedRace
+      ? generationContext.scheduleRaces?.find(
+          (race) => race.officialPointsRaceNumber === Number(requestedRaceNumber)
+        )
+      : null;
+
+    return `Write a ${typeConfig.label} article for the Blazing Pedals Truck Series.
+
+Article type: ${typeConfig.label}
+${newsTopic ? `News topic: ${newsTopic}` : 'News topic: (derive from article type and manual notes)'}
+Target length: ${typeConfig.minWords}-${typeConfig.maxWords} words
+Structure: ${typeConfig.structure}
+Author byline: ${options.author || 'Miles Apex'}
+${headlineOverride ? `Suggested headline direction: ${headlineOverride}` : ''}
+${optionalDriver ? `Optional featured driver: ${optionalDriver.driverName} (P${optionalDriver.position}, ${optionalDriver.points} pts)` : ''}
+${hasRequestedRace ? `Optional race context: Race ${requestedRaceNumber} — ${raceRow?.track || 'See schedule'} (${raceRow?.date || 'TBD'})` : 'No specific race selected — use general league context from standings and manual notes.'}
+
+Focus the article on the news topic, article type, and manual notes. Do not invent race-specific events unless manual notes or transcript explicitly support them.
+
+Standings snapshot:
+${promptContext.standingsSnapshot.text}
+
+Recent results:
+${recentResults || '(none)'}
+
+Factual grounding (verified facts only):
+${factualJson}
+
+Manual notes / transcript:
+${promptContext.truncatedTranscript.text || '(none)'}
+
+Return JSON only with headline, subheadline, summary, and body.`;
   }
 
   const raceRow = generationContext.scheduleRaces?.find(

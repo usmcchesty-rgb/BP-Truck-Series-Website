@@ -1,4 +1,7 @@
 (function () {
+  const DISPLAY_FILL = "fill";
+  const DISPLAY_CONTAIN = "contain";
+
   function stripUrlQuery(url) {
     const value = String(url || "").trim();
     if (!value) return "";
@@ -24,6 +27,19 @@
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;");
+  }
+
+  function normalizeDisplayMode(article = {}) {
+    const raw = String(
+      article.featuredImageDisplayMode ?? article.featured_image_display_mode ?? DISPLAY_FILL,
+    )
+      .trim()
+      .toLowerCase();
+    return raw === DISPLAY_CONTAIN ? DISPLAY_CONTAIN : DISPLAY_FILL;
+  }
+
+  function isContainMode(article = {}) {
+    return normalizeDisplayMode(article) === DISPLAY_CONTAIN;
   }
 
   function isDriverSpotlightArticle(article = {}) {
@@ -59,6 +75,7 @@
         featuredImageZoom: Number.isFinite(zoom) && zoom > 0 ? zoom : 1,
         featuredImageX: Number.isFinite(x) ? Math.min(100, Math.max(0, x)) : 50,
         featuredImageY: Number.isFinite(y) ? Math.min(100, Math.max(0, y)) : 50,
+        featuredImageDisplayMode: normalizeDisplayMode(article),
         displayImage: article.displayImage,
       };
     }
@@ -75,6 +92,7 @@
       featuredImageZoom: Number.isFinite(zoom) && zoom > 0 ? zoom : 1,
       featuredImageX: Number.isFinite(x) ? Math.min(100, Math.max(0, x)) : 50,
       featuredImageY: Number.isFinite(y) ? Math.min(100, Math.max(0, y)) : 50,
+      featuredImageDisplayMode: normalizeDisplayMode(article),
       displayImage: article.displayImage || null,
     };
   }
@@ -90,8 +108,16 @@
     return Boolean(normalize(article).featuredImageUrl);
   }
 
+  function wrapClassForMode(baseClass, article = {}) {
+    const classes = [baseClass];
+    if (isContainMode(article)) classes.push("news-image-wrap--contain");
+    return classes.join(" ");
+  }
+
   function cropStyle(article = {}, extra = {}) {
-    const data = normalize({ ...article, ...extra });
+    const merged = { ...article, ...extra };
+    if (isContainMode(merged)) return "";
+    const data = normalize(merged);
     return `--img-zoom:${data.featuredImageZoom};--img-x:${data.featuredImageX};--img-y:${data.featuredImageY};`;
   }
 
@@ -145,7 +171,8 @@
     const url = previewUrl || displayUrl(article);
     if (!url) return options.placeholderHtml || "";
 
-    const wrapClass = options.wrapClass || "news-article-image-wrap";
+    const merged = { ...article, ...(options.settings || {}) };
+    const wrapClass = wrapClassForMode(options.wrapClass || "news-article-image-wrap", merged);
     const imgClass = options.imgClass || "news-article-image-el";
     const alt = escapeHtml(options.alt || article.headline || "Article image");
     const style = cropStyle(article, options.settings);
@@ -154,7 +181,7 @@
         ? ' onerror="this.onerror=null;this.src=\'/assets/drivers/placeholder.png\'"'
         : "";
 
-    return `<div class="${wrapClass}" style="${style}"><img class="${imgClass}" src="${escapeHtml(url)}" alt="${alt}"${onerror}></div>`;
+    return `<div class="${wrapClass}"${style ? ` style="${style}"` : ""}><img class="${imgClass}" src="${escapeHtml(url)}" alt="${alt}"${onerror}></div>`;
   }
 
   function renderFeaturedMedia(article = {}, options = {}) {
@@ -202,9 +229,16 @@
   function applyPreview(target, article = {}, options = {}) {
     if (!target) return;
     const previewUrl = String(options.previewUrl || "").trim();
-    const url = previewUrl || displayUrl(article);
-    const style = cropStyle(article, options.settings);
-    target.style.cssText = style;
+    const merged = { ...article, ...(options.settings || {}) };
+    const url = previewUrl || displayUrl(merged);
+    const contain = isContainMode(merged);
+
+    target.classList.toggle("news-image-wrap--contain", contain);
+    if (contain) {
+      target.style.cssText = "";
+    } else {
+      target.style.cssText = cropStyle(article, options.settings);
+    }
 
     if (url) {
       target.classList.remove("is-empty");
@@ -229,10 +263,15 @@
   }
 
   window.NewsArticleImage = {
+    DISPLAY_FILL,
+    DISPLAY_CONTAIN,
     normalize,
+    normalizeDisplayMode,
+    isContainMode,
     hasImage,
     displayUrl,
     cropStyle,
+    wrapClassForMode,
     isDriverSpotlightArticle,
     isSpotlightPortrait,
     renderFeaturedMedia,

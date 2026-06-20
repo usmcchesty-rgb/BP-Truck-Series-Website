@@ -1,4 +1,4 @@
-export const NEWS_PROMPT_VERSION = '1.8';
+export const NEWS_PROMPT_VERSION = '1.9';
 export const NEWS_AUTHOR = 'Miles Apex';
 export const NEWS_AUTHOR_BIO =
   'Motorsports journalist covering the Blazing Pedals Truck Series. Focused on race analysis, championship battles, emerging storylines, and driver performance.';
@@ -43,6 +43,13 @@ export const ARTICLE_TYPES = {
     minWords: 200,
     maxWords: 600,
     structure: 'Announcement summary, details, effective timing, what it means for competitors',
+  },
+  news: {
+    label: 'News',
+    minWords: 250,
+    maxWords: 700,
+    structure:
+      'Lead with the topic, provide context and league relevance, key details, what readers should know next',
   },
 };
 

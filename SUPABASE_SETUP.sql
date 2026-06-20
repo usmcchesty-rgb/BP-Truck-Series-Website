@@ -165,7 +165,9 @@ create table if not exists news_articles (
   featured_image_zoom numeric default 1,
   featured_image_x numeric default 50,
   featured_image_y numeric default 50,
+  featured_image_display_mode text default 'fill',
   featured_image_updated_at timestamptz,
+  news_topic text,
   created_at timestamptz default now(),
   updated_at timestamptz default now(),
   published_at timestamptz
@@ -179,6 +181,8 @@ alter table news_articles add column if not exists featured_image_y numeric defa
 alter table news_articles add column if not exists featured_image_updated_at timestamptz;
 alter table news_articles add column if not exists spotlight_image_url text;
 alter table news_articles add column if not exists spotlight_image_updated_at timestamptz;
+alter table news_articles add column if not exists featured_image_display_mode text default 'fill';
+alter table news_articles add column if not exists news_topic text;
 
 create table if not exists race_transcripts (
   id bigint generated always as identity primary key,

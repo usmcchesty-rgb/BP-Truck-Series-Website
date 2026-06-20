@@ -34,6 +34,18 @@ function buildSlug(headline, id = null) {
   return id ? `${base}-${id}` : base;
 }
 
+function normalizeFeaturedImageDisplayMode(body = {}, existing = {}) {
+  const raw = String(
+    body.featuredImageDisplayMode ??
+      body.featured_image_display_mode ??
+      existing.featured_image_display_mode ??
+      'fill'
+  )
+    .trim()
+    .toLowerCase();
+  return raw === 'contain' ? 'contain' : 'fill';
+}
+
 function normalizeFeaturedImageCrop(body = {}, existing = {}) {
   const zoom = Number(
     body.featuredImageZoom ??
@@ -82,6 +94,8 @@ function normalizeArticle(row) {
     featuredImageX: Number(row.featured_image_x ?? 50),
     featuredImageY: Number(row.featured_image_y ?? 50),
     featuredImageUpdatedAt: row.featured_image_updated_at || null,
+    featuredImageDisplayMode: normalizeFeaturedImageDisplayMode({}, row),
+    newsTopic: row.news_topic || '',
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     publishedAt: row.published_at,
@@ -200,6 +214,7 @@ async function saveArticle(body, publish = false) {
   const now = new Date().toISOString();
   const id = body.id ? Number(body.id) : null;
   const crop = normalizeFeaturedImageCrop(body);
+  const displayMode = normalizeFeaturedImageDisplayMode(body);
   const row = {
     article_type: articleType,
     headline,
@@ -218,6 +233,8 @@ async function saveArticle(body, publish = false) {
     featured_image_zoom: crop.featured_image_zoom,
     featured_image_x: crop.featured_image_x,
     featured_image_y: crop.featured_image_y,
+    featured_image_display_mode: displayMode,
+    news_topic: String(body.newsTopic ?? body.news_topic ?? '').trim(),
     updated_at: now,
   };
 
@@ -309,22 +326,20 @@ async function handleGenerate(body) {
   const spotlightDriverId =
     body.spotlightDriverId ?? body.spotlight_driver_id ?? body.driverId ?? null;
 
-  if (isDriverSpotlight) {
-    if (!spotlightDriverId) {
-      return { error: 'Driver Spotlight requires a selected driver.', status: 400 };
-    }
-  } else {
-    const raceNumber = Number(body.raceNumber ?? body.race_number ?? 1);
-    if (!Number.isInteger(raceNumber) || raceNumber < 1) {
-      return { error: 'Valid race number is required.', status: 400 };
-    }
+  if (isDriverSpotlight && !spotlightDriverId) {
+    return { error: 'Driver Spotlight requires a selected driver.', status: 400 };
   }
+
+  const rawRace = body.raceNumber ?? body.race_number;
+  const hasRace =
+    rawRace != null && rawRace !== '' && Number.isInteger(Number(rawRace)) && Number(rawRace) >= 1;
 
   try {
     const result = await generateNewsArticle({
       articleType,
-      raceNumber: isDriverSpotlight ? null : Number(body.raceNumber ?? body.race_number ?? 1),
+      raceNumber: isDriverSpotlight || !hasRace ? null : Number(rawRace),
       manualNotes: body.manualNotes ?? body.manualRaceNotes ?? body.manual_notes,
+      newsTopic: body.newsTopic ?? body.news_topic,
       transcript: body.transcript,
       headlineOverride: body.headlineOverride ?? body.headline_override,
       spotlightDriverId,

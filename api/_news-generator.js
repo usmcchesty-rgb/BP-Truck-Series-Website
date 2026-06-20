@@ -77,6 +77,8 @@ function buildNewsUserPrompt(generationContext, options = {}) {
   const userPrompt = buildNewsUserPromptFromContext(generationContext, promptContext, {
     typeConfig,
     raceNumber: options.raceNumber ?? generationContext.raceNumber,
+    requestedRaceNumber: options.requestedRaceNumber ?? generationContext.requestedRaceNumber,
+    newsTopic: options.newsTopic ?? generationContext.newsTopic,
     headlineOverride: options.headlineOverride,
     author: NEWS_AUTHOR,
   });
@@ -153,29 +155,43 @@ Examples when career wins=5, season wins=1, Season 8 runner-up (P2), current Sea
 
 export async function loadNewsGenerationContext(options = {}) {
   const articleType = normalizeArticleType(options.articleType ?? options.article_type);
-  let raceNumber = options.raceNumber ?? options.race_number;
+  const rawRace = options.raceNumber ?? options.race_number;
+  const hasRequestedRace =
+    rawRace != null &&
+    rawRace !== '' &&
+    Number.isInteger(Number(rawRace)) &&
+    Number(rawRace) >= 1;
+  let raceNumber;
   const manualNotes = String(
     options.manualNotes ?? options.manualRaceNotes ?? options.manual_race_notes ?? ''
   ).trim();
+  const newsTopic = String(options.newsTopic ?? options.news_topic ?? '').trim();
 
   if (articleType === 'driver-spotlight') {
-    if (raceNumber == null || raceNumber === '' || Number(raceNumber) < 1) {
+    if (hasRequestedRace) {
+      raceNumber = Number(rawRace);
+    } else {
       const bootstrap = await loadPowerRankingsGenerationContext(1, '', {
         supplementalManualNotes: manualNotes,
       });
       raceNumber = bootstrap.raceNumberDebug?.latestCompletedRaceNumber ?? 1;
-    } else {
-      raceNumber = Number(raceNumber);
     }
+  } else if (hasRequestedRace) {
+    raceNumber = Number(rawRace);
   } else {
-    raceNumber = Number(raceNumber ?? 1);
+    const bootstrap = await loadPowerRankingsGenerationContext(1, '', {
+      supplementalManualNotes: manualNotes,
+    });
+    raceNumber = bootstrap.raceNumberDebug?.latestCompletedRaceNumber ?? 1;
   }
 
   const generationContext = await loadPowerRankingsGenerationContext(raceNumber, '', {
     supplementalManualNotes: manualNotes,
   });
   generationContext.resolvedRaceNumber = raceNumber;
+  generationContext.requestedRaceNumber = hasRequestedRace ? Number(rawRace) : null;
   generationContext.articleType = articleType;
+  generationContext.newsTopic = newsTopic;
 
   return buildNewsFactualContext(generationContext, {
     spotlightDriverId: options.spotlightDriverId || options.spotlight_driver_id || null,
@@ -257,24 +273,34 @@ export async function repairNewsArticle(article, generationContext, articleType)
 export async function generateNewsArticle(options = {}) {
   const articleType = normalizeArticleType(options.articleType ?? options.article_type);
   const isDriverSpotlight = articleType === 'driver-spotlight';
-  const raceNumber = isDriverSpotlight
-    ? null
-    : Number(options.raceNumber ?? options.race_number ?? 1);
+  const rawRace = options.raceNumber ?? options.race_number;
+  const hasRequestedRace =
+    rawRace != null &&
+    rawRace !== '' &&
+    Number.isInteger(Number(rawRace)) &&
+    Number(rawRace) >= 1;
 
   const generationContext = await loadNewsGenerationContext({
     articleType,
     raceNumber: isDriverSpotlight
-      ? options.raceNumber ?? options.race_number ?? null
-      : raceNumber,
+      ? hasRequestedRace
+        ? Number(rawRace)
+        : null
+      : hasRequestedRace
+        ? Number(rawRace)
+        : null,
     manualNotes: options.manualNotes ?? options.manualRaceNotes,
+    newsTopic: options.newsTopic ?? options.news_topic,
     spotlightDriverId: options.spotlightDriverId ?? options.spotlight_driver_id,
   });
 
-  const resolvedRaceNumber = generationContext.resolvedRaceNumber ?? raceNumber ?? 1;
+  const resolvedRaceNumber = generationContext.resolvedRaceNumber ?? 1;
 
   const { userPrompt, promptContext } = buildNewsUserPrompt(generationContext, {
     articleType,
     raceNumber: resolvedRaceNumber,
+    requestedRaceNumber: generationContext.requestedRaceNumber,
+    newsTopic: options.newsTopic ?? options.news_topic ?? generationContext.newsTopic,
     headlineOverride: options.headlineOverride ?? options.headline_override,
     spotlightDriverId: options.spotlightDriverId ?? options.spotlight_driver_id,
   });
@@ -297,7 +323,8 @@ export async function generateNewsArticle(options = {}) {
     promptVersion: NEWS_PROMPT_VERSION,
     author: NEWS_AUTHOR,
     articleType,
-    raceNumber: isDriverSpotlight ? null : resolvedRaceNumber,
+    raceNumber: isDriverSpotlight ? null : generationContext.requestedRaceNumber,
+    newsTopic: generationContext.newsTopic || null,
     article: repaired.article,
     validation: repaired.validation,
     repairAttempted: repaired.repairAttempted,
