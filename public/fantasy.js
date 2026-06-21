@@ -1,48 +1,9 @@
 // BP Fantasy — public marketing landing page (frontend only).
-// Gameplay (lineups, salaries, standings) will live on separate pages later.
+// Requires fantasy-branding-assets.js loaded first.
 // Shared hero placement helpers (window.BPFantasyHeroPlacement) are safe on admin pages.
 
-/** Default asset paths — swap via admin settings when backend wiring is added. */
-const FANTASY_LANDING_ASSETS = {
-  heroBackgroundUrl: '/assets/fantasy/hero-background.jpg',
-  headerLogoUrl: '/assets/fantasy/fantasy-logo.png',
-};
-
-function stripPhotoUrlQuery(photoUrl) {
-  const url = String(photoUrl || '').trim();
-  if (!url) return '';
-  return url.split('?')[0].split('#')[0];
-}
-
-function photoCacheVersion(updatedAt) {
-  if (!updatedAt) return null;
-  const ms = new Date(updatedAt).getTime();
-  return Number.isFinite(ms) ? ms : null;
-}
-
-function withPhotoCacheBust(photoUrl, version) {
-  const clean = stripPhotoUrlQuery(photoUrl);
-  if (!clean) return clean;
-  if (version == null || version === '') return clean;
-  return `${clean}?v=${encodeURIComponent(version)}`;
-}
-
-function resolveFantasyHeroBackgroundDisplayUrl(settings = {}) {
-  const stored = stripPhotoUrlQuery(settings.fantasyHeroBackgroundUrl || '');
-  const url = stored || FANTASY_LANDING_ASSETS.heroBackgroundUrl;
-  const version = stored
-    ? photoCacheVersion(settings.fantasyHeroBackgroundUpdatedAt) || Date.now()
-    : null;
-  return version ? withPhotoCacheBust(url, version) : url;
-}
-
-function resolveFantasyHeaderLogoDisplayUrl(settings = {}) {
-  const stored = stripPhotoUrlQuery(settings.fantasyHeaderLogoUrl || '');
-  const url = stored || FANTASY_LANDING_ASSETS.headerLogoUrl;
-  const version = stored
-    ? photoCacheVersion(settings.fantasyHeaderLogoUpdatedAt) || Date.now()
-    : null;
-  return version ? withPhotoCacheBust(url, version) : url;
+function getFantasyBrandingAssets() {
+  return window.BPFantasyBrandingAssets || null;
 }
 
 const FANTASY_LOGO_PLACEMENT_DEFAULTS = {
@@ -114,28 +75,35 @@ function formatSalary(value) {
   return `$${Number(value).toLocaleString('en-US')}`;
 }
 
-function applyHeroImage(url) {
+function applyHeroImage(settings = {}) {
   const img = document.getElementById('fantasyHeroImage');
-  if (!img || !url) return;
-  img.src = url;
+  const branding = getFantasyBrandingAssets();
+  if (!img || !branding) return;
+
+  branding.applyImageFromCandidates(
+    img,
+    branding.resolveFantasyHeroBackgroundCandidates(settings),
+  );
 }
 
-function applyHeaderLogo(url) {
+function applyHeaderLogo(settings = {}) {
   const logo = document.getElementById('fantasyHeaderLogo');
   const fallback = document.getElementById('fantasyLogoFallback');
-  if (!logo || !url) return;
+  const branding = getFantasyBrandingAssets();
+  if (!logo || !branding) return;
 
-  const probe = new Image();
-  probe.onload = () => {
-    logo.src = url;
-    logo.hidden = false;
-    if (fallback) fallback.hidden = true;
-  };
-  probe.onerror = () => {
-    logo.hidden = true;
-    if (fallback) fallback.hidden = false;
-  };
-  probe.src = url;
+  branding.applyImageFromCandidates(
+    logo,
+    branding.resolveFantasyHeaderLogoCandidates(settings),
+    {
+      onLoaded: () => {
+        if (fallback) fallback.hidden = true;
+      },
+      onMissing: () => {
+        if (fallback) fallback.hidden = false;
+      },
+    },
+  );
 }
 
 function applyHeroLogoPlacement(settings = {}) {
@@ -147,8 +115,8 @@ function applyHeroLogoPlacement(settings = {}) {
 
 function applyLandingAssets(settings = {}) {
   if (!isFantasyPublicLandingPage()) return;
-  applyHeroImage(resolveFantasyHeroBackgroundDisplayUrl(settings));
-  applyHeaderLogo(resolveFantasyHeaderLogoDisplayUrl(settings));
+  applyHeroImage(settings);
+  applyHeaderLogo(settings);
   applyHeroLogoPlacement(settings);
 }
 

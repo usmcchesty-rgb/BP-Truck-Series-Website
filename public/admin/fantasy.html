@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Fantasy Admin — BP Fantasy Coming Soon</title>
     <link rel="stylesheet" href="/styles.css" />
-    <link rel="stylesheet" href="/fantasy.css" />
     <style>
       .wrap {
         padding: 18px;
@@ -206,18 +205,69 @@
         font-weight: 900;
       }
 
-      .fantasy-hero-preview-viewport {
+      .fantasy-admin-hero-preview {
+        position: relative;
         width: 100%;
         max-width: 720px;
         margin: 12px 0 0;
-        overflow: hidden;
         border: 1px solid #333;
         background: #050505;
+        line-height: 0;
+        overflow: hidden;
       }
 
-      .fantasy-hero-preview-scaler {
-        transform-origin: top left;
-        width: 100vw;
+      .fantasy-admin-hero-preview__hero {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+
+      .fantasy-admin-hero-preview__hero[hidden] {
+        display: none;
+      }
+
+      .fantasy-admin-hero-preview__logo {
+        position: absolute;
+        top: var(--admin-preview-logo-top, 21%);
+        left: 50%;
+        transform: translateX(-50%);
+        width: var(--admin-preview-logo-width, 32%);
+        max-width: var(--admin-preview-logo-max-width, 280px);
+        height: auto;
+        object-fit: contain;
+        pointer-events: none;
+        filter: drop-shadow(0 4px 18px rgba(0, 0, 0, 0.45));
+      }
+
+      .fantasy-admin-hero-preview__logo[hidden] {
+        display: none;
+      }
+
+      .fantasy-admin-hero-preview__msg {
+        margin: 0;
+        padding: 48px 16px;
+        color: #777;
+        font-size: 12px;
+        font-weight: 900;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        text-align: center;
+        line-height: 1.4;
+      }
+
+      .fantasy-admin-hero-preview__msg--logo {
+        position: absolute;
+        top: var(--admin-preview-logo-top, 21%);
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 10px 14px;
+        width: max-content;
+        max-width: 90%;
+        background: rgba(0, 0, 0, 0.55);
+      }
+
+      .fantasy-admin-hero-preview__msg[hidden] {
+        display: none;
       }
 
       .fantasy-hero-preview-debug {
@@ -420,23 +470,27 @@
             <div class="branding-block">
               <div class="field-label">Fantasy Hero Preview</div>
               <span class="field-help">Scaled preview of the public hero with logo overlay placement. Updates live as you adjust sliders.</span>
-              <div id="fantasyHeroPreviewViewport" class="fantasy-hero-preview-viewport" aria-label="Fantasy Hero Preview">
-                <div id="fantasyHeroPreviewScaler" class="fantasy-hero-preview-scaler">
-                  <section class="fantasy-hero-banner" id="fantasyAdminHeroBanner">
-                    <img
-                      id="fantasyCompositeHeroImg"
-                      class="fantasy-hero-banner-img"
-                      src="/assets/fantasy/hero-background.jpg"
-                      alt="Fantasy hero background preview"
-                    />
-                    <img
-                      id="fantasyCompositeLogoImg"
-                      class="fantasy-hero-logo"
-                      src="/assets/fantasy/fantasy-logo.png"
-                      alt="Fantasy header logo preview"
-                    />
-                  </section>
-                </div>
+              <div id="fantasyHeroPreviewBox" class="fantasy-admin-hero-preview" aria-label="Fantasy Hero Preview">
+                <img
+                  id="fantasyCompositeHeroImg"
+                  class="fantasy-admin-hero-preview__hero"
+                  src=""
+                  alt="Fantasy hero background preview"
+                  hidden
+                />
+                <p id="fantasyCompositeHeroMsg" class="fantasy-admin-hero-preview__msg" hidden>
+                  Hero image not found
+                </p>
+                <img
+                  id="fantasyCompositeLogoImg"
+                  class="fantasy-admin-hero-preview__logo"
+                  src=""
+                  alt="Fantasy header logo preview"
+                  hidden
+                />
+                <p id="fantasyCompositeLogoMsg" class="fantasy-admin-hero-preview__msg fantasy-admin-hero-preview__msg--logo" hidden>
+                  Logo image not found
+                </p>
               </div>
 
               <div id="fantasyHeroPreviewDebug" class="fantasy-hero-preview-debug" aria-live="polite">
@@ -637,6 +691,7 @@
     </main>
 
 
+    <script src="/fantasy-branding-assets.js"></script>
     <script>
       const $ = (s) => document.querySelector(s);
 
@@ -669,9 +724,7 @@
         $('#adminView').hidden = false;
         if (window.AdminNav) AdminNav.setLoggedIn(true);
         loadFantasySettings();
-        requestAnimationFrame(() => {
-          requestAnimationFrame(refreshFantasyHeroCompositePreview);
-        });
+        requestAnimationFrame(() => updateFantasyHeroCompositePreview());
       }
 
       function resolveServerOpenTime(settings = {}) {
@@ -699,6 +752,10 @@
 
       const DEFAULT_FANTASY_HERO_BACKGROUND_URL = '/assets/fantasy/hero-background.jpg';
       const DEFAULT_FANTASY_HEADER_LOGO_URL = '/assets/fantasy/fantasy-logo.png';
+
+      function getFantasyBrandingAssets() {
+        return window.BPFantasyBrandingAssets || null;
+      }
       const FANTASY_LOGO_PLACEMENT_DEFAULTS = {
         fantasyHeaderLogoTopPercent: 21,
         fantasyHeaderLogoWidthVw: 32,
@@ -802,164 +859,93 @@
       }
 
       let fantasyHeroPreviewLastPlacement = null;
-      const fantasyHeroPreviewReadyCallbacks = [];
 
-      function hasFantasyHeroPreviewDom() {
-        return Boolean(
-          $('#fantasyHeroPreviewViewport') &&
-          $('#fantasyHeroPreviewScaler') &&
-          $('#fantasyAdminHeroBanner') &&
-          $('#fantasyCompositeHeroImg'),
-        );
+      function applyAdminHeroPreviewStyles(previewBox, placement) {
+        if (!previewBox || !placement) return;
+        previewBox.style.setProperty('--admin-preview-logo-top', `${placement.fantasyHeaderLogoTopPercent}%`);
+        previewBox.style.setProperty('--admin-preview-logo-width', `${placement.fantasyHeaderLogoWidthVw}%`);
+        const boxWidth = previewBox.clientWidth || previewBox.offsetWidth || 720;
+        const scaledMaxWidth = Math.min(placement.fantasyHeaderLogoMaxWidthPx, boxWidth);
+        previewBox.style.setProperty('--admin-preview-logo-max-width', `${scaledMaxWidth}px`);
       }
 
-      function flushFantasyHeroPreviewReadyCallbacks() {
-        if (!window.BPFantasyHeroPlacement?.applyToBanner) return;
-        const callbacks = fantasyHeroPreviewReadyCallbacks.splice(0);
-        for (const callback of callbacks) {
-          try {
-            callback(window.BPFantasyHeroPlacement);
-          } catch (err) {
-            console.warn('Fantasy Hero Preview update failed:', err);
-          }
-        }
-      }
+      function setAdminPreviewImage(img, msg, candidates, notFoundText) {
+        if (!img) return;
 
-      function waitForFantasyHeroPlacement(callback) {
-        if (window.BPFantasyHeroPlacement?.applyToBanner) {
-          try {
-            callback(window.BPFantasyHeroPlacement);
-          } catch (err) {
-            console.warn('Fantasy Hero Preview update failed:', err);
+        const showMissing = () => {
+          img.removeAttribute('src');
+          img.hidden = true;
+          if (msg) {
+            msg.textContent = notFoundText;
+            msg.hidden = false;
           }
+        };
+
+        const showLoaded = (loadedUrl) => {
+          img.src = loadedUrl;
+          img.hidden = false;
+          if (msg) msg.hidden = true;
+        };
+
+        const branding = getFantasyBrandingAssets();
+        const urlList = Array.isArray(candidates) ? candidates : [candidates];
+
+        if (branding?.loadFirstAvailableImageUrl) {
+          branding.loadFirstAvailableImageUrl(urlList).then((url) => {
+            if (url) showLoaded(url);
+            else showMissing();
+          });
           return;
         }
 
-        fantasyHeroPreviewReadyCallbacks.push(callback);
-        if (fantasyHeroPreviewReadyCallbacks.length > 1) return;
+        const cleanUrl = String(urlList[0] || '').trim();
+        if (!cleanUrl) {
+          showMissing();
+          return;
+        }
 
-        let attempts = 0;
-        const retry = () => {
-          if (window.BPFantasyHeroPlacement?.applyToBanner) {
-            flushFantasyHeroPreviewReadyCallbacks();
-            return;
-          }
-          attempts += 1;
-          if (attempts >= 60) {
-            console.warn('Fantasy Hero Preview: BPFantasyHeroPlacement not available.');
-            fantasyHeroPreviewReadyCallbacks.length = 0;
-            return;
-          }
-          setTimeout(retry, 50);
-        };
-        retry();
-      }
-
-      function onFantasyJsReady() {
-        flushFantasyHeroPreviewReadyCallbacks();
-        if ($('#adminView')?.hidden || !hasFantasyHeroPreviewDom()) return;
-        refreshFantasyHeroCompositePreview();
-      }
-
-      function refreshFantasyHeroCompositePreview() {
-        updateFantasyHeroCompositePreview(
-          fantasyHeroPreviewLastPlacement || resolveLogoPlacement(fantasyBrandingSettings),
-        );
+        const probe = new Image();
+        probe.onload = () => showLoaded(cleanUrl);
+        probe.onerror = () => showMissing();
+        probe.src = cleanUrl;
       }
 
       function updateFantasyHeroPreviewDebug(placement) {
         const list = $('#fantasyHeroPreviewDebugList');
         if (!list) return;
 
-        const resolved = window.BPFantasyHeroPlacement?.resolve(buildPreviewSettings(placement)) || {
-          topPercent: placement.fantasyHeaderLogoTopPercent,
-          widthVw: placement.fantasyHeaderLogoWidthVw,
-          maxWidthPx: placement.fantasyHeaderLogoMaxWidthPx,
-        };
+        const resolved = resolveLogoPlacement(buildPreviewSettings(placement));
 
         list.innerHTML = `
-          <li>Top: ${resolved.topPercent}%</li>
-          <li>Width: ${resolved.widthVw}vw</li>
-          <li>Max Width: ${resolved.maxWidthPx}px</li>
+          <li>Top: ${resolved.fantasyHeaderLogoTopPercent}%</li>
+          <li>Width: ${resolved.fantasyHeaderLogoWidthVw}vw</li>
+          <li>Max Width: ${resolved.fantasyHeaderLogoMaxWidthPx}px</li>
         `;
       }
 
-      let fantasyHeroPreviewScaleAttempts = 0;
-
-      function syncFantasyHeroPreviewScale() {
-        const viewport = $('#fantasyHeroPreviewViewport');
-        const scaler = $('#fantasyHeroPreviewScaler');
-        const banner = $('#fantasyAdminHeroBanner');
-        const adminView = $('#adminView');
-        if (!viewport || !scaler || !banner || adminView?.hidden) {
-          fantasyHeroPreviewScaleAttempts = 0;
-          return;
-        }
-
-        const containerWidth = viewport.clientWidth;
-        if (containerWidth <= 0) {
-          fantasyHeroPreviewScaleAttempts += 1;
-          if (fantasyHeroPreviewScaleAttempts <= 20) {
-            requestAnimationFrame(syncFantasyHeroPreviewScale);
-          }
-          return;
-        }
-
-        fantasyHeroPreviewScaleAttempts = 0;
-        const viewportWidth = window.innerWidth || document.documentElement.clientWidth || containerWidth;
-        const scale = containerWidth / viewportWidth;
-        scaler.style.transform = `scale(${scale})`;
-        const bannerHeight = banner.offsetHeight;
-        viewport.style.height = bannerHeight > 0 ? `${bannerHeight * scale}px` : '';
-      }
-
       function updateFantasyHeroCompositePreview(placement = readLogoPlacementFromSliders()) {
-        if (!hasFantasyHeroPreviewDom()) return;
+        const previewBox = $('#fantasyHeroPreviewBox');
+        if (!previewBox) return;
 
         fantasyHeroPreviewLastPlacement = placement;
         syncLogoPlacementSliderLabels(placement);
         updateFantasyHeroPreviewDebug(placement);
+        applyAdminHeroPreviewStyles(previewBox, placement);
 
-        waitForFantasyHeroPlacement((heroPlacement) => {
-          if (!hasFantasyHeroPreviewDom()) return;
-
-          const banner = $('#fantasyAdminHeroBanner');
-          const heroImg = $('#fantasyCompositeHeroImg');
-          const logoImg = $('#fantasyCompositeLogoImg');
-          const previewSettings = buildPreviewSettings(placement);
-
-          heroPlacement.applyToBanner(banner, previewSettings);
-
-          if (heroImg) {
-            const heroUrl = resolveFantasyHeroBackgroundDisplayUrl(fantasyBrandingSettings);
-            const onHeroReady = () => syncFantasyHeroPreviewScale();
-            heroImg.onload = onHeroReady;
-            if (heroImg.src !== heroUrl) {
-              heroImg.src = heroUrl;
-            } else if (heroImg.complete) {
-              onHeroReady();
-            }
-          }
-
-          if (logoImg) {
-            const logoUrl = resolveFantasyHeaderLogoDisplayUrl(fantasyBrandingSettings);
-            logoImg.onerror = () => {
-              logoImg.hidden = true;
-              syncFantasyHeroPreviewScale();
-            };
-            logoImg.onload = () => {
-              logoImg.hidden = false;
-              syncFantasyHeroPreviewScale();
-            };
-            if (logoImg.src !== logoUrl) {
-              logoImg.src = logoUrl;
-            } else if (logoImg.complete && !logoImg.hidden) {
-              syncFantasyHeroPreviewScale();
-            }
-          }
-
-          requestAnimationFrame(() => requestAnimationFrame(syncFantasyHeroPreviewScale));
-        });
+        setAdminPreviewImage(
+          $('#fantasyCompositeHeroImg'),
+          $('#fantasyCompositeHeroMsg'),
+          getFantasyBrandingAssets()?.resolveFantasyHeroBackgroundCandidates(fantasyBrandingSettings)
+            || [resolveFantasyHeroBackgroundDisplayUrl(fantasyBrandingSettings)],
+          'Hero image not found',
+        );
+        setAdminPreviewImage(
+          $('#fantasyCompositeLogoImg'),
+          $('#fantasyCompositeLogoMsg'),
+          getFantasyBrandingAssets()?.resolveFantasyHeaderLogoCandidates(fantasyBrandingSettings)
+            || [resolveFantasyHeaderLogoDisplayUrl(fantasyBrandingSettings)],
+          'Logo image not found',
+        );
       }
 
       function setBrandingMsg(text, isError = false) {
@@ -1379,15 +1365,13 @@
       $('#fantasyLogoTopPercent')?.addEventListener('input', () => updateFantasyHeroCompositePreview());
       $('#fantasyLogoWidthVw')?.addEventListener('input', () => updateFantasyHeroCompositePreview());
       $('#fantasyLogoMaxWidthPx')?.addEventListener('input', () => updateFantasyHeroCompositePreview());
-      window.addEventListener('resize', syncFantasyHeroPreviewScale);
+      window.addEventListener('resize', () => {
+        if (!fantasyHeroPreviewLastPlacement) return;
+        applyAdminHeroPreviewStyles($('#fantasyHeroPreviewBox'), fantasyHeroPreviewLastPlacement);
+      });
 
-      window.__onFantasyJsReady = onFantasyJsReady;
       initSession();
-      if (window.BPFantasyHeroPlacement?.applyToBanner) {
-        onFantasyJsReady();
-      }
     </script>
-    <script src="/fantasy.js" onload="window.__onFantasyJsReady?.()"></script>
   </body>
 </html>
 
