@@ -3,193 +3,154 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>BP Fantasy Challenge — Coming Soon</title>
+    <title>BP Fantasy — Season 11 Fantasy Challenge</title>
     <link rel="stylesheet" href="styles.css" />
     <link rel="stylesheet" href="fantasy.css" />
-
   </head>
 
   <body>
     <div class="page-bg"></div>
     <header class="topbar"></header>
 
-    <main class="fantasy-main fantasy-phase2">
+    <main class="fantasy-landing">
 
-      <!-- HERO -->
-      <section class="fantasy-hero">
-        <div class="fantasy-hero-inner">
-          <div class="fantasy-ribbon">BP FANTASY</div>
-          <h1 class="fantasy-hero-title">BP Fantasy Challenge</h1>
-          <div class="fantasy-badge-row">
-            <span class="fantasy-status">Coming Soon</span>
+      <!-- FULL-WIDTH LAUNCH HERO -->
+      <section class="fantasy-launch-hero" aria-label="BP Fantasy Challenge">
+        <div class="fantasy-launch-hero-bg" id="fantasyHeroBg" aria-hidden="true"></div>
+        <div class="fantasy-launch-hero-overlay" aria-hidden="true"></div>
+
+        <div class="fantasy-launch-hero-content">
+          <img
+            id="fantasyHeaderLogo"
+            class="fantasy-launch-logo"
+            src=""
+            alt="BP Fantasy"
+            hidden
+          />
+          <p class="fantasy-launch-eyebrow" id="fantasyLogoFallback">BP Fantasy</p>
+
+          <h1 class="fantasy-launch-title" id="fantasySeasonTitle">Season 11 Fantasy Challenge</h1>
+
+          <ul class="fantasy-launch-stats" aria-label="Contest highlights">
+            <li>
+              <span class="fantasy-launch-stat-k">Lineup</span>
+              <span class="fantasy-launch-stat-v">5 Drivers</span>
+            </li>
+            <li>
+              <span class="fantasy-launch-stat-k">Salary Cap</span>
+              <span class="fantasy-launch-stat-v">$50,000</span>
+            </li>
+            <li>
+              <span class="fantasy-launch-stat-k">Lineup Lock</span>
+              <span class="fantasy-launch-stat-v">Server Open</span>
+              <span class="fantasy-launch-stat-meta" id="serverOpenTimeDisplay"></span>
+            </li>
+            <li>
+              <span class="fantasy-launch-stat-k">Scoring</span>
+              <span class="fantasy-launch-stat-v">FanDuel Style</span>
+            </li>
+          </ul>
+
+          <div class="fantasy-launch-cta-row">
+            <button
+              type="button"
+              class="fantasy-btn fantasy-btn--primary"
+              id="fantasySignUpBtn"
+              disabled
+              aria-disabled="true"
+            >
+              Sign Up (Coming Soon)
+            </button>
+            <a href="#fantasy-overview" class="fantasy-btn fantasy-btn--secondary">Learn How It Works</a>
           </div>
-
-          <p class="fantasy-hero-sub">
-            Pick 5 BP drivers, stay under a salary cap, and score points from race results.
-          </p>
-
-          <div class="fantasy-cta-row">
-            <button type="button" class="fantasy-cta" onclick="location.href='schedule.html'">View Schedule</button>
-            <button type="button" class="fantasy-cta" onclick="location.href='standings.html'">View Standings</button>
-          </div>
-
-          <p class="fantasy-footnote">
-            No sign-in required yet. This page is a front-end preview for the full contest experience.
-          </p>
         </div>
       </section>
 
-      <!-- CONTEST INFO STRIP -->
-      <section class="fantasy-contest-bar fantasy-card" aria-label="Contest information">
-        <div class="fantasy-contest-item">
-          <div class="fantasy-contest-k">Salary Cap</div>
-          <div class="fantasy-contest-v">$50,000</div>
-        </div>
-        <div class="fantasy-contest-item">
-          <div class="fantasy-contest-k">Lineup Size</div>
-          <div class="fantasy-contest-v">5 Drivers</div>
-        </div>
-        <div class="fantasy-contest-item">
-          <div class="fantasy-contest-k">Lineup Lock</div>
-          <div class="fantasy-contest-v">Locks At Server Open</div>
-          <div class="fantasy-contest-meta" id="serverOpenTimeDisplay" aria-live="polite"></div>
-        </div>
-        <div class="fantasy-contest-item">
-          <div class="fantasy-contest-k">Scoring</div>
-          <div class="fantasy-contest-v">FanDuel Style</div>
-        </div>
-        <div class="fantasy-contest-item">
-          <div class="fantasy-contest-k">Season</div>
-          <div class="fantasy-contest-v">Season 11</div>
-        </div>
-      </section>
+      <div class="fantasy-wrap">
 
-      <!-- CONTENT GRID -->
-      <section class="fantasy-grid">
+        <!-- OVERVIEW -->
+        <section class="fantasy-section" id="fantasy-overview" aria-labelledby="fantasyOverviewTitle">
+          <header class="fantasy-section-head">
+            <h2 class="fantasy-section-title" id="fantasyOverviewTitle">Fantasy Overview</h2>
+            <p class="fantasy-section-lead">
+              Build your lineup, manage the cap, and climb the standings all season long.
+            </p>
+          </header>
+          <ul class="fantasy-overview-grid">
+            <li class="fantasy-overview-item">
+              <span class="fantasy-overview-icon" aria-hidden="true">01</span>
+              <h3>Build a 5-Driver Lineup</h3>
+              <p>Pick five Blazing Pedals drivers for each race slate.</p>
+            </li>
+            <li class="fantasy-overview-item">
+              <span class="fantasy-overview-icon" aria-hidden="true">02</span>
+              <h3>Stay Under the Salary Cap</h3>
+              <p>Every driver carries a salary. Your lineup must fit within $50,000.</p>
+            </li>
+            <li class="fantasy-overview-item">
+              <span class="fantasy-overview-icon" aria-hidden="true">03</span>
+              <h3>Earn Points From Race Results</h3>
+              <p>Score from finishes, position change, laps completed, and laps led.</p>
+            </li>
+            <li class="fantasy-overview-item">
+              <span class="fantasy-overview-icon" aria-hidden="true">04</span>
+              <h3>Compete Against Other BP Members</h3>
+              <p>Race-week points stack up across the season leaderboard.</p>
+            </li>
+          </ul>
+        </section>
 
         <!-- FEATURED DRIVERS -->
-        <section class="fantasy-card fantasy-card--full">
-          <div class="fantasy-card-head">
-            <h2 class="fantasy-card-title">Featured Drivers</h2>
-            <div class="fantasy-card-sub">Sample salaries and form for the upcoming slate. Demo data only.</div>
-          </div>
-          <div class="fantasy-driver-grid" id="featuredDriversGrid" aria-live="polite"></div>
+        <section class="fantasy-section" aria-labelledby="fantasyDriversTitle">
+          <header class="fantasy-section-head">
+            <h2 class="fantasy-section-title" id="fantasyDriversTitle">Featured Driver Preview</h2>
+            <p class="fantasy-section-lead">
+              Sample salaries from the BP field. Full driver pool available inside the fantasy platform.
+            </p>
+          </header>
+          <div class="fantasy-driver-strip" id="featuredDriversGrid" aria-live="polite"></div>
         </section>
 
-        <!-- FANTASY STANDINGS PREVIEW -->
-        <section class="fantasy-card fantasy-card--full">
-          <div class="fantasy-card-head">
-            <h2 class="fantasy-card-title">Fantasy Standings Preview</h2>
-            <div class="fantasy-card-sub">Top managers after the latest race slate. Demo standings for preview.</div>
-          </div>
-          <div class="fantasy-table-wrap">
-            <table class="fantasy-table fantasy-standings-table" aria-label="Fantasy standings preview">
-              <thead>
-                <tr>
-                  <th>Rank</th>
-                  <th>Team Name</th>
-                  <th>Points</th>
-                </tr>
-              </thead>
-              <tbody id="standingsPreviewBody"></tbody>
-            </table>
-          </div>
+        <!-- SCORING + RULES -->
+        <div class="fantasy-split">
+          <section class="fantasy-section fantasy-panel" aria-labelledby="fantasyScoringTitle">
+            <header class="fantasy-section-head">
+              <h2 class="fantasy-section-title" id="fantasyScoringTitle">Scoring Preview</h2>
+            </header>
+            <ul class="fantasy-scoring-list" id="fantasyScoringList"></ul>
+          </section>
+
+          <section class="fantasy-section fantasy-panel" aria-labelledby="fantasyRulesTitle">
+            <header class="fantasy-section-head">
+              <h2 class="fantasy-section-title" id="fantasyRulesTitle">Rules Preview</h2>
+            </header>
+            <ul class="fantasy-rules-list">
+              <li>Exactly 5 BP drivers per lineup.</li>
+              <li>Total driver salaries must stay under $50,000.</li>
+              <li>Lineups lock when the race server opens.</li>
+              <li>Drivers who do not start the race score zero points.</li>
+            </ul>
+            <a class="fantasy-rules-link" href="fantasy-rules.html">View Full Rules (Coming Soon)</a>
+          </section>
+        </div>
+
+        <!-- BOTTOM CTA -->
+        <section class="fantasy-section fantasy-cta-band" aria-label="Join BP Fantasy">
+          <h2 class="fantasy-cta-band-title">Ready to Play BP Fantasy?</h2>
+          <p class="fantasy-cta-band-copy">
+            Create your account, build your lineup, and compete when the platform opens.
+          </p>
+          <button
+            type="button"
+            class="fantasy-btn fantasy-btn--primary"
+            disabled
+            aria-disabled="true"
+          >
+            Sign Up (Coming Soon)
+          </button>
         </section>
 
-        <!-- HOW IT WORKS -->
-        <section class="fantasy-card fantasy-card--full">
-          <div class="fantasy-card-head">
-            <h2 class="fantasy-card-title">How It Works</h2>
-            <div class="fantasy-card-sub">A clear path from lineup setup to race-night standings.</div>
-          </div>
-
-          <div class="fantasy-how-grid">
-            <article class="fantasy-how">
-              <div class="fantasy-how-icon">1</div>
-              <h3>Pick Your Lineup</h3>
-              <p>Select 5 drivers from the BP field.</p>
-            </article>
-            <article class="fantasy-how">
-              <div class="fantasy-how-icon">2</div>
-              <h3>Beat The Cap</h3>
-              <p>Stay under the salary cap using driver salaries.</p>
-            </article>
-            <article class="fantasy-how">
-              <div class="fantasy-how-icon">3</div>
-              <h3>Score On Race Night</h3>
-              <p>Points are awarded from race results (finish, position change, laps).</p>
-            </article>
-            <article class="fantasy-how">
-              <div class="fantasy-how-icon">4</div>
-              <h3>Climb The Standings</h3>
-              <p>Your total updates after each race slate.</p>
-            </article>
-          </div>
-        </section>
-
-        <!-- SCORING PREVIEW -->
-        <section class="fantasy-card fantasy-card--half">
-          <div class="fantasy-card-head">
-            <h2 class="fantasy-card-title">Scoring Preview</h2>
-            <div class="fantasy-card-sub">Demo-only example metrics (not tied to live scoring yet).</div>
-          </div>
-
-          <div class="fantasy-table-wrap">
-            <table class="fantasy-table" aria-label="Fantasy scoring preview table">
-              <thead>
-                <tr>
-                  <th>Finish points</th>
-                  <th>Place differential</th>
-                  <th>Laps completed</th>
-                  <th>Laps led</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>Earned by finish</td>
-                  <td>Position changes</td>
-                  <td>Completion credit</td>
-                  <td>Leader credit</td>
-                </tr>
-                <tr>
-                  <td class="fantasy-muted">Example:</td>
-                  <td class="fantasy-muted">Example:</td>
-                  <td class="fantasy-muted">Example:</td>
-                  <td class="fantasy-muted">Example:</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <!-- RULES PREVIEW -->
-        <section class="fantasy-card fantasy-card--half">
-          <div class="fantasy-card-head">
-            <h2 class="fantasy-card-title">Rules Preview</h2>
-            <div class="fantasy-card-sub">Design notes for the final contest setup.</div>
-          </div>
-
-          <div class="fantasy-rules">
-            <div class="fantasy-rule">
-              <div class="fantasy-rule-k">5-driver lineups</div>
-              <div class="fantasy-rule-v">Exactly 5 BP drivers per lineup.</div>
-            </div>
-            <div class="fantasy-rule">
-              <div class="fantasy-rule-k">$50,000 salary cap</div>
-              <div class="fantasy-rule-v">Total salaries must remain under the cap.</div>
-            </div>
-            <div class="fantasy-rule">
-              <div class="fantasy-rule-k">Lineups lock at server open</div>
-              <div class="fantasy-rule-v">Lineups lock when the race server opens. The league has about one hour of practice after server open before the race starts.</div>
-            </div>
-            <p class="fantasy-settings-note">Server open time is controlled from Admin Settings.</p>
-            <div class="fantasy-rule">
-              <div class="fantasy-rule-k">Non-starters score 0</div>
-              <div class="fantasy-rule-v">Drivers who do not start contribute zero points.</div>
-            </div>
-          </div>
-        </section>
-      </section>
+      </div>
     </main>
 
     <footer>FAST DRIVERS. CLOSE RACING. <span>BIG FUN.</span></footer>
@@ -199,7 +160,7 @@
       BPPublicNav.init({
         active: "fantasy",
         title: "BP FANTASY",
-        subtitle: "COMING SOON",
+        subtitle: "SEASON 11",
         subtitleId: "seasonLabel",
         right: "tagline",
       });

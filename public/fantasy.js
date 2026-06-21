@@ -1,40 +1,35 @@
-// BP Fantasy (Phase 2.5) — front-end only landing page mock.
-// - No backend calls
-// - No auth
-// - No lineup submission
-// - No scoring backend
-// Uses placeholder/demo data only.
+// BP Fantasy — public marketing landing page (frontend only).
+// Gameplay (lineups, salaries, standings) will live on separate pages later.
+
+/** Default asset paths — swap via admin settings when backend wiring is added. */
+const FANTASY_LANDING_ASSETS = {
+  heroBackgroundUrl: '/assets/fantasy/hero-background.jpg',
+  headerLogoUrl: '/assets/fantasy/fantasy-logo.png',
+};
 
 const DEMO_FEATURED_DRIVERS = [
-  { name: 'Mark Arthur', carNumber: '12', salary: 12500, form: 'hot' },
-  { name: 'Cody Gibson', carNumber: '7', salary: 11200, form: 'up' },
-  { name: 'Mike Massengill', carNumber: '20', salary: 10800, form: 'stable' },
-  { name: 'Dalton Kilroe', carNumber: '41', salary: 9400, form: 'up' },
-  { name: 'Larry Bell', carNumber: '43', salary: 8750, form: 'down' },
-  { name: 'Michael Boone', carNumber: '15', salary: 8200, form: 'hot' },
+  { name: 'Mark Arthur', carNumber: '12', salary: 12500 },
+  { name: 'Cody Gibson', carNumber: '7', salary: 11200 },
+  { name: 'Mike Massengill', carNumber: '20', salary: 10800 },
+  { name: 'Dalton Kilroe', carNumber: '41', salary: 9400 },
+  { name: 'Larry Bell', carNumber: '43', salary: 8750 },
+  { name: 'Michael Boone', carNumber: '15', salary: 8200 },
 ];
 
-const DEMO_STANDINGS = [
-  { rank: 1, team: 'Pedal Pushers', points: 412 },
-  { rank: 2, team: 'Checkered Chasers', points: 398 },
-  { rank: 3, team: 'Red Line Racing', points: 385 },
-  { rank: 4, team: 'Pit Row Prophets', points: 371 },
-  { rank: 5, team: 'Draft Day Heroes', points: 364 },
+const SCORING_CATEGORIES = [
+  { key: 'Finish Points', value: 'Points earned from where your driver finishes the race.' },
+  { key: 'Place Differential', value: 'Bonus or penalty based on positions gained or lost.' },
+  { key: 'Laps Completed', value: 'Credit for every lap your driver completes.' },
+  { key: 'Laps Led', value: 'Extra points for leading laps during the race.' },
 ];
-
-const FORM_LABELS = {
-  hot: 'Hot',
-  up: 'Up',
-  stable: 'Stable',
-  down: 'Down',
-};
 
 function resolveServerOpenTime(settings = {}) {
   return String(settings.serverOpenTime ?? settings.raceStartTime ?? '').trim();
 }
 
-function formatSalary(value) {
-  return `$${Number(value).toLocaleString('en-US')}`;
+function resolveSeasonLabel(settings = {}) {
+  const season = String(settings.seasonName ?? '').trim();
+  return season ? `${season} Fantasy Challenge` : 'Season 11 Fantasy Challenge';
 }
 
 function escapeHtml(text) {
@@ -45,32 +40,88 @@ function escapeHtml(text) {
     .replace(/"/g, '&quot;');
 }
 
+function formatSalary(value) {
+  return `$${Number(value).toLocaleString('en-US')}`;
+}
+
+function applyHeroBackground(url) {
+  const bg = document.getElementById('fantasyHeroBg');
+  if (!bg || !url) return;
+
+  const img = new Image();
+  img.onload = () => {
+    bg.style.backgroundImage = `linear-gradient(120deg, rgba(0,0,0,.35) 0%, rgba(0,0,0,.15) 100%), url("${url}")`;
+    bg.classList.add('is-image-loaded');
+  };
+  img.src = url;
+}
+
+function applyHeaderLogo(url) {
+  const logo = document.getElementById('fantasyHeaderLogo');
+  const fallback = document.getElementById('fantasyLogoFallback');
+  if (!logo || !url) return;
+
+  const img = new Image();
+  img.onload = () => {
+    logo.src = url;
+    logo.hidden = false;
+    if (fallback) fallback.hidden = true;
+  };
+  img.onerror = () => {
+    logo.hidden = true;
+    if (fallback) fallback.hidden = false;
+  };
+  img.src = url;
+}
+
+function applyLandingAssets(settings = {}) {
+  const heroUrl = String(
+    settings.fantasyHeroBackgroundUrl ?? FANTASY_LANDING_ASSETS.heroBackgroundUrl
+  ).trim();
+  const logoUrl = String(
+    settings.fantasyHeaderLogoUrl ?? FANTASY_LANDING_ASSETS.headerLogoUrl
+  ).trim();
+
+  applyHeroBackground(heroUrl);
+  applyHeaderLogo(logoUrl);
+}
+
 window.BPFantasyLanding = {
   init() {
-    const root = document.querySelector('.fantasy-main');
+    const root = document.querySelector('.fantasy-landing');
     if (!root) return;
 
     this.renderFeaturedDrivers(root);
-    this.renderStandingsPreview(root);
     this.renderScoringPreview(root);
-    this.loadServerOpenSettings(root);
+    this.loadPageSettings(root);
+    applyLandingAssets();
   },
 
-  async loadServerOpenSettings(root) {
-    const display = root.querySelector('#serverOpenTimeDisplay');
-    if (!display) return;
-
+  async loadPageSettings(root) {
     try {
       const res = await fetch('/api/settings');
       if (!res.ok) return;
 
       const settings = await res.json();
+      applyLandingAssets(settings);
+
+      const seasonTitle = root.querySelector('#fantasySeasonTitle');
+      if (seasonTitle) {
+        seasonTitle.textContent = resolveSeasonLabel(settings);
+      }
+
+      const serverOpenDisplay = root.querySelector('#serverOpenTimeDisplay');
       const serverOpenTime = resolveServerOpenTime(settings);
-      if (serverOpenTime) {
-        display.textContent = serverOpenTime;
+      if (serverOpenDisplay && serverOpenTime) {
+        serverOpenDisplay.textContent = serverOpenTime;
+      }
+
+      const navSeason = document.getElementById('seasonLabel');
+      if (navSeason && settings.seasonName) {
+        navSeason.textContent = String(settings.seasonName).trim().toUpperCase();
       }
     } catch {
-      // Demo page remains usable without settings.
+      // Landing page works with static defaults when settings are unavailable.
     }
   },
 
@@ -78,96 +129,25 @@ window.BPFantasyLanding = {
     const grid = root.querySelector('#featuredDriversGrid');
     if (!grid) return;
 
-    grid.innerHTML = DEMO_FEATURED_DRIVERS.map((driver) => {
-      const formKey = driver.form in FORM_LABELS ? driver.form : 'stable';
-      const formLabel = FORM_LABELS[formKey];
-
-      return `
-        <article class="fantasy-driver-card">
-          <div class="fantasy-driver-photo" aria-hidden="true">
-            <span>Driver Photo</span>
-          </div>
-          <div class="fantasy-driver-meta">
-            <div class="fantasy-driver-name">${escapeHtml(driver.name)}</div>
-            <div class="fantasy-driver-number">#${escapeHtml(driver.carNumber)}</div>
-          </div>
-          <div class="fantasy-driver-row">
-            <span class="fantasy-driver-salary">${formatSalary(driver.salary)}</span>
-            <span class="fantasy-form fantasy-form--${formKey}">${formLabel}</span>
-          </div>
-        </article>
-      `;
-    }).join('');
-  },
-
-  renderStandingsPreview(root) {
-    const tbody = root.querySelector('#standingsPreviewBody');
-    if (!tbody) return;
-
-    tbody.innerHTML = DEMO_STANDINGS.map((entry) => {
-      const rankClass =
-        entry.rank === 1 ? 'fantasy-rank--gold' :
-        entry.rank === 2 ? 'fantasy-rank--silver' :
-        entry.rank === 3 ? 'fantasy-rank--bronze' : '';
-
-      return `
-        <tr>
-          <td class="fantasy-rank ${rankClass}">${entry.rank}</td>
-          <td>${escapeHtml(entry.team)}</td>
-          <td class="fantasy-points">${entry.points.toLocaleString('en-US')}</td>
-        </tr>
-      `;
-    }).join('');
+    grid.innerHTML = DEMO_FEATURED_DRIVERS.map((driver) => `
+      <article class="fantasy-driver-card">
+        <div class="fantasy-driver-name">${escapeHtml(driver.name)}</div>
+        <div class="fantasy-driver-number">#${escapeHtml(driver.carNumber)}</div>
+        <div class="fantasy-driver-salary">${formatSalary(driver.salary)}</div>
+      </article>
+    `).join('');
   },
 
   renderScoringPreview(root) {
-    const table = root.querySelector('.fantasy-table:not(.fantasy-standings-table)');
-    if (!table) return;
+    const list = root.querySelector('#fantasyScoringList');
+    if (!list) return;
 
-    const tbody = table.querySelector('tbody');
-    if (!tbody) return;
-
-    const demoRows = [
-      {
-        finish: 'Earned by finish',
-        diff: 'Position changes',
-        lapsCompleted: 'Completion credit',
-        lapsLed: 'Leader credit',
-      },
-      {
-        finish: 'Example: 30 pts',
-        diff: 'Example: ±10 pts',
-        lapsCompleted: 'Example: 5 laps = 5 pts',
-        lapsLed: 'Example: 3 laps = 6 pts',
-      },
-    ];
-
-    const existingRows = Array.from(tbody.querySelectorAll('tr'));
-    if (existingRows.length >= demoRows.length) {
-      existingRows.slice(0, demoRows.length).forEach((row, idx) => {
-        const d = demoRows[idx];
-        const cells = row.querySelectorAll('td');
-        const values = [d.finish, d.diff, d.lapsCompleted, d.lapsLed];
-
-        cells.forEach((cell, cIdx) => {
-          cell.textContent = values[cIdx];
-          cell.classList.toggle('fantasy-muted', idx === 1);
-        });
-      });
-      return;
-    }
-
-    tbody.innerHTML = '';
-    demoRows.forEach((d, i) => {
-      const tr = document.createElement('tr');
-      [d.finish, d.diff, d.lapsCompleted, d.lapsLed].forEach((val) => {
-        const td = document.createElement('td');
-        td.textContent = val;
-        if (i === 1) td.classList.add('fantasy-muted');
-        tr.appendChild(td);
-      });
-      tbody.appendChild(tr);
-    });
+    list.innerHTML = SCORING_CATEGORIES.map((item) => `
+      <li>
+        <span class="fantasy-scoring-k">${escapeHtml(item.key)}</span>
+        <span class="fantasy-scoring-v">${escapeHtml(item.value)}</span>
+      </li>
+    `).join('');
   },
 };
 
