@@ -205,22 +205,48 @@
         font-weight: 900;
       }
 
-      .fantasy-admin-hero-iframe-frame {
+      .fantasy-admin-hero-only-preview {
+        position: relative;
         width: 100%;
         max-width: 100%;
         margin: 12px 0 0;
         border: 1px solid #333;
         background: #050505;
         overflow: hidden;
-        height: clamp(320px, 42vw, 520px);
+        line-height: 0;
       }
 
-      .fantasy-admin-hero-iframe-frame iframe {
+      .fantasy-admin-hero-only-preview__hero {
         display: block;
         width: 100%;
-        height: 1200px;
-        border: 0;
+        height: auto;
+      }
+
+      .fantasy-admin-hero-only-preview__hero[hidden] {
+        display: none;
+      }
+
+      .fantasy-admin-hero-only-preview__logo {
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+        height: auto;
+        object-fit: contain;
         pointer-events: none;
+        filter: drop-shadow(0 4px 18px rgba(0, 0, 0, 0.45));
+      }
+
+      .fantasy-admin-hero-only-preview__logo[hidden] {
+        display: none;
+      }
+
+      .fantasy-admin-hero-only-preview__msg {
+        margin: 0;
+        padding: 24px 16px;
+        line-height: 1.5;
+        font-size: 12px;
+        color: #888;
+        text-align: center;
       }
 
       .fantasy-hero-preview-debug {
@@ -422,14 +448,22 @@
 
             <div class="branding-block">
               <div class="field-label">Fantasy Hero Preview</div>
-              <span class="field-help">Preview shows the actual public page rendering.</span>
-              <span class="field-help">Slider changes update the values below. Save logo placement, then refresh preview to see updates.</span>
-              <div class="fantasy-admin-hero-iframe-frame">
-                <iframe
-                  id="fantasyHeroPublicPreview"
-                  title="Fantasy public page preview"
-                  src="about:blank"
-                ></iframe>
+              <span class="field-help">Hero-only preview for logo placement. Slider changes update the preview instantly.</span>
+              <span class="field-help">Preview is an approximate hero-only guide. Public page may vary slightly by screen width.</span>
+              <div id="fantasyHeroOnlyPreview" class="fantasy-admin-hero-only-preview" aria-label="Fantasy hero logo placement preview">
+                <p id="fantasyHeroOnlyPreviewMsg" class="fantasy-admin-hero-only-preview__msg" hidden></p>
+                <img
+                  id="fantasyHeroOnlyPreviewHero"
+                  class="fantasy-admin-hero-only-preview__hero"
+                  alt=""
+                  hidden
+                />
+                <img
+                  id="fantasyHeroOnlyPreviewLogo"
+                  class="fantasy-admin-hero-only-preview__logo"
+                  alt=""
+                  hidden
+                />
               </div>
               <div class="branding-upload-row">
                 <button id="refreshFantasyHeroPreviewBtn" class="btn btn-secondary" type="button">
@@ -635,6 +669,7 @@
     </main>
 
 
+    <script src="/fantasy-branding-assets.js"></script>
     <script>
       const $ = (s) => document.querySelector(s);
 
@@ -694,7 +729,6 @@
 
       const DEFAULT_FANTASY_HERO_BACKGROUND_URL = '/assets/fantasy/hero-background.jpg';
       const DEFAULT_FANTASY_HEADER_LOGO_URL = '/assets/fantasy/fantasy-logo.png';
-      const FANTASY_PUBLIC_PREVIEW_URL = '/fantasy.html';
       const FANTASY_LOGO_PLACEMENT_DEFAULTS = {
         fantasyHeaderLogoTopPercent: 21,
         fantasyHeaderLogoWidthVw: 32,
@@ -797,10 +831,76 @@
         };
       }
 
-      function refreshFantasyHeroIframePreview() {
-        const iframe = $('#fantasyHeroPublicPreview');
-        if (!iframe || $('#adminView')?.hidden) return;
-        iframe.src = `${FANTASY_PUBLIC_PREVIEW_URL}?_preview=${Date.now()}`;
+      function applyFantasyHeroOnlyPreviewLayout(placement = readLogoPlacementFromSliders()) {
+        const previewBox = $('#fantasyHeroOnlyPreview');
+        const logo = $('#fantasyHeroOnlyPreviewLogo');
+        if (!previewBox || !logo || logo.hidden) return;
+
+        const resolved = resolveLogoPlacement(buildPreviewSettings(placement));
+        const previewWidth = previewBox.clientWidth || previewBox.offsetWidth || 720;
+        const viewportWidth = window.innerWidth || document.documentElement.clientWidth || previewWidth;
+        const brandingAssets = window.BPFantasyBrandingAssets;
+        const logoWidthPx = brandingAssets?.computePreviewLogoWidthPx
+          ? brandingAssets.computePreviewLogoWidthPx(resolved, previewWidth, viewportWidth)
+          : Math.min((resolved.fantasyHeaderLogoWidthVw / 100) * previewWidth, resolved.fantasyHeaderLogoMaxWidthPx);
+
+        logo.style.top = `${resolved.fantasyHeaderLogoTopPercent}%`;
+        logo.style.width = `${logoWidthPx}px`;
+        logo.style.maxWidth = '100%';
+      }
+
+      function setFantasyHeroOnlyPreviewMessage(text) {
+        const msg = $('#fantasyHeroOnlyPreviewMsg');
+        const hero = $('#fantasyHeroOnlyPreviewHero');
+        const logo = $('#fantasyHeroOnlyPreviewLogo');
+        if (!msg) return;
+
+        if (text) {
+          msg.textContent = text;
+          msg.hidden = false;
+          hero?.setAttribute('hidden', '');
+          logo?.setAttribute('hidden', '');
+        } else {
+          msg.textContent = '';
+          msg.hidden = true;
+        }
+      }
+
+      function refreshFantasyHeroOnlyPreview() {
+        const previewBox = $('#fantasyHeroOnlyPreview');
+        const hero = $('#fantasyHeroOnlyPreviewHero');
+        const logo = $('#fantasyHeroOnlyPreviewLogo');
+        if (!previewBox || !hero || !logo || $('#adminView')?.hidden) return;
+
+        const brandingAssets = window.BPFantasyBrandingAssets;
+        if (!brandingAssets?.applyImageFromCandidates) {
+          setFantasyHeroOnlyPreviewMessage('Preview assets unavailable.');
+          return;
+        }
+
+        const settings = fantasyBrandingSettings;
+        const placement = readLogoPlacementFromSliders();
+        const heroCandidates = brandingAssets.resolveFantasyHeroBackgroundCandidates(settings);
+        const logoCandidates = brandingAssets.resolveFantasyHeaderLogoCandidates(settings);
+
+        brandingAssets.applyImageFromCandidates(hero, heroCandidates, {
+          onLoaded: () => {
+            setFantasyHeroOnlyPreviewMessage('');
+            applyFantasyHeroOnlyPreviewLayout(placement);
+          },
+          onMissing: () => {
+            setFantasyHeroOnlyPreviewMessage('Hero image not found. Upload a hero background or check the URL.');
+          },
+        });
+
+        brandingAssets.applyImageFromCandidates(logo, logoCandidates, {
+          onLoaded: () => {
+            applyFantasyHeroOnlyPreviewLayout(placement);
+          },
+          onMissing: () => {
+            logo.setAttribute('hidden', '');
+          },
+        });
       }
 
       function updateFantasyHeroPreviewDebug(placement) {
@@ -819,6 +919,7 @@
       function updateFantasyLogoPlacementUi(placement = readLogoPlacementFromSliders()) {
         syncLogoPlacementSliderLabels(placement);
         updateFantasyHeroPreviewDebug(placement);
+        applyFantasyHeroOnlyPreviewLayout(placement);
       }
 
       function setBrandingMsg(text, isError = false) {
@@ -891,7 +992,7 @@
 
         syncFantasyBrandingButtons();
         updateFantasyLogoPlacementUi(resolveLogoPlacement(fantasyBrandingSettings));
-        refreshFantasyHeroIframePreview();
+        refreshFantasyHeroOnlyPreview();
       }
 
       function syncFantasyBrandingButtons() {
@@ -1133,7 +1234,7 @@
           };
           syncLogoPlacementSliders(resolveLogoPlacement(fantasyBrandingSettings));
           updateFantasyLogoPlacementUi(resolveLogoPlacement(fantasyBrandingSettings));
-          refreshFantasyHeroIframePreview();
+          refreshFantasyHeroOnlyPreview();
           setBrandingMsg('Logo placement saved.');
         } catch (e) {
           setBrandingMsg(e.message || 'Save failed', true);
@@ -1237,10 +1338,11 @@
       $('#saveFantasyLogoUrlBtn')?.addEventListener('click', saveFantasyLogoUrl);
       $('#saveFantasyLogoPlacementBtn')?.addEventListener('click', saveFantasyLogoPlacement);
       $('#resetFantasyLogoPlacementBtn')?.addEventListener('click', resetFantasyLogoPlacement);
-      $('#refreshFantasyHeroPreviewBtn')?.addEventListener('click', refreshFantasyHeroIframePreview);
+      $('#refreshFantasyHeroPreviewBtn')?.addEventListener('click', refreshFantasyHeroOnlyPreview);
       $('#fantasyLogoTopPercent')?.addEventListener('input', () => updateFantasyLogoPlacementUi());
       $('#fantasyLogoWidthVw')?.addEventListener('input', () => updateFantasyLogoPlacementUi());
       $('#fantasyLogoMaxWidthPx')?.addEventListener('input', () => updateFantasyLogoPlacementUi());
+      window.addEventListener('resize', () => applyFantasyHeroOnlyPreviewLayout());
 
       initSession();
     </script>

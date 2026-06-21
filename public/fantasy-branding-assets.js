@@ -105,6 +105,22 @@ function loadFirstAvailableImageUrl(urls) {
   });
 }
 
+function computePublicLogoWidthPx(placement = {}, viewportWidth) {
+  const widthVw = Number(placement.fantasyHeaderLogoWidthVw);
+  const maxWidthPx = Number(placement.fantasyHeaderLogoMaxWidthPx);
+  const vw = Number.isFinite(widthVw) ? widthVw : 32;
+  const maxPx = Number.isFinite(maxWidthPx) ? maxWidthPx : 560;
+  const viewport = viewportWidth > 0 ? viewportWidth : 1200;
+  return Math.min((vw / 100) * viewport, maxPx);
+}
+
+function computePreviewLogoWidthPx(placement = {}, previewWidth, viewportWidth) {
+  const preview = previewWidth > 0 ? previewWidth : 720;
+  const viewport = viewportWidth > 0 ? viewportWidth : preview;
+  const publicLogoPx = computePublicLogoWidthPx(placement, viewport);
+  return (publicLogoPx / viewport) * preview;
+}
+
 function applyImageFromCandidates(img, candidates, callbacks = {}) {
   if (!img) return Promise.resolve('');
 
@@ -134,4 +150,6 @@ window.BPFantasyBrandingAssets = {
   resolveFantasyHeaderLogoDisplayUrl,
   loadFirstAvailableImageUrl,
   applyImageFromCandidates,
+  computePublicLogoWidthPx,
+  computePreviewLogoWidthPx,
 };
