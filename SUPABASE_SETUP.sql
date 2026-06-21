@@ -156,6 +156,51 @@ create table if not exists power_rankings_honorable_mentions (
   unique (week_id, sort_order)
 );
 
+-- BP Fantasy slates (draft / published salary sheets per race week)
+create table if not exists fantasy_slates (
+  id serial primary key,
+  season_id text not null,
+  race_number int not null,
+  schedule_id text,
+  track text not null default '',
+  track_type text,
+  lock_time text,
+  status text not null default 'draft' check (status in ('draft', 'published')),
+  model_version text not null default 'fantasy-salary-v1',
+  generated_at timestamptz default now(),
+  published_at timestamptz,
+  meta jsonb default '{}'::jsonb,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create unique index if not exists fantasy_slates_season_race_status_draft_idx
+  on fantasy_slates (season_id, race_number)
+  where status = 'draft';
+
+create unique index if not exists fantasy_slates_season_race_published_idx
+  on fantasy_slates (season_id, race_number)
+  where status = 'published';
+
+create table if not exists fantasy_slate_drivers (
+  id serial primary key,
+  slate_id int not null references fantasy_slates(id) on delete cascade,
+  driver_id text not null,
+  driver_name text not null default '',
+  car_number text not null default '',
+  computed_tier text not null,
+  fantasy_tier_score numeric not null,
+  score_breakdown jsonb not null default '{}'::jsonb,
+  generated_salary int not null,
+  salary_override int,
+  final_salary int not null,
+  track_history_summary jsonb not null default '{}'::jsonb,
+  track_adjustment jsonb not null default '{}'::jsonb,
+  salary_reasons jsonb not null default '[]'::jsonb,
+  prior_salary int,
+  unique (slate_id, driver_id)
+);
+
 create table if not exists news_articles (
   id bigint generated always as identity primary key,
   article_type text not null,

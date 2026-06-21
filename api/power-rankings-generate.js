@@ -74,7 +74,7 @@ function cleanText(value) {
     .trim();
 }
 
-function parseScheduleRaces(html) {
+export function parseScheduleRaces(html) {
   const $ = cheerio.load(html);
   const races = [];
 
@@ -165,7 +165,7 @@ async function detectLatestScheduleId(settings) {
   }
 }
 
-async function fetchStandingsRows(settings, scheduleId = null) {
+export async function fetchStandingsRows(settings, scheduleId = null) {
   const seasonId = settings.seasonId || '27987';
   const resolvedScheduleId = scheduleId || (await detectLatestScheduleId(settings));
 
@@ -1054,7 +1054,7 @@ ${JSON.stringify(contextPayload, null, 2)}`,
   }
 }
 
-function buildDriverLookup(standings, profiles) {
+export function buildDriverLookup(standings, profiles) {
   const lookup = new Map();
 
   for (const row of standings) {

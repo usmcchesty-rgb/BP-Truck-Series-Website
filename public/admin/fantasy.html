@@ -324,6 +324,61 @@
 
       .fantasy-admin-table td.salary { color: var(--gold); }
 
+      .fantasy-tier-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 900;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        background: rgba(229, 9, 20, 0.18);
+        border: 1px solid rgba(229, 9, 20, 0.35);
+        color: #fff;
+      }
+
+      .fantasy-slate-status {
+        font-size: 12px;
+        font-weight: 900;
+        color: #ccc;
+      }
+
+      .fantasy-slate-status.is-draft { color: #f0c040; }
+      .fantasy-slate-status.is-empty { color: #888; }
+
+      .fantasy-generate-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+        margin: 10px 0 0;
+      }
+
+      .fantasy-generate-status {
+        font-size: 12px;
+        color: #ccc;
+      }
+
+      .fantasy-generate-status.error { color: #ff6060; }
+
+      .fantasy-detail-block {
+        margin: 0;
+        font-size: 11px;
+        color: #bbb;
+      }
+
+      .fantasy-detail-block summary {
+        cursor: pointer;
+        color: #ff8080;
+        font-weight: 700;
+      }
+
+      .fantasy-detail-list {
+        margin: 6px 0 0;
+        padding-left: 16px;
+        line-height: 1.5;
+      }
+
       .pos { color: var(--green); }
       .neg { color: #ff2323; }
       .flat { color: #cfcfcf; }
@@ -529,9 +584,9 @@
             </div>
             <div class="admin-kv">
               <div class="admin-k">Backend</div>
-              <div class="admin-v">Not connected</div>
+              <div class="admin-v">Salary draft generator connected</div>
             </div>
-            <div class="admin-note">This panel is ready for future wiring (slates, salaries, lineup locks, scoring, and standings publishing).</div>
+            <div class="admin-note">Generate a draft slate below. Publishing, lineups, and scoring ship in later phases.</div>
           </div>
 
           <!-- Slate Setup -->
@@ -540,11 +595,11 @@
             <div class="admin-form-grid">
               <div class="admin-field">
                 <label class="field-label">Race week</label>
-                <input class="input" type="text" value="SEASON 11 — Race Week (Demo)" disabled />
+                <input id="fantasySlateRaceWeek" class="input" type="text" value="Loading..." disabled />
               </div>
               <div class="admin-field">
                 <label class="field-label">Track</label>
-                <input class="input" type="text" value="Track TBD (Demo)" disabled />
+                <input id="fantasySlateTrack" class="input" type="text" value="Loading..." disabled />
               </div>
               <div class="admin-field">
                 <label class="field-label" for="lineupLockTime">Lineup Lock: Server Open</label>
@@ -562,60 +617,54 @@
             </div>
           </div>
 
-          <!-- Driver Salary Preview -->
+          <!-- Draft Slate -->
           <div class="admin-card admin-card--full">
-            <div class="admin-card-title">Driver Salary Preview</div>
+            <div class="admin-card-title">Draft Slate</div>
+            <div class="admin-kv">
+              <div class="admin-k">Status</div>
+              <div class="admin-v"><span id="fantasySlateStatus" class="fantasy-slate-status is-empty">No draft</span></div>
+            </div>
+            <div class="admin-kv">
+              <div class="admin-k">Generated</div>
+              <div class="admin-v" id="fantasySlateGeneratedAt">—</div>
+            </div>
+            <div class="admin-kv">
+              <div class="admin-k">Model</div>
+              <div class="admin-v" id="fantasySlateModelVersion">fantasy-salary-v1</div>
+            </div>
+            <span class="field-help">Tiers are calculated automatically from the fantasy tier score. Salaries save as a draft only — nothing is published automatically.</span>
+            <div class="fantasy-generate-row">
+              <button id="generateFantasySalariesBtn" class="btn" type="button">Generate Salaries</button>
+              <button id="reloadFantasyDraftBtn" class="btn btn-secondary" type="button">Reload Draft</button>
+              <span id="fantasyGenerateStatus" class="fantasy-generate-status"></span>
+            </div>
+          </div>
+
+          <!-- Driver Salary Review -->
+          <div class="admin-card admin-card--full">
+            <div class="admin-card-title">Driver Salary Review</div>
             <div class="table-wrap">
               <table class="fantasy-admin-table">
                 <thead>
                   <tr>
                     <th>Driver</th>
                     <th>Car #</th>
-                    <th>Salary</th>
-                    <th>Trend</th>
-                    <th>Status</th>
+                    <th>Tier</th>
+                    <th>Tier Score</th>
+                    <th>Generated Salary</th>
+                    <th>Final Salary</th>
+                    <th>Breakdown</th>
+                    <th>Reasons</th>
                   </tr>
                 </thead>
-                <tbody id="salaryPreviewBody">
+                <tbody id="fantasySalaryReviewBody">
                   <tr>
-                    <td>Driver A</td>
-                    <td class="muted">#7</td>
-                    <td class="salary">$12,500</td>
-                    <td class="pos">Up</td>
-                    <td class="ok">Active</td>
-                  </tr>
-                  <tr>
-                    <td>Driver B</td>
-                    <td class="muted">#22</td>
-                    <td class="salary">$10,000</td>
-                    <td class="neg">Down</td>
-                    <td class="ok">Active</td>
-                  </tr>
-                  <tr>
-                    <td>Driver C</td>
-                    <td class="muted">#41</td>
-                    <td class="salary">$9,250</td>
-                    <td class="flat">Stable</td>
-                    <td class="ok">Active</td>
-                  </tr>
-                  <tr>
-                    <td>Driver D</td>
-                    <td class="muted">#16</td>
-                    <td class="salary">$8,600</td>
-                    <td class="pos">Up</td>
-                    <td class="ok">Active</td>
-                  </tr>
-                  <tr>
-                    <td>Driver E</td>
-                    <td class="muted">#3</td>
-                    <td class="salary">$7,650</td>
-                    <td class="flat">Stable</td>
-                    <td class="ok">Active</td>
+                    <td colspan="8" class="muted">Generate salaries to review the draft slate.</td>
                   </tr>
                 </tbody>
               </table>
             </div>
-            <div class="admin-note">Demo data only. When connected, this table will reflect the current slate’s salary generation.</div>
+            <div class="admin-note">Tier assignment is read-only and math-driven. Final salary matches generated salary until manual override support is added in a later phase.</div>
           </div>
 
           <!-- Scoring Formula -->
@@ -645,13 +694,12 @@
           <div class="admin-card admin-card--full">
             <div class="admin-card-title">Future Tools</div>
             <div class="tool-grid">
-              <button class="btn" type="button" disabled>Generate salaries</button>
               <button class="btn" type="button" disabled>Open slate</button>
               <button class="btn" type="button" disabled>Lock lineups</button>
               <button class="btn" type="button" disabled>Score race</button>
               <button class="btn" type="button" disabled>Publish standings</button>
             </div>
-            <div class="admin-note">These controls are mock UI only. Backend integration will be added later.</div>
+            <div class="admin-note">Salary generation lives in Draft Slate above. Remaining tools ship in later phases.</div>
           </div>
         </section>
 
@@ -702,6 +750,192 @@
         $('#adminView').hidden = false;
         if (window.AdminNav) AdminNav.setLoggedIn(true);
         loadFantasySettings();
+        loadFantasySchedulePreview();
+        loadFantasyDraftSlate();
+      }
+
+      function escapeAdminHtml(value) {
+        return String(value ?? '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      }
+
+      function formatFantasySalary(value) {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return '—';
+        return `$${n.toLocaleString('en-US')}`;
+      }
+
+      function formatFantasyDate(value) {
+        if (!value) return '—';
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return String(value);
+        return date.toLocaleString();
+      }
+
+      function formatScoreBreakdownHtml(breakdown = {}) {
+        const rows = [
+          ['Season', breakdown.seasonPerformance?.score],
+          ['Recent Form', breakdown.recentForm?.score],
+          ['Track History', breakdown.careerTrackHistory?.score],
+          ['Race Impact', breakdown.raceImpact?.score],
+          ['Momentum', breakdown.momentum?.score],
+        ];
+        return `<ul class="fantasy-detail-list">${rows
+          .map(
+            ([label, score]) =>
+              `<li>${escapeAdminHtml(label)}: ${Number.isFinite(Number(score)) ? Number(score).toFixed(1) : 'n/a'}</li>`
+          )
+          .join('')}</ul>`;
+      }
+
+      function renderFantasySalaryReview(drivers = []) {
+        const body = $('#fantasySalaryReviewBody');
+        if (!body) return;
+
+        if (!drivers.length) {
+          body.innerHTML =
+            '<tr><td colspan="8" class="muted">Generate salaries to review the draft slate.</td></tr>';
+          return;
+        }
+
+        body.innerHTML = drivers
+          .map((driver) => {
+            const reasons = Array.isArray(driver.salaryReasons) ? driver.salaryReasons : [];
+            return `<tr>
+              <td>${escapeAdminHtml(driver.driverName)}</td>
+              <td class="muted">${driver.carNumber ? `#${escapeAdminHtml(driver.carNumber)}` : '—'}</td>
+              <td><span class="fantasy-tier-badge">${escapeAdminHtml(driver.computedTier)}</span></td>
+              <td>${Number(driver.fantasyTierScore).toFixed(1)}</td>
+              <td class="salary">${formatFantasySalary(driver.generatedSalary)}</td>
+              <td class="salary">${formatFantasySalary(driver.finalSalary ?? driver.generatedSalary)}</td>
+              <td>
+                <details class="fantasy-detail-block">
+                  <summary>View</summary>
+                  ${formatScoreBreakdownHtml(driver.scoreBreakdown)}
+                </details>
+              </td>
+              <td>
+                <details class="fantasy-detail-block">
+                  <summary>${reasons.length} reason${reasons.length === 1 ? '' : 's'}</summary>
+                  <ul class="fantasy-detail-list">${reasons
+                    .map((reason) => `<li>${escapeAdminHtml(reason)}</li>`)
+                    .join('')}</ul>
+                </details>
+              </td>
+            </tr>`;
+          })
+          .join('');
+      }
+
+      function updateFantasyDraftHeader(slate = null, targetRace = null) {
+        const statusEl = $('#fantasySlateStatus');
+        const generatedEl = $('#fantasySlateGeneratedAt');
+        const modelEl = $('#fantasySlateModelVersion');
+        const raceWeekEl = $('#fantasySlateRaceWeek');
+        const trackEl = $('#fantasySlateTrack');
+
+        if (targetRace?.raceNumber && raceWeekEl) {
+          raceWeekEl.value = `Race ${targetRace.raceNumber}${targetRace.date ? ` — ${targetRace.date}` : ''}`;
+        }
+        if (targetRace?.track && trackEl) {
+          trackEl.value = targetRace.track;
+        }
+
+        if (!slate) {
+          if (statusEl) {
+            statusEl.textContent = 'No draft';
+            statusEl.className = 'fantasy-slate-status is-empty';
+          }
+          if (generatedEl) generatedEl.textContent = '—';
+          if (modelEl) modelEl.textContent = 'fantasy-salary-v1';
+          return;
+        }
+
+        if (statusEl) {
+          statusEl.textContent = slate.status === 'published' ? 'Published' : 'Draft';
+          statusEl.className = `fantasy-slate-status ${slate.status === 'published' ? '' : 'is-draft'}`;
+        }
+        if (generatedEl) generatedEl.textContent = formatFantasyDate(slate.generated_at);
+        if (modelEl) modelEl.textContent = slate.model_version || 'fantasy-salary-v1';
+        if (raceWeekEl && slate.race_number) {
+          raceWeekEl.value = `Race ${slate.race_number}`;
+        }
+        if (trackEl && slate.track) {
+          trackEl.value = slate.track;
+        }
+      }
+
+      async function loadFantasySchedulePreview() {
+        const raceWeekEl = $('#fantasySlateRaceWeek');
+        const trackEl = $('#fantasySlateTrack');
+        try {
+          const res = await fetch('/api/schedule');
+          if (!res.ok) return;
+          const data = await res.json();
+          const next = data.next || null;
+          const seasonName = data.settings?.seasonName || 'Season';
+          if (raceWeekEl && next?.officialPointsRaceNumber) {
+            raceWeekEl.value = `${seasonName} — Race ${next.officialPointsRaceNumber}`;
+          }
+          if (trackEl && next?.track) {
+            trackEl.value = next.track;
+          }
+        } catch {
+          if (raceWeekEl) raceWeekEl.value = 'Schedule unavailable';
+          if (trackEl) trackEl.value = 'Track TBD';
+        }
+      }
+
+      async function loadFantasyDraftSlate() {
+        try {
+          const res = await fetch('/api/fantasy-slate-generate');
+          if (!res.ok) {
+            renderFantasySalaryReview([]);
+            updateFantasyDraftHeader(null);
+            return;
+          }
+          const data = await res.json();
+          renderFantasySalaryReview(data.drivers || []);
+          updateFantasyDraftHeader(data.slate || null);
+        } catch {
+          renderFantasySalaryReview([]);
+        }
+      }
+
+      async function generateFantasySalaries() {
+        const statusEl = $('#fantasyGenerateStatus');
+        const btn = $('#generateFantasySalariesBtn');
+        if (statusEl) {
+          statusEl.textContent = 'Generating draft slate...';
+          statusEl.classList.remove('error');
+        }
+        if (btn) btn.disabled = true;
+
+        try {
+          const res = await fetch('/api/fantasy-slate-generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password: getSessionPw() }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Generation failed');
+
+          renderFantasySalaryReview(data.drivers || []);
+          updateFantasyDraftHeader(data.slate || null, data.targetRace || null);
+          if (statusEl) {
+            statusEl.textContent = `Draft saved for race ${data.targetRace?.raceNumber ?? data.slate?.race_number ?? ''} (${(data.drivers || []).length} drivers).`;
+          }
+        } catch (error) {
+          if (statusEl) {
+            statusEl.textContent = error.message || 'Generation failed';
+            statusEl.classList.add('error');
+          }
+        } finally {
+          if (btn) btn.disabled = false;
+        }
       }
 
       function resolveServerOpenTime(settings = {}) {
@@ -1339,6 +1573,8 @@
       $('#saveFantasyLogoPlacementBtn')?.addEventListener('click', saveFantasyLogoPlacement);
       $('#resetFantasyLogoPlacementBtn')?.addEventListener('click', resetFantasyLogoPlacement);
       $('#refreshFantasyHeroPreviewBtn')?.addEventListener('click', refreshFantasyHeroOnlyPreview);
+      $('#generateFantasySalariesBtn')?.addEventListener('click', generateFantasySalaries);
+      $('#reloadFantasyDraftBtn')?.addEventListener('click', loadFantasyDraftSlate);
       $('#fantasyLogoTopPercent')?.addEventListener('input', () => updateFantasyLogoPlacementUi());
       $('#fantasyLogoWidthVw')?.addEventListener('input', () => updateFantasyLogoPlacementUi());
       $('#fantasyLogoMaxWidthPx')?.addEventListener('input', () => updateFantasyLogoPlacementUi());

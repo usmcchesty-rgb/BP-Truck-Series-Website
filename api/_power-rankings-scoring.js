@@ -616,3 +616,12 @@ export function buildPowerRankingSelection({
 }
 
 export { WEIGHTS as POWER_SCORE_WEIGHTS };
+
+export {
+  buildRecentFormComponent,
+  buildRaceImpactComponent,
+  buildMomentumComponent,
+  clamp as clampScore,
+  invertFinishScore,
+  isDnfFinish,
+};

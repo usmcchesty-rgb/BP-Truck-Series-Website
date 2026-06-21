@@ -1,0 +1,149 @@
+{
+  "tracks": [
+    {
+      "trackName": "Daytona International Speedway Oval Night",
+      "aliases": ["Daytona", "Daytona International Speedway"],
+      "trackType": "superspeedway"
+    },
+    {
+      "trackName": "Kentucky Speedway Oval",
+      "aliases": ["Kentucky Speedway", "Kentucky"],
+      "trackType": "intermediate"
+    },
+    {
+      "trackName": "Las Vegas Motor Speedway Oval Night",
+      "aliases": ["Las Vegas Motor Speedway", "Las Vegas"],
+      "trackType": "intermediate"
+    },
+    {
+      "trackName": "Dover Motor Speedway",
+      "aliases": ["Dover", "Dover International Speedway"],
+      "trackType": "intermediate"
+    },
+    {
+      "trackName": "Bristol Motor Speedway Dual Pit Roads Night",
+      "aliases": ["Bristol Motor Speedway", "Bristol"],
+      "trackType": "short_track"
+    },
+    {
+      "trackName": "Michigan International Speedway",
+      "aliases": ["Michigan", "MIS"],
+      "trackType": "intermediate"
+    },
+    {
+      "trackName": "Phoenix Raceway Oval w/open dogleg Night",
+      "aliases": ["Phoenix Raceway", "Phoenix"],
+      "trackType": "intermediate"
+    },
+    {
+      "trackName": "Darlington Raceway",
+      "aliases": ["Darlington", "Lady in Black"],
+      "trackType": "intermediate"
+    },
+    {
+      "trackName": "EchoPark Speedway (Atlanta) Oval Night",
+      "aliases": ["EchoPark Speedway Atlanta", "Atlanta Motor Speedway", "Atlanta"],
+      "trackType": "intermediate"
+    },
+    {
+      "trackName": "Rockingham Speedway Oval",
+      "aliases": ["Rockingham", "Rockingham Speedway"],
+      "trackType": "intermediate"
+    },
+    {
+      "trackName": "Charlotte Motor Speedway Oval Night",
+      "aliases": ["Charlotte Motor Speedway", "Charlotte"],
+      "trackType": "intermediate"
+    },
+    {
+      "trackName": "Iowa Speedway Oval Night",
+      "aliases": ["Iowa Speedway", "Iowa"],
+      "trackType": "intermediate"
+    },
+    {
+      "trackName": "Indianapolis Motor Speedway NASCAR Oval",
+      "aliases": ["Indianapolis Motor Speedway", "Indianapolis", "IMS"],
+      "trackType": "intermediate"
+    },
+    {
+      "trackName": "Talladega Superspeedway",
+      "aliases": ["Talladega", "Dega"],
+      "trackType": "superspeedway"
+    },
+    {
+      "trackName": "Pocono Raceway",
+      "aliases": ["Pocono", "Tricky Triangle"],
+      "trackType": "intermediate"
+    },
+    {
+      "trackName": "EchoPark Speedway (Atlanta) Oval - 2008",
+      "aliases": ["Atlanta 2008", "EchoPark Speedway Atlanta 2008"],
+      "trackType": "intermediate"
+    },
+    {
+      "trackName": "Homestead Miami Speedway Oval Night",
+      "aliases": ["Homestead Miami Speedway", "Homestead"],
+      "trackType": "intermediate"
+    },
+    {
+      "trackName": "New Hampshire Motor Speedway Oval",
+      "aliases": ["New Hampshire Motor Speedway", "New Hampshire", "NHMS"],
+      "trackType": "intermediate"
+    },
+    {
+      "trackName": "Texas Motor Speedway Oval",
+      "aliases": ["Texas Motor Speedway", "Texas"],
+      "trackType": "intermediate"
+    },
+    {
+      "trackName": "Martinsville Speedway",
+      "aliases": ["Martinsville"],
+      "trackType": "short_track"
+    },
+    {
+      "trackName": "Chicagoland Speedway Night",
+      "aliases": ["Chicagoland Speedway", "Chicagoland"],
+      "trackType": "intermediate"
+    },
+    {
+      "trackName": "Nashville Superspeedway",
+      "aliases": ["Nashville"],
+      "trackType": "intermediate"
+    },
+    {
+      "trackName": "The Milwaukee Mile",
+      "aliases": ["Milwaukee Mile", "Milwaukee"],
+      "trackType": "short_track"
+    },
+    {
+      "trackName": "Auto Club Speedway Oval",
+      "aliases": ["Auto Club Speedway", "Fontana"],
+      "trackType": "intermediate"
+    },
+    {
+      "trackName": "Sonoma Raceway Cup Short",
+      "aliases": ["Sonoma Raceway", "Sonoma"],
+      "trackType": "road_course"
+    },
+    {
+      "trackName": "Lucas Oil Indianapolis Raceway Park Oval Night",
+      "aliases": ["Indianapolis Raceway Park", "IRP", "Lucas Oil IRP"],
+      "trackType": "short_track"
+    },
+    {
+      "trackName": "Kansas Speedway Oval",
+      "aliases": ["Kansas Speedway", "Kansas"],
+      "trackType": "intermediate"
+    },
+    {
+      "trackName": "Watkins Glen International Cup",
+      "aliases": ["Watkins Glen", "The Glen"],
+      "trackType": "road_course"
+    },
+    {
+      "trackName": "Richmond Raceway Night",
+      "aliases": ["Richmond Raceway", "Richmond"],
+      "trackType": "short_track"
+    }
+  ]
+}
