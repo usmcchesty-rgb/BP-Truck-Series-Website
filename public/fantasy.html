@@ -39,10 +39,64 @@
         </div>
       </section>
 
+      <!-- CONTEST INFO STRIP -->
+      <section class="fantasy-contest-bar fantasy-card" aria-label="Contest information">
+        <div class="fantasy-contest-item">
+          <div class="fantasy-contest-k">Salary Cap</div>
+          <div class="fantasy-contest-v">$50,000</div>
+        </div>
+        <div class="fantasy-contest-item">
+          <div class="fantasy-contest-k">Lineup Size</div>
+          <div class="fantasy-contest-v">5 Drivers</div>
+        </div>
+        <div class="fantasy-contest-item">
+          <div class="fantasy-contest-k">Lock Time</div>
+          <div class="fantasy-contest-v">Green Flag</div>
+        </div>
+        <div class="fantasy-contest-item">
+          <div class="fantasy-contest-k">Scoring</div>
+          <div class="fantasy-contest-v">FanDuel Style</div>
+        </div>
+        <div class="fantasy-contest-item">
+          <div class="fantasy-contest-k">Season</div>
+          <div class="fantasy-contest-v">Season 11</div>
+        </div>
+      </section>
+
       <!-- CONTENT GRID -->
       <section class="fantasy-grid">
+
+        <!-- FEATURED DRIVERS -->
+        <section class="fantasy-card fantasy-card--full">
+          <div class="fantasy-card-head">
+            <h2 class="fantasy-card-title">Featured Drivers</h2>
+            <div class="fantasy-card-sub">Sample salaries and form for the upcoming slate. Demo data only.</div>
+          </div>
+          <div class="fantasy-driver-grid" id="featuredDriversGrid" aria-live="polite"></div>
+        </section>
+
+        <!-- FANTASY STANDINGS PREVIEW -->
+        <section class="fantasy-card fantasy-card--full">
+          <div class="fantasy-card-head">
+            <h2 class="fantasy-card-title">Fantasy Standings Preview</h2>
+            <div class="fantasy-card-sub">Top managers after the latest race slate. Demo standings for preview.</div>
+          </div>
+          <div class="fantasy-table-wrap">
+            <table class="fantasy-table fantasy-standings-table" aria-label="Fantasy standings preview">
+              <thead>
+                <tr>
+                  <th>Rank</th>
+                  <th>Team Name</th>
+                  <th>Points</th>
+                </tr>
+              </thead>
+              <tbody id="standingsPreviewBody"></tbody>
+            </table>
+          </div>
+        </section>
+
         <!-- HOW IT WORKS -->
-        <section class="fantasy-card">
+        <section class="fantasy-card fantasy-card--full">
           <div class="fantasy-card-head">
             <h2 class="fantasy-card-title">How It Works</h2>
             <div class="fantasy-card-sub">A clear path from lineup setup to race-night standings.</div>
@@ -73,7 +127,7 @@
         </section>
 
         <!-- SCORING PREVIEW -->
-        <section class="fantasy-card">
+        <section class="fantasy-card fantasy-card--half">
           <div class="fantasy-card-head">
             <h2 class="fantasy-card-title">Scoring Preview</h2>
             <div class="fantasy-card-sub">Demo-only example metrics (not tied to live scoring yet).</div>
@@ -108,7 +162,7 @@
         </section>
 
         <!-- RULES PREVIEW -->
-        <section class="fantasy-card fantasy-card--wide">
+        <section class="fantasy-card fantasy-card--half">
           <div class="fantasy-card-head">
             <h2 class="fantasy-card-title">Rules Preview</h2>
             <div class="fantasy-card-sub">Design notes for the final contest setup.</div>
@@ -133,29 +187,6 @@
             </div>
           </div>
         </section>
-
-        <!-- FAQ / Notes -->
-        <section class="fantasy-card fantasy-card--wide fantasy-card--ghost">
-          <div class="fantasy-card-head">
-            <h2 class="fantasy-card-title">Ready for phase 2</h2>
-            <div class="fantasy-card-sub">Next: slate setup, salary generation, and locked lineups.</div>
-          </div>
-
-          <div class="fantasy-ghost-row">
-            <div class="fantasy-ghost-item">
-              <div class="fantasy-ghost-label">Status</div>
-              <div class="fantasy-ghost-value">Disabled (demo)</div>
-            </div>
-            <div class="fantasy-ghost-item">
-              <div class="fantasy-ghost-label">Backend</div>
-              <div class="fantasy-ghost-value">Not connected</div>
-            </div>
-            <div class="fantasy-ghost-item">
-              <div class="fantasy-ghost-label">Scoring</div>
-              <div class="fantasy-ghost-value">Frontend preview only</div>
-            </div>
-          </div>
-        </section>
       </section>
     </main>
 
@@ -174,5 +205,3 @@
     <script src="fantasy.js"></script>
   </body>
 </html>
-
-
