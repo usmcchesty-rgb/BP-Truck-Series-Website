@@ -22,6 +22,13 @@
       margin: 10px 0 4px;
     }
     .settings-fields .field-label:first-child { margin-top: 0; }
+    .field-help {
+      display: block;
+      margin: -2px 0 10px;
+      color: var(--bp-text-secondary);
+      font-size: 11px;
+      line-height: 1.45;
+    }
     .input { width: 100%; margin-bottom: 8px; padding: 8px; background: #090909; color: #fff; border: 1px solid #555; border-radius: 4px; font-size: 12px; }
     .btn { margin-top: 4px; }
     #adminMsg, #driversMsg, #loginMsg { margin-top: 10px; font-size: 12px; color: #ccc; white-space: pre-wrap; }
@@ -109,47 +116,59 @@
         <h2>Site Settings / Scrape Links</h2>
         <div class="settings-fields">
           <label class="field-label" for="seriesName">Site Name</label>
+          <span class="field-help">Displayed in page headers, browser titles, and league branding.</span>
           <input id="seriesName" class="input" type="text" placeholder="Blazing Pedals Truck Series">
 
           <label class="field-label" for="seasonName">Season Name</label>
+          <span class="field-help">Current season label shown throughout the website.</span>
           <input id="seasonName" class="input" type="text" placeholder="Season 11">
 
           <label class="field-label" for="standingsUrl">Standings URL</label>
+          <span class="field-help">SimRacerHub standings page used to build standings, statistics, and championship data.</span>
           <input id="standingsUrl" class="input" type="url" placeholder="https://www.simracerhub.com/scoring/season_standings.php?season_id=...">
 
           <label class="field-label" for="scheduleUrl">Schedule URL</label>
+          <span class="field-help">SimRacerHub schedule page used to build race schedule and results.</span>
           <input id="scheduleUrl" class="input" type="url" placeholder="https://www.simracerhub.com/scoring/season_schedule.php?season_id=...">
 
           <label class="field-label" for="playoffCut">Playoff Cut Line</label>
+          <span class="field-help">Number of drivers shown above the playoff cut line.</span>
           <input id="playoffCut" class="input" type="number" placeholder="16" min="1">
 
           <label class="field-label" for="raceStartTime">Race Time</label>
+          <span class="field-help">Official league race start time displayed on schedule and race cards.</span>
           <input id="raceStartTime" class="input" type="text" placeholder="6:30 PM ET">
 
           <label class="field-label" for="raceCompletionBufferMinutes">Race Completion Buffer (minutes)</label>
+          <span class="field-help">How long after race start the site waits before unlocking race-dependent content.</span>
           <input id="raceCompletionBufferMinutes" class="input" type="number" min="0" step="1" placeholder="180">
-          <p class="sub">Race progression unlocks after race start plus this buffer. Default: 180 minutes (3 hours).</p>
+
+          <label class="field-label" for="leagueFacebookUrl">League Facebook URL</label>
+          <span class="field-help">Used by the Home page League Updates card and all public Facebook buttons.</span>
+          <input id="leagueFacebookUrl" class="input" type="url" placeholder="https://www.facebook.com/blazingpedalsracingleague/">
 
           <hr class="settings-divider">
           <h3 style="margin:0 0 8px;font-size:14px;color:#ff3030;">Public Site Logo</h3>
-          <p class="sub">Controls the top-left logo on all public pages. Leave URL empty to use the default clean BP logo.</p>
+          <span class="field-help">Logo displayed in the upper-left corner of public pages.</span>
 
           <div class="logo-preview-wrap">
             <img id="headerLogoPreview" src="/assets/logos/New%20Clean%20Logo.png" alt="Header logo preview">
           </div>
 
           <label class="field-label" for="headerLogoUrl">Header Logo URL</label>
+          <span class="field-help">Custom logo URL. Leave empty to use the default clean BP logo.</span>
           <input id="headerLogoUrl" class="input" type="url" placeholder="https://... or /assets/logos/...">
 
           <label class="field-label" for="headerLogoAltText">Logo Alt Text (optional)</label>
+          <span class="field-help">Accessibility label read by screen readers when the logo is shown.</span>
           <input id="headerLogoAltText" class="input" type="text" placeholder="Blazing Pedals Truck Series">
 
           <label class="field-label" for="headerLogoFile">Header Logo Upload</label>
+          <span class="field-help">Upload a PNG logo to Supabase Storage. Uploaded images replace the URL field above.</span>
           <div class="logo-upload-row">
             <input id="headerLogoFile" type="file" accept="image/png,.png">
             <button class="btn" type="button" onclick="uploadHeaderLogo()">Upload Logo</button>
           </div>
-          <p class="sub">PNG only. Transparency is preserved. Uploaded logos are stored in Supabase Storage when configured.</p>
         </div>
         <button class="btn" type="button" onclick="saveSettings()">Save Settings</button>
         <pre id="adminMsg"></pre>
@@ -330,6 +349,7 @@
           raceStartTime: $('#raceStartTime').value,
           raceCompletionBufferMinutes:
             Number($('#raceCompletionBufferMinutes').value) || undefined,
+          leagueFacebookUrl: $('#leagueFacebookUrl').value.trim(),
           headerLogoUrl: $('#headerLogoUrl').value,
           headerLogoAltText: $('#headerLogoAltText').value
         };
@@ -439,6 +459,7 @@
         $('#raceStartTime').value = data.raceStartTime || '';
         $('#raceCompletionBufferMinutes').value =
           data.raceCompletionBufferMinutes ?? '';
+        $('#leagueFacebookUrl').value = data.leagueFacebookUrl ?? '';
         $('#headerLogoUrl').value = stripUrlQuery(data.headerLogoUrl || '');
         $('#headerLogoAltText').value = data.headerLogoAltText || '';
         updateHeaderLogoPreview(data);

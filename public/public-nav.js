@@ -13,6 +13,12 @@
 
   const DEFAULT_LOGO_SRC = "/assets/logos/New%20Clean%20Logo.png";
   const DEFAULT_LOGO_ALT = "Blazing Pedals Truck Series";
+  const DEFAULT_LEAGUE_FACEBOOK_URL = "https://www.facebook.com/blazingpedalsracingleague/";
+
+  function resolveLeagueFacebookUrl(settings) {
+    if (settings && settings.leagueFacebookUrl === "") return "";
+    return String(settings?.leagueFacebookUrl || DEFAULT_LEAGUE_FACEBOOK_URL).trim();
+  }
 
   function stripUrlQuery(url) {
     const value = String(url || "").trim();
@@ -154,6 +160,8 @@
     renderFooter,
     applyHeaderLogo,
     resolveHeaderLogoDisplayUrl,
+    resolveLeagueFacebookUrl,
+    DEFAULT_LEAGUE_FACEBOOK_URL,
     NAV_ITEMS,
     DEFAULT_LOGO_SRC,
   };

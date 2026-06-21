@@ -31,6 +31,7 @@ alter table site_settings add column if not exists "milesApexImageX" numeric def
 alter table site_settings add column if not exists "milesApexImageY" numeric default 50;
 alter table site_settings add column if not exists "powerRankingsFormulaImageUrl" text;
 alter table site_settings add column if not exists "powerRankingsFormulaImageUpdatedAt" timestamptz;
+alter table site_settings add column if not exists "leagueFacebookUrl" text;
 
 insert into site_settings (id, "seriesName", "seasonName", "standingsUrl", "scheduleUrl", "playoffCut", "refreshSeconds")
 values (1, 'Blazing Pedals Truck Series', 'Season 11', 'https://www.simracerhub.com/scoring/season_standings.php?season_id=27987', 'https://www.simracerhub.com/scoring/season_schedule.php?season_id=27987', 16, 60)

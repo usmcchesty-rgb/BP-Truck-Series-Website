@@ -12,6 +12,7 @@ export const DEFAULTS = {
   refreshSeconds: 60,
   raceStartTime: '9:00 PM EST',
   raceCompletionBufferMinutes: 180,
+  leagueFacebookUrl: 'https://www.facebook.com/blazingpedalsracingleague/',
   headerLogoUrl: '',
   headerLogoAltText: 'Blazing Pedals Truck Series',
   headerLogoUpdatedAt: null,
@@ -74,6 +75,13 @@ export function withPhotoCacheBust(photoUrl, version) {
   if (!clean) return clean;
   if (version == null || version === '') return clean;
   return `${clean}?v=${encodeURIComponent(version)}`;
+}
+
+export const DEFAULT_LEAGUE_FACEBOOK_URL = 'https://www.facebook.com/blazingpedalsracingleague/';
+
+export function resolveLeagueFacebookUrl(settings = {}) {
+  if (settings.leagueFacebookUrl === '') return '';
+  return String(settings.leagueFacebookUrl || DEFAULT_LEAGUE_FACEBOOK_URL).trim();
 }
 
 export const DEFAULT_HEADER_LOGO_URL = '/assets/logos/New%20Clean%20Logo.png';

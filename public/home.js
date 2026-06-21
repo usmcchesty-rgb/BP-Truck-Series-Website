@@ -595,6 +595,47 @@ async function loadHomeNews() {
   }
 }
 
+function resolveLeagueFacebookUrl(settings) {
+  if (window.BPPublicNav?.resolveLeagueFacebookUrl) {
+    return window.BPPublicNav.resolveLeagueFacebookUrl(settings);
+  }
+  if (settings && settings.leagueFacebookUrl === "") return "";
+  return String(
+    settings?.leagueFacebookUrl || "https://www.facebook.com/blazingpedalsracingleague/"
+  ).trim();
+}
+
+function renderHomeLeagueUpdates(settings) {
+  const copyEl = $("#homeLeagueUpdatesCopy");
+  const btnEl = $("#homeLeagueFacebookBtn");
+  if (!copyEl && !btnEl) return;
+
+  const url = resolveLeagueFacebookUrl(settings || {});
+  if (url && btnEl) {
+    btnEl.hidden = false;
+    btnEl.onclick = () => window.open(url, "_blank", "noopener,noreferrer");
+    copyEl.textContent = "Facebook league updates and community posts coming soon.";
+    return;
+  }
+
+  if (btnEl) {
+    btnEl.hidden = true;
+    btnEl.onclick = null;
+  }
+  if (copyEl) copyEl.textContent = "Facebook updates coming soon.";
+}
+
+async function loadHomeLeagueUpdates() {
+  try {
+    const res = await fetch("/api/settings");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    renderHomeLeagueUpdates(await res.json());
+  } catch (e) {
+    console.warn("Home league updates settings load failed:", e);
+    renderHomeLeagueUpdates({});
+  }
+}
+
 async function loadHome() {
   let leader = null;
   let rows = [];
@@ -648,4 +689,5 @@ loadGreenFlagBroadcast();
 loadPowerRankingsWidget();
 loadHomeNews();
 loadHomeSpotlight();
+loadHomeLeagueUpdates();
 loadHome();
