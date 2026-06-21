@@ -131,8 +131,7 @@ function resolveFantasyHeaderLogoPlacement(settings = {}) {
   };
 }
 
-function applyHeroLogoPlacement(settings = {}) {
-  const banner = document.querySelector('.fantasy-hero-banner');
+function applyHeroLogoPlacementToBanner(banner, settings = {}) {
   if (!banner) return;
 
   const placement = resolveFantasyHeaderLogoPlacement(settings);
@@ -140,6 +139,19 @@ function applyHeroLogoPlacement(settings = {}) {
   banner.style.setProperty('--fantasy-hero-logo-width', `${placement.widthVw}vw`);
   banner.style.setProperty('--fantasy-hero-logo-max-width', `${placement.maxWidthPx}px`);
 }
+
+function applyHeroLogoPlacement(settings = {}) {
+  applyHeroLogoPlacementToBanner(
+    document.querySelector('.fantasy-landing .fantasy-hero-banner'),
+    settings,
+  );
+}
+
+window.BPFantasyHeroPlacement = {
+  resolve: resolveFantasyHeaderLogoPlacement,
+  applyToBanner: applyHeroLogoPlacementToBanner,
+  defaults: FANTASY_LOGO_PLACEMENT_DEFAULTS,
+};
 
 function applyLandingAssets(settings = {}) {
   applyHeroImage(resolveFantasyHeroBackgroundDisplayUrl(settings));

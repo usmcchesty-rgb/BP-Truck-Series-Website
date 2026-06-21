@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Fantasy Admin — BP Fantasy Coming Soon</title>
     <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/fantasy.css" />
     <style>
       .wrap {
         padding: 18px;
@@ -205,41 +206,34 @@
         font-weight: 900;
       }
 
-      .fantasy-hero-composite-preview {
-        --fantasy-hero-logo-top: 21%;
-        --fantasy-hero-logo-width: 32%;
-        --fantasy-hero-logo-max-width: 560px;
-        position: relative;
+      .fantasy-hero-preview-viewport {
         width: 100%;
         max-width: 720px;
         margin: 12px 0 0;
+        overflow: hidden;
         border: 1px solid #333;
         background: #050505;
-        line-height: 0;
-        overflow: hidden;
       }
 
-      .fantasy-hero-composite-preview__hero {
-        display: block;
-        width: 100%;
-        height: auto;
+      .fantasy-hero-preview-scaler {
+        transform-origin: top left;
+        width: 100vw;
       }
 
-      .fantasy-hero-composite-preview__logo {
-        position: absolute;
-        top: var(--fantasy-hero-logo-top);
-        left: 50%;
-        transform: translateX(-50%);
-        width: var(--fantasy-hero-logo-width);
-        max-width: min(var(--fantasy-hero-logo-max-width), 100%);
-        height: auto;
-        object-fit: contain;
-        pointer-events: none;
-        filter: drop-shadow(0 4px 18px rgba(0,0,0,.45));
+      .fantasy-hero-preview-debug {
+        margin-top: 10px;
+        padding: 10px 12px;
+        border: 1px solid #2b2b2b;
+        border-radius: 6px;
+        background: rgba(0, 0, 0, 0.25);
+        font-size: 12px;
+        color: #ccc;
       }
 
-      .fantasy-hero-composite-preview__logo[hidden] {
-        display: none;
+      .fantasy-hero-preview-debug ul {
+        margin: 6px 0 0;
+        padding-left: 18px;
+        line-height: 1.6;
       }
 
       .branding-upload-row {
@@ -426,19 +420,32 @@
             <div class="branding-block">
               <div class="field-label">Fantasy Hero Preview</div>
               <span class="field-help">Scaled preview of the public hero with logo overlay placement. Updates live as you adjust sliders.</span>
-              <div id="fantasyHeroCompositePreview" class="fantasy-hero-composite-preview" aria-label="Fantasy Hero Preview">
-                <img
-                  id="fantasyCompositeHeroImg"
-                  class="fantasy-hero-composite-preview__hero"
-                  src="/assets/fantasy/hero-background.jpg"
-                  alt="Fantasy hero background preview"
-                />
-                <img
-                  id="fantasyCompositeLogoImg"
-                  class="fantasy-hero-composite-preview__logo"
-                  src="/assets/fantasy/fantasy-logo.png"
-                  alt="Fantasy header logo preview"
-                />
+              <div id="fantasyHeroPreviewViewport" class="fantasy-hero-preview-viewport" aria-label="Fantasy Hero Preview">
+                <div id="fantasyHeroPreviewScaler" class="fantasy-hero-preview-scaler">
+                  <section class="fantasy-hero-banner" id="fantasyAdminHeroBanner">
+                    <img
+                      id="fantasyCompositeHeroImg"
+                      class="fantasy-hero-banner-img"
+                      src="/assets/fantasy/hero-background.jpg"
+                      alt="Fantasy hero background preview"
+                    />
+                    <img
+                      id="fantasyCompositeLogoImg"
+                      class="fantasy-hero-logo"
+                      src="/assets/fantasy/fantasy-logo.png"
+                      alt="Fantasy header logo preview"
+                    />
+                  </section>
+                </div>
+              </div>
+
+              <div id="fantasyHeroPreviewDebug" class="fantasy-hero-preview-debug" aria-live="polite">
+                <div class="field-label" style="margin:0">Current Public Values</div>
+                <ul id="fantasyHeroPreviewDebugList">
+                  <li>Top: 21%</li>
+                  <li>Width: 32vw</li>
+                  <li>Max Width: 560px</li>
+                </ul>
               </div>
 
               <div class="slider-row">
@@ -630,6 +637,7 @@
     </main>
 
 
+    <script src="/fantasy.js"></script>
     <script>
       const $ = (s) => document.querySelector(s);
 
@@ -782,24 +790,57 @@
         syncLogoPlacementSliderLabels(placement);
       }
 
-      function applyLogoPlacementToCompositePreview(placement) {
-        const preview = $('#fantasyHeroCompositePreview');
-        if (!preview) return;
-        preview.style.setProperty('--fantasy-hero-logo-top', `${placement.fantasyHeaderLogoTopPercent}%`);
-        preview.style.setProperty('--fantasy-hero-logo-width', `${placement.fantasyHeaderLogoWidthVw}%`);
-        preview.style.setProperty(
-          '--fantasy-hero-logo-max-width',
-          `${placement.fantasyHeaderLogoMaxWidthPx}px`,
-        );
+      function buildPreviewSettings(placement) {
+        return {
+          ...fantasyBrandingSettings,
+          fantasyHeaderLogoTopPercent: placement.fantasyHeaderLogoTopPercent,
+          fantasyHeaderLogoWidthVw: placement.fantasyHeaderLogoWidthVw,
+          fantasyHeaderLogoMaxWidthPx: placement.fantasyHeaderLogoMaxWidthPx,
+        };
+      }
+
+      function updateFantasyHeroPreviewDebug(placement) {
+        const list = $('#fantasyHeroPreviewDebugList');
+        if (!list) return;
+
+        const resolved = window.BPFantasyHeroPlacement?.resolve(buildPreviewSettings(placement)) || {
+          topPercent: placement.fantasyHeaderLogoTopPercent,
+          widthVw: placement.fantasyHeaderLogoWidthVw,
+          maxWidthPx: placement.fantasyHeaderLogoMaxWidthPx,
+        };
+
+        list.innerHTML = `
+          <li>Top: ${resolved.topPercent}%</li>
+          <li>Width: ${resolved.widthVw}vw</li>
+          <li>Max Width: ${resolved.maxWidthPx}px</li>
+        `;
+      }
+
+      function syncFantasyHeroPreviewScale() {
+        const viewport = $('#fantasyHeroPreviewViewport');
+        const scaler = $('#fantasyHeroPreviewScaler');
+        const banner = $('#fantasyAdminHeroBanner');
+        if (!viewport || !scaler || !banner) return;
+
+        const containerWidth = viewport.clientWidth;
+        const viewportWidth = window.innerWidth || document.documentElement.clientWidth || containerWidth;
+        const scale = containerWidth / viewportWidth;
+        scaler.style.transform = `scale(${scale})`;
+        viewport.style.height = `${banner.offsetHeight * scale}px`;
       }
 
       function updateFantasyHeroCompositePreview(placement = readLogoPlacementFromSliders()) {
+        const banner = $('#fantasyAdminHeroBanner');
         const heroImg = $('#fantasyCompositeHeroImg');
         const logoImg = $('#fantasyCompositeLogoImg');
-        applyLogoPlacementToCompositePreview(placement);
+        const previewSettings = buildPreviewSettings(placement);
+
+        window.BPFantasyHeroPlacement?.applyToBanner(banner, previewSettings);
         syncLogoPlacementSliderLabels(placement);
+        updateFantasyHeroPreviewDebug(placement);
 
         if (heroImg) {
+          heroImg.onload = () => syncFantasyHeroPreviewScale();
           heroImg.src = resolveFantasyHeroBackgroundDisplayUrl(fantasyBrandingSettings);
         }
 
@@ -807,12 +848,16 @@
           const logoUrl = resolveFantasyHeaderLogoDisplayUrl(fantasyBrandingSettings);
           logoImg.onerror = () => {
             logoImg.hidden = true;
+            syncFantasyHeroPreviewScale();
           };
           logoImg.onload = () => {
             logoImg.hidden = false;
+            syncFantasyHeroPreviewScale();
           };
           logoImg.src = logoUrl;
         }
+
+        requestAnimationFrame(syncFantasyHeroPreviewScale);
       }
 
       function setBrandingMsg(text, isError = false) {
@@ -1232,6 +1277,7 @@
       $('#fantasyLogoTopPercent')?.addEventListener('input', () => updateFantasyHeroCompositePreview());
       $('#fantasyLogoWidthVw')?.addEventListener('input', () => updateFantasyHeroCompositePreview());
       $('#fantasyLogoMaxWidthPx')?.addEventListener('input', () => updateFantasyHeroCompositePreview());
+      window.addEventListener('resize', syncFantasyHeroPreviewScale);
 
       initSession();
     </script>
