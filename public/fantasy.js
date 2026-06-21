@@ -7,6 +7,43 @@ const FANTASY_LANDING_ASSETS = {
   headerLogoUrl: '/assets/fantasy/fantasy-logo.png',
 };
 
+function stripPhotoUrlQuery(photoUrl) {
+  const url = String(photoUrl || '').trim();
+  if (!url) return '';
+  return url.split('?')[0].split('#')[0];
+}
+
+function photoCacheVersion(updatedAt) {
+  if (!updatedAt) return null;
+  const ms = new Date(updatedAt).getTime();
+  return Number.isFinite(ms) ? ms : null;
+}
+
+function withPhotoCacheBust(photoUrl, version) {
+  const clean = stripPhotoUrlQuery(photoUrl);
+  if (!clean) return clean;
+  if (version == null || version === '') return clean;
+  return `${clean}?v=${encodeURIComponent(version)}`;
+}
+
+function resolveFantasyHeroBackgroundDisplayUrl(settings = {}) {
+  const stored = stripPhotoUrlQuery(settings.fantasyHeroBackgroundUrl || '');
+  const url = stored || FANTASY_LANDING_ASSETS.heroBackgroundUrl;
+  const version = stored
+    ? photoCacheVersion(settings.fantasyHeroBackgroundUpdatedAt) || Date.now()
+    : null;
+  return version ? withPhotoCacheBust(url, version) : url;
+}
+
+function resolveFantasyHeaderLogoDisplayUrl(settings = {}) {
+  const stored = stripPhotoUrlQuery(settings.fantasyHeaderLogoUrl || '');
+  const url = stored || FANTASY_LANDING_ASSETS.headerLogoUrl;
+  const version = stored
+    ? photoCacheVersion(settings.fantasyHeaderLogoUpdatedAt) || Date.now()
+    : null;
+  return version ? withPhotoCacheBust(url, version) : url;
+}
+
 const DEMO_FEATURED_DRIVERS = [
   { name: 'Mark Arthur', carNumber: '12', salary: 12500 },
   { name: 'Cody Gibson', carNumber: '7', salary: 11200 },
@@ -75,15 +112,8 @@ function applyHeaderLogo(url) {
 }
 
 function applyLandingAssets(settings = {}) {
-  const heroUrl = String(
-    settings.fantasyHeroBackgroundUrl ?? FANTASY_LANDING_ASSETS.heroBackgroundUrl
-  ).trim();
-  const logoUrl = String(
-    settings.fantasyHeaderLogoUrl ?? FANTASY_LANDING_ASSETS.headerLogoUrl
-  ).trim();
-
-  applyHeroBackground(heroUrl);
-  applyHeaderLogo(logoUrl);
+  applyHeroBackground(resolveFantasyHeroBackgroundDisplayUrl(settings));
+  applyHeaderLogo(resolveFantasyHeaderLogoDisplayUrl(settings));
 }
 
 window.BPFantasyLanding = {

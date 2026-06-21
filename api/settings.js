@@ -39,6 +39,16 @@ export default async function handler(req, res) {
     patch.powerRankingsFormulaImageUrl = nextUrl;
     patch.powerRankingsFormulaImageUpdatedAt = nextUrl ? new Date().toISOString() : null;
   }
+  if (body.fantasyHeroBackgroundUrl !== undefined) {
+    const nextUrl = stripPhotoUrlQuery(String(body.fantasyHeroBackgroundUrl || '').trim());
+    patch.fantasyHeroBackgroundUrl = nextUrl;
+    patch.fantasyHeroBackgroundUpdatedAt = nextUrl ? new Date().toISOString() : null;
+  }
+  if (body.fantasyHeaderLogoUrl !== undefined) {
+    const nextUrl = stripPhotoUrlQuery(String(body.fantasyHeaderLogoUrl || '').trim());
+    patch.fantasyHeaderLogoUrl = nextUrl;
+    patch.fantasyHeaderLogoUpdatedAt = nextUrl ? new Date().toISOString() : null;
+  }
   const { data, error } = await sb.from('site_settings').upsert(patch).select().single();
   if (error) return res.status(500).json({ error: error.message });
   res.status(200).json(data);

@@ -23,6 +23,10 @@ export const DEFAULTS = {
   milesApexImageY: 50,
   powerRankingsFormulaImageUrl: '',
   powerRankingsFormulaImageUpdatedAt: null,
+  fantasyHeroBackgroundUrl: '',
+  fantasyHeroBackgroundUpdatedAt: null,
+  fantasyHeaderLogoUrl: '',
+  fantasyHeaderLogoUpdatedAt: null,
 };
 
 export function supabase() {
@@ -138,6 +142,37 @@ export function resolvePowerRankingsFormulaImageDisplayUrl(settings = {}) {
   const url = stored || DEFAULT_POWER_RANKINGS_FORMULA_IMAGE_URL;
   const version = stored
     ? photoCacheVersion(settings.powerRankingsFormulaImageUpdatedAt) || Date.now()
+    : null;
+  return version ? withPhotoCacheBust(url, version) : url;
+}
+
+export const DEFAULT_FANTASY_HERO_BACKGROUND_URL = '/assets/fantasy/hero-background.jpg';
+export const DEFAULT_FANTASY_HEADER_LOGO_URL = '/assets/fantasy/fantasy-logo.png';
+
+export function resolveFantasyHeroBackgroundUrl(settings = {}) {
+  const custom = stripPhotoUrlQuery(settings.fantasyHeroBackgroundUrl || '');
+  return custom || DEFAULT_FANTASY_HERO_BACKGROUND_URL;
+}
+
+export function resolveFantasyHeroBackgroundDisplayUrl(settings = {}) {
+  const stored = stripPhotoUrlQuery(settings.fantasyHeroBackgroundUrl || '');
+  const url = stored || DEFAULT_FANTASY_HERO_BACKGROUND_URL;
+  const version = stored
+    ? photoCacheVersion(settings.fantasyHeroBackgroundUpdatedAt) || Date.now()
+    : null;
+  return version ? withPhotoCacheBust(url, version) : url;
+}
+
+export function resolveFantasyHeaderLogoUrl(settings = {}) {
+  const custom = stripPhotoUrlQuery(settings.fantasyHeaderLogoUrl || '');
+  return custom || DEFAULT_FANTASY_HEADER_LOGO_URL;
+}
+
+export function resolveFantasyHeaderLogoDisplayUrl(settings = {}) {
+  const stored = stripPhotoUrlQuery(settings.fantasyHeaderLogoUrl || '');
+  const url = stored || DEFAULT_FANTASY_HEADER_LOGO_URL;
+  const version = stored
+    ? photoCacheVersion(settings.fantasyHeaderLogoUpdatedAt) || Date.now()
     : null;
   return version ? withPhotoCacheBust(url, version) : url;
 }

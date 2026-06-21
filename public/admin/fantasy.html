@@ -114,6 +114,93 @@
         line-height: 1.45;
       }
 
+      .field-label {
+        display: block;
+        font-size: 11px;
+        color: #999;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: .06em;
+        margin: 10px 0 4px;
+      }
+
+      .branding-block + .branding-block {
+        margin-top: 22px;
+        padding-top: 22px;
+        border-top: 1px solid #333;
+      }
+
+      .fantasy-brand-preview {
+        width: 100%;
+        margin: 12px 0;
+        padding: 10px;
+        border: 1px solid #333;
+        background: linear-gradient(180deg, #121212 0%, #080808 100%);
+      }
+
+      .fantasy-brand-preview img {
+        display: block;
+        width: 100%;
+        height: auto;
+        object-fit: contain;
+      }
+
+      .fantasy-brand-preview--hero {
+        max-width: 100%;
+      }
+
+      .fantasy-brand-preview--hero img {
+        max-height: 220px;
+        object-fit: cover;
+      }
+
+      .fantasy-brand-preview--logo {
+        max-width: 320px;
+      }
+
+      .fantasy-brand-preview--logo img {
+        max-height: 96px;
+        object-position: left center;
+      }
+
+      .fantasy-brand-preview.is-empty {
+        display: grid;
+        place-items: center;
+        min-height: 120px;
+        color: #777;
+        font-size: 11px;
+        font-weight: 900;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+      }
+
+      .fantasy-brand-preview--logo.is-empty {
+        min-height: 96px;
+      }
+
+      .branding-upload-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+        margin: 8px 0 0;
+      }
+
+      .branding-upload-row input[type="file"] {
+        font-size: 11px;
+        color: #ccc;
+        max-width: 100%;
+      }
+
+      #brandingMsg {
+        margin-top: 12px;
+        font-size: 12px;
+        color: #ccc;
+        white-space: pre-wrap;
+      }
+
+      #brandingMsg.error { color: #ff6060; }
+
       .admin-field .input {
         width: 100%;
         margin-bottom: 0;
@@ -238,6 +325,43 @@
         <h2>BP Fantasy</h2>
 
         <section class="admin-grid">
+          <!-- Fantasy Branding -->
+          <div class="admin-card admin-card--full">
+            <div class="admin-card-title">Fantasy Branding</div>
+
+            <div class="branding-block">
+              <div class="field-label">Fantasy Hero Background Image</div>
+              <span class="field-help">Large full-width background image displayed at the top of the Fantasy landing page.</span>
+              <div id="fantasyHeroPreview" class="fantasy-brand-preview fantasy-brand-preview--hero is-empty">No hero background</div>
+              <label class="field-label" for="fantasyHeroBackgroundUrl">Image URL</label>
+              <input id="fantasyHeroBackgroundUrl" class="input" type="url" placeholder="/assets/fantasy/hero-background.jpg" />
+              <label class="field-label" for="fantasyHeroBackgroundFile">Upload Image (PNG or JPG)</label>
+              <div class="branding-upload-row">
+                <input id="fantasyHeroBackgroundFile" type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg" />
+                <button id="uploadFantasyHeroBtn" class="btn btn-secondary" type="button" disabled>Upload Hero Background</button>
+                <button id="removeFantasyHeroBtn" class="btn btn-danger" type="button" disabled>Remove Hero Background</button>
+                <button id="saveFantasyHeroUrlBtn" class="btn" type="button">Save Hero URL</button>
+              </div>
+            </div>
+
+            <div class="branding-block">
+              <div class="field-label">Fantasy Header Logo Image</div>
+              <span class="field-help">Transparent PNG logo displayed over the Fantasy hero section.</span>
+              <div id="fantasyLogoPreview" class="fantasy-brand-preview fantasy-brand-preview--logo is-empty">No header logo</div>
+              <label class="field-label" for="fantasyHeaderLogoUrl">Image URL</label>
+              <input id="fantasyHeaderLogoUrl" class="input" type="url" placeholder="/assets/fantasy/fantasy-logo.png" />
+              <label class="field-label" for="fantasyHeaderLogoFile">Upload Logo (PNG)</label>
+              <div class="branding-upload-row">
+                <input id="fantasyHeaderLogoFile" type="file" accept="image/png,.png" />
+                <button id="uploadFantasyLogoBtn" class="btn btn-secondary" type="button" disabled>Upload Header Logo</button>
+                <button id="removeFantasyLogoBtn" class="btn btn-danger" type="button" disabled>Remove Header Logo</button>
+                <button id="saveFantasyLogoUrlBtn" class="btn" type="button">Save Logo URL</button>
+              </div>
+            </div>
+
+            <pre id="brandingMsg"></pre>
+          </div>
+
           <!-- Fantasy Status -->
           <div class="admin-card">
             <div class="admin-card-title">Fantasy Status</div>
@@ -378,7 +502,7 @@
         </section>
 
         <div class="btn-row">
-          <button class="btn btn-secondary" type="button" onclick="location.href='../../fantasy.html'">
+          <button class="btn btn-secondary" type="button" onclick="location.href='/fantasy.html'">
             View Public Fantasy
           </button>
           <button class="btn" type="button" onclick="location.href='/admin/'">
@@ -429,11 +553,325 @@
         return String(settings.serverOpenTime ?? settings.raceStartTime ?? '').trim();
       }
 
+      function stripUrlQuery(url) {
+        const value = String(url || '').trim();
+        if (!value) return '';
+        return value.split('?')[0].split('#')[0];
+      }
+
+      function cacheVersion(value) {
+        if (!value) return null;
+        const ms = new Date(value).getTime();
+        return Number.isFinite(ms) ? ms : null;
+      }
+
+      function withCacheBust(url, version) {
+        const clean = stripUrlQuery(url);
+        if (!clean) return clean;
+        if (version == null || version === '') return clean;
+        return `${clean}?v=${encodeURIComponent(version)}`;
+      }
+
+      const DEFAULT_FANTASY_HERO_BACKGROUND_URL = '/assets/fantasy/hero-background.jpg';
+      const DEFAULT_FANTASY_HEADER_LOGO_URL = '/assets/fantasy/fantasy-logo.png';
+
+      let fantasyBrandingSettings = {
+        fantasyHeroBackgroundUrl: '',
+        fantasyHeroBackgroundUpdatedAt: null,
+        fantasyHeaderLogoUrl: '',
+        fantasyHeaderLogoUpdatedAt: null,
+      };
+
+      function setBrandingMsg(text, isError = false) {
+        const msg = $('#brandingMsg');
+        if (!msg) return;
+        msg.textContent = text || '';
+        msg.classList.toggle('error', isError);
+      }
+
+      function resolveFantasyHeroBackgroundDisplayUrl(settings = fantasyBrandingSettings) {
+        const stored = stripUrlQuery(settings.fantasyHeroBackgroundUrl || '');
+        const url = stored || DEFAULT_FANTASY_HERO_BACKGROUND_URL;
+        const version = stored
+          ? cacheVersion(settings.fantasyHeroBackgroundUpdatedAt) || Date.now()
+          : null;
+        return version ? withCacheBust(url, version) : url;
+      }
+
+      function resolveFantasyHeaderLogoDisplayUrl(settings = fantasyBrandingSettings) {
+        const stored = stripUrlQuery(settings.fantasyHeaderLogoUrl || '');
+        const url = stored || DEFAULT_FANTASY_HEADER_LOGO_URL;
+        const version = stored
+          ? cacheVersion(settings.fantasyHeaderLogoUpdatedAt) || Date.now()
+          : null;
+        return version ? withCacheBust(url, version) : url;
+      }
+
+      function heroPreviewUrl(settings = fantasyBrandingSettings) {
+        const stored = stripUrlQuery(settings.fantasyHeroBackgroundUrl || '');
+        if (!stored) return '';
+        return resolveFantasyHeroBackgroundDisplayUrl(settings);
+      }
+
+      function logoPreviewUrl(settings = fantasyBrandingSettings) {
+        const stored = stripUrlQuery(settings.fantasyHeaderLogoUrl || '');
+        if (!stored) return '';
+        return resolveFantasyHeaderLogoDisplayUrl(settings);
+      }
+
+      function updateFantasyBrandingPreviews() {
+        const heroPreview = $('#fantasyHeroPreview');
+        const logoPreview = $('#fantasyLogoPreview');
+        const heroUrl = heroPreviewUrl();
+        const logoUrl = logoPreviewUrl();
+
+        if (heroPreview) {
+          if (heroUrl) {
+            heroPreview.classList.remove('is-empty');
+            heroPreview.innerHTML = `<img src="${heroUrl.replace(/"/g, '&quot;')}" alt="Fantasy hero background preview">`;
+          } else {
+            heroPreview.classList.add('is-empty');
+            heroPreview.textContent = 'No hero background';
+          }
+        }
+
+        if (logoPreview) {
+          if (logoUrl) {
+            logoPreview.classList.remove('is-empty');
+            logoPreview.innerHTML = `<img src="${logoUrl.replace(/"/g, '&quot;')}" alt="Fantasy header logo preview">`;
+          } else {
+            logoPreview.classList.add('is-empty');
+            logoPreview.textContent = 'No header logo';
+          }
+        }
+
+        const heroUrlInput = $('#fantasyHeroBackgroundUrl');
+        const logoUrlInput = $('#fantasyHeaderLogoUrl');
+        if (heroUrlInput) heroUrlInput.value = stripUrlQuery(fantasyBrandingSettings.fantasyHeroBackgroundUrl || '');
+        if (logoUrlInput) logoUrlInput.value = stripUrlQuery(fantasyBrandingSettings.fantasyHeaderLogoUrl || '');
+
+        syncFantasyBrandingButtons();
+      }
+
+      function syncFantasyBrandingButtons() {
+        const heroFile = $('#fantasyHeroBackgroundFile')?.files?.[0];
+        const logoFile = $('#fantasyHeaderLogoFile')?.files?.[0];
+        if ($('#uploadFantasyHeroBtn')) {
+          $('#uploadFantasyHeroBtn').disabled = !heroFile;
+        }
+        if ($('#uploadFantasyLogoBtn')) {
+          $('#uploadFantasyLogoBtn').disabled = !logoFile;
+        }
+        if ($('#removeFantasyHeroBtn')) {
+          $('#removeFantasyHeroBtn').disabled = !stripUrlQuery(fantasyBrandingSettings.fantasyHeroBackgroundUrl || '');
+        }
+        if ($('#removeFantasyLogoBtn')) {
+          $('#removeFantasyLogoBtn').disabled = !stripUrlQuery(fantasyBrandingSettings.fantasyHeaderLogoUrl || '');
+        }
+      }
+
+      async function readFileAsDataUrl(file) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result || ''));
+          reader.onerror = () => reject(new Error('Could not read file.'));
+          reader.readAsDataURL(file);
+        });
+      }
+
+      async function saveFantasyHeroUrl() {
+        setBrandingMsg('Saving hero background URL...');
+        try {
+          const res = await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              password: getSessionPw(),
+              fantasyHeroBackgroundUrl: $('#fantasyHeroBackgroundUrl').value.trim(),
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Save failed');
+
+          fantasyBrandingSettings = {
+            ...fantasyBrandingSettings,
+            fantasyHeroBackgroundUrl: stripUrlQuery(data.fantasyHeroBackgroundUrl || ''),
+            fantasyHeroBackgroundUpdatedAt: data.fantasyHeroBackgroundUpdatedAt || null,
+          };
+          updateFantasyBrandingPreviews();
+          setBrandingMsg('Hero background URL saved.');
+        } catch (e) {
+          setBrandingMsg(e.message || 'Save failed', true);
+        }
+      }
+
+      async function saveFantasyLogoUrl() {
+        setBrandingMsg('Saving header logo URL...');
+        try {
+          const res = await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              password: getSessionPw(),
+              fantasyHeaderLogoUrl: $('#fantasyHeaderLogoUrl').value.trim(),
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Save failed');
+
+          fantasyBrandingSettings = {
+            ...fantasyBrandingSettings,
+            fantasyHeaderLogoUrl: stripUrlQuery(data.fantasyHeaderLogoUrl || ''),
+            fantasyHeaderLogoUpdatedAt: data.fantasyHeaderLogoUpdatedAt || null,
+          };
+          updateFantasyBrandingPreviews();
+          setBrandingMsg('Header logo URL saved.');
+        } catch (e) {
+          setBrandingMsg(e.message || 'Save failed', true);
+        }
+      }
+
+      async function uploadFantasyHeroBackground() {
+        const file = $('#fantasyHeroBackgroundFile')?.files?.[0];
+        if (!file) {
+          setBrandingMsg('Choose a PNG or JPG file first.', true);
+          return;
+        }
+
+        setBrandingMsg('Uploading hero background...');
+        try {
+          const imageBase64 = await readFileAsDataUrl(file);
+          const res = await fetch('/api/uploads', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              password: getSessionPw(),
+              action: 'fantasy-hero-background-image',
+              imageBase64,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Upload failed');
+
+          fantasyBrandingSettings = {
+            ...fantasyBrandingSettings,
+            fantasyHeroBackgroundUrl: stripUrlQuery(
+              data.fantasyHeroBackgroundUrlStored || data.fantasyHeroBackgroundUrl || '',
+            ),
+            fantasyHeroBackgroundUpdatedAt:
+              data.fantasyHeroBackgroundUpdatedAt || new Date().toISOString(),
+          };
+          $('#fantasyHeroBackgroundFile').value = '';
+          updateFantasyBrandingPreviews();
+          setBrandingMsg(data.savedTo ? `Hero background saved to ${data.savedTo}.` : 'Hero background uploaded.');
+        } catch (e) {
+          setBrandingMsg(e.message || 'Upload failed', true);
+          syncFantasyBrandingButtons();
+        }
+      }
+
+      async function uploadFantasyHeaderLogo() {
+        const file = $('#fantasyHeaderLogoFile')?.files?.[0];
+        if (!file) {
+          setBrandingMsg('Choose a PNG file first.', true);
+          return;
+        }
+        if (file.type !== 'image/png') {
+          setBrandingMsg('Only PNG files are supported for the header logo.', true);
+          return;
+        }
+
+        setBrandingMsg('Uploading header logo...');
+        try {
+          const imageBase64 = await readFileAsDataUrl(file);
+          const res = await fetch('/api/uploads', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              password: getSessionPw(),
+              action: 'fantasy-header-logo-image',
+              imageBase64,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Upload failed');
+
+          fantasyBrandingSettings = {
+            ...fantasyBrandingSettings,
+            fantasyHeaderLogoUrl: stripUrlQuery(
+              data.fantasyHeaderLogoUrlStored || data.fantasyHeaderLogoUrl || '',
+            ),
+            fantasyHeaderLogoUpdatedAt:
+              data.fantasyHeaderLogoUpdatedAt || new Date().toISOString(),
+          };
+          $('#fantasyHeaderLogoFile').value = '';
+          updateFantasyBrandingPreviews();
+          setBrandingMsg(data.savedTo ? `Header logo saved to ${data.savedTo}.` : 'Header logo uploaded.');
+        } catch (e) {
+          setBrandingMsg(e.message || 'Upload failed', true);
+          syncFantasyBrandingButtons();
+        }
+      }
+
+      async function removeFantasyHeroBackground() {
+        setBrandingMsg('Removing hero background...');
+        try {
+          const res = await fetch('/api/uploads', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              password: getSessionPw(),
+              action: 'remove-fantasy-hero-background-image',
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Remove failed');
+
+          fantasyBrandingSettings = {
+            ...fantasyBrandingSettings,
+            fantasyHeroBackgroundUrl: '',
+            fantasyHeroBackgroundUpdatedAt: data.fantasyHeroBackgroundUpdatedAt || null,
+          };
+          $('#fantasyHeroBackgroundFile').value = '';
+          updateFantasyBrandingPreviews();
+          setBrandingMsg('Hero background removed. Public page will use the default image path.');
+        } catch (e) {
+          setBrandingMsg(e.message || 'Remove failed', true);
+          syncFantasyBrandingButtons();
+        }
+      }
+
+      async function removeFantasyHeaderLogo() {
+        setBrandingMsg('Removing header logo...');
+        try {
+          const res = await fetch('/api/uploads', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              password: getSessionPw(),
+              action: 'remove-fantasy-header-logo-image',
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Remove failed');
+
+          fantasyBrandingSettings = {
+            ...fantasyBrandingSettings,
+            fantasyHeaderLogoUrl: '',
+            fantasyHeaderLogoUpdatedAt: data.fantasyHeaderLogoUpdatedAt || null,
+          };
+          $('#fantasyHeaderLogoFile').value = '';
+          updateFantasyBrandingPreviews();
+          setBrandingMsg('Header logo removed. Public page will use the text fallback.');
+        } catch (e) {
+          setBrandingMsg(e.message || 'Remove failed', true);
+          syncFantasyBrandingButtons();
+        }
+      }
+
       async function loadFantasySettings() {
         const lockInput = $('#lineupLockTime');
-        if (!lockInput) return;
-
-        lockInput.value = 'Loading...';
+        if (lockInput) lockInput.value = 'Loading...';
 
         try {
           const res = await fetch('/api/settings');
@@ -441,9 +879,20 @@
 
           const settings = await res.json();
           const serverOpenTime = resolveServerOpenTime(settings);
-          lockInput.value = serverOpenTime || 'Not set in Admin Settings';
+          if (lockInput) {
+            lockInput.value = serverOpenTime || 'Not set in Admin Settings';
+          }
+
+          fantasyBrandingSettings = {
+            fantasyHeroBackgroundUrl: stripUrlQuery(settings.fantasyHeroBackgroundUrl || ''),
+            fantasyHeroBackgroundUpdatedAt: settings.fantasyHeroBackgroundUpdatedAt || null,
+            fantasyHeaderLogoUrl: stripUrlQuery(settings.fantasyHeaderLogoUrl || ''),
+            fantasyHeaderLogoUpdatedAt: settings.fantasyHeaderLogoUpdatedAt || null,
+          };
+          updateFantasyBrandingPreviews();
         } catch {
-          lockInput.value = 'Not set in Admin Settings';
+          if (lockInput) lockInput.value = 'Not set in Admin Settings';
+          setBrandingMsg('Could not load branding settings.', true);
         }
       }
 
@@ -498,6 +947,15 @@
       $('#loginPw')?.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') login();
       });
+
+      $('#fantasyHeroBackgroundFile')?.addEventListener('change', syncFantasyBrandingButtons);
+      $('#fantasyHeaderLogoFile')?.addEventListener('change', syncFantasyBrandingButtons);
+      $('#uploadFantasyHeroBtn')?.addEventListener('click', uploadFantasyHeroBackground);
+      $('#uploadFantasyLogoBtn')?.addEventListener('click', uploadFantasyHeaderLogo);
+      $('#removeFantasyHeroBtn')?.addEventListener('click', removeFantasyHeroBackground);
+      $('#removeFantasyLogoBtn')?.addEventListener('click', removeFantasyHeaderLogo);
+      $('#saveFantasyHeroUrlBtn')?.addEventListener('click', saveFantasyHeroUrl);
+      $('#saveFantasyLogoUrlBtn')?.addEventListener('click', saveFantasyLogoUrl);
 
       initSession();
     </script>
