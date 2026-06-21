@@ -26,8 +26,13 @@ body.fantasy-page .topbar{
   padding:40px 18px 48px;
 }
 
-/* ── Hero banner (image only) ── */
+/* ── Hero banner (image + logo overlay) ── */
 .fantasy-hero-banner{
+  --fantasy-hero-logo-top: 21%;
+  --fantasy-hero-logo-width: 32vw;
+  --fantasy-hero-logo-max-width: 560px;
+  --fantasy-hero-logo-min-width: 200px;
+  position:relative;
   width:100%;
   margin:0;
   padding:0;
@@ -39,6 +44,46 @@ body.fantasy-page .topbar{
   width:100%;
   height:auto;
   max-width:100%;
+}
+
+.fantasy-hero-logo{
+  position:absolute;
+  top:var(--fantasy-hero-logo-top);
+  left:50%;
+  transform:translateX(-50%);
+  width:var(--fantasy-hero-logo-width);
+  max-width:var(--fantasy-hero-logo-max-width);
+  min-width:min(var(--fantasy-hero-logo-min-width), 72vw);
+  height:auto;
+  object-fit:contain;
+  pointer-events:none;
+  z-index:2;
+  filter:drop-shadow(0 4px 18px rgba(0,0,0,.45));
+}
+
+.fantasy-hero-logo[hidden]{
+  display:none;
+}
+
+.fantasy-hero-logo-fallback{
+  position:absolute;
+  top:var(--fantasy-hero-logo-top);
+  left:50%;
+  transform:translateX(-50%);
+  margin:0;
+  color:#fff;
+  font-size:clamp(28px, 5vw, 42px);
+  font-style:italic;
+  font-weight:900;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  text-shadow:0 4px 18px rgba(0,0,0,.65);
+  pointer-events:none;
+  z-index:2;
+}
+
+.fantasy-hero-logo-fallback[hidden]{
+  display:none;
 }
 .fantasy-btn{
   display:inline-flex;
@@ -326,6 +371,12 @@ body.fantasy-page .topbar{
 }
 
 @media (max-width: 640px){
+  .fantasy-hero-banner{
+    --fantasy-hero-logo-top: 18%;
+    --fantasy-hero-logo-width: 48vw;
+    --fantasy-hero-logo-max-width: 420px;
+  }
+
   .fantasy-overview-grid{
     grid-template-columns:1fr;
   }

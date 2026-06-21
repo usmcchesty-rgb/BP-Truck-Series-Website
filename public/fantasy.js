@@ -4,6 +4,7 @@
 /** Default asset paths — swap via admin settings when backend wiring is added. */
 const FANTASY_LANDING_ASSETS = {
   heroBackgroundUrl: '/assets/fantasy/hero-background.jpg',
+  headerLogoUrl: '/assets/fantasy/fantasy-logo.png',
 };
 
 function stripPhotoUrlQuery(photoUrl) {
@@ -30,6 +31,15 @@ function resolveFantasyHeroBackgroundDisplayUrl(settings = {}) {
   const url = stored || FANTASY_LANDING_ASSETS.heroBackgroundUrl;
   const version = stored
     ? photoCacheVersion(settings.fantasyHeroBackgroundUpdatedAt) || Date.now()
+    : null;
+  return version ? withPhotoCacheBust(url, version) : url;
+}
+
+function resolveFantasyHeaderLogoDisplayUrl(settings = {}) {
+  const stored = stripPhotoUrlQuery(settings.fantasyHeaderLogoUrl || '');
+  const url = stored || FANTASY_LANDING_ASSETS.headerLogoUrl;
+  const version = stored
+    ? photoCacheVersion(settings.fantasyHeaderLogoUpdatedAt) || Date.now()
     : null;
   return version ? withPhotoCacheBust(url, version) : url;
 }
@@ -68,8 +78,27 @@ function applyHeroImage(url) {
   img.src = url;
 }
 
+function applyHeaderLogo(url) {
+  const logo = document.getElementById('fantasyHeaderLogo');
+  const fallback = document.getElementById('fantasyLogoFallback');
+  if (!logo || !url) return;
+
+  const probe = new Image();
+  probe.onload = () => {
+    logo.src = url;
+    logo.hidden = false;
+    if (fallback) fallback.hidden = true;
+  };
+  probe.onerror = () => {
+    logo.hidden = true;
+    if (fallback) fallback.hidden = false;
+  };
+  probe.src = url;
+}
+
 function applyLandingAssets(settings = {}) {
   applyHeroImage(resolveFantasyHeroBackgroundDisplayUrl(settings));
+  applyHeaderLogo(resolveFantasyHeaderLogoDisplayUrl(settings));
 }
 
 window.BPFantasyLanding = {
