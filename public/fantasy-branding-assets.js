@@ -29,11 +29,28 @@ function withPhotoCacheBust(photoUrl, version) {
   return `${clean}?v=${encodeURIComponent(version)}`;
 }
 
+function uniqueImageCandidates(urls) {
+  const seen = new Set();
+  const result = [];
+  for (const raw of urls) {
+    const url = String(raw || '').trim();
+    if (!url) continue;
+    const key = stripPhotoUrlQuery(url);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(url);
+  }
+  return result;
+}
+
 function resolveFantasyHeroBackgroundCandidates(settings = {}) {
   const stored = stripPhotoUrlQuery(settings.fantasyHeroBackgroundUrl || '');
   if (stored) {
     const version = photoCacheVersion(settings.fantasyHeroBackgroundUpdatedAt) || Date.now();
-    return [withPhotoCacheBust(stored, version)];
+    return uniqueImageCandidates([
+      withPhotoCacheBust(stored, version),
+      ...FANTASY_DEFAULT_HERO_URLS,
+    ]);
   }
   return [...FANTASY_DEFAULT_HERO_URLS];
 }
@@ -42,7 +59,10 @@ function resolveFantasyHeaderLogoCandidates(settings = {}) {
   const stored = stripPhotoUrlQuery(settings.fantasyHeaderLogoUrl || '');
   if (stored) {
     const version = photoCacheVersion(settings.fantasyHeaderLogoUpdatedAt) || Date.now();
-    return [withPhotoCacheBust(stored, version)];
+    return uniqueImageCandidates([
+      withPhotoCacheBust(stored, version),
+      ...FANTASY_DEFAULT_LOGO_URLS,
+    ]);
   }
   return [...FANTASY_DEFAULT_LOGO_URLS];
 }
@@ -91,11 +111,11 @@ function applyImageFromCandidates(img, candidates, callbacks = {}) {
   return loadFirstAvailableImageUrl(candidates).then((url) => {
     if (url) {
       img.src = url;
-      if (Object.prototype.hasOwnProperty.call(img, 'hidden')) img.hidden = false;
+      img.removeAttribute('hidden');
       callbacks.onLoaded?.(url, img);
     } else {
       img.removeAttribute('src');
-      if (Object.prototype.hasOwnProperty.call(img, 'hidden')) img.hidden = true;
+      img.setAttribute('hidden', '');
       callbacks.onMissing?.(img);
     }
     return url;

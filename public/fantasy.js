@@ -90,17 +90,23 @@ function applyHeaderLogo(settings = {}) {
   const logo = document.getElementById('fantasyHeaderLogo');
   const fallback = document.getElementById('fantasyLogoFallback');
   const branding = getFantasyBrandingAssets();
-  if (!logo || !branding) return;
+  if (!logo) return;
+  if (!branding) {
+    console.warn('BP Fantasy: fantasy-branding-assets.js must load before fantasy.js');
+    if (fallback) fallback.hidden = false;
+    return;
+  }
 
   branding.applyImageFromCandidates(
     logo,
     branding.resolveFantasyHeaderLogoCandidates(settings),
     {
       onLoaded: () => {
-        if (fallback) fallback.hidden = true;
+        if (fallback) fallback.setAttribute('hidden', '');
       },
       onMissing: () => {
-        if (fallback) fallback.hidden = false;
+        console.warn('BP Fantasy: header logo not found after trying custom and default URLs.');
+        if (fallback) fallback.removeAttribute('hidden');
       },
     },
   );
