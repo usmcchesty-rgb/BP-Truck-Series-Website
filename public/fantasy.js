@@ -1,5 +1,6 @@
 // BP Fantasy — public marketing landing page (frontend only).
 // Gameplay (lineups, salaries, standings) will live on separate pages later.
+// Shared hero placement helpers (window.BPFantasyHeroPlacement) are safe on admin pages.
 
 /** Default asset paths — swap via admin settings when backend wiring is added. */
 const FANTASY_LANDING_ASSETS = {
@@ -42,58 +43,6 @@ function resolveFantasyHeaderLogoDisplayUrl(settings = {}) {
     ? photoCacheVersion(settings.fantasyHeaderLogoUpdatedAt) || Date.now()
     : null;
   return version ? withPhotoCacheBust(url, version) : url;
-}
-
-const DEMO_FEATURED_DRIVERS = [
-  { name: 'Mark Arthur', carNumber: '12', salary: 12500 },
-  { name: 'Cody Gibson', carNumber: '7', salary: 11200 },
-  { name: 'Mike Massengill', carNumber: '20', salary: 10800 },
-  { name: 'Dalton Kilroe', carNumber: '41', salary: 9400 },
-  { name: 'Larry Bell', carNumber: '43', salary: 8750 },
-  { name: 'Michael Boone', carNumber: '15', salary: 8200 },
-];
-
-const SCORING_CATEGORIES = [
-  { key: 'Finish Points', value: 'Points earned from where your driver finishes the race.' },
-  { key: 'Place Differential', value: 'Bonus or penalty based on positions gained or lost.' },
-  { key: 'Laps Completed', value: 'Credit for every lap your driver completes.' },
-  { key: 'Laps Led', value: 'Extra points for leading laps during the race.' },
-];
-
-function escapeHtml(text) {
-  return String(text ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-function formatSalary(value) {
-  return `$${Number(value).toLocaleString('en-US')}`;
-}
-
-function applyHeroImage(url) {
-  const img = document.getElementById('fantasyHeroImage');
-  if (!img || !url) return;
-  img.src = url;
-}
-
-function applyHeaderLogo(url) {
-  const logo = document.getElementById('fantasyHeaderLogo');
-  const fallback = document.getElementById('fantasyLogoFallback');
-  if (!logo || !url) return;
-
-  const probe = new Image();
-  probe.onload = () => {
-    logo.src = url;
-    logo.hidden = false;
-    if (fallback) fallback.hidden = true;
-  };
-  probe.onerror = () => {
-    logo.hidden = true;
-    if (fallback) fallback.hidden = false;
-  };
-  probe.src = url;
 }
 
 const FANTASY_LOGO_PLACEMENT_DEFAULTS = {
@@ -140,28 +89,90 @@ function applyHeroLogoPlacementToBanner(banner, settings = {}) {
   banner.style.setProperty('--fantasy-hero-logo-max-width', `${placement.maxWidthPx}px`);
 }
 
-function applyHeroLogoPlacement(settings = {}) {
-  applyHeroLogoPlacementToBanner(
-    document.querySelector('.fantasy-landing .fantasy-hero-banner'),
-    settings,
-  );
-}
-
 window.BPFantasyHeroPlacement = {
   resolve: resolveFantasyHeaderLogoPlacement,
   applyToBanner: applyHeroLogoPlacementToBanner,
   defaults: FANTASY_LOGO_PLACEMENT_DEFAULTS,
 };
 
+function isFantasyPublicLandingPage() {
+  return Boolean(
+    document.querySelector('main.fantasy-landing') &&
+    document.getElementById('fantasyHeroImage'),
+  );
+}
+
+function escapeHtml(text) {
+  return String(text ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function formatSalary(value) {
+  return `$${Number(value).toLocaleString('en-US')}`;
+}
+
+function applyHeroImage(url) {
+  const img = document.getElementById('fantasyHeroImage');
+  if (!img || !url) return;
+  img.src = url;
+}
+
+function applyHeaderLogo(url) {
+  const logo = document.getElementById('fantasyHeaderLogo');
+  const fallback = document.getElementById('fantasyLogoFallback');
+  if (!logo || !url) return;
+
+  const probe = new Image();
+  probe.onload = () => {
+    logo.src = url;
+    logo.hidden = false;
+    if (fallback) fallback.hidden = true;
+  };
+  probe.onerror = () => {
+    logo.hidden = true;
+    if (fallback) fallback.hidden = false;
+  };
+  probe.src = url;
+}
+
+function applyHeroLogoPlacement(settings = {}) {
+  applyHeroLogoPlacementToBanner(
+    document.querySelector('main.fantasy-landing .fantasy-hero-banner'),
+    settings,
+  );
+}
+
 function applyLandingAssets(settings = {}) {
+  if (!isFantasyPublicLandingPage()) return;
   applyHeroImage(resolveFantasyHeroBackgroundDisplayUrl(settings));
   applyHeaderLogo(resolveFantasyHeaderLogoDisplayUrl(settings));
   applyHeroLogoPlacement(settings);
 }
 
+const DEMO_FEATURED_DRIVERS = [
+  { name: 'Mark Arthur', carNumber: '12', salary: 12500 },
+  { name: 'Cody Gibson', carNumber: '7', salary: 11200 },
+  { name: 'Mike Massengill', carNumber: '20', salary: 10800 },
+  { name: 'Dalton Kilroe', carNumber: '41', salary: 9400 },
+  { name: 'Larry Bell', carNumber: '43', salary: 8750 },
+  { name: 'Michael Boone', carNumber: '15', salary: 8200 },
+];
+
+const SCORING_CATEGORIES = [
+  { key: 'Finish Points', value: 'Points earned from where your driver finishes the race.' },
+  { key: 'Place Differential', value: 'Bonus or penalty based on positions gained or lost.' },
+  { key: 'Laps Completed', value: 'Credit for every lap your driver completes.' },
+  { key: 'Laps Led', value: 'Extra points for leading laps during the race.' },
+];
+
 window.BPFantasyLanding = {
   init() {
-    const root = document.querySelector('.fantasy-landing');
+    if (!isFantasyPublicLandingPage()) return;
+
+    const root = document.querySelector('main.fantasy-landing');
     if (!root) return;
 
     this.renderFeaturedDrivers(root);
@@ -171,6 +182,8 @@ window.BPFantasyLanding = {
   },
 
   async loadPageSettings(root) {
+    if (!root || !isFantasyPublicLandingPage()) return;
+
     try {
       const res = await fetch('/api/settings');
       if (!res.ok) return;
@@ -188,7 +201,7 @@ window.BPFantasyLanding = {
   },
 
   renderFeaturedDrivers(root) {
-    const grid = root.querySelector('#featuredDriversGrid');
+    const grid = root?.querySelector('#featuredDriversGrid');
     if (!grid) return;
 
     grid.innerHTML = DEMO_FEATURED_DRIVERS.map((driver) => `
@@ -201,7 +214,7 @@ window.BPFantasyLanding = {
   },
 
   renderScoringPreview(root) {
-    const list = root.querySelector('#fantasyScoringList');
+    const list = root?.querySelector('#fantasyScoringList');
     if (!list) return;
 
     list.innerHTML = SCORING_CATEGORIES.map((item) => `
@@ -213,10 +226,22 @@ window.BPFantasyLanding = {
   },
 };
 
-window.addEventListener('DOMContentLoaded', () => {
+function initFantasyPublicLandingPage() {
+  if (!isFantasyPublicLandingPage()) return;
+
   try {
     window.BPFantasyLanding?.init?.();
-  } catch {
-    // no-op
+  } catch (err) {
+    console.warn('BP Fantasy landing init failed:', err);
   }
-});
+}
+
+function bootFantasyPublicLandingPage() {
+  initFantasyPublicLandingPage();
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', bootFantasyPublicLandingPage);
+} else {
+  bootFantasyPublicLandingPage();
+}
