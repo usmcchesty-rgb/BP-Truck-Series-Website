@@ -4,7 +4,6 @@
 /** Default asset paths — swap via admin settings when backend wiring is added. */
 const FANTASY_LANDING_ASSETS = {
   heroBackgroundUrl: '/assets/fantasy/hero-background.jpg',
-  headerLogoUrl: '/assets/fantasy/fantasy-logo.png',
 };
 
 function stripPhotoUrlQuery(photoUrl) {
@@ -35,15 +34,6 @@ function resolveFantasyHeroBackgroundDisplayUrl(settings = {}) {
   return version ? withPhotoCacheBust(url, version) : url;
 }
 
-function resolveFantasyHeaderLogoDisplayUrl(settings = {}) {
-  const stored = stripPhotoUrlQuery(settings.fantasyHeaderLogoUrl || '');
-  const url = stored || FANTASY_LANDING_ASSETS.headerLogoUrl;
-  const version = stored
-    ? photoCacheVersion(settings.fantasyHeaderLogoUpdatedAt) || Date.now()
-    : null;
-  return version ? withPhotoCacheBust(url, version) : url;
-}
-
 const DEMO_FEATURED_DRIVERS = [
   { name: 'Mark Arthur', carNumber: '12', salary: 12500 },
   { name: 'Cody Gibson', carNumber: '7', salary: 11200 },
@@ -60,15 +50,6 @@ const SCORING_CATEGORIES = [
   { key: 'Laps Led', value: 'Extra points for leading laps during the race.' },
 ];
 
-function resolveServerOpenTime(settings = {}) {
-  return String(settings.serverOpenTime ?? settings.raceStartTime ?? '').trim();
-}
-
-function resolveSeasonLabel(settings = {}) {
-  const season = String(settings.seasonName ?? '').trim();
-  return season ? `${season} Fantasy Challenge` : 'Season 11 Fantasy Challenge';
-}
-
 function escapeHtml(text) {
   return String(text ?? '')
     .replace(/&/g, '&amp;')
@@ -81,39 +62,14 @@ function formatSalary(value) {
   return `$${Number(value).toLocaleString('en-US')}`;
 }
 
-function applyHeroBackground(url) {
-  const bg = document.getElementById('fantasyHeroBg');
-  if (!bg || !url) return;
-
-  const img = new Image();
-  img.onload = () => {
-    bg.style.backgroundImage = `linear-gradient(120deg, rgba(0,0,0,.35) 0%, rgba(0,0,0,.15) 100%), url("${url}")`;
-    bg.classList.add('is-image-loaded');
-  };
-  img.src = url;
-}
-
-function applyHeaderLogo(url) {
-  const logo = document.getElementById('fantasyHeaderLogo');
-  const fallback = document.getElementById('fantasyLogoFallback');
-  if (!logo || !url) return;
-
-  const img = new Image();
-  img.onload = () => {
-    logo.src = url;
-    logo.hidden = false;
-    if (fallback) fallback.hidden = true;
-  };
-  img.onerror = () => {
-    logo.hidden = true;
-    if (fallback) fallback.hidden = false;
-  };
+function applyHeroImage(url) {
+  const img = document.getElementById('fantasyHeroImage');
+  if (!img || !url) return;
   img.src = url;
 }
 
 function applyLandingAssets(settings = {}) {
-  applyHeroBackground(resolveFantasyHeroBackgroundDisplayUrl(settings));
-  applyHeaderLogo(resolveFantasyHeaderLogoDisplayUrl(settings));
+  applyHeroImage(resolveFantasyHeroBackgroundDisplayUrl(settings));
 }
 
 window.BPFantasyLanding = {
@@ -134,17 +90,6 @@ window.BPFantasyLanding = {
 
       const settings = await res.json();
       applyLandingAssets(settings);
-
-      const seasonTitle = root.querySelector('#fantasySeasonTitle');
-      if (seasonTitle) {
-        seasonTitle.textContent = resolveSeasonLabel(settings);
-      }
-
-      const serverOpenDisplay = root.querySelector('#serverOpenTimeDisplay');
-      const serverOpenTime = resolveServerOpenTime(settings);
-      if (serverOpenDisplay && serverOpenTime) {
-        serverOpenDisplay.textContent = serverOpenTime;
-      }
 
       const navSeason = document.getElementById('seasonLabel');
       if (navSeason && settings.seasonName) {
