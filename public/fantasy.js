@@ -29,6 +29,10 @@ const FORM_LABELS = {
   down: 'Down',
 };
 
+function resolveServerOpenTime(settings = {}) {
+  return String(settings.serverOpenTime ?? settings.raceStartTime ?? '').trim();
+}
+
 function formatSalary(value) {
   return `$${Number(value).toLocaleString('en-US')}`;
 }
@@ -49,6 +53,25 @@ window.BPFantasyLanding = {
     this.renderFeaturedDrivers(root);
     this.renderStandingsPreview(root);
     this.renderScoringPreview(root);
+    this.loadServerOpenSettings(root);
+  },
+
+  async loadServerOpenSettings(root) {
+    const display = root.querySelector('#serverOpenTimeDisplay');
+    if (!display) return;
+
+    try {
+      const res = await fetch('/api/settings');
+      if (!res.ok) return;
+
+      const settings = await res.json();
+      const serverOpenTime = resolveServerOpenTime(settings);
+      if (serverOpenTime) {
+        display.textContent = serverOpenTime;
+      }
+    } catch {
+      // Demo page remains usable without settings.
+    }
   },
 
   renderFeaturedDrivers(root) {
