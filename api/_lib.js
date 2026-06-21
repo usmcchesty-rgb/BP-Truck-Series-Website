@@ -27,6 +27,9 @@ export const DEFAULTS = {
   fantasyHeroBackgroundUpdatedAt: null,
   fantasyHeaderLogoUrl: '',
   fantasyHeaderLogoUpdatedAt: null,
+  fantasyHeaderLogoTopPercent: 21,
+  fantasyHeaderLogoWidthVw: 32,
+  fantasyHeaderLogoMaxWidthPx: 560,
 };
 
 export function supabase() {

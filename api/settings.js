@@ -49,6 +49,18 @@ export default async function handler(req, res) {
     patch.fantasyHeaderLogoUrl = nextUrl;
     patch.fantasyHeaderLogoUpdatedAt = nextUrl ? new Date().toISOString() : null;
   }
+  if (body.fantasyHeaderLogoTopPercent !== undefined) {
+    const v = Number(body.fantasyHeaderLogoTopPercent);
+    patch.fantasyHeaderLogoTopPercent = Number.isFinite(v) ? Math.min(45, Math.max(8, v)) : DEFAULTS.fantasyHeaderLogoTopPercent;
+  }
+  if (body.fantasyHeaderLogoWidthVw !== undefined) {
+    const v = Number(body.fantasyHeaderLogoWidthVw);
+    patch.fantasyHeaderLogoWidthVw = Number.isFinite(v) ? Math.min(60, Math.max(15, v)) : DEFAULTS.fantasyHeaderLogoWidthVw;
+  }
+  if (body.fantasyHeaderLogoMaxWidthPx !== undefined) {
+    const v = Number(body.fantasyHeaderLogoMaxWidthPx);
+    patch.fantasyHeaderLogoMaxWidthPx = Number.isFinite(v) ? Math.min(900, Math.max(240, v)) : DEFAULTS.fantasyHeaderLogoMaxWidthPx;
+  }
   const { data, error } = await sb.from('site_settings').upsert(patch).select().single();
   if (error) return res.status(500).json({ error: error.message });
   res.status(200).json(data);

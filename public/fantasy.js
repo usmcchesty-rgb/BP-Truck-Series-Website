@@ -96,9 +96,55 @@ function applyHeaderLogo(url) {
   probe.src = url;
 }
 
+const FANTASY_LOGO_PLACEMENT_DEFAULTS = {
+  topPercent: 21,
+  widthVw: 32,
+  maxWidthPx: 560,
+};
+
+function clampFantasyLogoPlacement(value, min, max, fallback) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
+}
+
+function resolveFantasyHeaderLogoPlacement(settings = {}) {
+  return {
+    topPercent: clampFantasyLogoPlacement(
+      settings.fantasyHeaderLogoTopPercent,
+      8,
+      45,
+      FANTASY_LOGO_PLACEMENT_DEFAULTS.topPercent,
+    ),
+    widthVw: clampFantasyLogoPlacement(
+      settings.fantasyHeaderLogoWidthVw,
+      15,
+      60,
+      FANTASY_LOGO_PLACEMENT_DEFAULTS.widthVw,
+    ),
+    maxWidthPx: clampFantasyLogoPlacement(
+      settings.fantasyHeaderLogoMaxWidthPx,
+      240,
+      900,
+      FANTASY_LOGO_PLACEMENT_DEFAULTS.maxWidthPx,
+    ),
+  };
+}
+
+function applyHeroLogoPlacement(settings = {}) {
+  const banner = document.querySelector('.fantasy-hero-banner');
+  if (!banner) return;
+
+  const placement = resolveFantasyHeaderLogoPlacement(settings);
+  banner.style.setProperty('--fantasy-hero-logo-top', `${placement.topPercent}%`);
+  banner.style.setProperty('--fantasy-hero-logo-width', `${placement.widthVw}vw`);
+  banner.style.setProperty('--fantasy-hero-logo-max-width', `${placement.maxWidthPx}px`);
+}
+
 function applyLandingAssets(settings = {}) {
   applyHeroImage(resolveFantasyHeroBackgroundDisplayUrl(settings));
   applyHeaderLogo(resolveFantasyHeaderLogoDisplayUrl(settings));
+  applyHeroLogoPlacement(settings);
 }
 
 window.BPFantasyLanding = {

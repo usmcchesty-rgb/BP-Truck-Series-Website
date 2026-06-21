@@ -35,6 +35,9 @@ alter table site_settings add column if not exists "fantasyHeroBackgroundUrl" te
 alter table site_settings add column if not exists "fantasyHeroBackgroundUpdatedAt" timestamptz;
 alter table site_settings add column if not exists "fantasyHeaderLogoUrl" text;
 alter table site_settings add column if not exists "fantasyHeaderLogoUpdatedAt" timestamptz;
+alter table site_settings add column if not exists "fantasyHeaderLogoTopPercent" numeric;
+alter table site_settings add column if not exists "fantasyHeaderLogoWidthVw" numeric;
+alter table site_settings add column if not exists "fantasyHeaderLogoMaxWidthPx" numeric;
 
 insert into site_settings (id, "seriesName", "seasonName", "standingsUrl", "scheduleUrl", "playoffCut", "refreshSeconds")
 values (1, 'Blazing Pedals Truck Series', 'Season 11', 'https://www.simracerhub.com/scoring/season_standings.php?season_id=27987', 'https://www.simracerhub.com/scoring/season_schedule.php?season_id=27987', 16, 60)
