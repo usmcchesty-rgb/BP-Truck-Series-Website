@@ -669,6 +669,9 @@
         $('#adminView').hidden = false;
         if (window.AdminNav) AdminNav.setLoggedIn(true);
         loadFantasySettings();
+        requestAnimationFrame(() => {
+          requestAnimationFrame(refreshFantasyHeroCompositePreview);
+        });
       }
 
       function resolveServerOpenTime(settings = {}) {
@@ -798,6 +801,72 @@
         };
       }
 
+      let fantasyHeroPreviewLastPlacement = null;
+      const fantasyHeroPreviewReadyCallbacks = [];
+
+      function hasFantasyHeroPreviewDom() {
+        return Boolean(
+          $('#fantasyHeroPreviewViewport') &&
+          $('#fantasyHeroPreviewScaler') &&
+          $('#fantasyAdminHeroBanner') &&
+          $('#fantasyCompositeHeroImg'),
+        );
+      }
+
+      function flushFantasyHeroPreviewReadyCallbacks() {
+        if (!window.BPFantasyHeroPlacement?.applyToBanner) return;
+        const callbacks = fantasyHeroPreviewReadyCallbacks.splice(0);
+        for (const callback of callbacks) {
+          try {
+            callback(window.BPFantasyHeroPlacement);
+          } catch (err) {
+            console.warn('Fantasy Hero Preview update failed:', err);
+          }
+        }
+      }
+
+      function waitForFantasyHeroPlacement(callback) {
+        if (window.BPFantasyHeroPlacement?.applyToBanner) {
+          try {
+            callback(window.BPFantasyHeroPlacement);
+          } catch (err) {
+            console.warn('Fantasy Hero Preview update failed:', err);
+          }
+          return;
+        }
+
+        fantasyHeroPreviewReadyCallbacks.push(callback);
+        if (fantasyHeroPreviewReadyCallbacks.length > 1) return;
+
+        let attempts = 0;
+        const retry = () => {
+          if (window.BPFantasyHeroPlacement?.applyToBanner) {
+            flushFantasyHeroPreviewReadyCallbacks();
+            return;
+          }
+          attempts += 1;
+          if (attempts >= 60) {
+            console.warn('Fantasy Hero Preview: BPFantasyHeroPlacement not available.');
+            fantasyHeroPreviewReadyCallbacks.length = 0;
+            return;
+          }
+          setTimeout(retry, 50);
+        };
+        retry();
+      }
+
+      function onFantasyJsReady() {
+        flushFantasyHeroPreviewReadyCallbacks();
+        if ($('#adminView')?.hidden || !hasFantasyHeroPreviewDom()) return;
+        refreshFantasyHeroCompositePreview();
+      }
+
+      function refreshFantasyHeroCompositePreview() {
+        updateFantasyHeroCompositePreview(
+          fantasyHeroPreviewLastPlacement || resolveLogoPlacement(fantasyBrandingSettings),
+        );
+      }
+
       function updateFantasyHeroPreviewDebug(placement) {
         const list = $('#fantasyHeroPreviewDebugList');
         if (!list) return;
@@ -815,48 +884,82 @@
         `;
       }
 
+      let fantasyHeroPreviewScaleAttempts = 0;
+
       function syncFantasyHeroPreviewScale() {
         const viewport = $('#fantasyHeroPreviewViewport');
         const scaler = $('#fantasyHeroPreviewScaler');
         const banner = $('#fantasyAdminHeroBanner');
-        if (!viewport || !scaler || !banner) return;
+        const adminView = $('#adminView');
+        if (!viewport || !scaler || !banner || adminView?.hidden) {
+          fantasyHeroPreviewScaleAttempts = 0;
+          return;
+        }
 
         const containerWidth = viewport.clientWidth;
+        if (containerWidth <= 0) {
+          fantasyHeroPreviewScaleAttempts += 1;
+          if (fantasyHeroPreviewScaleAttempts <= 20) {
+            requestAnimationFrame(syncFantasyHeroPreviewScale);
+          }
+          return;
+        }
+
+        fantasyHeroPreviewScaleAttempts = 0;
         const viewportWidth = window.innerWidth || document.documentElement.clientWidth || containerWidth;
         const scale = containerWidth / viewportWidth;
         scaler.style.transform = `scale(${scale})`;
-        viewport.style.height = `${banner.offsetHeight * scale}px`;
+        const bannerHeight = banner.offsetHeight;
+        viewport.style.height = bannerHeight > 0 ? `${bannerHeight * scale}px` : '';
       }
 
       function updateFantasyHeroCompositePreview(placement = readLogoPlacementFromSliders()) {
-        const banner = $('#fantasyAdminHeroBanner');
-        const heroImg = $('#fantasyCompositeHeroImg');
-        const logoImg = $('#fantasyCompositeLogoImg');
-        const previewSettings = buildPreviewSettings(placement);
+        if (!hasFantasyHeroPreviewDom()) return;
 
-        window.BPFantasyHeroPlacement?.applyToBanner(banner, previewSettings);
+        fantasyHeroPreviewLastPlacement = placement;
         syncLogoPlacementSliderLabels(placement);
         updateFantasyHeroPreviewDebug(placement);
 
-        if (heroImg) {
-          heroImg.onload = () => syncFantasyHeroPreviewScale();
-          heroImg.src = resolveFantasyHeroBackgroundDisplayUrl(fantasyBrandingSettings);
-        }
+        waitForFantasyHeroPlacement((heroPlacement) => {
+          if (!hasFantasyHeroPreviewDom()) return;
 
-        if (logoImg) {
-          const logoUrl = resolveFantasyHeaderLogoDisplayUrl(fantasyBrandingSettings);
-          logoImg.onerror = () => {
-            logoImg.hidden = true;
-            syncFantasyHeroPreviewScale();
-          };
-          logoImg.onload = () => {
-            logoImg.hidden = false;
-            syncFantasyHeroPreviewScale();
-          };
-          logoImg.src = logoUrl;
-        }
+          const banner = $('#fantasyAdminHeroBanner');
+          const heroImg = $('#fantasyCompositeHeroImg');
+          const logoImg = $('#fantasyCompositeLogoImg');
+          const previewSettings = buildPreviewSettings(placement);
 
-        requestAnimationFrame(syncFantasyHeroPreviewScale);
+          heroPlacement.applyToBanner(banner, previewSettings);
+
+          if (heroImg) {
+            const heroUrl = resolveFantasyHeroBackgroundDisplayUrl(fantasyBrandingSettings);
+            const onHeroReady = () => syncFantasyHeroPreviewScale();
+            heroImg.onload = onHeroReady;
+            if (heroImg.src !== heroUrl) {
+              heroImg.src = heroUrl;
+            } else if (heroImg.complete) {
+              onHeroReady();
+            }
+          }
+
+          if (logoImg) {
+            const logoUrl = resolveFantasyHeaderLogoDisplayUrl(fantasyBrandingSettings);
+            logoImg.onerror = () => {
+              logoImg.hidden = true;
+              syncFantasyHeroPreviewScale();
+            };
+            logoImg.onload = () => {
+              logoImg.hidden = false;
+              syncFantasyHeroPreviewScale();
+            };
+            if (logoImg.src !== logoUrl) {
+              logoImg.src = logoUrl;
+            } else if (logoImg.complete && !logoImg.hidden) {
+              syncFantasyHeroPreviewScale();
+            }
+          }
+
+          requestAnimationFrame(() => requestAnimationFrame(syncFantasyHeroPreviewScale));
+        });
       }
 
       function setBrandingMsg(text, isError = false) {
@@ -1278,9 +1381,13 @@
       $('#fantasyLogoMaxWidthPx')?.addEventListener('input', () => updateFantasyHeroCompositePreview());
       window.addEventListener('resize', syncFantasyHeroPreviewScale);
 
+      window.__onFantasyJsReady = onFantasyJsReady;
       initSession();
+      if (window.BPFantasyHeroPlacement?.applyToBanner) {
+        onFantasyJsReady();
+      }
     </script>
-    <script src="/fantasy.js"></script>
+    <script src="/fantasy.js" onload="window.__onFantasyJsReady?.()"></script>
   </body>
 </html>
 
