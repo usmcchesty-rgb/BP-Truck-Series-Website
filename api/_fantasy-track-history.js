@@ -914,37 +914,41 @@ export function buildCareerTrackHistoryForDriver(driverRaceRows, upcomingTrack, 
   };
 }
 
+const TRACK_HISTORY_HYBRID_BONUS_SCORE_MIN = 55;
+const TRACK_HISTORY_HYBRID_PENALTY_SCORE_MAX = 40;
+const TRACK_HISTORY_HYBRID_EXACT_STARTS_BONUS_MIN = 4;
+const TRACK_HISTORY_HYBRID_BONUS_AMOUNT = 750;
+const TRACK_HISTORY_HYBRID_PENALTY_AMOUNT = -750;
+
 export function computeTrackDollarAdjustment(trackHistory) {
   const stats = trackHistory?.summary || {};
-  const score = Number(trackHistory?.score);
-  const dnfRate = Number(stats.dnfRate) || 0;
+  const score = Number(
+    trackHistory?.careerTrackHistoryNormalized ?? trackHistory?.score
+  );
+  const historyScope = trackHistory?.historyScope ?? trackHistory?.scope ?? null;
+  const exactStarts =
+    trackHistory?.careerExactTrackStarts ??
+    trackHistory?.exactTrackStarts ??
+    trackHistory?.exactStarts ??
+    0;
 
   let tier = 'neutral';
   let amount = 0;
   let reason = 'Neutral career track history adjustment.';
 
-  if (stats.starts >= 2 && score >= 88) {
-    tier = 'track_ace';
-    amount = 1500 + Math.round((score - 88) * 25);
-    amount = Math.min(2000, Math.max(1000, amount));
-    reason = `Career track ace profile (${stats.starts} starts, score ${score}).`;
-  } else if (score >= 72) {
-    tier = 'good_track_history';
-    amount = 500 + Math.round((score - 72) * 35);
-    amount = Math.min(1000, Math.max(500, amount));
-    reason = `Good career history at this track profile (${stats.starts} relevant starts).`;
-  } else if (score < 52) {
+  if (Number.isFinite(score) && score < TRACK_HISTORY_HYBRID_PENALTY_SCORE_MAX) {
     tier = 'poor_history';
-    amount = -500 - Math.round((52 - score) * 20);
-    amount = Math.max(-1500, Math.min(-500, amount));
-    reason = `Weak career history at this track profile (${stats.starts} relevant starts).`;
-  }
-
-  if (dnfRate >= 0.35 && stats.starts >= 2) {
-    const dnfPenalty = -Math.round(Math.min(500, dnfRate * 800));
-    amount += dnfPenalty;
-    reason += ` DNF-prone (${Math.round(dnfRate * 100)}% DNF rate, ${dnfPenalty}).`;
-    tier = `${tier}_dnf_prone`;
+    amount = TRACK_HISTORY_HYBRID_PENALTY_AMOUNT;
+    reason = `Weak career history at this track profile (${stats.starts ?? 0} relevant starts, score ${score}).`;
+  } else if (
+    historyScope === 'career_track' &&
+    exactStarts >= TRACK_HISTORY_HYBRID_EXACT_STARTS_BONUS_MIN &&
+    Number.isFinite(score) &&
+    score >= TRACK_HISTORY_HYBRID_BONUS_SCORE_MIN
+  ) {
+    tier = 'good_track_history';
+    amount = TRACK_HISTORY_HYBRID_BONUS_AMOUNT;
+    reason = `Strong proven exact-track history (${exactStarts} exact starts, score ${score}).`;
   }
 
   return {
