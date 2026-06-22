@@ -29,9 +29,10 @@ body.fantasy-page .topbar{
 /* ── Hero banner (image + logo overlay) ── */
 .fantasy-hero-banner{
   --fantasy-hero-logo-top: 21%;
-  --fantasy-hero-logo-width: 32vw;
-  --fantasy-hero-logo-max-width: 560px;
-  --fantasy-hero-logo-min-width: 200px;
+  /* % of banner width (full-bleed ≈ viewport at 100% zoom; scales with browser zoom unlike vw) */
+  --fantasy-hero-logo-width: 32%;
+  --fantasy-hero-logo-max-width: 35rem;
+  --fantasy-hero-logo-min-width: 12.5rem;
   position:relative;
   width:100%;
   margin:0;
@@ -52,8 +53,8 @@ body.fantasy-page .topbar{
   left:50%;
   transform:translateX(-50%);
   width:var(--fantasy-hero-logo-width);
-  max-width:var(--fantasy-hero-logo-max-width);
-  min-width:min(var(--fantasy-hero-logo-min-width), 72vw);
+  max-width:min(var(--fantasy-hero-logo-max-width), 100%);
+  min-width:min(var(--fantasy-hero-logo-min-width), 72%);
   height:auto;
   object-fit:contain;
   pointer-events:none;
@@ -71,12 +72,15 @@ body.fantasy-page .topbar{
   left:50%;
   transform:translateX(-50%);
   margin:0;
+  width:var(--fantasy-hero-logo-width);
+  max-width:min(var(--fantasy-hero-logo-max-width), 100%);
   color:#fff;
-  font-size:clamp(28px, 5vw, 42px);
+  font-size:clamp(1.75rem, 2.5rem, 2.625rem);
   font-style:italic;
   font-weight:900;
   letter-spacing:.08em;
   text-transform:uppercase;
+  text-align:center;
   text-shadow:0 4px 18px rgba(0,0,0,.65);
   pointer-events:none;
   z-index:2;
@@ -436,8 +440,8 @@ body.fantasy-page .topbar{
 @media (max-width: 640px){
   .fantasy-hero-banner{
     --fantasy-hero-logo-top: 18%;
-    --fantasy-hero-logo-width: 48vw;
-    --fantasy-hero-logo-max-width: 420px;
+    --fantasy-hero-logo-width: 48%;
+    --fantasy-hero-logo-max-width: 26.25rem;
   }
 
   .fantasy-overview-grid{

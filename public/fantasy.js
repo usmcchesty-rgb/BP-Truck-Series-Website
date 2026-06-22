@@ -8,14 +8,20 @@ function getFantasyBrandingAssets() {
 
 const FANTASY_LOGO_PLACEMENT_DEFAULTS = {
   topPercent: 21,
-  widthVw: 32,
-  maxWidthPx: 560,
+  widthPercent: 32,
+  maxWidthRem: 35,
 };
 
 function clampFantasyLogoPlacement(value, min, max, fallback) {
   const n = Number(value);
   if (!Number.isFinite(n)) return fallback;
   return Math.min(max, Math.max(min, n));
+}
+
+function pxToRem(px, fallbackRem) {
+  const n = Number(px);
+  if (!Number.isFinite(n) || n <= 0) return fallbackRem;
+  return n / 16;
 }
 
 function resolveFantasyHeaderLogoPlacement(settings = {}) {
@@ -26,17 +32,15 @@ function resolveFantasyHeaderLogoPlacement(settings = {}) {
       45,
       FANTASY_LOGO_PLACEMENT_DEFAULTS.topPercent,
     ),
-    widthVw: clampFantasyLogoPlacement(
+    widthPercent: clampFantasyLogoPlacement(
       settings.fantasyHeaderLogoWidthVw,
       15,
       60,
-      FANTASY_LOGO_PLACEMENT_DEFAULTS.widthVw,
+      FANTASY_LOGO_PLACEMENT_DEFAULTS.widthPercent,
     ),
-    maxWidthPx: clampFantasyLogoPlacement(
+    maxWidthRem: pxToRem(
       settings.fantasyHeaderLogoMaxWidthPx,
-      240,
-      900,
-      FANTASY_LOGO_PLACEMENT_DEFAULTS.maxWidthPx,
+      FANTASY_LOGO_PLACEMENT_DEFAULTS.maxWidthRem,
     ),
   };
 }
@@ -46,8 +50,8 @@ function applyHeroLogoPlacementToBanner(banner, settings = {}) {
 
   const placement = resolveFantasyHeaderLogoPlacement(settings);
   banner.style.setProperty('--fantasy-hero-logo-top', `${placement.topPercent}%`);
-  banner.style.setProperty('--fantasy-hero-logo-width', `${placement.widthVw}vw`);
-  banner.style.setProperty('--fantasy-hero-logo-max-width', `${placement.maxWidthPx}px`);
+  banner.style.setProperty('--fantasy-hero-logo-width', `${placement.widthPercent}%`);
+  banner.style.setProperty('--fantasy-hero-logo-max-width', `${placement.maxWidthRem}rem`);
 }
 
 window.BPFantasyHeroPlacement = {

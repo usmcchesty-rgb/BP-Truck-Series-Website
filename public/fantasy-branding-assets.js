@@ -106,12 +106,12 @@ function loadFirstAvailableImageUrl(urls) {
 }
 
 function computePublicLogoWidthPx(placement = {}, viewportWidth) {
-  const widthVw = Number(placement.fantasyHeaderLogoWidthVw);
+  const widthPercent = Number(placement.fantasyHeaderLogoWidthVw);
   const maxWidthPx = Number(placement.fantasyHeaderLogoMaxWidthPx);
-  const vw = Number.isFinite(widthVw) ? widthVw : 32;
+  const pct = Number.isFinite(widthPercent) ? widthPercent : 32;
   const maxPx = Number.isFinite(maxWidthPx) ? maxWidthPx : 560;
   const viewport = viewportWidth > 0 ? viewportWidth : 1200;
-  return Math.min((vw / 100) * viewport, maxPx);
+  return Math.min((pct / 100) * viewport, maxPx);
 }
 
 function computePreviewLogoWidthPx(placement = {}, previewWidth, viewportWidth) {

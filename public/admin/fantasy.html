@@ -563,7 +563,7 @@
               <div class="slider-row">
                 <label for="fantasyLogoWidthVw">
                   Logo Width
-                  <span class="slider-value" id="fantasyLogoWidthVwValue">32vw</span>
+                  <span class="slider-value" id="fantasyLogoWidthVwValue">32%</span>
                 </label>
                 <span class="field-help">Controls responsive logo width.</span>
                 <input id="fantasyLogoWidthVw" type="range" min="15" max="60" step="1" value="32" />
@@ -1387,7 +1387,7 @@
           $('#fantasyLogoTopPercentValue').textContent = `${placement.fantasyHeaderLogoTopPercent}%`;
         }
         if ($('#fantasyLogoWidthVwValue')) {
-          $('#fantasyLogoWidthVwValue').textContent = `${placement.fantasyHeaderLogoWidthVw}vw`;
+          $('#fantasyLogoWidthVwValue').textContent = `${placement.fantasyHeaderLogoWidthVw}%`;
         }
         if ($('#fantasyLogoMaxWidthPxValue')) {
           $('#fantasyLogoMaxWidthPxValue').textContent = `${placement.fantasyHeaderLogoMaxWidthPx}px`;
@@ -1422,16 +1422,9 @@
         if (!previewBox || !logo || logo.hidden) return;
 
         const resolved = resolveLogoPlacement(buildPreviewSettings(placement));
-        const previewWidth = previewBox.clientWidth || previewBox.offsetWidth || 720;
-        const viewportWidth = window.innerWidth || document.documentElement.clientWidth || previewWidth;
-        const brandingAssets = window.BPFantasyBrandingAssets;
-        const logoWidthPx = brandingAssets?.computePreviewLogoWidthPx
-          ? brandingAssets.computePreviewLogoWidthPx(resolved, previewWidth, viewportWidth)
-          : Math.min((resolved.fantasyHeaderLogoWidthVw / 100) * previewWidth, resolved.fantasyHeaderLogoMaxWidthPx);
-
         logo.style.top = `${resolved.fantasyHeaderLogoTopPercent}%`;
-        logo.style.width = `${logoWidthPx}px`;
-        logo.style.maxWidth = '100%';
+        logo.style.width = `${resolved.fantasyHeaderLogoWidthVw}%`;
+        logo.style.maxWidth = `${resolved.fantasyHeaderLogoMaxWidthPx / 16}rem`;
       }
 
       function setFantasyHeroOnlyPreviewMessage(text) {
@@ -1496,7 +1489,7 @@
 
         list.innerHTML = `
           <li>Top: ${resolved.fantasyHeaderLogoTopPercent}%</li>
-          <li>Width: ${resolved.fantasyHeaderLogoWidthVw}vw</li>
+          <li>Width: ${resolved.fantasyHeaderLogoWidthVw}%</li>
           <li>Max Width: ${resolved.fantasyHeaderLogoMaxWidthPx}px</li>
         `;
       }
