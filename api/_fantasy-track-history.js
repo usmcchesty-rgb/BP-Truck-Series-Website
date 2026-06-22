@@ -425,7 +425,34 @@ function invertFinishScore(finish, fieldSize = 30) {
   return Math.min(100, Math.max(0, ((size - f + 1) / size) * 100));
 }
 
-export function scoreTrackHistoryStats(stats) {
+const EXPERIENCE_START_ANCHORS = [
+  [0, 0],
+  [1, 20],
+  [2, 40],
+  [3, 60],
+  [5, 75],
+  [8, 90],
+  [10, 100],
+];
+
+export function scoreTrackHistoryExperience(starts) {
+  const n = Math.max(0, Number(starts) || 0);
+  if (n >= 10) return 100;
+
+  for (let i = 0; i < EXPERIENCE_START_ANCHORS.length - 1; i += 1) {
+    const [x0, y0] = EXPERIENCE_START_ANCHORS[i];
+    const [x1, y1] = EXPERIENCE_START_ANCHORS[i + 1];
+    if (n >= x0 && n <= x1) {
+      if (x1 === x0) return y1;
+      return Number((y0 + ((n - x0) / (x1 - x0)) * (y1 - y0)).toFixed(2));
+    }
+  }
+
+  return 100;
+}
+
+/** Pre-v2.5 career/current-season formula (audit comparison only). */
+export function scoreTrackHistoryStatsLegacy(stats) {
   if (!stats?.starts) {
     return {
       score: 50,
@@ -444,7 +471,7 @@ export function scoreTrackHistoryStats(stats) {
   const bestFinishScore = stats.bestFinish != null
     ? invertFinishScore(stats.bestFinish) * 0.15
     : 0;
-  const lapsLedScore = Math.min(stats.lapsLed, 80) / 80 * 100 * 0.1;
+  const lapsLedScore = (Math.min(stats.lapsLed, 80) / 80) * 100 * 0.1;
   const dnfPenalty = (stats.dnfRate ?? 0) * 100 * 0.15;
 
   const raw = avgFinishScore + rateScore + bestFinishScore + lapsLedScore - dnfPenalty;
@@ -457,6 +484,64 @@ export function scoreTrackHistoryStats(stats) {
       rateScore: Number(rateScore.toFixed(2)),
       bestFinishScore: Number(bestFinishScore.toFixed(2)),
       lapsLedScore: Number(lapsLedScore.toFixed(2)),
+      dnfPenalty: Number(dnfPenalty.toFixed(2)),
+    },
+  };
+}
+
+export function scoreTrackHistoryStats(stats, options = {}) {
+  if (!stats?.starts) {
+    return {
+      score: 50,
+      details: {
+        reason: 'No career track history available; neutral score applied.',
+      },
+    };
+  }
+
+  const { experienceStarts } = options;
+  const useCareerFormula = experienceStarts !== undefined && experienceStarts !== null;
+
+  const avgFinishWeight = useCareerFormula ? 0.4 : 0.35;
+  const bestFinishWeight = useCareerFormula ? 0.1 : 0.15;
+  const lapsLedWeight = useCareerFormula ? 0.15 : 0.1;
+
+  const avgFinishScore = stats.averageFinish != null
+    ? invertFinishScore(stats.averageFinish) * avgFinishWeight
+    : 0;
+  const winRate = stats.wins / stats.starts;
+  const top5Rate = stats.top5s / stats.starts;
+  const rateScore = (winRate * 60 + top5Rate * 40) * 0.25;
+  const bestFinishScore = stats.bestFinish != null
+    ? invertFinishScore(stats.bestFinish) * bestFinishWeight
+    : 0;
+  const lapsLedScore = (Math.min(stats.lapsLed, 80) / 80) * 100 * lapsLedWeight;
+  const experienceScore = useCareerFormula ? scoreTrackHistoryExperience(experienceStarts) : null;
+  const experienceContribution = useCareerFormula ? experienceScore * 0.1 : 0;
+  const dnfPenalty = (stats.dnfRate ?? 0) * 100 * 0.15;
+
+  const raw =
+    avgFinishScore +
+    rateScore +
+    bestFinishScore +
+    lapsLedScore +
+    experienceContribution -
+    dnfPenalty;
+  const score = Math.min(100, Math.max(0, Number(raw.toFixed(2))));
+
+  return {
+    score,
+    details: {
+      formula: useCareerFormula ? 'career_v2.5' : 'legacy',
+      avgFinishScore: Number(avgFinishScore.toFixed(2)),
+      rateScore: Number(rateScore.toFixed(2)),
+      bestFinishScore: Number(bestFinishScore.toFixed(2)),
+      lapsLedScore: Number(lapsLedScore.toFixed(2)),
+      experienceScore: useCareerFormula ? experienceScore : null,
+      experienceStarts: useCareerFormula ? Math.max(0, Number(experienceStarts) || 0) : null,
+      experienceContribution: useCareerFormula
+        ? Number(experienceContribution.toFixed(2))
+        : null,
       dnfPenalty: Number(dnfPenalty.toFixed(2)),
     },
   };
@@ -732,7 +817,9 @@ export function buildCareerTrackHistoryForDriver(driverRaceRows, upcomingTrack, 
     }
   }
 
-  const scored = scoreTrackHistoryStats(stats);
+  const experienceStarts =
+    historyScope === 'career_track' ? exactStats.starts : trackTypeStats.starts;
+  const scored = scoreTrackHistoryStats(stats, { experienceStarts });
   const careerTrackHistoryRaw = scored.score;
   let careerTrackHistoryNormalized = careerTrackHistoryRaw;
   let regression = null;

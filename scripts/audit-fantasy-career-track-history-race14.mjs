@@ -16,6 +16,8 @@ import {
   buildCareerTrackHistoryForDriver,
   buildDriverCareerRaceResultsByDriver,
   buildDriverRaceResultsByDriver,
+  scoreTrackHistoryStatsLegacy,
+  regressTrackHistoryScoreForSampleSize,
 } from '../api/_fantasy-track-history.js';
 import {
   buildFantasyDriverSalaries,
@@ -114,6 +116,34 @@ const careerRowsByDriver = await buildDriverCareerRaceResultsByDriver(driverIds,
     now,
   }).sort((a, b) => b.fantasyTierScore - a.fantasyTierScore);
 
+const TRACK_TYPE_CAREER_MIN = 5;
+const TRACK_HISTORY_NEUTRAL_SCORE = 50;
+
+function legacyCareerTrackNormalized(th) {
+  const legacyScored = scoreTrackHistoryStatsLegacy(th.summary);
+  const raw = legacyScored.score;
+
+  if (th.historyScope === 'blended_neutral') {
+    const size = th.careerTrackTypeStarts ?? th.similarStarts ?? 0;
+    if (size >= TRACK_TYPE_CAREER_MIN) return raw;
+    const neutralWeight = (TRACK_TYPE_CAREER_MIN - size) / TRACK_TYPE_CAREER_MIN;
+    return Number(
+      (TRACK_HISTORY_NEUTRAL_SCORE * neutralWeight + raw * (1 - neutralWeight)).toFixed(2)
+    );
+  }
+
+  return regressTrackHistoryScoreForSampleSize(raw, th.summary?.starts ?? 0).regressedScore;
+}
+
+function summarizeExperience(driver) {
+  const details = driver?.scoreBreakdown?.careerTrackHistory?.details?.scoreDetails || {};
+  return {
+    experienceScore: details.experienceScore ?? null,
+    experienceStarts: details.experienceStarts ?? null,
+    experienceContribution: details.experienceContribution ?? null,
+  };
+}
+
 function summarizeTrackHistory(driver, phase) {
   const th =
     phase === 'phase1'
@@ -141,9 +171,61 @@ function summarizeTrackHistory(driver, phase) {
       th?.careerTrackHistoryRaw ?? th?.actualTrackScore ?? breakdown?.rawScore ?? null,
     careerTrackHistoryNormalized:
       th?.careerTrackHistoryNormalized ?? th?.score ?? breakdown?.normalizedScore ?? null,
+    experience: summarizeExperience(driver),
     dataSource: th?.dataSource ?? (phase === 'phase1' ? 'current season' : 'career history'),
   };
 }
+
+function summarizeBeforeAfter(name) {
+  const driver = phase2Drivers.find((row) => row.driverName === name);
+  if (!driver) return { name, found: false };
+
+  const careerRows = careerRowsByDriver.get(String(driver.driverId)) || [];
+  const th = buildCareerTrackHistoryForDriver(careerRows, upcomingTrack);
+  const beforeNormalized = legacyCareerTrackNormalized(th);
+  const afterNormalized =
+    driver.scoreBreakdown?.careerTrackHistory?.details?.careerTrackHistoryNormalized ??
+    driver.scoreBreakdown?.careerTrackHistory?.normalizedScore ??
+    th.careerTrackHistoryNormalized;
+
+  return {
+    name,
+    tier: driver.computedTier,
+    fantasyScore: driver.fantasyTierScore,
+    historyScope: th.historyScope,
+    exactStarts: th.careerExactTrackStarts ?? th.exactStarts ?? 0,
+    trackTypeStarts: th.careerTrackTypeStarts ?? th.similarStarts ?? 0,
+    beforeTrackScoreRaw: scoreTrackHistoryStatsLegacy(th.summary).score,
+    beforeTrackScoreNormalized: beforeNormalized,
+    afterTrackScoreRaw:
+      driver.scoreBreakdown?.careerTrackHistory?.details?.careerTrackHistoryRaw ??
+      th.careerTrackHistoryRaw,
+    afterTrackScoreNormalized: afterNormalized,
+    trackScoreDelta: Number((afterNormalized - beforeNormalized).toFixed(2)),
+    experience: summarizeExperience(driver),
+    provenTrackHistoryRank:
+      driver.scoreBreakdown?.careerTrackHistory?.details?.provenTrackHistoryRank ??
+      driver.trackHistorySummary?.provenTrackHistoryRank ??
+      null,
+  };
+}
+
+function tierCounts(drivers) {
+  return drivers.reduce((acc, driver) => {
+    const tier = driver.computedTier || 'Unknown';
+    acc[tier] = (acc[tier] || 0) + 1;
+    return acc;
+  }, {});
+}
+
+const experienceBeforeAfter = [
+  'Dalton Kilroe',
+  'Chris Carroll3',
+  'Taylor Butcher-Benjamin',
+  'Ty Marasco',
+].map(summarizeBeforeAfter);
+
+const top10ProvenTrackHistory = buildProvenTrackHistoryRankingAuditRows(phase2Drivers).slice(0, 10);
 
 const top15Phase2 = phase2Drivers.slice(0, 15).map((driver) => {
   const phase2 = summarizeTrackHistory(driver, 'phase2');
@@ -209,6 +291,15 @@ console.log(
       provenTrackHistoryRanking: buildProvenTrackHistoryRankingAuditRows(phase2Drivers),
       topProvenTrackHistoryDrivers: summarizeFantasySlateMeta(phase2Drivers).topProvenTrackHistoryDrivers,
       topTrackHistoryDrivers: summarizeFantasySlateMeta(phase2Drivers).topTrackHistoryDrivers,
+      top10ProvenTrackHistory,
+      experienceBeforeAfter,
+      tierDistribution: tierCounts(phase2Drivers),
+      topTierDrivers: phase2Drivers
+        .filter((driver) => driver.computedTier === 'Top Tier')
+        .map((driver) => ({ name: driver.driverName, fantasyScore: driver.fantasyTierScore })),
+      eliteDrivers: phase2Drivers
+        .filter((driver) => driver.computedTier === 'Elite')
+        .map((driver) => ({ name: driver.driverName, fantasyScore: driver.fantasyTierScore })),
       top15Phase2,
       biggestTrackHistoryMovers,
       watched,

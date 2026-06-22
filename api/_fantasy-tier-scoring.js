@@ -7,7 +7,7 @@ import {
 } from './_power-rankings-scoring.js';
 import { getCompletedPointsRaces } from './_schedule-points-races.js';
 
-export const FANTASY_MODEL_VERSION = 'fantasy-salary-v2.4.0';
+export const FANTASY_MODEL_VERSION = 'fantasy-salary-v2.5.0';
 
 export const FANTASY_TIER_WEIGHTS = {
   seasonPerformance: 0.35,

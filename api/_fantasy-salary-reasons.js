@@ -76,12 +76,16 @@ export function buildFantasySalaryReasons(scored = {}) {
     const regression = th.regressionApplied
       ? `; sample ${th.sampleSize ?? summary?.starts ?? 0}, actual ${Math.round(th.actualTrackScore ?? th.careerTrackHistoryRaw ?? 0)} → regressed ${Math.round(th.regressedScore ?? th.careerTrackHistoryNormalized ?? 0)}`
       : '';
+    const experienceNote =
+      th.scoreDetails?.experienceContribution != null
+        ? `; experience ${Math.round(th.scoreDetails.experienceScore ?? 0)} from ${th.scoreDetails.experienceStarts ?? 0} starts (+${Number(th.scoreDetails.experienceContribution).toFixed(1)})`
+        : '';
     const trackMatch = th.upcomingTrackMatch;
     const matchNote = trackMatch?.matchMethod
       ? `; upcoming match ${trackMatch.matchedTrackName} (${trackMatch.matchedTrackType}, ${trackMatch.matchMethod})`
       : '';
     reasons.push(
-      `Career Track History ${formatComponentPair(breakdown.careerTrackHistory)} (${scopeLabel}${summary?.starts != null ? `, ${summary.starts} starts` : ''}; exact ${th.careerExactTrackStarts ?? th.exactStarts ?? 0}, track type ${th.careerTrackTypeStarts ?? th.similarStarts ?? 0}${matchNote}${regression})`
+      `Career Track History ${formatComponentPair(breakdown.careerTrackHistory)} (${scopeLabel}${summary?.starts != null ? `, ${summary.starts} starts` : ''}; exact ${th.careerExactTrackStarts ?? th.exactStarts ?? 0}, track type ${th.careerTrackTypeStarts ?? th.similarStarts ?? 0}${experienceNote}${matchNote}${regression})`
     );
   }
 

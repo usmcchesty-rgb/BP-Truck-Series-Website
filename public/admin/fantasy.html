@@ -975,6 +975,17 @@
         if (thSummary.top10s != null) {
           trackHistoryLines.push(`Top 10: ${thSummary.top10s}`);
         }
+        const thScoreDetails = thDetails.scoreDetails || {};
+        if (thScoreDetails.experienceScore != null) {
+          trackHistoryLines.push(
+            `Experience score: ${Number(thScoreDetails.experienceScore).toFixed(1)} (${thScoreDetails.experienceStarts ?? 0} starts)`
+          );
+        }
+        if (thScoreDetails.experienceContribution != null) {
+          trackHistoryLines.push(
+            `Experience contribution: +${Number(thScoreDetails.experienceContribution).toFixed(2)}`
+          );
+        }
         if (thDetails.upcomingTrackMatch) {
           const m = thDetails.upcomingTrackMatch;
           trackHistoryLines.push(
