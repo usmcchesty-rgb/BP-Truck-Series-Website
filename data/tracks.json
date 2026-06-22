@@ -2,8 +2,23 @@
   "tracks": [
     {
       "trackName": "Daytona International Speedway Oval Night",
-      "aliases": ["Daytona", "Daytona International Speedway"],
+      "aliases": [
+        "Daytona International Speedway Oval Night",
+        "Daytona International Speedway Oval",
+        "Daytona Oval",
+        "Daytona International Speedway"
+      ],
       "trackType": "superspeedway"
+    },
+    {
+      "trackName": "Daytona Road Course",
+      "aliases": [
+        "Daytona International Speedway Road Course",
+        "Daytona Road",
+        "Daytona NASCAR Road",
+        "Daytona International Speedway NASCAR Road"
+      ],
+      "trackType": "road_course"
     },
     {
       "trackName": "Kentucky Speedway Oval",
@@ -57,8 +72,23 @@
     },
     {
       "trackName": "Charlotte Motor Speedway Oval Night",
-      "aliases": ["Charlotte Motor Speedway", "Charlotte"],
+      "aliases": [
+        "Charlotte Motor Speedway Oval Night",
+        "Charlotte Motor Speedway Oval",
+        "Charlotte Motor Speedway",
+        "[Retired] Charlotte Motor Speedway"
+      ],
       "trackType": "intermediate"
+    },
+    {
+      "trackName": "Charlotte Roval",
+      "aliases": [
+        "Charlotte Motor Speedway Road Course",
+        "Charlotte Motor Speedway Roval",
+        "Charlotte Roval",
+        "[Retired] Charlotte Roval"
+      ],
+      "trackType": "road_course"
     },
     {
       "trackName": "Iowa Speedway Oval Night",
@@ -67,8 +97,22 @@
     },
     {
       "trackName": "Indianapolis Motor Speedway NASCAR Oval",
-      "aliases": ["Indianapolis Motor Speedway", "Indianapolis", "IMS"],
+      "aliases": [
+        "Indianapolis Motor Speedway NASCAR Oval",
+        "Indianapolis Motor Speedway Oval",
+        "Indianapolis Motor Speedway"
+      ],
       "trackType": "intermediate"
+    },
+    {
+      "trackName": "Indianapolis Road Course",
+      "aliases": [
+        "Indianapolis Motor Speedway Road Course",
+        "Indianapolis GP",
+        "Indianapolis Grand Prix",
+        "Indianapolis Motor Speedway GP"
+      ],
+      "trackType": "road_course"
     },
     {
       "trackName": "Talladega Superspeedway",
@@ -132,7 +176,12 @@
     },
     {
       "trackName": "Lucas Oil Indianapolis Raceway Park Oval Night",
-      "aliases": ["Indianapolis Raceway Park", "IRP", "Lucas Oil IRP"],
+      "aliases": [
+        "Lucas Oil Indianapolis Raceway Park",
+        "Indianapolis Raceway Park",
+        "IRP",
+        "Lucas Oil IRP"
+      ],
       "trackType": "short_track"
     },
     {

@@ -84,20 +84,55 @@ function buildUnmatchedMatch(trackName) {
   };
 }
 
-/**
- * Match a schedule/API track label to tracks.json.
- * Priority: exact name → exact alias → normalized contains → distinctive tokens only.
- * Generic tokens (speedway, international, motor, raceway, park, …) never drive a match alone.
- */
-export function matchTrackToCatalog(trackName) {
-  const catalog = loadTracksCatalog()?.tracks || [];
-  const input = String(trackName || '').trim();
-  const normalizedInput = normalizeTrackName(input);
+const SIMRACER_ROAD_COURSE_TYPE = 'road course';
+const SIMRACER_SUPERSPEEDWAY_TYPE = 'superspeedway';
+const SIMRACER_SPEEDWAY_TYPE = 'speedway';
+const SIMRACER_SHORT_TRACK_TYPE = 'short track';
 
-  if (!normalizedInput) {
-    return buildUnmatchedMatch(input);
+export function hasRoadCourseLayoutIndicator(value = '') {
+  const n = normalizeTrackName(value);
+  if (!n) return false;
+
+  return (
+    n.includes('road course') ||
+    n.includes('roval') ||
+    /\brc\b/.test(n) ||
+    n.includes('grand prix') ||
+    n.includes('nascar road') ||
+    (n.includes('circuit') &&
+      !n.includes('motor speedway') &&
+      !n.includes('superspeedway'))
+  );
+}
+
+export function hasOvalLayoutIndicator(value = '') {
+  const n = normalizeTrackName(value);
+  if (!n || hasRoadCourseLayoutIndicator(n)) return false;
+
+  return (
+    n.includes('oval') ||
+    n.includes('superspeedway') ||
+    (n.includes('speedway') && !n.includes('road'))
+  );
+}
+
+function orderCatalogForInput(catalog, normalizedInput) {
+  if (hasRoadCourseLayoutIndicator(normalizedInput)) {
+    const roadEntries = catalog.filter((entry) => entry.trackType === 'road_course');
+    const otherEntries = catalog.filter((entry) => entry.trackType !== 'road_course');
+    return [...roadEntries, ...otherEntries];
   }
 
+  if (hasOvalLayoutIndicator(normalizedInput)) {
+    const ovalEntries = catalog.filter((entry) => entry.trackType !== 'road_course');
+    const roadEntries = catalog.filter((entry) => entry.trackType === 'road_course');
+    return [...ovalEntries, ...roadEntries];
+  }
+
+  return catalog;
+}
+
+function matchCatalogEntry(catalog, normalizedInput, input) {
   for (const entry of catalog) {
     if (normalizeTrackName(entry.trackName) === normalizedInput) {
       return buildCatalogMatch(entry, 'exact_name');
@@ -118,6 +153,13 @@ export function matchTrackToCatalog(trackName) {
       normEntry.length >= 6 &&
       (normalizedInput.includes(normEntry) || normEntry.includes(normalizedInput))
     ) {
+      if (
+        hasRoadCourseLayoutIndicator(normalizedInput) &&
+        entry.trackType !== 'road_course' &&
+        hasRoadCourseLayoutIndicator(`${entry.trackName} ${(entry.aliases || []).join(' ')}`) === false
+      ) {
+        continue;
+      }
       return buildCatalogMatch(entry, 'normalized_contains');
     }
     for (const alias of entry.aliases || []) {
@@ -126,6 +168,13 @@ export function matchTrackToCatalog(trackName) {
         normAlias.length >= 4 &&
         (normalizedInput.includes(normAlias) || normAlias.includes(normalizedInput))
       ) {
+        if (
+          hasRoadCourseLayoutIndicator(normalizedInput) &&
+          entry.trackType !== 'road_course' &&
+          !hasRoadCourseLayoutIndicator(`${entry.trackName} ${alias}`)
+        ) {
+          continue;
+        }
         return buildCatalogMatch(entry, 'normalized_alias_contains');
       }
     }
@@ -152,6 +201,72 @@ export function matchTrackToCatalog(trackName) {
   if (bestEntry && bestOverlap >= 1) {
     return buildCatalogMatch(bestEntry, 'distinctive_token');
   }
+
+  return null;
+}
+
+export function resolveCareerTrackMatchLabel(entry = {}) {
+  const trackName = String(entry?.trackName || '').trim();
+  const typeName = normalizeTrackName(entry?.simracerTypeName || '');
+  const configName = String(entry?.trackConfigName || '');
+  const configShort = String(entry?.trackConfigShort || '');
+  const combined = `${trackName} ${configName} ${configShort}`.trim();
+
+  if (
+    /lucas oil.*indianapolis raceway park/i.test(trackName) ||
+    (typeName === SIMRACER_SHORT_TRACK_TYPE && /raceway park/i.test(trackName))
+  ) {
+    return 'Lucas Oil Indianapolis Raceway Park Oval Night';
+  }
+
+  const isRoad =
+    typeName === SIMRACER_ROAD_COURSE_TYPE || hasRoadCourseLayoutIndicator(combined);
+
+  if (/daytona/i.test(trackName)) {
+    if (isRoad) return 'Daytona Road Course';
+    if (typeName === SIMRACER_SUPERSPEEDWAY_TYPE || hasOvalLayoutIndicator(combined)) {
+      return 'Daytona International Speedway Oval Night';
+    }
+  }
+
+  if (/charlotte/i.test(trackName)) {
+    if (isRoad) return 'Charlotte Roval';
+    if (typeName === SIMRACER_SPEEDWAY_TYPE || hasOvalLayoutIndicator(combined)) {
+      return 'Charlotte Motor Speedway Oval Night';
+    }
+  }
+
+  if (/indianapolis motor speedway/i.test(trackName)) {
+    if (isRoad) return 'Indianapolis Road Course';
+    if (typeName === SIMRACER_SPEEDWAY_TYPE || hasOvalLayoutIndicator(combined)) {
+      return 'Indianapolis Motor Speedway NASCAR Oval';
+    }
+  }
+
+  if (hasRoadCourseLayoutIndicator(combined)) {
+    return combined;
+  }
+
+  return trackName;
+}
+
+/**
+ * Match a schedule/API track label to tracks.json.
+ * Priority: road/oval layout hint ordering → exact name → exact alias → normalized contains → distinctive tokens.
+ * Generic venue names (Daytona, Charlotte, Indianapolis) never override road-course layout indicators.
+ */
+export function matchTrackToCatalog(trackName) {
+  const catalog = loadTracksCatalog()?.tracks || [];
+  const input = String(trackName || '').trim();
+  const normalizedInput = normalizeTrackName(input);
+
+  if (!normalizedInput) {
+    return buildUnmatchedMatch(input);
+  }
+
+  const orderedCatalog = orderCatalogForInput(catalog, normalizedInput);
+  const match = matchCatalogEntry(orderedCatalog, normalizedInput, input);
+  if (match) return match;
 
   return buildUnmatchedMatch(input);
 }
@@ -354,14 +469,18 @@ const DEFAULT_CAREER_LEAGUE_ID = '1783';
 
 export function mapCareerEntryToRaceRow(entry) {
   const track = entry?.trackName || 'Unknown Track';
-  const trackMatch = matchTrackToCatalog(track);
+  const matchLabel = resolveCareerTrackMatchLabel(entry);
+  const trackMatch = matchTrackToCatalog(matchLabel);
 
   return {
     track,
+    matchLabel,
     seasonId: entry?.seasonId ?? null,
     finish: entry.finish,
     lapsLed: entry?.lapsLed ?? null,
     dnf: isDnfFinish(entry.finish),
+    simracerTypeName: entry?.simracerTypeName ?? null,
+    trackConfigName: entry?.trackConfigName ?? null,
     matchedTrackName: trackMatch.matchedTrackName,
     matchedTrackType: trackMatch.matchedTrackType,
     matchMethod: trackMatch.matchMethod,

@@ -638,6 +638,8 @@ export function parseDriverCareerRaceEntries(html, leagueId = DEFAULT_LEAGUE_ID)
       scheduleId: get('schedule_id') || null,
       trackConfigId: trackConfigId || null,
       trackName: cfg.track_name || null,
+      trackConfigName: cfg.track_config_name || null,
+      trackConfigShort: cfg.track_config_short || null,
       simracerTypeName: cfg.type_name || null,
       provisional: get('provisional') || 'N',
     });
