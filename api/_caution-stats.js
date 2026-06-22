@@ -22,6 +22,11 @@ function isRaceNumber(value) {
   return /^\d+$/.test(cleanText(value));
 }
 
+export function extractScheduleIdFromResultLink(link) {
+  const match = String(link || '').match(/[?&]schedule_id=(\d+)/i);
+  return match?.[1] ? String(match[1]) : null;
+}
+
 function parseRaceRow($, row) {
   const cells = $(row).find('td');
   if (cells.length < 5) return null;
@@ -43,6 +48,7 @@ function parseRaceRow($, row) {
   const winner = cleanText(winnerLink.text() || winnerCell.text());
 
   const resultLink = $(row).find("a[href*='race']").last().attr('href') || '';
+  const scheduleId = extractScheduleIdFromResultLink(resultLink);
 
   return {
     raceNumber: Number(raceNumber),
@@ -53,6 +59,7 @@ function parseRaceRow($, row) {
     length,
     winner,
     link: resultLink,
+    scheduleId,
   };
 }
 
