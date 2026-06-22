@@ -14,6 +14,7 @@ import {
 } from './power-rankings-generate.js';
 import {
   alignAllCompletedPointsRaces,
+  buildDriverCareerRaceResultsByDriver,
   buildDriverRaceResultsByDriver,
   resolveTrackType,
 } from './_fantasy-track-history.js';
@@ -149,11 +150,31 @@ function normalizeSlateDriver(row) {
     carNumber: row.car_number || '',
     computedTier: row.computed_tier || '',
     fantasyTierScore: Number(row.fantasy_tier_score),
+    fantasyTierScoreRaw:
+      row.score_breakdown?._fantasyTierScoreRaw != null
+        ? Number(row.score_breakdown._fantasyTierScoreRaw)
+        : null,
     scoreBreakdown: row.score_breakdown || {},
     generatedSalary: Number(row.generated_salary),
     salaryOverride: row.salary_override != null ? Number(row.salary_override) : null,
     finalSalary: Number(row.final_salary),
     trackHistorySummary: row.track_history_summary || {},
+    trackHistoryRank:
+      row.track_history_summary?.trackHistoryRank ??
+      row.score_breakdown?.careerTrackHistory?.details?.trackHistoryRank ??
+      null,
+    provenTrackHistoryRank:
+      row.track_history_summary?.provenTrackHistoryRank ??
+      row.score_breakdown?.careerTrackHistory?.details?.provenTrackHistoryRank ??
+      null,
+    trackHistorySampleQuality:
+      row.track_history_summary?.trackHistorySampleQuality ??
+      row.score_breakdown?.careerTrackHistory?.details?.trackHistorySampleQuality ??
+      null,
+    trackHistoryLimitedSample:
+      row.track_history_summary?.trackHistoryLimitedSample ??
+      row.score_breakdown?.careerTrackHistory?.details?.trackHistoryLimitedSample ??
+      false,
     trackAdjustment: row.track_adjustment || {},
     salaryReasons: row.salary_reasons || [],
     priorSalary: row.prior_salary != null ? Number(row.prior_salary) : null,
@@ -273,6 +294,11 @@ export async function generateFantasyDraftSlate(options = {}) {
     standingsResult.schedules,
     driverIds
   );
+  const leagueId = String(standingsResult.lss?.league_id || settings.leagueId || '1783');
+  const driverCareerRaceRowsByDriver = await buildDriverCareerRaceResultsByDriver(
+    driverIds,
+    leagueId
+  );
 
   const priorMaps = await loadPriorPublishedSlateMaps(seasonId, raceNumber);
   const upcomingTrack = targetRace.track || 'TBD';
@@ -286,8 +312,14 @@ export async function generateFantasyDraftSlate(options = {}) {
     schedules: standingsResult.schedules,
     upcomingTrack,
     driverRaceResultsByDriver,
+    driverCareerRaceRowsByDriver,
     priorSalariesByDriver: priorMaps.priorSalariesByDriver,
     priorTierScoresByDriver: priorMaps.priorTierScoresByDriver,
+    slateRaceNumber: raceNumber,
+    scheduleRaces,
+    allAlignedRaces: allAligned,
+    settings,
+    now,
   }).sort((a, b) => b.fantasyTierScore - a.fantasyTierScore);
 
   const meta = {

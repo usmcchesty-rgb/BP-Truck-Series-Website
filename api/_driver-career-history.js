@@ -578,6 +578,117 @@ export function parseDriverStatsRaceEntries(html) {
   return entries;
 }
 
+function extractJsObjectAfterMarker(html, marker) {
+  const start = String(html || '').indexOf(marker);
+  if (start < 0) return null;
+  const braceStart = html.indexOf('{', start + marker.length);
+  if (braceStart < 0) return null;
+
+  let depth = 0;
+  for (let i = braceStart; i < html.length; i += 1) {
+    const ch = html[i];
+    if (ch === '{') depth += 1;
+    else if (ch === '}') {
+      depth -= 1;
+      if (depth === 0) return html.slice(braceStart, i + 1);
+    }
+  }
+
+  return null;
+}
+
+export function parseDriverStatsTrackConfigs(html) {
+  const configsJson = extractJsObjectAfterMarker(html, 'configs:');
+  if (!configsJson) return {};
+
+  try {
+    return JSON.parse(configsJson);
+  } catch {
+    return {};
+  }
+}
+
+export function parseDriverCareerRaceEntries(html, leagueId = DEFAULT_LEAGUE_ID) {
+  const configs = parseDriverStatsTrackConfigs(html);
+  const league = String(leagueId);
+  const entries = [];
+
+  for (const match of String(html || '').matchAll(
+    /"(\d+)":\{"race_participant_id":"(\d+)"([\s\S]*?)\}(?=,"|\})/g
+  )) {
+    const body = match[3];
+    const get = (key) => body.match(new RegExp(`"${key}":"([^"]*)"`))?.[1];
+    const finish = Number(get('finish_pos'));
+    if (!Number.isFinite(finish) || finish < 1) continue;
+    if (String(get('league_id') || '') !== league) continue;
+
+    const trackConfigId = get('track_config_id');
+    const cfg = configs[trackConfigId] || {};
+
+    entries.push({
+      raceParticipantId: match[2],
+      raceId: get('race_id') || null,
+      finish,
+      incidents: Number(get('incidents') || 0),
+      lapsLed: Number(get('laps_led') || 0),
+      qualifyPos: get('qualify_pos') || '',
+      seasonId: String(get('season_id') || ''),
+      seriesId: String(get('series_id') || ''),
+      leagueId: league,
+      scheduleId: get('schedule_id') || null,
+      trackConfigId: trackConfigId || null,
+      trackName: cfg.track_name || null,
+      simracerTypeName: cfg.type_name || null,
+      provisional: get('provisional') || 'N',
+    });
+  }
+
+  return entries;
+}
+
+export async function fetchDriverCareerRaceEntries(driverId, leagueId = DEFAULT_LEAGUE_ID) {
+  const league = String(leagueId);
+  const sourceUrl = `https://www.simracerhub.com/scoring/driver_stats.php?driver_id=${driverId}&league_id=${league}`;
+  const html = await fetchHtml(sourceUrl);
+
+  return {
+    driverId: String(driverId),
+    leagueId: league,
+    sourceUrl,
+    dataSource: 'career history',
+    entries: parseDriverCareerRaceEntries(html, league),
+  };
+}
+
+export async function fetchDriverCareerRaceEntriesByDriver(
+  driverIds = [],
+  leagueId = DEFAULT_LEAGUE_ID,
+  { concurrency = 6 } = {}
+) {
+  const ids = [...new Set(driverIds.map((id) => String(id)).filter(Boolean))];
+  const map = new Map(ids.map((id) => [id, []]));
+  if (!ids.length) return map;
+
+  let cursor = 0;
+  const workerCount = Math.min(Math.max(1, concurrency), ids.length);
+
+  async function worker() {
+    while (cursor < ids.length) {
+      const driverId = ids[cursor];
+      cursor += 1;
+      try {
+        const result = await fetchDriverCareerRaceEntries(driverId, leagueId);
+        map.set(driverId, result.entries);
+      } catch {
+        map.set(driverId, []);
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  return map;
+}
+
 function buildParticipatedSeasonsFromRaceEntries(entries = [], seasonCatalog = null) {
   const seasonLookup = Object.fromEntries(
     (seasonCatalog?.seasons || []).map((season) => [String(season.seasonId), season])

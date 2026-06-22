@@ -1,19 +1,17 @@
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
+import { fetchDriverCareerRaceEntriesByDriver } from './_driver-career-history.js';
 import { getCompletedPointsRaces } from './_schedule-points-races.js';
 import { alignFinishRacesWithTrace } from './_power-rankings-schedule-alignment.js';
 import { extractFinishRacesFromSchedules } from './_simracerhub-schedule-results.js';
 import { isDnfFinish } from './_power-rankings-scoring.js';
 
 /**
- * Future Career Track History Plan (Phase 2 — not implemented):
- * - Source multi-season race rows via get_standings.php per season schedule_id
- * - Map schedule page races to schedules.event_name / schedule_id
- * - Build/cache a career race result table (driver, season, race, track, finish)
- * - Feed career rows into track history scoring; set historyScope to league_career
- *
- * See: api/_driver-career-history.js (discoverSimRacerHubSeasonCatalog, driver_stats.php)
+ * Career Track History (Phase 2):
+ * - Source multi-season race rows from SimRacerHub driver_stats.php (league-scoped)
+ * - Map track_config_id -> track_name via embedded configs payload
+ * - Score with exact-track -> track-type -> neutral blend hierarchy
  */
 
 const DNF_FINISH_THRESHOLD = 35;
@@ -317,7 +315,7 @@ export function scoreTrackHistoryStats(stats) {
     return {
       score: 50,
       details: {
-        reason: 'No current-season track history available; neutral score applied.',
+        reason: 'No career track history available; neutral score applied.',
       },
     };
   }
@@ -350,6 +348,84 @@ export function scoreTrackHistoryStats(stats) {
 }
 
 const TRACK_HISTORY_NEUTRAL_SCORE = 50;
+const EXACT_TRACK_CAREER_MIN = 3;
+const TRACK_TYPE_CAREER_MIN = 5;
+const DEFAULT_CAREER_LEAGUE_ID = '1783';
+
+export function mapCareerEntryToRaceRow(entry) {
+  const track = entry?.trackName || 'Unknown Track';
+  const trackMatch = matchTrackToCatalog(track);
+
+  return {
+    track,
+    seasonId: entry?.seasonId ?? null,
+    finish: entry.finish,
+    lapsLed: entry?.lapsLed ?? null,
+    dnf: isDnfFinish(entry.finish),
+    matchedTrackName: trackMatch.matchedTrackName,
+    matchedTrackType: trackMatch.matchedTrackType,
+    matchMethod: trackMatch.matchMethod,
+    dataSource: 'career history',
+  };
+}
+
+export function buildCareerRaceRowsFromEntries(entries = []) {
+  return (entries || [])
+    .map(mapCareerEntryToRaceRow)
+    .filter((row) => row.track && Number.isFinite(row.finish));
+}
+
+export async function buildDriverCareerRaceResultsByDriver(
+  driverIds = [],
+  leagueId = DEFAULT_CAREER_LEAGUE_ID,
+  options = {}
+) {
+  const entriesByDriver = await fetchDriverCareerRaceEntriesByDriver(driverIds, leagueId, options);
+  const map = new Map();
+
+  for (const [driverId, entries] of entriesByDriver.entries()) {
+    map.set(String(driverId), buildCareerRaceRowsFromEntries(entries));
+  }
+
+  return map;
+}
+
+function filterRowsByTrackTypeIncludingExact(rows, trackType) {
+  if (!trackType) return [];
+  return rows.filter((row) => {
+    const rowType = row.matchedTrackType || resolveTrackType(row.track);
+    return rowType === trackType;
+  });
+}
+
+function blendCareerTrackScoreTowardNeutral(actualScore, sampleSize, maxSample = TRACK_TYPE_CAREER_MIN) {
+  const safeActual = Number.isFinite(Number(actualScore))
+    ? Number(actualScore)
+    : TRACK_HISTORY_NEUTRAL_SCORE;
+  const size = Math.max(0, Number(sampleSize) || 0);
+
+  if (size >= maxSample) {
+    return {
+      score: safeActual,
+      neutralWeight: 0,
+      actualWeight: 1,
+      blendApplied: false,
+    };
+  }
+
+  const neutralWeight = maxSample > 0 ? (maxSample - size) / maxSample : 1;
+  const actualWeight = 1 - neutralWeight;
+  const score = Number(
+    (TRACK_HISTORY_NEUTRAL_SCORE * neutralWeight + safeActual * actualWeight).toFixed(2)
+  );
+
+  return {
+    score,
+    neutralWeight: Number(neutralWeight.toFixed(2)),
+    actualWeight: Number(actualWeight.toFixed(2)),
+    blendApplied: neutralWeight > 0,
+  };
+}
 
 export function regressTrackHistoryScoreForSampleSize(actualScore, starts) {
   const sampleSize = Math.max(0, Number(starts) || 0);
@@ -377,8 +453,8 @@ export function regressTrackHistoryScoreForSampleSize(actualScore, starts) {
   };
 }
 
-/** Current-season track history only (Phase 1). Phase 2 will add multi-season career rows. */
-export function buildCareerTrackHistoryForDriver(driverRaceRows, upcomingTrack, options = {}) {
+/** Phase 1 current-season track history (kept for audits/comparison). */
+export function buildCurrentSeasonTrackHistoryForDriver(driverRaceRows, upcomingTrack, options = {}) {
   const { alignedRaces = null, driverId = null } = options;
   const exactRows = filterRowsByExactTrack(driverRaceRows, upcomingTrack);
   const upcomingMatch = matchTrackToCatalog(upcomingTrack);
@@ -506,6 +582,132 @@ export function buildCareerTrackHistoryForDriver(driverRaceRows, upcomingTrack, 
   };
 }
 
+export function buildCareerTrackHistoryForDriver(driverRaceRows, upcomingTrack, options = {}) {
+  const upcomingMatch = matchTrackToCatalog(upcomingTrack);
+  const trackType = upcomingMatch.matchedTrackType || 'intermediate';
+  const exactRows = filterRowsByExactTrack(driverRaceRows, upcomingTrack);
+  const trackTypeRows = filterRowsByTrackTypeIncludingExact(driverRaceRows, trackType);
+
+  const exactStats = aggregateRaceRows(exactRows);
+  const trackTypeStats = aggregateRaceRows(trackTypeRows);
+
+  let historyScope = 'blended_neutral';
+  let scoringScope = 'blended_neutral';
+  let stats = trackTypeStats.starts ? trackTypeStats : exactStats;
+  let fallbackUsed = false;
+  let neutralBlend = null;
+
+  if (exactStats.starts >= EXACT_TRACK_CAREER_MIN) {
+    historyScope = 'career_track';
+    scoringScope = 'career_track';
+    stats = exactStats;
+  } else {
+    fallbackUsed = true;
+    historyScope = 'career_track_type';
+    scoringScope = 'career_track_type';
+    stats = trackTypeStats.starts ? trackTypeStats : exactStats;
+
+    if (trackTypeStats.starts < TRACK_TYPE_CAREER_MIN) {
+      historyScope = 'blended_neutral';
+      scoringScope = 'blended_neutral';
+    }
+  }
+
+  const scored = scoreTrackHistoryStats(stats);
+  const careerTrackHistoryRaw = scored.score;
+  let careerTrackHistoryNormalized = careerTrackHistoryRaw;
+  let regression = null;
+
+  if (historyScope === 'blended_neutral') {
+    neutralBlend = blendCareerTrackScoreTowardNeutral(
+      careerTrackHistoryRaw,
+      trackTypeStats.starts
+    );
+    careerTrackHistoryNormalized = neutralBlend.score;
+  } else {
+    regression = regressTrackHistoryScoreForSampleSize(careerTrackHistoryRaw, stats.starts);
+    careerTrackHistoryNormalized = regression.regressedScore;
+  }
+
+  const racesIncluded = (driverRaceRows || []).map((row) => ({
+    seasonId: row.seasonId ?? null,
+    track: row.track,
+    finish: row.finish,
+    matchedTrackName: row.matchedTrackName,
+    matchedTrackType: row.matchedTrackType,
+    matchMethod: row.matchMethod,
+    countsAsExact: tracksLikelyMatch(row.track, upcomingTrack),
+    countsAsTrackType:
+      (row.matchedTrackType || resolveTrackType(row.track)) === trackType,
+  }));
+
+  return {
+    scope: scoringScope,
+    historyScope,
+    scoringScope,
+    fallbackUsed,
+    dataSource: 'career history',
+    similarTrackType: fallbackUsed ? trackType : null,
+    upcomingTrack: upcomingMatch.matchedTrackName || upcomingTrack,
+    upcomingTrackMatch: {
+      matchedTrackName: upcomingMatch.matchedTrackName,
+      matchedTrackType: upcomingMatch.matchedTrackType,
+      matchMethod: upcomingMatch.matchMethod,
+    },
+    trackTypeUsed: trackType,
+    exactTrackStarts: exactStats.starts,
+    similarTrackStarts: trackTypeStats.starts,
+    exactStarts: exactStats.starts,
+    similarStarts: trackTypeStats.starts,
+    careerExactTrackStarts: exactStats.starts,
+    careerTrackTypeStarts: trackTypeStats.starts,
+    careerTrackWins: exactStats.wins,
+    careerTrackTop5s: exactStats.top5s,
+    careerTrackTop10s: exactStats.top10s,
+    careerTrackAverageFinish: exactStats.averageFinish,
+    careerTrackTypeWins: trackTypeStats.wins,
+    careerTrackTypeTop5s: trackTypeStats.top5s,
+    careerTrackTypeTop10s: trackTypeStats.top10s,
+    careerTrackTypeAverageFinish: trackTypeStats.averageFinish,
+    careerTrackHistoryRaw,
+    careerTrackHistoryNormalized,
+    diagnostics: {
+      exactTrackStarts: exactStats.starts,
+      similarTrackStarts: trackTypeStats.starts,
+      careerExactTrackStarts: exactStats.starts,
+      careerTrackTypeStarts: trackTypeStats.starts,
+      trackTypeUsed: trackType,
+      matchMethod: upcomingMatch.matchMethod,
+      dataSource: 'career history',
+      racesIncluded,
+    },
+    summary: {
+      starts: stats.starts,
+      averageFinish: stats.averageFinish,
+      bestFinish: stats.bestFinish,
+      wins: stats.wins,
+      top5s: stats.top5s,
+      top10s: stats.top10s,
+      lapsLed: stats.lapsLed,
+      dnfRate: stats.dnfRate,
+    },
+    score: careerTrackHistoryNormalized,
+    actualTrackScore: careerTrackHistoryRaw,
+    scoreDetails: {
+      ...scored.details,
+      sampleSize: stats.starts,
+      regressionApplied: regression?.regressionApplied ?? false,
+      neutralWeight: neutralBlend?.neutralWeight ?? regression?.neutralWeight ?? 0,
+      actualWeight: neutralBlend?.actualWeight ?? regression?.actualWeight ?? 1,
+      actualScore: careerTrackHistoryRaw,
+      regressedScore: careerTrackHistoryNormalized,
+      neutralBlendApplied: neutralBlend?.blendApplied ?? false,
+      careerTrackHistoryRaw,
+      careerTrackHistoryNormalized,
+    },
+  };
+}
+
 export function computeTrackDollarAdjustment(trackHistory) {
   const stats = trackHistory?.summary || {};
   const score = Number(trackHistory?.score);
@@ -513,23 +715,23 @@ export function computeTrackDollarAdjustment(trackHistory) {
 
   let tier = 'neutral';
   let amount = 0;
-  let reason = 'Neutral current-season track history adjustment.';
+  let reason = 'Neutral career track history adjustment.';
 
   if (stats.starts >= 2 && score >= 88) {
     tier = 'track_ace';
     amount = 1500 + Math.round((score - 88) * 25);
     amount = Math.min(2000, Math.max(1000, amount));
-    reason = `Current-season track ace profile (${stats.starts} starts, score ${score}).`;
+    reason = `Career track ace profile (${stats.starts} starts, score ${score}).`;
   } else if (score >= 72) {
     tier = 'good_track_history';
     amount = 500 + Math.round((score - 72) * 35);
     amount = Math.min(1000, Math.max(500, amount));
-    reason = `Good current-season history at this track type (${stats.starts} relevant starts).`;
+    reason = `Good career history at this track profile (${stats.starts} relevant starts).`;
   } else if (score < 52) {
     tier = 'poor_history';
     amount = -500 - Math.round((52 - score) * 20);
     amount = Math.max(-1500, Math.min(-500, amount));
-    reason = `Weak current-season history at this track profile (${stats.starts} relevant starts).`;
+    reason = `Weak career history at this track profile (${stats.starts} relevant starts).`;
   }
 
   if (dnfRate >= 0.35 && stats.starts >= 2) {

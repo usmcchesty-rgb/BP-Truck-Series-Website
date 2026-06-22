@@ -333,6 +333,26 @@
         color: #fff;
       }
 
+      .fantasy-limited-sample-badge {
+        display: inline-block;
+        margin-top: 4px;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 9px;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        background: rgba(240, 192, 64, 0.14);
+        border: 1px solid rgba(240, 192, 64, 0.35);
+        color: #f0c040;
+      }
+
+      .fantasy-track-rank-cell {
+        font-size: 11px;
+        line-height: 1.45;
+        white-space: nowrap;
+      }
+
       .fantasy-slate-status {
         font-size: 12px;
         font-weight: 900;
@@ -629,6 +649,10 @@
               <div class="admin-v" id="fantasySlateModelVersion">fantasy-salary-v2</div>
             </div>
             <div id="fantasySlateModelSummary" class="admin-note" hidden></div>
+            <details id="fantasyTopTrackHistorySection" class="fantasy-track-history-summary" hidden>
+              <summary>Top Proven Track History Drivers</summary>
+              <ol id="fantasyTopTrackHistoryList" class="fantasy-track-history-rank-list"></ol>
+            </details>
             <span class="field-help">Tiers use field-normalized component scores and percentile slot assignment. Salaries save as draft only.</span>
             <div class="fantasy-generate-row">
               <button id="generateFantasySalariesBtn" class="btn" type="button">Generate Salaries</button>
@@ -648,6 +672,7 @@
                     <th>Car #</th>
                     <th>Tier</th>
                     <th>Tier Score</th>
+                    <th>Track Rank</th>
                     <th>Generated Salary</th>
                     <th>Final Salary</th>
                     <th>Breakdown</th>
@@ -656,7 +681,7 @@
                 </thead>
                 <tbody id="fantasySalaryReviewBody">
                   <tr>
-                    <td colspan="8" class="muted">Generate salaries to review the draft slate.</td>
+                    <td colspan="9" class="muted">Generate salaries to review the draft slate.</td>
                   </tr>
                 </tbody>
               </table>
@@ -772,29 +797,103 @@
         return date.toLocaleString();
       }
 
+      function getTrackHistoryDisplayContext(driver) {
+        const details = driver?.scoreBreakdown?.careerTrackHistory?.details || {};
+        const historyScope =
+          details.historyScope ?? driver?.trackHistorySummary?.historyScope ?? 'blended_neutral';
+        const sampleQuality =
+          driver?.trackHistorySampleQuality ??
+          details.trackHistorySampleQuality ??
+          driver?.trackHistorySummary?.trackHistorySampleQuality ??
+          (historyScope === 'career_track'
+            ? 'Proven exact track history'
+            : historyScope === 'career_track_type'
+              ? 'Proven track-type history'
+              : 'Limited sample / blended neutral');
+        const limitedSample =
+          driver?.trackHistoryLimitedSample ??
+          details.trackHistoryLimitedSample ??
+          driver?.trackHistorySummary?.trackHistoryLimitedSample ??
+          historyScope === 'blended_neutral';
+
+        return {
+          rawRank:
+            driver?.trackHistoryRank ??
+            details.trackHistoryRank ??
+            driver?.trackHistorySummary?.trackHistoryRank ??
+            null,
+          provenRank:
+            driver?.provenTrackHistoryRank ??
+            details.provenTrackHistoryRank ??
+            driver?.trackHistorySummary?.provenTrackHistoryRank ??
+            null,
+          historyScope,
+          sampleQuality,
+          limitedSample,
+        };
+      }
+
+      function formatTrackRankCellHtml(driver) {
+        const ctx = getTrackHistoryDisplayContext(driver);
+        const rawLine =
+          ctx.rawRank != null
+            ? `<div>Raw #${escapeAdminHtml(ctx.rawRank)}</div>`
+            : '<div>Raw —</div>';
+        const provenLine =
+          ctx.provenRank != null
+            ? `<div>Proven #${escapeAdminHtml(ctx.provenRank)}</div>`
+            : '<div>Proven —</div>';
+        const badge = ctx.limitedSample
+          ? '<span class="fantasy-limited-sample-badge">Limited sample</span>'
+          : '';
+        return `<div class="fantasy-track-rank-cell">${rawLine}${provenLine}${badge}</div>`;
+      }
+
       function formatScoreBreakdownHtml(breakdown = {}, driver = {}) {
         const rows = [
           ['Season', breakdown.seasonPerformance],
           ['Recent Form', breakdown.recentForm],
-          ['Current Season Track History', breakdown.careerTrackHistory],
+          ['Career Track History', breakdown.careerTrackHistory],
           ['Race Impact', breakdown.raceImpact],
           ['Momentum', breakdown.momentum],
           ['Reliability', breakdown.reliability],
         ];
         const attendance = driver.attendanceContext || breakdown.reliability?.details || {};
         const attendanceLines = [];
+        if (attendance.last5WindowSize != null) {
+          const recentRate = attendance.recentAttendanceRate ?? attendance.last5AttendanceRate;
+          attendanceLines.push(
+            `Valid recent races: ${attendance.validLast5Starts ?? attendance.last5Starts ?? '?'}/${attendance.validLast5WindowSize ?? attendance.last5WindowSize ?? '?'} starts`
+          );
+          attendanceLines.push(
+            `Recent attendance (valid races): ${recentRate != null ? `${Math.round(Number(recentRate) * 100)}%` : 'n/a'}`
+          );
+        }
+        if (Array.isArray(attendance.validRecentRaces) && attendance.validRecentRaces.length) {
+          attendanceLines.push(
+            `Valid recent race list: ${attendance.validRecentRaces
+              .map((race) => `R${race.pointsRaceNumber} ${race.track || ''}`.trim())
+              .join('; ')}`
+          );
+        }
+        if (Array.isArray(attendance.excludedRecentRaces) && attendance.excludedRecentRaces.length) {
+          attendanceLines.push(
+            `Excluded (missing finish data): ${attendance.excludedRecentRaces
+              .map((race) => `R${race.pointsRaceNumber} ${race.track || ''}`.trim())
+              .join('; ')}`
+          );
+        }
         if (attendance.completedRacesBeforeSlate != null) {
           attendanceLines.push(
             `Season: ${attendance.seasonStarts ?? '?'}/${attendance.completedRacesBeforeSlate} starts`
           );
           attendanceLines.push(
+            `Season attendance: ${attendance.seasonAttendanceRate != null ? `${Math.round(Number(attendance.seasonAttendanceRate) * 100)}%` : 'n/a'}`
+          );
+        }
+        if (attendance.last3WindowSize != null) {
+          attendanceLines.push(
             `Last 3: ${attendance.last3Starts ?? '?'}/${attendance.last3WindowSize ?? '?'} starts`
-          );
-          attendanceLines.push(
-            `Last 5: ${attendance.last5Starts ?? '?'}/${attendance.last5WindowSize ?? '?'} starts`
-          );
-          attendanceLines.push(
-            `Missed latest race: ${attendance.missedLatestRace ? 'yes' : 'no'}`
           );
         }
         const tierCap = driver.tierCap || breakdown._tierCap;
@@ -810,10 +909,71 @@
             ? `Tier recovery: ${tierRecovery.previousTier} → ${driver.computedTier} (${tierRecovery.reason || tierRecovery.type})`
             : null;
         const thDetails = breakdown.careerTrackHistory?.details || {};
+        const thSummary = thDetails.summary || driver.trackHistorySummary || {};
         const thDiag = thDetails.diagnostics || {};
         const trackHistoryLines = [];
+        if (
+          thDetails.careerTrackHistoryRaw != null &&
+          thDetails.careerTrackHistoryNormalized != null
+        ) {
+          trackHistoryLines.push(
+            `Career track history: raw ${Number(thDetails.careerTrackHistoryRaw).toFixed(1)} → norm ${Number(thDetails.careerTrackHistoryNormalized).toFixed(1)}`
+          );
+        }
+        const trackCtx = getTrackHistoryDisplayContext(driver);
+        const trackRankFieldSize =
+          thDetails.trackHistoryRankFieldSize ??
+          driver.trackHistorySummary?.trackHistoryRankFieldSize ??
+          null;
+        if (trackCtx.rawRank != null) {
+          trackHistoryLines.push(
+            `Raw track rank: #${trackCtx.rawRank}${trackRankFieldSize ? ` of ${trackRankFieldSize} drivers` : ''}`
+          );
+        }
+        if (trackCtx.provenRank != null) {
+          trackHistoryLines.push(
+            `Proven track rank: #${trackCtx.provenRank}${trackRankFieldSize ? ` of ${trackRankFieldSize} drivers` : ''}`
+          );
+        }
+        trackHistoryLines.push(`Sample quality: ${trackCtx.sampleQuality}`);
+        if (trackCtx.limitedSample) {
+          trackHistoryLines.push('Limited sample badge: yes');
+        }
         if (thDetails.historyScope) {
-          trackHistoryLines.push(`History scope: ${thDetails.historyScope} (not multi-season career yet)`);
+          trackHistoryLines.push(`History scope: ${thDetails.historyScope}`);
+        }
+        if (thDetails.dataSource) {
+          trackHistoryLines.push(`Data source: ${thDetails.dataSource}`);
+        }
+        if (
+          thDetails.careerExactTrackStarts != null ||
+          thDetails.exactTrackStarts != null ||
+          thDetails.exactStarts != null
+        ) {
+          trackHistoryLines.push(
+            `Exact track starts: ${thDetails.careerExactTrackStarts ?? thDetails.exactTrackStarts ?? thDetails.exactStarts ?? 0}`
+          );
+        }
+        if (
+          thDetails.careerTrackTypeStarts != null ||
+          thDetails.similarTrackStarts != null ||
+          thDetails.similarStarts != null
+        ) {
+          trackHistoryLines.push(
+            `Track type starts: ${thDetails.careerTrackTypeStarts ?? thDetails.similarTrackStarts ?? thDetails.similarStarts ?? 0}`
+          );
+        }
+        if (thSummary.averageFinish != null) {
+          trackHistoryLines.push(`Average finish: ${Number(thSummary.averageFinish).toFixed(1)}`);
+        }
+        if (thSummary.wins != null) {
+          trackHistoryLines.push(`Wins: ${thSummary.wins}`);
+        }
+        if (thSummary.top5s != null) {
+          trackHistoryLines.push(`Top 5: ${thSummary.top5s}`);
+        }
+        if (thSummary.top10s != null) {
+          trackHistoryLines.push(`Top 10: ${thSummary.top10s}`);
         }
         if (thDetails.upcomingTrackMatch) {
           const m = thDetails.upcomingTrackMatch;
@@ -821,10 +981,8 @@
             `Upcoming track: ${m.matchedTrackName} (${m.matchedTrackType}, ${m.matchMethod})`
           );
         }
-        if (thDetails.exactTrackStarts != null || thDetails.similarTrackStarts != null) {
-          trackHistoryLines.push(
-            `Exact starts: ${thDetails.exactTrackStarts ?? 0}; similar starts: ${thDetails.similarTrackStarts ?? 0}; type used: ${thDetails.trackTypeUsed ?? 'n/a'}`
-          );
+        if (thDetails.trackTypeUsed) {
+          trackHistoryLines.push(`Track type used: ${thDetails.trackTypeUsed}`);
         }
         if (Array.isArray(thDiag.racesIncluded) && thDiag.racesIncluded.length) {
           trackHistoryLines.push(
@@ -838,6 +996,36 @@
         }
         if (Array.isArray(thDiag.racesSkipped) && thDiag.racesSkipped.length) {
           trackHistoryLines.push(`Races skipped (no finish): ${thDiag.racesSkipped.length}`);
+        }
+
+        const eligibilityLines = [];
+        if (driver.topTierEligible === true) {
+          eligibilityLines.push('Top Tier eligible: yes');
+        } else if (driver.topTierEligible === false) {
+          eligibilityLines.push(
+            `Top Tier eligible: no (${(driver.topTierEligibleReasons || []).join('; ') || 'requirements not met'})`
+          );
+        }
+        if (driver.eliteEligible === true) {
+          eligibilityLines.push('Elite eligible: yes');
+        } else if (driver.eliteEligible === false) {
+          eligibilityLines.push(
+            `Elite eligible: no (${(driver.eliteEligibleReasons || []).join('; ') || 'requirements not met'})`
+          );
+        }
+        if (driver.recentFormRank != null) {
+          eligibilityLines.push(`Recent form rank: ${driver.recentFormRank}`);
+        }
+        if (driver.fantasyScoreRank != null) {
+          eligibilityLines.push(`Fantasy score rank: ${driver.fantasyScoreRank}`);
+        }
+        if (breakdown._recentDataSparse) {
+          const weights = breakdown._effectiveWeights || {};
+          eligibilityLines.push(
+            `Sparse recent data: yes (Season ${Math.round((weights.seasonPerformance ?? 0) * 100)}%, Recent ${Math.round((weights.recentForm ?? 0) * 100)}%; attendance caps disabled)`
+          );
+        } else if (breakdown._recentDataSparse === false) {
+          eligibilityLines.push('Sparse recent data: no');
         }
 
         return `<ul class="fantasy-detail-list">${rows
@@ -858,44 +1046,124 @@
           .concat(
             attendanceLines.map((line) => `<li>${escapeAdminHtml(line)}</li>`),
             trackHistoryLines.map((line) => `<li>${escapeAdminHtml(line)}</li>`),
+            eligibilityLines.map((line) => `<li>${escapeAdminHtml(line)}</li>`),
             capLine ? [`<li>${escapeAdminHtml(capLine)}</li>`] : [],
             recoveryLine ? [`<li>${escapeAdminHtml(recoveryLine)}</li>`] : []
           )
           .join('')}</ul>`;
       }
 
-      function renderFantasyModelSummary(meta = null) {
+      function buildTopProvenTrackHistoryFromDrivers(drivers = []) {
+        return [...drivers]
+          .filter((driver) => getTrackHistoryDisplayContext(driver).provenRank != null)
+          .sort(
+            (a, b) =>
+              Number(getTrackHistoryDisplayContext(a).provenRank) -
+              Number(getTrackHistoryDisplayContext(b).provenRank)
+          )
+          .slice(0, 5)
+          .map((driver) => {
+            const ctx = getTrackHistoryDisplayContext(driver);
+            const details = driver.scoreBreakdown?.careerTrackHistory?.details || {};
+            const score = Number(
+              details.careerTrackHistoryNormalized ??
+                details.regressedScore ??
+                driver.scoreBreakdown?.careerTrackHistory?.rawScore
+            );
+            return {
+              rank: ctx.provenRank,
+              provenTrackHistoryRank: ctx.provenRank,
+              rawTrackHistoryRank: ctx.rawRank,
+              driverName: driver.driverName,
+              trackHistoryScore: Number.isFinite(score) ? score : null,
+              historyScope: ctx.historyScope,
+              sampleQuality: ctx.sampleQuality,
+              limitedSample: ctx.limitedSample,
+            };
+          });
+      }
+
+      function renderTopTrackHistoryDrivers(meta = null, drivers = []) {
+        const section = $('#fantasyTopTrackHistorySection');
+        const list = $('#fantasyTopTrackHistoryList');
+        if (!section || !list) return;
+
+        const rows =
+          (Array.isArray(meta?.topProvenTrackHistoryDrivers) &&
+            meta.topProvenTrackHistoryDrivers.length &&
+            meta.topProvenTrackHistoryDrivers) ||
+          (Array.isArray(meta?.topTrackHistoryDrivers) &&
+            meta.topTrackHistoryDrivers.some((row) => row.provenTrackHistoryRank != null) &&
+            meta.topTrackHistoryDrivers) ||
+          buildTopProvenTrackHistoryFromDrivers(drivers);
+
+        if (!rows.length) {
+          section.hidden = true;
+          list.innerHTML = '';
+          return;
+        }
+
+        section.hidden = false;
+        list.innerHTML = rows
+          .map((row) => {
+            const score =
+              row.trackHistoryScore != null && Number.isFinite(Number(row.trackHistoryScore))
+                ? Number(row.trackHistoryScore).toFixed(1)
+                : '—';
+            const badge = row.limitedSample
+              ? ' <span class="fantasy-limited-sample-badge">Limited sample</span>'
+              : '';
+            return `<li><strong>#${escapeAdminHtml(row.provenTrackHistoryRank ?? row.rank)}</strong> ${escapeAdminHtml(row.driverName)} (${escapeAdminHtml(score)})${badge}</li>`;
+          })
+          .join('');
+      }
+
+      function renderFantasyModelSummary(meta = null, drivers = []) {
         const el = $('#fantasySlateModelSummary');
         if (!el) return;
+
+        renderTopTrackHistoryDrivers(meta, drivers);
 
         const stats = meta?.scoreStats;
         const tiers = meta?.tierCounts;
         if (!stats || !tiers) {
           el.hidden = true;
           el.textContent = '';
+          if (
+            !meta?.topProvenTrackHistoryDrivers?.length &&
+            !meta?.topTrackHistoryDrivers?.length
+          ) {
+            renderTopTrackHistoryDrivers(null, drivers);
+          }
           return;
         }
 
         const tierLine = Object.entries(tiers)
           .map(([label, count]) => `${label} ${count}`)
           .join(' · ');
-        const modelVersion = meta?.modelVersion || 'fantasy-salary-v2.1';
+        const modelVersion = meta?.modelVersion || 'fantasy-salary-v2.3.1';
         const bandViolations = meta?.salaryBandViolations?.count ?? 0;
         const cappedCount = meta?.cappedDrivers?.count ?? 0;
         const topTierRecovery = meta?.topTierRecoveryApplied ?? 0;
         const eliteRecovery = meta?.eliteRecoveryApplied ?? 0;
+        const topTierEligibleCount = meta?.topTierEligible ?? 0;
+        const eliteEligibleCount = meta?.eliteEligible ?? 0;
+        const recentDataSparse = meta?.recentDataSparse ? 'yes' : 'no';
+        const topTierUnfilled = meta?.topTierSlotsUnfilled ?? 0;
 
         el.hidden = false;
-        el.textContent = `${modelVersion}. Score max ${Number(stats.max).toFixed(1)}, avg ${Number(stats.avg).toFixed(1)}, median ${Number(stats.median).toFixed(1)}. Tiers: ${tierLine}. Band violations: ${bandViolations}. Tier-capped: ${cappedCount}. Top Tier recovery: ${topTierRecovery}. Elite recovery: ${eliteRecovery}.`;
+        el.textContent = `${modelVersion}. Score max ${Number(stats.max).toFixed(1)}, avg ${Number(stats.avg).toFixed(1)}, median ${Number(stats.median).toFixed(1)}. Tiers: ${tierLine}. Band violations: ${bandViolations}. Tier-capped: ${cappedCount}. Top Tier eligible: ${topTierEligibleCount}. Elite eligible: ${eliteEligibleCount}. Sparse recent data: ${recentDataSparse}. Top Tier recovery: ${topTierRecovery}. Elite recovery: ${eliteRecovery}. Top Tier unfilled: ${topTierUnfilled}.`;
       }
 
       function renderFantasySalaryReview(drivers = []) {
         const body = $('#fantasySalaryReviewBody');
         if (!body) return;
 
+        renderTopTrackHistoryDrivers(null, drivers);
+
         if (!drivers.length) {
           body.innerHTML =
-            '<tr><td colspan="8" class="muted">Generate salaries to review the draft slate.</td></tr>';
+            '<tr><td colspan="9" class="muted">Generate salaries to review the draft slate.</td></tr>';
           return;
         }
 
@@ -907,6 +1175,7 @@
               <td class="muted">${driver.carNumber ? `#${escapeAdminHtml(driver.carNumber)}` : '—'}</td>
               <td><span class="fantasy-tier-badge">${escapeAdminHtml(driver.computedTier)}</span></td>
               <td>${Number(driver.fantasyTierScore).toFixed(1)}</td>
+              <td>${formatTrackRankCellHtml(driver)}</td>
               <td class="salary">${formatFantasySalary(driver.generatedSalary)}</td>
               <td class="salary">${formatFantasySalary(driver.finalSalary ?? driver.generatedSalary)}</td>
               <td>
@@ -1001,7 +1270,7 @@
           const data = await res.json();
           renderFantasySalaryReview(data.drivers || []);
           updateFantasyDraftHeader(data.slate || null);
-          renderFantasyModelSummary(data.slate?.meta || data.meta || null);
+          renderFantasyModelSummary(data.slate?.meta || data.meta || null, data.drivers || []);
         } catch {
           renderFantasySalaryReview([]);
         }
@@ -1030,7 +1299,7 @@
 
           renderFantasySalaryReview(data.drivers || []);
           updateFantasyDraftHeader(data.slate || null, data.targetRace || null);
-          renderFantasyModelSummary(data.meta || data.slate?.meta || null);
+          renderFantasyModelSummary(data.meta || data.slate?.meta || null, data.drivers || []);
           if (statusEl) {
             statusEl.textContent = `Draft saved for race ${data.targetRace?.raceNumber ?? data.slate?.race_number ?? ''} (${(data.drivers || []).length} drivers).`;
           }

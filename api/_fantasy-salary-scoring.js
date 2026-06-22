@@ -1,14 +1,20 @@
-import { buildCareerTrackHistoryForDriver, computeTrackDollarAdjustment } from './_fantasy-track-history.js';
+import { buildCareerTrackHistoryForDriver, computeTrackDollarAdjustment, buildCurrentSeasonTrackHistoryForDriver } from './_fantasy-track-history.js';
 import {
   FANTASY_MODEL_VERSION,
+  assignTrackHistoryRanks,
   buildFantasyAttendanceContext,
+  buildSlateRecentRaceContext,
   detectSalaryBandViolations,
   finalizeFantasySlateSalaries,
+  getEffectiveFantasyTierWeights,
   normalizeFantasySlateComponents,
   scoreFantasyDriverRaw,
   summarizeCappedDrivers,
   summarizeFantasyScoreStats,
   summarizeFantasyTierCounts,
+  summarizeTierEligibility,
+  summarizeTopTrackHistoryDrivers,
+  summarizeTopProvenTrackHistoryDrivers,
 } from './_fantasy-tier-scoring.js';
 import { buildFantasySalaryReasons } from './_fantasy-salary-reasons.js';
 
@@ -21,23 +27,43 @@ export function buildFantasyDriverSalaries({
   schedules,
   upcomingTrack,
   driverRaceResultsByDriver,
+  driverCareerRaceRowsByDriver = null,
+  trackHistoryMode = 'career',
   priorSalariesByDriver = new Map(),
   priorTierScoresByDriver = new Map(),
   slateRaceNumber = null,
   scheduleRaces = null,
+  allAlignedRaces = null,
   settings = null,
   now = new Date(),
 }) {
+  const recentRaceContext =
+    slateRaceNumber != null && scheduleRaces
+      ? buildSlateRecentRaceContext({
+          scheduleRaces,
+          slateRaceNumber,
+          alignedRaces,
+          allAlignedRaces: allAlignedRaces || [],
+          settings,
+          now,
+        })
+      : null;
+
   const rawDrivers = standings.map((row) => {
     const driverId = String(row.driverId);
     const grounding = groundingByDriver?.[driverId] || {
       recentRaceFinishes: [],
     };
-    const raceRows = driverRaceResultsByDriver?.get(driverId) || [];
-    const trackHistory = buildCareerTrackHistoryForDriver(raceRows, upcomingTrack, {
-      alignedRaces,
-      driverId,
-    });
+    const careerRows = driverCareerRaceRowsByDriver?.get(driverId) || [];
+    const seasonRows = driverRaceResultsByDriver?.get(driverId) || [];
+    const useCareerTrackHistory = trackHistoryMode !== 'current_season';
+    const trackHistoryRows = useCareerTrackHistory ? careerRows : seasonRows;
+    const trackHistory = useCareerTrackHistory
+      ? buildCareerTrackHistoryForDriver(trackHistoryRows, upcomingTrack)
+      : buildCurrentSeasonTrackHistoryForDriver(trackHistoryRows, upcomingTrack, {
+          alignedRaces,
+          driverId,
+        });
     trackHistory.trackAdjustment = computeTrackDollarAdjustment(trackHistory);
 
     const attendanceContext =
@@ -49,7 +75,8 @@ export function buildFantasyDriverSalaries({
             alignedRaces,
             slateRaceNumber,
             scheduleRaces,
-            driverRaceRows: raceRows,
+            driverRaceRows: seasonRows,
+            recentRaceContext,
             settings,
             now,
           })
@@ -70,14 +97,42 @@ export function buildFantasyDriverSalaries({
     });
   });
 
-  normalizeFantasySlateComponents(rawDrivers);
+  const sparseInfo = recentRaceContext
+    ? {
+        recentDataSparse: recentRaceContext.recentDataSparse,
+        validRecentRaceCount: recentRaceContext.validRecentRaceCount,
+        attendanceCapsEnabled: recentRaceContext.attendanceCapsEnabled,
+        validLast5Entries: recentRaceContext.validLast5Entries,
+        excludedLast5Entries: recentRaceContext.excludedLast5Entries,
+        validLast3Entries: recentRaceContext.validLast3Entries,
+        excludedLast3Entries: recentRaceContext.excludedLast3Entries,
+        last5ScheduleWindowSize: recentRaceContext.last5ScheduleWindowSize,
+        last3AlignedWindowSize: recentRaceContext.last3AlignedWindowSize,
+      }
+    : {
+        recentDataSparse: false,
+        validRecentRaceCount: 0,
+        attendanceCapsEnabled: false,
+      };
+  const effectiveWeights = getEffectiveFantasyTierWeights(sparseInfo.recentDataSparse);
+
+  normalizeFantasySlateComponents(rawDrivers, {
+    effectiveWeights,
+    recentDataSparse: sparseInfo.recentDataSparse,
+  });
   const drivers = finalizeFantasySlateSalaries(rawDrivers);
   const tierRecovery = drivers.tierRecoveryMeta || {
     topTierRecoveryApplied: 0,
     eliteRecoveryApplied: 0,
     recoveredDrivers: [],
+    topTierSlotsUnfilled: 0,
+    topTierRecoverySkippedNoEligible: false,
   };
-  drivers.tierRecoveryMeta = tierRecovery;
+  drivers.tierRecoveryMeta = {
+    ...tierRecovery,
+    ...sparseInfo,
+    effectiveWeights,
+  };
 
   for (const driver of drivers) {
     driver.salaryReasons = buildFantasySalaryReasons(driver);
@@ -85,6 +140,8 @@ export function buildFantasyDriverSalaries({
       driver.scoreBreakdown._fantasyTierScoreRaw = driver.fantasyTierScoreRaw;
     }
   }
+
+  assignTrackHistoryRanks(drivers);
 
   return drivers;
 }
@@ -100,7 +157,11 @@ export function summarizeFantasySlateMeta(drivers = []) {
     topTierRecoveryApplied: 0,
     eliteRecoveryApplied: 0,
     recoveredDrivers: [],
+    topTierSlotsUnfilled: 0,
+    topTierRecoverySkippedNoEligible: false,
+    recentDataSparse: false,
   };
+  const eligibility = summarizeTierEligibility(drivers);
 
   return {
     modelVersion: FANTASY_MODEL_VERSION,
@@ -115,8 +176,18 @@ export function summarizeFantasySlateMeta(drivers = []) {
       violations,
     },
     cappedDrivers,
+    topTierEligible: eligibility.topTierEligible,
+    eliteEligible: eligibility.eliteEligible,
+    topTrackHistoryDrivers: summarizeTopProvenTrackHistoryDrivers(drivers),
+    topProvenTrackHistoryDrivers: summarizeTopProvenTrackHistoryDrivers(drivers),
+    recentDataSparse: tierRecovery.recentDataSparse ?? false,
     topTierRecoveryApplied: tierRecovery.topTierRecoveryApplied ?? 0,
     eliteRecoveryApplied: tierRecovery.eliteRecoveryApplied ?? 0,
+    topTierSlotsUnfilled: tierRecovery.topTierSlotsUnfilled ?? 0,
+    topTierRecoverySkippedNoEligible: tierRecovery.topTierRecoverySkippedNoEligible ?? false,
+    validRecentRaceCount: tierRecovery.validRecentRaceCount ?? null,
+    attendanceCapsEnabled: tierRecovery.attendanceCapsEnabled ?? null,
+    excludedRecentRaces: tierRecovery.excludedLast5Entries ?? [],
     tierRecovery,
   };
 }
