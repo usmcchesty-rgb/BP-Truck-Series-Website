@@ -34,7 +34,10 @@ export function buildFantasyDriverSalaries({
       recentRaceFinishes: [],
     };
     const raceRows = driverRaceResultsByDriver?.get(driverId) || [];
-    const trackHistory = buildCareerTrackHistoryForDriver(raceRows, upcomingTrack);
+    const trackHistory = buildCareerTrackHistoryForDriver(raceRows, upcomingTrack, {
+      alignedRaces,
+      driverId,
+    });
     trackHistory.trackAdjustment = computeTrackDollarAdjustment(trackHistory);
 
     const attendanceContext =

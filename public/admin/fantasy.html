@@ -776,7 +776,7 @@
         const rows = [
           ['Season', breakdown.seasonPerformance],
           ['Recent Form', breakdown.recentForm],
-          ['Track History', breakdown.careerTrackHistory],
+          ['Current Season Track History', breakdown.careerTrackHistory],
           ['Race Impact', breakdown.raceImpact],
           ['Momentum', breakdown.momentum],
           ['Reliability', breakdown.reliability],
@@ -809,6 +809,36 @@
           tierRecovery?.applied
             ? `Tier recovery: ${tierRecovery.previousTier} → ${driver.computedTier} (${tierRecovery.reason || tierRecovery.type})`
             : null;
+        const thDetails = breakdown.careerTrackHistory?.details || {};
+        const thDiag = thDetails.diagnostics || {};
+        const trackHistoryLines = [];
+        if (thDetails.historyScope) {
+          trackHistoryLines.push(`History scope: ${thDetails.historyScope} (not multi-season career yet)`);
+        }
+        if (thDetails.upcomingTrackMatch) {
+          const m = thDetails.upcomingTrackMatch;
+          trackHistoryLines.push(
+            `Upcoming track: ${m.matchedTrackName} (${m.matchedTrackType}, ${m.matchMethod})`
+          );
+        }
+        if (thDetails.exactTrackStarts != null || thDetails.similarTrackStarts != null) {
+          trackHistoryLines.push(
+            `Exact starts: ${thDetails.exactTrackStarts ?? 0}; similar starts: ${thDetails.similarTrackStarts ?? 0}; type used: ${thDetails.trackTypeUsed ?? 'n/a'}`
+          );
+        }
+        if (Array.isArray(thDiag.racesIncluded) && thDiag.racesIncluded.length) {
+          trackHistoryLines.push(
+            `Races included: ${thDiag.racesIncluded
+              .map(
+                (r) =>
+                  `R${r.pointsRaceNumber} ${r.track} P${r.finish} (${r.matchedTrackType}${r.countsAsSimilar ? ', similar' : r.countsAsExact ? ', exact' : ''})`
+              )
+              .join('; ')}`
+          );
+        }
+        if (Array.isArray(thDiag.racesSkipped) && thDiag.racesSkipped.length) {
+          trackHistoryLines.push(`Races skipped (no finish): ${thDiag.racesSkipped.length}`);
+        }
 
         return `<ul class="fantasy-detail-list">${rows
           .map(([label, component]) => {
@@ -827,6 +857,7 @@
           })
           .concat(
             attendanceLines.map((line) => `<li>${escapeAdminHtml(line)}</li>`),
+            trackHistoryLines.map((line) => `<li>${escapeAdminHtml(line)}</li>`),
             capLine ? [`<li>${escapeAdminHtml(capLine)}</li>`] : [],
             recoveryLine ? [`<li>${escapeAdminHtml(recoveryLine)}</li>`] : []
           )

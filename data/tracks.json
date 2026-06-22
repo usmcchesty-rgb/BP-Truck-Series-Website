@@ -42,7 +42,12 @@
     },
     {
       "trackName": "EchoPark Speedway (Atlanta) Oval Night",
-      "aliases": ["EchoPark Speedway Atlanta", "Atlanta Motor Speedway", "Atlanta"],
+      "aliases": [
+        "EchoPark Speedway Atlanta",
+        "Atlanta Motor Speedway",
+        "Atlanta",
+        "EchoPark Speedway (Atlanta) Oval Night"
+      ],
       "trackType": "intermediate"
     },
     {

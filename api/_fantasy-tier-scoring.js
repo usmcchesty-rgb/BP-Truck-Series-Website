@@ -839,7 +839,9 @@ export function scoreFantasyDriverRaw({
   });
 
   components.careerTrackHistory.details = {
-    scope: trackHistory?.scope ?? null,
+    scope: trackHistory?.scoringScope ?? trackHistory?.scope ?? null,
+    historyScope: trackHistory?.historyScope ?? 'current_season',
+    scoringScope: trackHistory?.scoringScope ?? trackHistory?.scope ?? null,
     fallbackUsed: trackHistory?.fallbackUsed ?? false,
     summary: trackHistory?.summary ?? null,
     scoreDetails: trackHistory?.scoreDetails ?? null,
@@ -847,6 +849,13 @@ export function scoreFantasyDriverRaw({
     sampleSize: trackHistory?.summary?.starts ?? trackHistory?.scoreDetails?.sampleSize ?? null,
     regressionApplied: trackHistory?.scoreDetails?.regressionApplied ?? false,
     regressedScore: trackHistory?.score ?? null,
+    upcomingTrackMatch: trackHistory?.upcomingTrackMatch ?? null,
+    trackTypeUsed: trackHistory?.trackTypeUsed ?? null,
+    exactTrackStarts: trackHistory?.exactTrackStarts ?? null,
+    similarTrackStarts: trackHistory?.similarTrackStarts ?? null,
+    exactStarts: trackHistory?.exactStarts ?? null,
+    similarStarts: trackHistory?.similarStarts ?? null,
+    diagnostics: trackHistory?.diagnostics ?? null,
   };
 
   return {
@@ -862,7 +871,8 @@ export function scoreFantasyDriverRaw({
     scoreBreakdown: components,
     trackHistorySummary: trackHistory?.summary
       ? {
-          scope: trackHistory.scope,
+          historyScope: trackHistory.historyScope ?? 'current_season',
+          scope: trackHistory.scoringScope ?? trackHistory.scope,
           fallbackUsed: trackHistory.fallbackUsed,
           similarTrackType: trackHistory.similarTrackType,
           upcomingTrack: trackHistory.upcomingTrack,

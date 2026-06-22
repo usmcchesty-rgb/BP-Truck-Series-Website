@@ -56,18 +56,26 @@ export function buildFantasySalaryReasons(scored = {}) {
   }
 
   if (breakdown.careerTrackHistory) {
-    const summary = breakdown.careerTrackHistory.details?.summary;
-    const scope = breakdown.careerTrackHistory.details?.scope || 'track';
-    const scopeLabel = scope === 'exact_track'
-      ? 'exact track'
-      : scope === 'similar_track_type'
-        ? 'similar track type'
-        : 'blended track profile';
-    const regression = breakdown.careerTrackHistory.details?.regressionApplied
-      ? `; sample ${breakdown.careerTrackHistory.details?.sampleSize ?? summary?.starts ?? 0}, actual ${Math.round(breakdown.careerTrackHistory.details?.actualTrackScore ?? 0)} → regressed ${Math.round(breakdown.careerTrackHistory.details?.regressedScore ?? 0)}`
+    const th = breakdown.careerTrackHistory.details || {};
+    const summary = th.summary;
+    const scoringScope = th.scoringScope ?? th.scope;
+    const scopeLabel =
+      scoringScope === 'exact_track'
+        ? 'exact track (current season)'
+        : scoringScope === 'similar_track_type'
+          ? 'similar track type (current season)'
+          : scoringScope === 'exact_track_blended'
+            ? 'blended exact + similar (current season)'
+            : 'current season';
+    const regression = th.regressionApplied
+      ? `; sample ${th.sampleSize ?? summary?.starts ?? 0}, actual ${Math.round(th.actualTrackScore ?? 0)} → regressed ${Math.round(th.regressedScore ?? 0)}`
+      : '';
+    const trackMatch = th.upcomingTrackMatch;
+    const matchNote = trackMatch?.matchMethod
+      ? `; upcoming match ${trackMatch.matchedTrackName} (${trackMatch.matchedTrackType}, ${trackMatch.matchMethod})`
       : '';
     reasons.push(
-      `Career Track History ${formatComponentPair(breakdown.careerTrackHistory)} (${scopeLabel}${summary?.starts != null ? `, ${summary.starts} starts` : ''}${regression})`
+      `Current Season Track History ${formatComponentPair(breakdown.careerTrackHistory)} (${scopeLabel}${summary?.starts != null ? `, ${summary.starts} starts` : ''}; exact ${th.exactStarts ?? 0}, similar ${th.similarStarts ?? 0}${matchNote}${regression})`
     );
   }
 
