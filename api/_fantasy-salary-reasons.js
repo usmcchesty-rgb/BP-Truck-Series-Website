@@ -4,34 +4,47 @@ function formatMoney(value) {
   return `$${n.toLocaleString('en-US')}`;
 }
 
-function formatComponentScore(score) {
-  const n = Number(score);
-  return Number.isFinite(n) ? `${Math.round(n)}/100` : 'n/a';
+function formatComponentPair(component) {
+  if (!component) return 'n/a';
+  const raw = Number(component.rawScore ?? component.score);
+  const normalized = Number(component.normalizedScore ?? component.score);
+  if (!Number.isFinite(raw) && !Number.isFinite(normalized)) return 'n/a';
+  if (!Number.isFinite(raw)) return `norm ${Math.round(normalized)}/100`;
+  if (!Number.isFinite(normalized) || raw === normalized) {
+    return `${Math.round(raw)}/100`;
+  }
+  return `raw ${Math.round(raw)} → norm ${Math.round(normalized)}/100`;
 }
 
 export function buildFantasySalaryReasons(scored = {}) {
   const reasons = [];
   const tierScore = Number(scored.fantasyTierScore);
+  const rawTierScore = Number(scored.fantasyTierScoreRaw);
   const tier = scored.computedTier || 'Value';
   const band = scored.salaryBand || {};
 
   reasons.push(
-    `Fantasy Tier Score ${Number.isFinite(tierScore) ? tierScore.toFixed(1) : 'n/a'} → ${tier} (${formatMoney(band.min)}–${formatMoney(band.max)})`
+    `Fantasy Tier Score ${Number.isFinite(tierScore) ? tierScore.toFixed(1) : 'n/a'} (field-normalized) → ${tier} (${formatMoney(band.min)}–${formatMoney(band.max)})`
   );
+
+  if (Number.isFinite(rawTierScore) && rawTierScore !== tierScore) {
+    reasons.push(`Pre-normalization composite score: ${rawTierScore.toFixed(1)}`);
+  }
 
   const breakdown = scored.scoreBreakdown || {};
   if (breakdown.seasonPerformance) {
     const position = breakdown.seasonPerformance.details?.pointsPosition;
     const wins = breakdown.seasonPerformance.details?.wins;
     reasons.push(
-      `Season Performance ${formatComponentScore(breakdown.seasonPerformance.score)}${position != null ? ` (P${position}${wins != null ? `, ${wins} win${wins === 1 ? '' : 's'}` : ''})` : ''}`
+      `Season Performance ${formatComponentPair(breakdown.seasonPerformance)}${position != null ? ` (P${position}${wins != null ? `, ${wins} win${wins === 1 ? '' : 's'}` : ''})` : ''}`
     );
   }
 
   if (breakdown.recentForm) {
     const avg = breakdown.recentForm.details?.last3RaceAverageFinish;
+    const neutral = breakdown.recentForm.details?.neutralApplied ? ' [neutral raw]' : '';
     reasons.push(
-      `Recent Form ${formatComponentScore(breakdown.recentForm.score)}${avg != null ? ` (avg finish ${avg} last 3)` : ''}`
+      `Recent Form ${formatComponentPair(breakdown.recentForm)}${avg != null ? ` (avg finish ${avg} last 3)` : ''}${neutral}`
     );
   }
 
@@ -44,21 +57,22 @@ export function buildFantasySalaryReasons(scored = {}) {
         ? 'similar track type'
         : 'blended track profile';
     reasons.push(
-      `Career Track History ${formatComponentScore(breakdown.careerTrackHistory.score)} (${scopeLabel}${summary?.starts != null ? `, ${summary.starts} starts` : ''})`
+      `Career Track History ${formatComponentPair(breakdown.careerTrackHistory)} (${scopeLabel}${summary?.starts != null ? `, ${summary.starts} starts` : ''})`
     );
   }
 
   if (breakdown.raceImpact) {
     const finish = breakdown.raceImpact.details?.finish;
     reasons.push(
-      `Race Impact ${formatComponentScore(breakdown.raceImpact.score)}${finish != null ? ` (latest finish P${finish})` : ''}`
+      `Race Impact ${formatComponentPair(breakdown.raceImpact)}${finish != null ? ` (latest finish P${finish})` : ''}`
     );
   }
 
   if (breakdown.momentum) {
     const prior = breakdown.momentum.details?.priorTierScore;
+    const neutral = breakdown.momentum.details?.neutralApplied ? ' [first slate neutral]' : '';
     reasons.push(
-      `Momentum ${formatComponentScore(breakdown.momentum.score)}${prior != null ? ` (prior tier score ${prior})` : ''}`
+      `Momentum ${formatComponentPair(breakdown.momentum)}${prior != null ? ` (prior tier score ${prior})` : ''}${neutral}`
     );
   }
 
@@ -72,6 +86,12 @@ export function buildFantasySalaryReasons(scored = {}) {
   if (scored.smoothing?.applied) {
     reasons.push(
       `Smoothed from prior salary ${formatMoney(scored.smoothing.priorSalary)} (${Math.round((scored.smoothing.weight || 0) * 100)}% prior weight)`
+    );
+  }
+
+  if (scored.bandEnforcement?.applied) {
+    reasons.push(
+      `Tier band enforcement: ${formatMoney(scored.bandEnforcement.unclampedSalary)} → ${formatMoney(scored.bandEnforcement.generatedSalary)} (${formatMoney(band.min)}–${formatMoney(band.max)})`
     );
   }
 
