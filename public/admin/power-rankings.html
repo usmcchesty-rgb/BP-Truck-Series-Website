@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Power Rankings Admin</title>
   <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/admin/admin-layout.css">
   <link rel="stylesheet" href="/power-rankings-discord-export.css">
   <style>
-    .wrap { padding: 18px; max-width: 1200px; margin: 0 auto; }
     .sub { color: var(--bp-text-secondary); font-size: 12px; margin-bottom: 16px; line-height: 1.45; }
     .panel { padding: 14px; margin-bottom: 14px; }
     .panel h2 { margin: 0 0 12px; font-size: 18px; color: #ff3030; }
@@ -259,7 +259,7 @@
 
   <main id="adminView" class="wrap" hidden>
     <h1>Power Rankings</h1>
-    <p class="sub">Create and publish weekly Top 10 power rankings with custom subtitles and writeups. Honorable mentions are optional (0â€“3).</p>
+    <p class="sub">Create and publish weekly Top 10 power rankings with custom subtitles and writeups. Honorable mentions are optional (0–3).</p>
 
     <div class="panel formula-image-panel">
       <h2>Formula Image</h2>
@@ -310,7 +310,7 @@
 
       <div class="manual-notes-box prophet-take-editor">
         <label class="field-label" for="prophetTake">The Pedal Prophet's Take</label>
-        <p class="sub">Weekly columnist article (150â€“300 words). Generated with the draft; edit before saving or publishing.</p>
+        <p class="sub">Weekly columnist article (150–300 words). Generated with the draft; edit before saving or publishing.</p>
         <textarea id="prophetTake" class="textarea" placeholder="The Pedal Prophet's weekly take will appear here after generation..."></textarea>
       </div>
 
@@ -426,7 +426,7 @@
           status.textContent =
             `Saved transcript found for Race ${raceNumber}` +
             `${data.transcript.raceName ? ` (${data.transcript.raceName})` : ''}` +
-            ` â€” ${String(data.transcript.transcript).length} characters.` +
+            ` — ${String(data.transcript.transcript).length} characters.` +
             ` Last updated ${new Date(data.transcript.updatedAt).toLocaleString()}.`;
           link.hidden = true;
           return;
@@ -810,7 +810,7 @@
 
       for (const row of diagnostics.top10 || []) {
         lines.push(
-          `  #${row.rank} ${row.driverName} â€” score ${row.powerScore} (prev PR #${row.previousRank ?? 'NEW'})`,
+          `  #${row.rank} ${row.driverName} — score ${row.powerScore} (prev PR #${row.previousRank ?? 'NEW'})`,
           `    breakdown: ${formatScoreBreakdown(row.scoreBreakdown)}`,
           `    retentionBonus: ${row.retentionBonus ?? 0}, dropProtection: ${row.dropProtectionApplied ? 'yes' : 'no'}`,
           row.dropReasons?.length ? `    dropReasons: ${row.dropReasons.join('; ')}` : '',
@@ -828,7 +828,7 @@
         lines.push('', 'Dropped from previous Top 10:');
         for (const row of diagnostics.droppedFromPreviousTop10) {
           lines.push(
-            `  ${row.driverName} (was #${row.previousRank}) â€” score ${row.powerScore ?? 'n/a'}`,
+            `  ${row.driverName} (was #${row.previousRank}) — score ${row.powerScore ?? 'n/a'}`,
             row.replacedByProtection
               ? `    bumped by drop protection for ${row.replacedFor}`
               : row.canDropOut === false
@@ -843,14 +843,14 @@
       if (diagnostics.honorableMentionCandidates?.length) {
         lines.push('', 'Honorable mention candidates (by score):');
         for (const row of diagnostics.honorableMentionCandidates) {
-          lines.push(`  ${row.driverName} â€” score ${row.powerScore}`);
+          lines.push(`  ${row.driverName} — score ${row.powerScore}`);
         }
       }
 
       lines.push('', 'All candidates (by score):');
       for (const row of diagnostics.allCandidates || []) {
         lines.push(
-          `  ${row.scoreRank}. ${row.driverName} â€” ${row.powerScore} [${formatScoreBreakdown(row.scoreBreakdown)}] prev PR #${row.previousRank ?? 'â€”'}${row.protectedFromDropout ? ' (protected)' : ''}`
+          `  ${row.scoreRank}. ${row.driverName} — ${row.powerScore} [${formatScoreBreakdown(row.scoreBreakdown)}] prev PR #${row.previousRank ?? '—'}${row.protectedFromDropout ? ' (protected)' : ''}`
         );
       }
 
@@ -908,7 +908,7 @@
         const facts = (verifiedFactsUsed?.[rank] || [])
           .map((fact) => fact.label || fact.type)
           .join('; ');
-        return `  ${rank}: ${count} fact(s)${facts ? ` â€” ${facts}` : ''}`;
+        return `  ${rank}: ${count} fact(s)${facts ? ` — ${facts}` : ''}`;
       });
     }
 
@@ -1346,7 +1346,7 @@
             <select class="select driver-select">${driverSelectHtml(entry.driverId || entry.driver_id || '')}</select>
           </div>
           <div>
-            <input class="input movement-input" type="text" value="${escapeHtml(movementFieldValue(entry))}" placeholder="0, NEW, NR" title="Number = â–²/â–¼ spots. NEW or NR = newly ranked. 0 = unchanged.">
+            <input class="input movement-input" type="text" value="${escapeHtml(movementFieldValue(entry))}" placeholder="0, NEW, NR" title="Number = ?/? spots. NEW or NR = newly ranked. 0 = unchanged.">
           </div>
           <div>
             <input class="input subtitle-input" type="text" value="${escapeHtml(entry.subtitle || '')}" placeholder="Custom headline">
@@ -1503,7 +1503,7 @@
         return `<div class="week-item">
           <div>
             <strong>${escapeHtml(week.label || `Race ${week.raceNumber}`)}</strong>
-            <span>${status} Â· ${escapeHtml(date)}</span>
+            <span>${status} · ${escapeHtml(date)}</span>
           </div>
           <div class="week-item-actions">
             <button class="btn btn-secondary" type="button" onclick="loadWeek(${week.id})">Edit</button>
@@ -1727,7 +1727,7 @@
         const diagnostics = buildTranscriptDiagnosticsView(data);
         const previousNote = data.previousRaceNumber
           ? ` Movement compared to Race ${data.previousRaceNumber} rankings.`
-          : ' No previous rankings found â€” movement defaults applied.';
+          : ' No previous rankings found — movement defaults applied.';
         const transcriptNote =
           diagnostics.transcriptSource === 'saved'
             ? ` Saved broadcast transcript used (${diagnostics.savedTranscriptLength || 0} characters).`
@@ -1735,9 +1735,9 @@
             ? ` Manual race notes used (${diagnostics.manualRaceNotesLength || 0} characters).`
             : diagnostics.transcriptUsed
           ? ` Green Flag TV transcript used${diagnostics.selectedVideoTitle ? `: ${diagnostics.selectedVideoTitle}` : ''}.`
-          : ` No saved transcript available â€” draft used standings/results only.${diagnostics.transcriptDebugReason ? ` Debug: ${diagnostics.transcriptDebugReason}.` : ''}`;
+          : ` No saved transcript available — draft used standings/results only.${diagnostics.transcriptDebugReason ? ` Debug: ${diagnostics.transcriptDebugReason}.` : ''}`;
         const existingNote = weekId
-          ? ' Updated existing Race week in the form â€” save to overwrite the draft.'
+          ? ' Updated existing Race week in the form — save to overwrite the draft.'
           : ' Review and edit before saving or publishing.';
         const sources = buildGenerationSourcesView(data);
         const confidenceNote = sources.confidenceScore
@@ -1751,7 +1751,7 @@
           .filter(([key, items]) => String(key).match(/^\d+$/) && Array.isArray(items) && items.length)
           .map(([key]) => key);
         const writeupWarningNote = writeupWarningRanks.length
-          ? ` Writeup warnings at rank(s): ${writeupWarningRanks.join(', ')} â€” review or regenerate.`
+          ? ` Writeup warnings at rank(s): ${writeupWarningRanks.join(', ')} — review or regenerate.`
           : '';
         const prophetTakeNote = data.prophetTakeValidationError
           ? ` Prophet's Take validation: ${data.prophetTakeValidationError}`
@@ -2072,7 +2072,7 @@
 
     async function exportDiscordImage() {
       setDiscordExportBusy(true);
-      setDiscordExportStatus('Preparing Discord PNGâ€¦');
+      setDiscordExportStatus('Preparing Discord PNG…');
 
       try {
         const week = await buildAdminExportWeek();
@@ -2087,7 +2087,7 @@
 
     async function copyDiscordText() {
       setDiscordExportBusy(true);
-      setDiscordExportStatus('Copying Discord textâ€¦');
+      setDiscordExportStatus('Copying Discord text…');
 
       try {
         const week = await buildAdminExportWeek();
@@ -2102,7 +2102,7 @@
 
     async function downloadDiscordText() {
       setDiscordExportBusy(true);
-      setDiscordExportStatus('Preparing Discord text fileâ€¦');
+      setDiscordExportStatus('Preparing Discord text file…');
 
       try {
         const week = await buildAdminExportWeek();

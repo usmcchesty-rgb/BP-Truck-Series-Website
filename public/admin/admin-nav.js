@@ -15,7 +15,19 @@
 
   const STYLE_ID = "admin-shell-nav-styles";
 
+  const LAYOUT_STYLE_ID = "admin-layout-styles";
+
+  function injectLayoutStyles() {
+    if (document.getElementById(LAYOUT_STYLE_ID)) return;
+    const link = document.createElement("link");
+    link.id = LAYOUT_STYLE_ID;
+    link.rel = "stylesheet";
+    link.href = "/admin/admin-layout.css";
+    document.head.appendChild(link);
+  }
+
   function injectStyles() {
+    injectLayoutStyles();
     if (document.getElementById(STYLE_ID)) return;
     const style = document.createElement("style");
     style.id = STYLE_ID;

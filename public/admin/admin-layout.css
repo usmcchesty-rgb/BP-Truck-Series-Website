@@ -1,0 +1,6 @@
+/* Shared admin content container — used by all /admin pages */
+.wrap {
+  padding: 18px;
+  max-width: 1800px;
+  margin: 0 auto;
+}
