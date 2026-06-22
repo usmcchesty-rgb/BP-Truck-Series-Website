@@ -31,33 +31,45 @@ body.fantasy-page .topbar{
   padding:40px 18px 48px;
 }
 
-/* ── Hero banner (image + logo overlay) ── */
+/* ── Hero banner (fixed 1920×820 design banner + overlays) ── */
 .fantasy-hero-banner{
-  --fantasy-hero-logo-top: 21%;
-  /* % of banner width — scales with the hero image, not the viewport (vw breaks browser zoom) */
-  --fantasy-hero-logo-width: 32%;
-  --fantasy-hero-logo-max-width: 560px;
-  --fantasy-hero-logo-min-width: 200px;
-  position:relative;
-  display:grid;
-  grid-template-columns:minmax(0, 100%);
   width:100%;
-  min-width:0;
   max-width:none;
+  min-width:0;
   margin:0;
   padding:0;
+}
+
+.fantasy-hero-stage{
+  --fantasy-hero-design-width:1920;
+  --fantasy-hero-banner-w:1920;
+  --fantasy-hero-banner-h:820;
+  --fantasy-hero-logo-top:21%;
+  --fantasy-hero-logo-width:32%;
+  --fantasy-hero-logo-max-width:calc(560 / var(--fantasy-hero-design-width) * 100%);
+  --fantasy-hero-logo-min-width:calc(200 / var(--fantasy-hero-design-width) * 100%);
+  position:relative;
+  width:100%;
+  max-width:none;
+  min-width:0;
+  aspect-ratio:var(--fantasy-hero-banner-w) / var(--fantasy-hero-banner-h);
+  overflow:hidden;
   line-height:0;
+  container-type:inline-size;
+  container-name:fantasy-hero;
 }
 
 .fantasy-hero-banner-img{
-  grid-column:1;
-  grid-row:1;
+  position:absolute;
+  inset:0;
   display:block;
   width:100%;
-  max-width:100%;
-  height:auto;
+  height:100%;
+  max-width:none;
   min-width:0;
   border:0;
+  object-fit:cover;
+  object-position:center top;
 }
 
 .fantasy-hero-logo{
@@ -88,7 +100,7 @@ body.fantasy-page .topbar{
   width:var(--fantasy-hero-logo-width);
   max-width:min(var(--fantasy-hero-logo-max-width), 100%);
   color:#fff;
-  font-size:clamp(1.75rem, 2.5rem, 2.625rem);
+  font-size:clamp(0.875rem, 2.19cqi, 2.625rem);
   font-style:italic;
   font-weight:900;
   letter-spacing:.08em;
@@ -451,10 +463,10 @@ body.fantasy-page .topbar{
 }
 
 @media (max-width: 640px){
-  .fantasy-hero-banner{
+  .fantasy-hero-stage{
     --fantasy-hero-logo-top: 18%;
     --fantasy-hero-logo-width: 48%;
-    --fantasy-hero-logo-max-width: 420px;
+    --fantasy-hero-logo-max-width: calc(420 / var(--fantasy-hero-design-width) * 100%);
   }
 
   .fantasy-overview-grid{

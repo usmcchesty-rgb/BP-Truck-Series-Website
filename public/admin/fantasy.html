@@ -6,6 +6,7 @@
     <title>Fantasy Admin — BP Truck Series</title>
     <link rel="stylesheet" href="/styles.css" />
     <link rel="stylesheet" href="/admin/admin-layout.css" />
+    <link rel="stylesheet" href="/fantasy.css" />
     <style>
       .sub {
         color: var(--bp-text-secondary);
@@ -202,38 +203,12 @@
       }
 
       .fantasy-admin-hero-only-preview {
-        position: relative;
         width: 100%;
         max-width: 100%;
         margin: 12px 0 0;
         border: 1px solid #333;
         background: #050505;
         overflow: hidden;
-        line-height: 0;
-      }
-
-      .fantasy-admin-hero-only-preview__hero {
-        display: block;
-        width: 100%;
-        height: auto;
-      }
-
-      .fantasy-admin-hero-only-preview__hero[hidden] {
-        display: none;
-      }
-
-      .fantasy-admin-hero-only-preview__logo {
-        position: absolute;
-        left: 50%;
-        transform: translateX(-50%);
-        height: auto;
-        object-fit: contain;
-        pointer-events: none;
-        filter: drop-shadow(0 4px 18px rgba(0, 0, 0, 0.45));
-      }
-
-      .fantasy-admin-hero-only-preview__logo[hidden] {
-        display: none;
       }
 
       .fantasy-admin-hero-only-preview__msg {
@@ -521,20 +496,22 @@
               <div class="field-label">Fantasy Hero Preview</div>
               <span class="field-help">Hero-only preview for logo placement. Slider changes update the preview instantly.</span>
               <span class="field-help">Preview is an approximate hero-only guide. Public page may vary slightly by screen width.</span>
-              <div id="fantasyHeroOnlyPreview" class="fantasy-admin-hero-only-preview" aria-label="Fantasy hero logo placement preview">
+              <div id="fantasyHeroOnlyPreview" class="fantasy-admin-hero-only-preview fantasy-hero-banner" aria-label="Fantasy hero logo placement preview">
                 <p id="fantasyHeroOnlyPreviewMsg" class="fantasy-admin-hero-only-preview__msg" hidden></p>
-                <img
-                  id="fantasyHeroOnlyPreviewHero"
-                  class="fantasy-admin-hero-only-preview__hero"
-                  alt=""
-                  hidden
-                />
-                <img
-                  id="fantasyHeroOnlyPreviewLogo"
-                  class="fantasy-admin-hero-only-preview__logo"
-                  alt=""
-                  hidden
-                />
+                <div class="fantasy-hero-stage">
+                  <img
+                    id="fantasyHeroOnlyPreviewHero"
+                    class="fantasy-hero-banner-img"
+                    alt=""
+                    hidden
+                  />
+                  <img
+                    id="fantasyHeroOnlyPreviewLogo"
+                    class="fantasy-hero-logo"
+                    alt=""
+                    hidden
+                  />
+                </div>
               </div>
               <div class="branding-upload-row">
                 <button id="refreshFantasyHeroPreviewBtn" class="btn btn-secondary" type="button">
@@ -705,6 +682,7 @@
 
 
     <script src="/fantasy-branding-assets.js"></script>
+    <script src="/fantasy.js"></script>
     <script>
       const $ = (s) => document.querySelector(s);
 
@@ -1417,14 +1395,14 @@
       }
 
       function applyFantasyHeroOnlyPreviewLayout(placement = readLogoPlacementFromSliders()) {
-        const previewBox = $('#fantasyHeroOnlyPreview');
+        const banner = $('#fantasyHeroOnlyPreview');
         const logo = $('#fantasyHeroOnlyPreviewLogo');
-        if (!previewBox || !logo || logo.hidden) return;
+        if (!banner || !logo || logo.hidden) return;
 
-        const resolved = resolveLogoPlacement(buildPreviewSettings(placement));
-        logo.style.top = `${resolved.fantasyHeaderLogoTopPercent}%`;
-        logo.style.width = `${resolved.fantasyHeaderLogoWidthVw}%`;
-        logo.style.maxWidth = `${resolved.fantasyHeaderLogoMaxWidthPx}px`;
+        window.BPFantasyHeroPlacement?.applyToBanner?.(
+          banner,
+          buildPreviewSettings(placement),
+        );
       }
 
       function setFantasyHeroOnlyPreviewMessage(text) {
@@ -1464,6 +1442,7 @@
         brandingAssets.applyImageFromCandidates(hero, heroCandidates, {
           onLoaded: () => {
             setFantasyHeroOnlyPreviewMessage('');
+            window.BPFantasyHeroPlacement?.clearHeroImageStyles?.(hero);
             applyFantasyHeroOnlyPreviewLayout(placement);
           },
           onMissing: () => {
@@ -1490,7 +1469,7 @@
         list.innerHTML = `
           <li>Top: ${resolved.fantasyHeaderLogoTopPercent}%</li>
           <li>Width: ${resolved.fantasyHeaderLogoWidthVw}%</li>
-          <li>Max Width: ${resolved.fantasyHeaderLogoMaxWidthPx}px</li>
+          <li>Max Width: ${resolved.fantasyHeaderLogoMaxWidthPx}px (${((resolved.fantasyHeaderLogoMaxWidthPx / (window.BPFantasyHeroPlacement?.designWidth || 1920)) * 100).toFixed(2)}% of banner)</li>
         `;
       }
 

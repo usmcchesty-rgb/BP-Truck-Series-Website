@@ -6,6 +6,9 @@ function getFantasyBrandingAssets() {
   return window.BPFantasyBrandingAssets || null;
 }
 
+const FANTASY_HERO_DESIGN_WIDTH = 1920;
+const FANTASY_HERO_BANNER_RATIO = { w: 1920, h: 820 };
+
 const FANTASY_LOGO_PLACEMENT_DEFAULTS = {
   topPercent: 21,
   widthPercent: 32,
@@ -16,6 +19,16 @@ function clampFantasyLogoPlacement(value, min, max, fallback) {
   const n = Number(value);
   if (!Number.isFinite(n)) return fallback;
   return Math.min(max, Math.max(min, n));
+}
+
+function logoMaxWidthPercent(maxWidthPx) {
+  const px = Number(maxWidthPx);
+  if (!Number.isFinite(px)) return (FANTASY_LOGO_PLACEMENT_DEFAULTS.maxWidthPx / FANTASY_HERO_DESIGN_WIDTH) * 100;
+  return (px / FANTASY_HERO_DESIGN_WIDTH) * 100;
+}
+
+function getFantasyHeroStage(banner) {
+  return banner?.querySelector?.('.fantasy-hero-stage') || banner;
 }
 
 function resolveFantasyHeaderLogoPlacement(settings = {}) {
@@ -42,15 +55,16 @@ function resolveFantasyHeaderLogoPlacement(settings = {}) {
 }
 
 function applyHeroLogoPlacementToBanner(banner, settings = {}) {
-  if (!banner) return;
+  const stage = getFantasyHeroStage(banner);
+  if (!stage) return;
 
   const placement = resolveFantasyHeaderLogoPlacement(settings);
-  banner.style.setProperty('--fantasy-hero-logo-top', `${placement.topPercent}%`);
-  banner.style.setProperty('--fantasy-hero-logo-width', `${placement.widthPercent}%`);
-  banner.style.setProperty('--fantasy-hero-logo-max-width', `${placement.maxWidthPx}px`);
+  stage.style.setProperty('--fantasy-hero-logo-top', `${placement.topPercent}%`);
+  stage.style.setProperty('--fantasy-hero-logo-width', `${placement.widthPercent}%`);
+  stage.style.setProperty('--fantasy-hero-logo-max-width', `${logoMaxWidthPercent(placement.maxWidthPx)}%`);
 }
 
-function syncHeroBannerImageLayout(img) {
+function clearHeroBannerImageStyles(img) {
   if (!img) return;
 
   img.style.removeProperty('width');
@@ -58,20 +72,16 @@ function syncHeroBannerImageLayout(img) {
   img.style.removeProperty('max-width');
   img.style.removeProperty('min-width');
   img.style.removeProperty('transform');
-
-  if (img.naturalWidth > 0 && img.naturalHeight > 0) {
-    img.setAttribute('width', String(img.naturalWidth));
-    img.setAttribute('height', String(img.naturalHeight));
-    img.style.aspectRatio = `${img.naturalWidth} / ${img.naturalHeight}`;
-  } else {
-    img.style.removeProperty('aspect-ratio');
-  }
+  img.style.removeProperty('aspect-ratio');
 }
 
 window.BPFantasyHeroPlacement = {
   resolve: resolveFantasyHeaderLogoPlacement,
   applyToBanner: applyHeroLogoPlacementToBanner,
+  clearHeroImageStyles: clearHeroBannerImageStyles,
   defaults: FANTASY_LOGO_PLACEMENT_DEFAULTS,
+  designWidth: FANTASY_HERO_DESIGN_WIDTH,
+  bannerRatio: FANTASY_HERO_BANNER_RATIO,
 };
 
 function isFantasyPublicLandingPage() {
@@ -94,15 +104,15 @@ function applyHeroImage(settings = {}) {
   const branding = getFantasyBrandingAssets();
   if (!img || !branding) return;
 
-  const syncLayout = () => syncHeroBannerImageLayout(img);
-  if (img.complete) syncLayout();
-  else img.addEventListener('load', syncLayout, { once: true });
+  const clearStyles = () => clearHeroBannerImageStyles(img);
+  if (img.complete) clearStyles();
+  else img.addEventListener('load', clearStyles, { once: true });
 
   branding.applyImageFromCandidates(
     img,
     branding.resolveFantasyHeroBackgroundCandidates(settings),
     {
-      onLoaded: syncLayout,
+      onLoaded: clearStyles,
     },
   );
 }
