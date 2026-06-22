@@ -815,6 +815,38 @@
       // --- Admin session (sessionStorage only; cleared when the tab/session closes) ---
       const SESSION_KEY = 'bp_admin_pw';
 
+      function safeNumber(value, fallback = null) {
+        const n = Number(value);
+        return Number.isFinite(n) ? n : fallback;
+      }
+
+      function safeToFixed(value, digits = 1, fallback = '—') {
+        const n = safeNumber(value);
+        return n == null ? fallback : n.toFixed(digits);
+      }
+
+      function safeArray(value) {
+        return Array.isArray(value) ? value : [];
+      }
+
+      function safeSetInnerHtml(el, html = '') {
+        if (!el) return;
+        try {
+          el.innerHTML = html;
+        } catch (err) {
+          console.error('[Fantasy Admin] Failed to update element HTML:', err);
+        }
+      }
+
+      function safeHide(el, hidden = true) {
+        if (!el) return;
+        try {
+          el.hidden = hidden;
+        } catch (err) {
+          console.error('[Fantasy Admin] Failed to toggle element visibility:', err);
+        }
+      }
+
       function getSessionPw() {
         return sessionStorage.getItem(SESSION_KEY) || '';
       }
@@ -829,20 +861,34 @@
       }
 
       function showLogin() {
-        $('#loginView').hidden = false;
-        $('#adminView').hidden = true;
-        if (window.AdminNav) AdminNav.setLoggedIn(false);
-        else if ($('#logoutBtn')) $('#logoutBtn').hidden = true;
-        $('#loginPw').focus();
+        safeHide($('#loginView'), false);
+        safeHide($('#adminView'), true);
+        try {
+          if (window.AdminNav) AdminNav.setLoggedIn(false);
+          else safeHide($('#logoutBtn'), true);
+        } catch (err) {
+          console.error('[Fantasy Admin] Nav login state update failed:', err);
+        }
+        $('#loginPw')?.focus();
       }
 
       function showAdmin() {
-        $('#loginView').hidden = true;
-        $('#adminView').hidden = false;
-        if (window.AdminNav) AdminNav.setLoggedIn(true);
-        loadFantasySettings();
-        loadFantasySchedulePreview();
-        loadFantasyDraftSlate();
+        safeHide($('#loginView'), true);
+        safeHide($('#adminView'), false);
+        try {
+          if (window.AdminNav) AdminNav.setLoggedIn(true);
+        } catch (err) {
+          console.error('[Fantasy Admin] Nav admin state update failed:', err);
+        }
+        loadFantasySettings().catch((err) => {
+          console.error('[Fantasy Admin] Settings load failed:', err);
+        });
+        loadFantasySchedulePreview().catch((err) => {
+          console.error('[Fantasy Admin] Schedule preview load failed:', err);
+        });
+        loadFantasyDraftSlate().catch((err) => {
+          console.error('[Fantasy Admin] Draft slate load failed:', err);
+        });
       }
 
       function escapeAdminHtml(value) {
@@ -881,55 +927,66 @@
         const container = $('#fantasySalarySummaryCards');
         if (!container) return;
 
-        if (!analytics) {
-          container.hidden = true;
-          container.innerHTML = '';
-          return;
-        }
+        try {
+          if (!analytics || typeof analytics !== 'object') {
+            safeHide(container, true);
+            safeSetInnerHtml(container, '');
+            return;
+          }
 
-        const cards = [
-          {
-            label: 'Biggest Salary Riser',
-            value: analytics.biggestSalaryRiser?.driverName || '—',
-            sub:
-              analytics.biggestSalaryRiser?.salaryChange != null
-                ? `+${formatFantasySalary(analytics.biggestSalaryRiser.salaryChange).replace('$', '$')} ▲`
-                : '',
-          },
-          {
-            label: 'Biggest Salary Faller',
-            value: analytics.biggestSalaryFaller?.driverName || '—',
-            sub:
-              analytics.biggestSalaryFaller?.salaryChange != null
-                ? `-${formatFantasySalary(Math.abs(analytics.biggestSalaryFaller.salaryChange)).replace('$', '$')} ▼`
-                : '',
-          },
-          {
-            label: 'Highest Salary',
-            value: analytics.highestSalary?.driverName || '—',
-            sub: analytics.highestSalary?.finalSalary != null
-              ? formatFantasySalary(analytics.highestSalary.finalSalary)
-              : '',
-          },
-          {
-            label: 'Best Value Pick',
-            value: analytics.bestValuePick?.driverName || '—',
-            sub: analytics.bestValuePick?.valueScore != null
-              ? `${analytics.bestValuePick.valueGrade || '—'} · ${Number(analytics.bestValuePick.valueScore).toFixed(2)} / $1k`
-              : '',
-          },
-        ];
+          const cards = [
+            {
+              label: 'Biggest Salary Riser',
+              value: analytics.biggestSalaryRiser?.driverName || '—',
+              sub:
+                analytics.biggestSalaryRiser?.salaryChange != null
+                  ? `+${formatFantasySalary(analytics.biggestSalaryRiser.salaryChange)} ▲`
+                  : '',
+            },
+            {
+              label: 'Biggest Salary Faller',
+              value: analytics.biggestSalaryFaller?.driverName || '—',
+              sub:
+                analytics.biggestSalaryFaller?.salaryChange != null
+                  ? `-${formatFantasySalary(Math.abs(Number(analytics.biggestSalaryFaller.salaryChange)))} ▼`
+                  : '',
+            },
+            {
+              label: 'Highest Salary',
+              value: analytics.highestSalary?.driverName || '—',
+              sub:
+                analytics.highestSalary?.finalSalary != null
+                  ? formatFantasySalary(analytics.highestSalary.finalSalary)
+                  : '',
+            },
+            {
+              label: 'Best Value Pick',
+              value: analytics.bestValuePick?.driverName || '—',
+              sub:
+                analytics.bestValuePick?.valueScore != null
+                  ? `${analytics.bestValuePick.valueGrade || '—'} · ${safeToFixed(analytics.bestValuePick.valueScore, 2)} / $1k`
+                  : '',
+            },
+          ];
 
-        container.hidden = false;
-        container.innerHTML = cards
-          .map(
-            (card) => `<div class="fantasy-summary-card">
+          safeHide(container, false);
+          safeSetInnerHtml(
+            container,
+            cards
+              .map(
+                (card) => `<div class="fantasy-summary-card">
               <div class="fantasy-summary-card-k">${escapeAdminHtml(card.label)}</div>
               <div class="fantasy-summary-card-v">${escapeAdminHtml(card.value)}</div>
               ${card.sub ? `<div class="fantasy-summary-card-sub">${escapeAdminHtml(card.sub)}</div>` : ''}
             </div>`
-          )
-          .join('');
+              )
+              .join('')
+          );
+        } catch (err) {
+          console.error('[Fantasy Admin] Salary summary render failed:', err);
+          safeHide(container, true);
+          safeSetInnerHtml(container, '');
+        }
       }
 
       function formatFantasyDate(value) {
@@ -1312,28 +1369,32 @@
         const body = $('#fantasySalaryReviewBody');
         if (!body) return;
 
-        renderTopTrackHistoryDrivers(null, drivers);
-        renderFantasySalarySummary(analytics);
+        try {
+          renderTopTrackHistoryDrivers(null, safeArray(drivers));
+          renderFantasySalarySummary(analytics);
 
-        if (!drivers.length) {
-          body.innerHTML =
-            '<tr><td colspan="13" class="muted">Generate salaries to review the draft slate.</td></tr>';
-          return;
-        }
+          const rows = safeArray(drivers);
+          if (!rows.length) {
+            safeSetInnerHtml(
+              body,
+              '<tr><td colspan="13" class="muted">Generate salaries to review the draft slate.</td></tr>'
+            );
+            return;
+          }
 
-        body.innerHTML = drivers
-          .map((driver) => {
-            const reasons = Array.isArray(driver.salaryReasons) ? driver.salaryReasons : [];
-            const valueScore =
-              driver.valueScore != null && Number.isFinite(Number(driver.valueScore))
-                ? Number(driver.valueScore).toFixed(2)
-                : '—';
-            const valueGrade = driver.valueGrade
-              ? `<span class="fantasy-value-grade">${escapeAdminHtml(driver.valueGrade)}</span>`
-              : '—';
-            return `<tr>
-              <td class="sticky-col">${escapeAdminHtml(driver.driverName)}</td>
-              <td><span class="fantasy-tier-badge">${escapeAdminHtml(driver.computedTier)}</span></td>
+          safeSetInnerHtml(
+            body,
+            rows
+              .map((driver) => {
+                if (!driver || typeof driver !== 'object') return '';
+                const reasons = safeArray(driver.salaryReasons);
+                const valueScore = safeToFixed(driver.valueScore, 2);
+                const valueGrade = driver.valueGrade
+                  ? `<span class="fantasy-value-grade">${escapeAdminHtml(driver.valueGrade)}</span>`
+                  : '—';
+                return `<tr>
+              <td class="sticky-col">${escapeAdminHtml(driver.driverName || '—')}</td>
+              <td><span class="fantasy-tier-badge">${escapeAdminHtml(driver.computedTier || '—')}</span></td>
               <td class="salary">${formatFantasySalary(driver.finalSalary ?? driver.generatedSalary)}</td>
               <td class="salary">${formatFantasySalary(driver.previousSalary)}</td>
               <td>${formatSalaryChangeCell(driver)}</td>
@@ -1342,11 +1403,11 @@
               <td>
                 <details class="fantasy-detail-block">
                   <summary>View</summary>
-                  ${formatScoreBreakdownHtml(driver.scoreBreakdown, driver)}
+                  ${formatScoreBreakdownHtml(driver.scoreBreakdown || {}, driver)}
                 </details>
               </td>
               <td class="muted">${driver.carNumber ? `#${escapeAdminHtml(driver.carNumber)}` : '—'}</td>
-              <td>${Number(driver.fantasyTierScore).toFixed(1)}</td>
+              <td>${safeToFixed(driver.fantasyTierScore, 1)}</td>
               <td>${formatTrackRankCellHtml(driver)}</td>
               <td class="salary">${formatFantasySalary(driver.generatedSalary)}</td>
               <td>
@@ -1358,8 +1419,17 @@
                 </details>
               </td>
             </tr>`;
-          })
-          .join('');
+              })
+              .join('')
+          );
+        } catch (err) {
+          console.error('[Fantasy Admin] Salary review render failed:', err);
+          safeSetInnerHtml(
+            body,
+            '<tr><td colspan="13" class="muted">Could not render salary review.</td></tr>'
+          );
+          renderFantasySalarySummary(null);
+        }
       }
 
       function updateFantasyDraftHeader(slate = null, targetRace = null) {
@@ -1482,17 +1552,20 @@
         const output = $('#fantasyBacktestOutput');
         if (!output) return;
 
-        if (!result) {
-          output.hidden = true;
-          output.innerHTML = '';
-          return;
-        }
+        try {
+          if (!result || typeof result !== 'object') {
+            safeHide(output, true);
+            safeSetInnerHtml(output, '');
+            return;
+          }
 
-        const misses = Array.isArray(result.biggestMisses) ? result.biggestMisses : [];
-        const races = Array.isArray(result.races) ? result.races : [];
+          const misses = safeArray(result.biggestMisses);
+          const races = safeArray(result.races);
 
-        output.hidden = false;
-        output.innerHTML = `
+          safeHide(output, false);
+          safeSetInnerHtml(
+            output,
+            `
           <h4>Season Backtest Results</h4>
           <p><em>${escapeAdminHtml(result.approximationNotice || 'Approximate backtest — not locked pre-race simulation yet.')}</em></p>
           <p>
@@ -1508,7 +1581,7 @@
               ? `<p><strong>Biggest misses</strong><br>${misses
                   .map(
                     (row) =>
-                      `Race ${escapeAdminHtml(row.raceNumber)} (${escapeAdminHtml(row.track)}): ${escapeAdminHtml(row.winner)} won at model rank P${escapeAdminHtml(row.winnerFantasyRank)} of ${escapeAdminHtml(row.fieldSize)}`
+                      `Race ${escapeAdminHtml(row?.raceNumber ?? '—')} (${escapeAdminHtml(row?.track ?? '—')}): ${escapeAdminHtml(row?.winner ?? '—')} won at model rank P${escapeAdminHtml(row?.winnerFantasyRank ?? '—')} of ${escapeAdminHtml(row?.fieldSize ?? '—')}`
                   )
                   .join('<br>')}</p>`
               : ''
@@ -1531,20 +1604,26 @@
                     ${races
                       .map(
                         (row) => `<tr>
-                          <td>${escapeAdminHtml(row.raceNumber)}</td>
-                          <td>${escapeAdminHtml(row.track)}</td>
-                          <td>${escapeAdminHtml(row.winner)}</td>
-                          <td>${escapeAdminHtml(row.winnerFantasyRank ?? '—')}</td>
-                          <td>${escapeAdminHtml(row.top5AverageFantasyRank ?? '—')}</td>
-                          <td>${escapeAdminHtml(row.top10AverageFantasyRank ?? '—')}</td>
-                          <td>${escapeAdminHtml(row.modelNotes)}</td>
+                          <td>${escapeAdminHtml(row?.raceNumber ?? '—')}</td>
+                          <td>${escapeAdminHtml(row?.track ?? '—')}</td>
+                          <td>${escapeAdminHtml(row?.winner ?? '—')}</td>
+                          <td>${escapeAdminHtml(row?.winnerFantasyRank ?? '—')}</td>
+                          <td>${escapeAdminHtml(row?.top5AverageFantasyRank ?? '—')}</td>
+                          <td>${escapeAdminHtml(row?.top10AverageFantasyRank ?? '—')}</td>
+                          <td>${escapeAdminHtml(row?.modelNotes ?? '—')}</td>
                         </tr>`
                       )
                       .join('')}
                   </tbody>
                 </table></div>`
               : ''
-          }`;
+          }`
+          );
+        } catch (err) {
+          console.error('[Fantasy Admin] Backtest render failed:', err);
+          safeHide(output, true);
+          safeSetInnerHtml(output, '');
+        }
       }
 
       async function runFantasySeasonBacktest() {
@@ -1608,7 +1687,7 @@
 
       const DEFAULT_FANTASY_HERO_BACKGROUND_URL = '/assets/fantasy/hero-background.jpg';
       const DEFAULT_FANTASY_HEADER_LOGO_URL = '/assets/fantasy/fantasy-logo.png';
-      const FANTASY_LOGO_PLACEMENT_DEFAULTS = {
+      const FANTASY_ADMIN_LOGO_DEFAULTS = {
         fantasyHeaderLogoTopPercent: 21,
         fantasyHeaderLogoWidthVw: 32,
         fantasyHeaderLogoMaxWidthPx: 560,
@@ -1619,9 +1698,9 @@
         fantasyHeroBackgroundUpdatedAt: null,
         fantasyHeaderLogoUrl: '',
         fantasyHeaderLogoUpdatedAt: null,
-        fantasyHeaderLogoTopPercent: FANTASY_LOGO_PLACEMENT_DEFAULTS.fantasyHeaderLogoTopPercent,
-        fantasyHeaderLogoWidthVw: FANTASY_LOGO_PLACEMENT_DEFAULTS.fantasyHeaderLogoWidthVw,
-        fantasyHeaderLogoMaxWidthPx: FANTASY_LOGO_PLACEMENT_DEFAULTS.fantasyHeaderLogoMaxWidthPx,
+        fantasyHeaderLogoTopPercent: FANTASY_ADMIN_LOGO_DEFAULTS.fantasyHeaderLogoTopPercent,
+        fantasyHeaderLogoWidthVw: FANTASY_ADMIN_LOGO_DEFAULTS.fantasyHeaderLogoWidthVw,
+        fantasyHeaderLogoMaxWidthPx: FANTASY_ADMIN_LOGO_DEFAULTS.fantasyHeaderLogoMaxWidthPx,
       };
 
       function clampLogoPlacement(value, min, max, fallback) {
@@ -1636,19 +1715,19 @@
             settings.fantasyHeaderLogoTopPercent,
             8,
             45,
-            FANTASY_LOGO_PLACEMENT_DEFAULTS.fantasyHeaderLogoTopPercent,
+            FANTASY_ADMIN_LOGO_DEFAULTS.fantasyHeaderLogoTopPercent,
           ),
           fantasyHeaderLogoWidthVw: clampLogoPlacement(
             settings.fantasyHeaderLogoWidthVw,
             15,
             60,
-            FANTASY_LOGO_PLACEMENT_DEFAULTS.fantasyHeaderLogoWidthVw,
+            FANTASY_ADMIN_LOGO_DEFAULTS.fantasyHeaderLogoWidthVw,
           ),
           fantasyHeaderLogoMaxWidthPx: clampLogoPlacement(
             settings.fantasyHeaderLogoMaxWidthPx,
             240,
             900,
-            FANTASY_LOGO_PLACEMENT_DEFAULTS.fantasyHeaderLogoMaxWidthPx,
+            FANTASY_ADMIN_LOGO_DEFAULTS.fantasyHeaderLogoMaxWidthPx,
           ),
         };
       }
@@ -1659,19 +1738,19 @@
             $('#fantasyLogoTopPercent')?.value,
             8,
             45,
-            FANTASY_LOGO_PLACEMENT_DEFAULTS.fantasyHeaderLogoTopPercent,
+            FANTASY_ADMIN_LOGO_DEFAULTS.fantasyHeaderLogoTopPercent,
           ),
           fantasyHeaderLogoWidthVw: clampLogoPlacement(
             $('#fantasyLogoWidthVw')?.value,
             15,
             60,
-            FANTASY_LOGO_PLACEMENT_DEFAULTS.fantasyHeaderLogoWidthVw,
+            FANTASY_ADMIN_LOGO_DEFAULTS.fantasyHeaderLogoWidthVw,
           ),
           fantasyHeaderLogoMaxWidthPx: clampLogoPlacement(
             $('#fantasyLogoMaxWidthPx')?.value,
             240,
             900,
-            FANTASY_LOGO_PLACEMENT_DEFAULTS.fantasyHeaderLogoMaxWidthPx,
+            FANTASY_ADMIN_LOGO_DEFAULTS.fantasyHeaderLogoMaxWidthPx,
           ),
         };
       }
@@ -2087,8 +2166,8 @@
       }
 
       function resetFantasyLogoPlacement() {
-        syncLogoPlacementSliders(FANTASY_LOGO_PLACEMENT_DEFAULTS);
-        updateFantasyLogoPlacementUi(FANTASY_LOGO_PLACEMENT_DEFAULTS);
+        syncLogoPlacementSliders(FANTASY_ADMIN_LOGO_DEFAULTS);
+        updateFantasyLogoPlacementUi(FANTASY_ADMIN_LOGO_DEFAULTS);
         setBrandingMsg('Logo placement reset to defaults. Click Save Logo Placement to publish.');
       }
 
@@ -2152,22 +2231,32 @@
       }
 
       async function initSession() {
-        const pw = getSessionPw();
-        if (!pw) {
-          showLogin();
-          return;
-        }
-
         try {
-          if (await verifyPassword(pw)) {
-            showAdmin();
+          const pw = getSessionPw();
+          if (!pw) {
+            showLogin();
             return;
           }
-        } catch {}
 
-        sessionStorage.removeItem(SESSION_KEY);
-        showLogin();
+          try {
+            if (await verifyPassword(pw)) {
+              showAdmin();
+              return;
+            }
+          } catch (err) {
+            console.error('[Fantasy Admin] Session verification failed:', err);
+          }
+
+          sessionStorage.removeItem(SESSION_KEY);
+          showLogin();
+        } catch (err) {
+          console.error('[Fantasy Admin] Session init failed:', err);
+          showLogin();
+        }
       }
+
+      window.login = login;
+      window.logout = logout;
 
       $('#loginPw')?.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') login();
