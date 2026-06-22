@@ -182,7 +182,7 @@ async function saveDraftSlate(slateRow, driverRows) {
   };
 }
 
-function normalizeSlateDriver(row) {
+export function normalizeSlateDriver(row) {
   return {
     driverId: String(row.driver_id),
     driverName: row.driver_name || '',

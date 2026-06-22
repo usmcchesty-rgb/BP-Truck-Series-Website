@@ -11,15 +11,17 @@
     <div class="page-bg"></div>
     <header class="topbar"></header>
 
-    <main class="fantasy-app-placeholder">
+    <main class="fantasy-app-shell">
+      <div id="fantasyAppNav"></div>
       <section class="fantasy-app-placeholder-card" aria-labelledby="fantasyStandingsTitle">
         <p class="fantasy-app-eyebrow">BP Fantasy</p>
         <h1 id="fantasyStandingsTitle">Standings</h1>
-        <p class="fantasy-app-lead">Fantasy access coming soon.</p>
+        <p class="fantasy-app-lead">Fantasy standings coming soon.</p>
         <p class="fantasy-app-copy">
-          Season-long fantasy standings and race-week results will be tracked here for logged-in players after launch.
+          Season-long fantasy standings will appear here after contests begin and player lineups are enabled.
         </p>
         <div class="fantasy-cta-actions">
+          <a class="fantasy-btn fantasy-btn--secondary" href="/fantasy/slate.html">View Demo Slate</a>
           <a class="fantasy-btn fantasy-btn--secondary" href="/fantasy.html">Back to Fantasy Home</a>
         </div>
       </section>
@@ -28,13 +30,10 @@
     <footer>FAST DRIVERS. CLOSE RACING. <span>BIG FUN.</span></footer>
 
     <script src="/public-nav.js"></script>
+    <script src="/fantasy-app-nav.js"></script>
     <script>
-      BPPublicNav.init({
-        active: "fantasy",
-        title: "BP FANTASY",
-        subtitle: "COMING SOON",
-        right: "tagline",
-      });
+      BPPublicNav.init({ active: "fantasy", title: "BP FANTASY", subtitle: "COMING SOON", right: "tagline" });
+      BPFantasyAppNav.init("standings");
     </script>
   </body>
 </html>

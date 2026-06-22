@@ -4,6 +4,11 @@ import {
   loadFantasyDraftSlate,
 } from './_fantasy-slate.js';
 import { runFantasySeasonBacktest } from './_fantasy-backtest.js';
+import {
+  buildFantasyPublicSlateResponse,
+  buildFantasySalaryHistoryResponse,
+  runFantasyLineupOptimizerForLatestSlate,
+} from './_fantasy-public-slate.js';
 
 async function handleGetFantasyDraftSlate(req, res) {
   try {
@@ -28,6 +33,32 @@ export default async function handler(req, res) {
   if (req.method === 'GET') {
     if (queryAction === 'getFantasyDraftSlate') {
       return handleGetFantasyDraftSlate(req, res);
+    }
+    if (queryAction === 'getFantasyPublicSlate') {
+      try {
+        const settings = await getSettings();
+        const seasonId = req.query?.seasonId || settings.seasonId || '27987';
+        const slate = await buildFantasyPublicSlateResponse(seasonId);
+        if (!slate) {
+          return res.status(404).json({ error: 'No fantasy slate found.' });
+        }
+        return res.status(200).json(slate);
+      } catch (error) {
+        return res.status(500).json({ error: error.message || 'Failed to load public slate.' });
+      }
+    }
+    if (queryAction === 'getFantasySalaryHistory') {
+      try {
+        const settings = await getSettings();
+        const seasonId = req.query?.seasonId || settings.seasonId || '27987';
+        const history = await buildFantasySalaryHistoryResponse(seasonId);
+        if (!history?.latestSlate) {
+          return res.status(404).json({ error: 'No fantasy salary history found.' });
+        }
+        return res.status(200).json(history);
+      } catch (error) {
+        return res.status(500).json({ error: error.message || 'Failed to load salary history.' });
+      }
     }
     return res.status(200).json(await getSettings());
   }
@@ -74,6 +105,21 @@ export default async function handler(req, res) {
       return res.status(200).json(result);
     } catch (error) {
       return res.status(500).json({ error: error.message || 'Fantasy backtest failed.' });
+    }
+  }
+
+  if (action === 'runFantasyLineupOptimizer') {
+    try {
+      const settings = await getSettings();
+      const result = await runFantasyLineupOptimizerForLatestSlate({
+        seasonId: body.seasonId || settings.seasonId || '27987',
+        salaryCap: body.salaryCap ?? 50000,
+        lineupSize: body.lineupSize ?? 5,
+        requireValueOrMid: Boolean(body.requireValueOrMid),
+      });
+      return res.status(200).json(result);
+    } catch (error) {
+      return res.status(500).json({ error: error.message || 'Lineup optimizer failed.' });
     }
   }
 

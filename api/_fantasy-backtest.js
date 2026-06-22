@@ -22,8 +22,14 @@ import {
   buildFantasyDriverSalaries,
   FANTASY_MODEL_VERSION,
 } from './_fantasy-salary-scoring.js';
+import {
+  finishPositionProxyPoints,
+  LINEUP_BACKTEST_NOTICE,
+  optimizeFantasyLineup,
+} from './_fantasy-lineup-optimizer.js';
 
 const SLATE_MAX_STANDINGS_POSITION = 30;
+const LINEUP_SALARY_CAP = 50000;
 const APPROXIMATION_NOTICE =
   'Approximate backtest — not locked pre-race simulation yet.';
 
@@ -282,6 +288,33 @@ export async function runFantasySeasonBacktest() {
     if (top5Avg != null) top5AverageRanks.push(top5Avg);
     if (top10Avg != null) top10AverageRanks.push(top10Avg);
 
+    const modelLineupResult = optimizeFantasyLineup(built.drivers, {
+      salaryCap: LINEUP_SALARY_CAP,
+      lineupSize: 5,
+    });
+
+    const driversWithFinishScore = built.drivers.map((driver) => ({
+      ...driver,
+      finishProxyScore: finishPositionProxyPoints(finishes[String(driver.driverId)]),
+    }));
+
+    const optimalActualResult = optimizeFantasyLineup(driversWithFinishScore, {
+      salaryCap: LINEUP_SALARY_CAP,
+      lineupSize: 5,
+      scoreField: 'finishProxyScore',
+    });
+
+    const modelLineupPoints = (modelLineupResult.optimalLineup?.drivers || []).reduce(
+      (sum, driver) =>
+        sum + finishPositionProxyPoints(finishes[String(driver.driverId)]),
+      0
+    );
+    const optimalLineupPoints = optimalActualResult.optimalLineup?.projectedScore ?? 0;
+    const lineupEfficiency =
+      optimalLineupPoints > 0
+        ? Number(((modelLineupPoints / optimalLineupPoints) * 100).toFixed(1))
+        : null;
+
     raceRows.push({
       raceNumber,
       track: race.track || 'Unknown',
@@ -297,19 +330,50 @@ export async function runFantasySeasonBacktest() {
         topModelName: topModelDriver?.driverName || null,
         topModelFinish,
       }),
+      modelLineupPoints,
+      optimalLineupPoints,
+      lineupEfficiency,
+      modelLineupDrivers: modelLineupResult.optimalLineup?.drivers?.map((d) => d.driverName) || [],
+      optimalLineupDrivers: optimalActualResult.optimalLineup?.drivers?.map((d) => d.driverName) || [],
     });
   }
 
   missCandidates.sort((a, b) => b.missScore - a.missScore);
 
+  const lineupEfficiencies = raceRows
+    .map((row) => row.lineupEfficiency)
+    .filter((value) => value != null);
+  const bestLineupRace = [...raceRows]
+    .filter((row) => row.lineupEfficiency != null)
+    .sort((a, b) => b.lineupEfficiency - a.lineupEfficiency)[0] || null;
+  const worstLineupRace = [...raceRows]
+    .filter((row) => row.lineupEfficiency != null)
+    .sort((a, b) => a.lineupEfficiency - b.lineupEfficiency)[0] || null;
+
   return {
     approximationNotice: APPROXIMATION_NOTICE,
+    lineupApproximationNotice: LINEUP_BACKTEST_NOTICE,
     modelVersion: FANTASY_MODEL_VERSION,
     completedRacesTested: raceRows.length,
     averageWinnerFantasyRank: average(winnerRanks),
     averageTop5FinisherFantasyRank: average(top5AverageRanks),
     averageTop10FinisherFantasyRank: average(top10AverageRanks),
     fantasyScoreFinishCorrelation: pearsonCorrelation(correlationScores, correlationFinishes),
+    averageLineupEfficiency: average(lineupEfficiencies),
+    bestLineupRace: bestLineupRace
+      ? {
+          raceNumber: bestLineupRace.raceNumber,
+          track: bestLineupRace.track,
+          lineupEfficiency: bestLineupRace.lineupEfficiency,
+        }
+      : null,
+    worstLineupRace: worstLineupRace
+      ? {
+          raceNumber: worstLineupRace.raceNumber,
+          track: worstLineupRace.track,
+          lineupEfficiency: worstLineupRace.lineupEfficiency,
+        }
+      : null,
     biggestMisses: missCandidates.slice(0, 5).map((entry) => ({
       raceNumber: entry.raceNumber,
       track: entry.track,

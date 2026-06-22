@@ -518,6 +518,235 @@ body.fantasy-page .topbar{
   line-height:1.55;
 }
 
+.fantasy-app-shell{
+  max-width:1180px;
+  margin:0 auto;
+  padding:110px 18px 48px;
+}
+
+.fantasy-app-nav{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin:0 0 18px;
+}
+
+.fantasy-app-nav__link{
+  display:inline-block;
+  padding:8px 12px;
+  border:1px solid #333;
+  background:linear-gradient(#1c1c1c,#080808);
+  color:#ddd;
+  text-decoration:none;
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+
+.fantasy-app-nav__link.is-active,
+.fantasy-app-nav__link:hover{
+  color:#fff;
+  border-color:#ff2424;
+  background:linear-gradient(#d40000,#680000);
+}
+
+.fantasy-app-hero-panel{
+  padding:24px;
+  margin-bottom:18px;
+}
+
+.fantasy-app-page-title{
+  margin:0 0 14px;
+  color:#fff;
+  font-size:clamp(24px, 4vw, 34px);
+  font-style:italic;
+  font-weight:900;
+  letter-spacing:.05em;
+  text-transform:uppercase;
+}
+
+.fantasy-app-readonly-note{
+  margin:12px 0 0;
+  color:#bbb;
+  font-size:12px;
+}
+
+.fantasy-app-section{
+  margin-bottom:22px;
+}
+
+.fantasy-app-section-title{
+  margin:0 0 12px;
+  color:#fff;
+  font-size:14px;
+  font-weight:900;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+}
+
+.fantasy-slate-meta-grid{
+  display:grid;
+  grid-template-columns:repeat(4, minmax(0,1fr));
+  gap:10px;
+}
+
+.fantasy-slate-meta-grid span{
+  display:block;
+  color:#999;
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+
+.fantasy-slate-meta-grid strong{
+  display:block;
+  margin-top:4px;
+  color:#fff;
+  font-size:14px;
+}
+
+.fantasy-value-card-grid{
+  display:grid;
+  grid-template-columns:repeat(3, minmax(0,1fr));
+  gap:12px;
+}
+
+.fantasy-value-card{
+  padding:14px;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:8px;
+  background:rgba(0,0,0,.28);
+}
+
+.fantasy-value-card__name{
+  color:#fff;
+  font-size:15px;
+  font-weight:900;
+}
+
+.fantasy-value-card__meta{
+  margin-top:4px;
+  color:#aaa;
+  font-size:11px;
+  font-weight:700;
+}
+
+.fantasy-value-card__stat{
+  margin-top:8px;
+  color:var(--gold);
+  font-size:18px;
+  font-weight:900;
+}
+
+.fantasy-value-card__badge{
+  display:inline-block;
+  margin-top:8px;
+  padding:2px 8px;
+  border-radius:4px;
+  background:rgba(255,255,255,.08);
+  color:#fff;
+  font-size:11px;
+  font-weight:900;
+}
+
+.fantasy-value-card__sub{
+  margin-top:6px;
+  color:#ccc;
+  font-size:12px;
+  font-weight:700;
+}
+
+.fantasy-table-wrap{
+  overflow-x:auto;
+}
+
+.fantasy-slate-table{
+  width:100%;
+  border-collapse:collapse;
+  min-width:760px;
+}
+
+.fantasy-slate-table th,
+.fantasy-slate-table td{
+  padding:10px 12px;
+  border-bottom:1px solid rgba(255,255,255,.06);
+  text-align:left;
+  font-size:13px;
+}
+
+.fantasy-slate-table th{
+  color:#fff;
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+}
+
+.fantasy-slate-table td.salary{
+  color:var(--gold);
+  font-weight:900;
+}
+
+.fantasy-tier-pill,
+.fantasy-grade-pill{
+  display:inline-block;
+  padding:2px 8px;
+  border-radius:4px;
+  background:rgba(229,9,20,.18);
+  border:1px solid rgba(229,9,20,.35);
+  color:#fff;
+  font-size:10px;
+  font-weight:900;
+  text-transform:uppercase;
+}
+
+.fantasy-change.is-up{ color:var(--green); font-weight:900; }
+.fantasy-change.is-down{ color:#ff2323; font-weight:900; }
+.fantasy-change.is-new{ color:#f0c040; font-weight:900; }
+.fantasy-change.is-same{ color:#ccc; }
+
+.fantasy-app-empty{
+  padding:48px 24px;
+  text-align:center;
+  color:#bbb;
+}
+
+.fantasy-history-block{
+  margin-bottom:18px;
+}
+
+.fantasy-history-block h3{
+  margin:0 0 8px;
+  color:#fff;
+  font-size:16px;
+}
+
+.fantasy-history-block .muted{
+  color:#aaa;
+  font-size:12px;
+  font-weight:700;
+}
+
+.fantasy-slate-table--compact{
+  min-width:560px;
+}
+
+@media (max-width: 980px){
+  .fantasy-slate-meta-grid,
+  .fantasy-value-card-grid{
+    grid-template-columns:repeat(2, minmax(0,1fr));
+  }
+}
+
+@media (max-width: 640px){
+  .fantasy-slate-meta-grid,
+  .fantasy-value-card-grid{
+    grid-template-columns:1fr;
+  }
+}
+
 @media (max-width: 980px){
   .fantasy-overview-grid{
     grid-template-columns:repeat(2, minmax(0, 1fr));

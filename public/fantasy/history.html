@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>BP Fantasy — Race Slate</title>
+    <title>BP Fantasy — Salary History</title>
     <link rel="stylesheet" href="/styles.css" />
     <link rel="stylesheet" href="/fantasy.css" />
   </head>
@@ -13,8 +13,8 @@
 
     <main class="fantasy-app-shell">
       <div id="fantasyAppNav"></div>
-      <div id="fantasySlateRoot">
-        <section class="fantasy-app-empty"><p>Loading fantasy slate…</p></section>
+      <div id="fantasyHistoryRoot">
+        <section class="fantasy-app-empty"><p>Loading salary history…</p></section>
       </div>
     </main>
 
@@ -22,16 +22,16 @@
 
     <script src="/public-nav.js"></script>
     <script src="/fantasy-app-nav.js"></script>
-    <script src="/fantasy-slate-app.js"></script>
+    <script src="/fantasy-history-app.js"></script>
     <script>
       BPPublicNav.init({
         active: "fantasy",
         title: "BP FANTASY",
-        subtitle: "DEMO SLATE",
+        subtitle: "SALARY HISTORY",
         right: "tagline",
       });
-      BPFantasyAppNav.init("slate");
-      BPFantasySlateApp.init();
+      BPFantasyAppNav.init("history");
+      BPFantasyHistoryApp.init();
     </script>
   </body>
 </html>

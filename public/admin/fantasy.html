@@ -632,6 +632,31 @@
             <div class="admin-note">Tier assignment is read-only and math-driven. Final salary matches generated salary until manual override support is added in a later phase.</div>
           </div>
 
+          <!-- Lineup Optimizer -->
+          <div class="admin-card admin-card--full">
+            <div class="admin-card-title">Lineup Optimizer</div>
+            <span class="field-help">Find the best 5-driver lineup under salary cap using current slate fantasyTierScore projections.</span>
+            <div class="admin-form-grid">
+              <div class="admin-field">
+                <label class="field-label" for="optimizerSalaryCap">Salary Cap</label>
+                <input id="optimizerSalaryCap" class="input" type="number" value="50000" min="1000" step="1000" />
+              </div>
+              <div class="admin-field">
+                <label class="field-label" for="optimizerLineupSize">Drivers Per Lineup</label>
+                <input id="optimizerLineupSize" class="input" type="number" value="5" min="1" max="10" />
+              </div>
+            </div>
+            <label class="field-label" style="display:flex;align-items:center;gap:8px;margin-top:10px;">
+              <input id="optimizerRequireValueMid" type="checkbox" />
+              Require at least one Value/Mid-Tier driver
+            </label>
+            <div class="fantasy-generate-row">
+              <button id="runFantasyOptimizerBtn" class="btn" type="button">Run Lineup Optimizer</button>
+              <span id="fantasyOptimizerStatus" class="fantasy-generate-status"></span>
+            </div>
+            <div id="fantasyOptimizerOutput" class="fantasy-backtest-output" hidden></div>
+          </div>
+
           <!-- Fantasy Backtest -->
           <div class="admin-card admin-card--full">
             <div class="admin-card-title">Fantasy Backtest</div>
@@ -1425,6 +1450,12 @@
             Fantasy score vs finish correlation: <strong>${escapeAdminHtml(result.fantasyScoreFinishCorrelation ?? '—')}</strong>
             (negative means higher scores tend to finish better)
           </p>
+          <p><em>${escapeAdminHtml(result.lineupApproximationNotice || 'Approximate lineup backtest — finish-based proxy, not final scoring.')}</em></p>
+          <p>
+            Average lineup efficiency: <strong>${escapeAdminHtml(result.averageLineupEfficiency ?? '—')}%</strong><br>
+            Best lineup race: <strong>${result.bestLineupRace ? `Race ${escapeAdminHtml(result.bestLineupRace.raceNumber)} (${escapeAdminHtml(result.bestLineupRace.track)}) — ${escapeAdminHtml(result.bestLineupRace.lineupEfficiency)}%` : '—'}</strong><br>
+            Worst lineup race: <strong>${result.worstLineupRace ? `Race ${escapeAdminHtml(result.worstLineupRace.raceNumber)} (${escapeAdminHtml(result.worstLineupRace.track)}) — ${escapeAdminHtml(result.worstLineupRace.lineupEfficiency)}%` : '—'}</strong>
+          </p>
           ${
             misses.length
               ? `<p><strong>Biggest misses</strong><br>${misses
@@ -1446,6 +1477,9 @@
                       <th>Winner Rank</th>
                       <th>Top 5 Avg Rank</th>
                       <th>Top 10 Avg Rank</th>
+                      <th>Model Lineup Pts</th>
+                      <th>Optimal Pts</th>
+                      <th>Lineup Eff.</th>
                       <th>Model Notes</th>
                     </tr>
                   </thead>
@@ -1459,6 +1493,9 @@
                           <td>${escapeAdminHtml(row?.winnerFantasyRank ?? '—')}</td>
                           <td>${escapeAdminHtml(row?.top5AverageFantasyRank ?? '—')}</td>
                           <td>${escapeAdminHtml(row?.top10AverageFantasyRank ?? '—')}</td>
+                          <td>${escapeAdminHtml(row?.modelLineupPoints ?? '—')}</td>
+                          <td>${escapeAdminHtml(row?.optimalLineupPoints ?? '—')}</td>
+                          <td>${row?.lineupEfficiency != null ? `${escapeAdminHtml(row.lineupEfficiency)}%` : '—'}</td>
                           <td>${escapeAdminHtml(row?.modelNotes ?? '—')}</td>
                         </tr>`
                       )
@@ -1472,6 +1509,103 @@
           console.error('[Fantasy Admin] Backtest render failed:', err);
           safeHide(output, true);
           safeSetInnerHtml(output, '');
+        }
+      }
+
+      function renderFantasyOptimizerOutput(result = null) {
+        const output = $('#fantasyOptimizerOutput');
+        if (!output) return;
+
+        try {
+          if (!result?.ok || !result?.optimalLineup) {
+            safeHide(output, true);
+            safeSetInnerHtml(output, result?.error ? `<p class="error">${escapeAdminHtml(result.error)}</p>` : '');
+            safeHide(output, !result?.error);
+            return;
+          }
+
+          const lineup = result.optimalLineup;
+          const alternatives = safeArray(result.alternativeLineups);
+
+          safeHide(output, false);
+          safeSetInnerHtml(
+            output,
+            `
+              <h4>Optimal Lineup</h4>
+              <p>
+                Projected score: <strong>${escapeAdminHtml(lineup.projectedScore)}</strong><br>
+                Total salary: <strong>${formatFantasySalary(lineup.totalSalary)}</strong><br>
+                Remaining salary: <strong>${formatFantasySalary(lineup.remainingSalary)}</strong><br>
+                Average salary: <strong>${formatFantasySalary(lineup.averageSalary)}</strong><br>
+                Average value score: <strong>${escapeAdminHtml(lineup.averageValueScore ?? '—')}</strong>
+              </p>
+              <ul class="fantasy-detail-list">
+                ${safeArray(lineup.drivers)
+                  .map(
+                    (driver) =>
+                      `<li>${escapeAdminHtml(driver.driverName)} — ${formatFantasySalary(driver.finalSalary)} · score ${escapeAdminHtml(driver.fantasyTierScore)} · ${escapeAdminHtml(driver.valueGrade || '—')}</li>`
+                  )
+                  .join('')}
+              </ul>
+              ${
+                alternatives.length
+                  ? `<h4>Alternative Lineups</h4><ul class="fantasy-detail-list">${alternatives
+                      .map(
+                        (alt, index) =>
+                          `<li>#${index + 2}: ${escapeAdminHtml(alt.projectedScore)} pts · ${formatFantasySalary(alt.totalSalary)} · ${safeArray(alt.drivers)
+                            .map((d) => escapeAdminHtml(d.driverName))
+                            .join(', ')}</li>`
+                      )
+                      .join('')}</ul>`
+                  : ''
+              }`
+          );
+        } catch (err) {
+          console.error('[Fantasy Admin] Optimizer render failed:', err);
+          safeHide(output, true);
+          safeSetInnerHtml(output, '');
+        }
+      }
+
+      async function runFantasyLineupOptimizer() {
+        const statusEl = $('#fantasyOptimizerStatus');
+        const btn = $('#runFantasyOptimizerBtn');
+        if (statusEl) {
+          statusEl.textContent = 'Running lineup optimizer...';
+          statusEl.classList.remove('error');
+        }
+        if (btn) btn.disabled = true;
+
+        try {
+          const res = await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              password: getSessionPw(),
+              action: 'runFantasyLineupOptimizer',
+              salaryCap: Number($('#optimizerSalaryCap')?.value || 50000),
+              lineupSize: Number($('#optimizerLineupSize')?.value || 5),
+              requireValueOrMid: Boolean($('#optimizerRequireValueMid')?.checked),
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Optimizer failed');
+
+          renderFantasyOptimizerOutput(data);
+          if (statusEl) {
+            statusEl.textContent = data.ok
+              ? `Optimal lineup: ${data.optimalLineup.projectedScore} projected score.`
+              : data.error || 'No lineup found.';
+            if (!data.ok) statusEl.classList.add('error');
+          }
+        } catch (error) {
+          renderFantasyOptimizerOutput(null);
+          if (statusEl) {
+            statusEl.textContent = error.message || 'Optimizer failed';
+            statusEl.classList.add('error');
+          }
+        } finally {
+          if (btn) btn.disabled = false;
         }
       }
 
@@ -1790,6 +1924,7 @@
       $('#saveFantasyHeroUrlBtn')?.addEventListener('click', saveFantasyHeroUrl);
       $('#generateFantasySalariesBtn')?.addEventListener('click', generateFantasySalaries);
       $('#reloadFantasyDraftBtn')?.addEventListener('click', loadFantasyDraftSlate);
+      $('#runFantasyOptimizerBtn')?.addEventListener('click', runFantasyLineupOptimizer);
       $('#runFantasyBacktestBtn')?.addEventListener('click', runFantasySeasonBacktest);
 
       initSession();

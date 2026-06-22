@@ -10,6 +10,8 @@ const VALUE_GRADE_BUCKETS = [
 const MIN_BEST_VALUE_SALARY = 5000;
 const VALUE_REASON_PREFIX = 'Value rating:';
 
+export { MIN_BEST_VALUE_SALARY };
+
 export function computeDriverValueScore(fantasyTierScore, finalSalary) {
   const score = Number(fantasyTierScore);
   const salary = Number(finalSalary);
