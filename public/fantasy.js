@@ -71,10 +71,6 @@ function escapeHtml(text) {
     .replace(/"/g, '&quot;');
 }
 
-function formatSalary(value) {
-  return `$${Number(value).toLocaleString('en-US')}`;
-}
-
 function applyHeroImage(settings = {}) {
   const img = document.getElementById('fantasyHeroImage');
   const branding = getFantasyBrandingAssets();
@@ -126,15 +122,6 @@ function applyLandingAssets(settings = {}) {
   applyHeroLogoPlacement(settings);
 }
 
-const DEMO_FEATURED_DRIVERS = [
-  { name: 'Mark Arthur', carNumber: '12', salary: 12500 },
-  { name: 'Cody Gibson', carNumber: '7', salary: 11200 },
-  { name: 'Mike Massengill', carNumber: '20', salary: 10800 },
-  { name: 'Dalton Kilroe', carNumber: '41', salary: 9400 },
-  { name: 'Larry Bell', carNumber: '43', salary: 8750 },
-  { name: 'Michael Boone', carNumber: '15', salary: 8200 },
-];
-
 const SCORING_CATEGORIES = [
   { key: 'Finish Points', value: 'Points earned from where your driver finishes the race.' },
   { key: 'Place Differential', value: 'Bonus or penalty based on positions gained or lost.' },
@@ -149,7 +136,6 @@ window.BPFantasyLanding = {
     const root = document.querySelector('main.fantasy-landing');
     if (!root) return;
 
-    this.renderFeaturedDrivers(root);
     this.renderScoringPreview(root);
     this.loadPageSettings(root);
     applyLandingAssets();
@@ -172,19 +158,6 @@ window.BPFantasyLanding = {
     } catch {
       // Landing page works with static defaults when settings are unavailable.
     }
-  },
-
-  renderFeaturedDrivers(root) {
-    const grid = root?.querySelector('#featuredDriversGrid');
-    if (!grid) return;
-
-    grid.innerHTML = DEMO_FEATURED_DRIVERS.map((driver) => `
-      <article class="fantasy-driver-card">
-        <div class="fantasy-driver-name">${escapeHtml(driver.name)}</div>
-        <div class="fantasy-driver-number">#${escapeHtml(driver.carNumber)}</div>
-        <div class="fantasy-driver-salary">${formatSalary(driver.salary)}</div>
-      </article>
-    `).join('');
   },
 
   renderScoringPreview(root) {
