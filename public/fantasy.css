@@ -31,9 +31,11 @@ body.fantasy-page .topbar{
   padding:40px 18px 48px;
 }
 
-/* ── Hero banner (responsive image only) ── */
+/* ── Hero banner (responsive image, max content width) ── */
 .fantasy-hero-banner{
-  width:100%;
+  width:min(100%, 1920px);
+  max-width:1920px;
+  margin:0 auto;
   overflow:hidden;
 }
 
