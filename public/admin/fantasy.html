@@ -494,24 +494,15 @@
 
             <div class="branding-block">
               <div class="field-label">Fantasy Hero Preview</div>
-              <span class="field-help">Hero-only preview for logo placement. Slider changes update the preview instantly.</span>
-              <span class="field-help">Preview is an approximate hero-only guide. Public page may vary slightly by screen width.</span>
-              <div id="fantasyHeroOnlyPreview" class="fantasy-admin-hero-only-preview fantasy-hero-banner" aria-label="Fantasy hero logo placement preview">
+              <span class="field-help">Preview matches the public page: one responsive hero image (logo is baked into the artwork).</span>
+              <div id="fantasyHeroOnlyPreview" class="fantasy-admin-hero-only-preview fantasy-hero-banner" aria-label="Fantasy hero preview">
                 <p id="fantasyHeroOnlyPreviewMsg" class="fantasy-admin-hero-only-preview__msg" hidden></p>
-                <div class="fantasy-hero-stage">
-                  <img
-                    id="fantasyHeroOnlyPreviewHero"
-                    class="fantasy-hero-banner-img"
-                    alt=""
-                    hidden
-                  />
-                  <img
-                    id="fantasyHeroOnlyPreviewLogo"
-                    class="fantasy-hero-logo"
-                    alt=""
-                    hidden
-                  />
-                </div>
+                <img
+                  id="fantasyHeroOnlyPreviewHero"
+                  class="fantasy-hero-banner-img"
+                  alt=""
+                  hidden
+                />
               </div>
               <div class="branding-upload-row">
                 <button id="refreshFantasyHeroPreviewBtn" class="btn btn-secondary" type="button">
@@ -682,7 +673,7 @@
 
 
     <script src="/fantasy-branding-assets.js"></script>
-    <script src="/fantasy.js"></script>
+    <script src="/fantasy-hero-placement.js"></script>
     <script>
       const $ = (s) => document.querySelector(s);
 
@@ -1394,28 +1385,20 @@
         };
       }
 
-      function applyFantasyHeroOnlyPreviewLayout(placement = readLogoPlacementFromSliders()) {
-        const banner = $('#fantasyHeroOnlyPreview');
-        const logo = $('#fantasyHeroOnlyPreviewLogo');
-        if (!banner || !logo || logo.hidden) return;
-
-        window.BPFantasyHeroPlacement?.applyToBanner?.(
-          banner,
-          buildPreviewSettings(placement),
-        );
+      function updateFantasyLogoPlacementUi(placement = readLogoPlacementFromSliders()) {
+        syncLogoPlacementSliderLabels(placement);
+        updateFantasyHeroPreviewDebug(placement);
       }
 
       function setFantasyHeroOnlyPreviewMessage(text) {
         const msg = $('#fantasyHeroOnlyPreviewMsg');
         const hero = $('#fantasyHeroOnlyPreviewHero');
-        const logo = $('#fantasyHeroOnlyPreviewLogo');
         if (!msg) return;
 
         if (text) {
           msg.textContent = text;
           msg.hidden = false;
           hero?.setAttribute('hidden', '');
-          logo?.setAttribute('hidden', '');
         } else {
           msg.textContent = '';
           msg.hidden = true;
@@ -1425,8 +1408,7 @@
       function refreshFantasyHeroOnlyPreview() {
         const previewBox = $('#fantasyHeroOnlyPreview');
         const hero = $('#fantasyHeroOnlyPreviewHero');
-        const logo = $('#fantasyHeroOnlyPreviewLogo');
-        if (!previewBox || !hero || !logo || $('#adminView')?.hidden) return;
+        if (!previewBox || !hero || $('#adminView')?.hidden) return;
 
         const brandingAssets = window.BPFantasyBrandingAssets;
         if (!brandingAssets?.applyImageFromCandidates) {
@@ -1435,27 +1417,14 @@
         }
 
         const settings = fantasyBrandingSettings;
-        const placement = readLogoPlacementFromSliders();
         const heroCandidates = brandingAssets.resolveFantasyHeroBackgroundCandidates(settings);
-        const logoCandidates = brandingAssets.resolveFantasyHeaderLogoCandidates(settings);
 
         brandingAssets.applyImageFromCandidates(hero, heroCandidates, {
           onLoaded: () => {
             setFantasyHeroOnlyPreviewMessage('');
-            window.BPFantasyHeroPlacement?.clearHeroImageStyles?.(hero);
-            applyFantasyHeroOnlyPreviewLayout(placement);
           },
           onMissing: () => {
             setFantasyHeroOnlyPreviewMessage('Hero image not found. Upload a hero background or check the URL.');
-          },
-        });
-
-        brandingAssets.applyImageFromCandidates(logo, logoCandidates, {
-          onLoaded: () => {
-            applyFantasyHeroOnlyPreviewLayout(placement);
-          },
-          onMissing: () => {
-            logo.setAttribute('hidden', '');
           },
         });
       }
@@ -1471,12 +1440,6 @@
           <li>Width: ${resolved.fantasyHeaderLogoWidthVw}%</li>
           <li>Max Width: ${resolved.fantasyHeaderLogoMaxWidthPx}px (${((resolved.fantasyHeaderLogoMaxWidthPx / (window.BPFantasyHeroPlacement?.designWidth || 1920)) * 100).toFixed(2)}% of banner)</li>
         `;
-      }
-
-      function updateFantasyLogoPlacementUi(placement = readLogoPlacementFromSliders()) {
-        syncLogoPlacementSliderLabels(placement);
-        updateFantasyHeroPreviewDebug(placement);
-        applyFantasyHeroOnlyPreviewLayout(placement);
       }
 
       function setBrandingMsg(text, isError = false) {
@@ -1901,7 +1864,6 @@
       $('#fantasyLogoTopPercent')?.addEventListener('input', () => updateFantasyLogoPlacementUi());
       $('#fantasyLogoWidthVw')?.addEventListener('input', () => updateFantasyLogoPlacementUi());
       $('#fantasyLogoMaxWidthPx')?.addEventListener('input', () => updateFantasyLogoPlacementUi());
-      window.addEventListener('resize', () => applyFantasyHeroOnlyPreviewLayout());
 
       initSession();
     </script>
