@@ -1,12 +1,72 @@
 import { DEFAULTS, getSettings, stripPhotoUrlQuery, supabase } from './_lib.js';
+import {
+  generateFantasyDraftSlate,
+  loadFantasyDraftSlate,
+} from './_fantasy-slate.js';
+
+async function handleGetFantasyDraftSlate(req, res) {
+  try {
+    const settings = await getSettings();
+    const seasonId = req.query?.seasonId || settings.seasonId || '27987';
+    const raceNumber = req.query?.raceNumber ? Number(req.query.raceNumber) : null;
+    const draft = await loadFantasyDraftSlate(seasonId, raceNumber);
+
+    if (!draft) {
+      return res.status(404).json({ error: 'No draft fantasy slate found.' });
+    }
+
+    return res.status(200).json(draft);
+  } catch (error) {
+    return res.status(500).json({ error: error.message || 'Failed to load draft slate.' });
+  }
+}
 
 export default async function handler(req, res) {
-  if (req.method === 'GET') return res.status(200).json(await getSettings());
+  const queryAction = String(req.query?.action || '').trim();
+
+  if (req.method === 'GET') {
+    if (queryAction === 'getFantasyDraftSlate') {
+      return handleGetFantasyDraftSlate(req, res);
+    }
+    return res.status(200).json(await getSettings());
+  }
+
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
   const body = req.body || {};
   if (body.password !== process.env.ADMIN_PASSWORD) return res.status(401).json({ error: 'Bad password' });
-  // Password check only (admin login) — no write.
   if (body.verifyOnly) return res.status(200).json({ ok: true });
+
+  const action = String(body.action || '').trim();
+
+  if (action === 'generateFantasySlate') {
+    try {
+      const result = await generateFantasyDraftSlate({
+        raceNumber: body.raceNumber ?? body.race_number ?? null,
+      });
+      return res.status(200).json(result);
+    } catch (error) {
+      return res.status(500).json({ error: error.message || 'Fantasy slate generation failed.' });
+    }
+  }
+
+  if (action === 'getFantasyDraftSlate') {
+    try {
+      const settings = await getSettings();
+      const seasonId = body.seasonId || settings.seasonId || '27987';
+      const raceNumber = body.raceNumber != null ? Number(body.raceNumber) : null;
+      const draft = await loadFantasyDraftSlate(seasonId, raceNumber);
+
+      if (!draft) {
+        return res.status(404).json({ error: 'No draft fantasy slate found.' });
+      }
+
+      return res.status(200).json(draft);
+    } catch (error) {
+      return res.status(500).json({ error: error.message || 'Failed to load draft slate.' });
+    }
+  }
+
   const sb = supabase();
   if (!sb) return res.status(400).json({ error: 'Supabase not configured yet. Add SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Vercel.' });
   const patch = { id: 1 };

@@ -891,7 +891,7 @@
 
       async function loadFantasyDraftSlate() {
         try {
-          const res = await fetch('/api/fantasy-slate-generate');
+          const res = await fetch('/api/settings?action=getFantasyDraftSlate');
           if (!res.ok) {
             renderFantasySalaryReview([]);
             updateFantasyDraftHeader(null);
@@ -915,10 +915,13 @@
         if (btn) btn.disabled = true;
 
         try {
-          const res = await fetch('/api/fantasy-slate-generate', {
+          const res = await fetch('/api/settings', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ password: getSessionPw() }),
+            body: JSON.stringify({
+              password: getSessionPw(),
+              action: 'generateFantasySlate',
+            }),
           });
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || 'Generation failed');

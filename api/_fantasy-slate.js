@@ -23,23 +23,7 @@ import {
   summarizeFantasySlateMeta,
 } from './_fantasy-salary-scoring.js';
 
-function parseBody(req) {
-  if (!req.body) return {};
-  if (typeof req.body === 'string') {
-    try {
-      return JSON.parse(req.body);
-    } catch {
-      return {};
-    }
-  }
-  return req.body;
-}
-
-function json(res, status, body) {
-  res.status(status);
-  res.setHeader('Content-Type', 'application/json');
-  res.end(JSON.stringify(body));
-}
+const SLATE_MAX_STANDINGS_POSITION = 30;
 
 function extractScheduleIdFromRace(race) {
   if (race?.scheduleId) return String(race.scheduleId);
@@ -236,7 +220,6 @@ export async function generateFantasyDraftSlate(options = {}) {
     settings,
     raceDebug.standingsScheduleId
   );
-const SLATE_MAX_STANDINGS_POSITION = 30;
 
   const standings = standingsResult.rows.filter(
     (row) =>
@@ -339,41 +322,4 @@ const SLATE_MAX_STANDINGS_POSITION = 30;
       lockTime: lockTime || null,
     },
   };
-}
-
-export default async function handler(req, res) {
-  if (req.method === 'GET') {
-    try {
-      const settings = await getSettings();
-      const seasonId = req.query?.seasonId || settings.seasonId || '27987';
-      const raceNumber = req.query?.raceNumber ? Number(req.query.raceNumber) : null;
-      const draft = await loadFantasyDraftSlate(seasonId, raceNumber);
-
-      if (!draft) {
-        return json(res, 404, { error: 'No draft fantasy slate found.' });
-      }
-
-      return json(res, 200, draft);
-    } catch (error) {
-      return json(res, 500, { error: error.message || 'Failed to load draft slate.' });
-    }
-  }
-
-  if (req.method !== 'POST') {
-    return json(res, 405, { error: 'Method not allowed' });
-  }
-
-  const body = parseBody(req);
-  if (body.password !== process.env.ADMIN_PASSWORD) {
-    return json(res, 401, { error: 'Bad password' });
-  }
-
-  try {
-    const result = await generateFantasyDraftSlate({
-      raceNumber: body.raceNumber ?? body.race_number ?? null,
-    });
-    return json(res, 200, result);
-  } catch (error) {
-    return json(res, 500, { error: error.message || 'Fantasy slate generation failed.' });
-  }
 }
