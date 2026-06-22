@@ -476,13 +476,15 @@ body.fantasy-page .topbar{
 }
 
 .fantasy-app-placeholder-card{
-  width:min(560px, 100%);
+  width:100%;
+  max-width:560px;
   padding:32px 28px;
   border:1px solid #333;
   border-radius:8px;
   background:rgba(12,12,12,.92);
   box-shadow:0 0 18px rgba(0,0,0,.32);
   text-align:center;
+  box-sizing:border-box;
 }
 
 .fantasy-app-eyebrow{
@@ -518,10 +520,33 @@ body.fantasy-page .topbar{
   line-height:1.55;
 }
 
+/* ── Fantasy app pages (/fantasy/*) ── */
+body.fantasy-page main.fantasy-app-page{
+  width:100%;
+  max-width:none;
+  min-width:0;
+  margin:0;
+  padding:0;
+  align-self:stretch;
+}
+
 .fantasy-app-shell{
-  max-width:1180px;
+  width:min(calc(100% - 48px), 1500px);
+  max-width:1500px;
   margin:0 auto;
-  padding:110px 18px 48px;
+  padding:110px 24px 48px;
+  box-sizing:border-box;
+}
+
+.fantasy-app-main{
+  width:100%;
+  min-width:0;
+}
+
+.fantasy-app-main--centered{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
 }
 
 .fantasy-app-nav{
@@ -529,6 +554,8 @@ body.fantasy-page .topbar{
   flex-wrap:wrap;
   gap:8px;
   margin:0 0 18px;
+  width:100%;
+  min-width:0;
 }
 
 .fantasy-app-nav__link{
@@ -542,6 +569,8 @@ body.fantasy-page .topbar{
   font-weight:900;
   letter-spacing:.08em;
   text-transform:uppercase;
+  white-space:nowrap;
+  flex:0 0 auto;
 }
 
 .fantasy-app-nav__link.is-active,
@@ -552,8 +581,10 @@ body.fantasy-page .topbar{
 }
 
 .fantasy-app-hero-panel{
+  width:100%;
   padding:24px;
   margin-bottom:18px;
+  box-sizing:border-box;
 }
 
 .fantasy-app-page-title{
@@ -573,7 +604,9 @@ body.fantasy-page .topbar{
 }
 
 .fantasy-app-section{
+  width:100%;
   margin-bottom:22px;
+  min-width:0;
 }
 
 .fantasy-app-section-title{
@@ -611,6 +644,7 @@ body.fantasy-page .topbar{
   display:grid;
   grid-template-columns:repeat(3, minmax(0,1fr));
   gap:12px;
+  width:100%;
 }
 
 .fantasy-value-card{
@@ -618,6 +652,7 @@ body.fantasy-page .topbar{
   border:1px solid rgba(255,255,255,.08);
   border-radius:8px;
   background:rgba(0,0,0,.28);
+  min-width:0;
 }
 
 .fantasy-value-card__name{
@@ -659,13 +694,15 @@ body.fantasy-page .topbar{
 }
 
 .fantasy-table-wrap{
+  width:100%;
   overflow-x:auto;
+  -webkit-overflow-scrolling:touch;
 }
 
 .fantasy-slate-table{
   width:100%;
   border-collapse:collapse;
-  min-width:760px;
+  min-width:0;
 }
 
 .fantasy-slate-table th,
@@ -708,13 +745,17 @@ body.fantasy-page .topbar{
 .fantasy-change.is-same{ color:#ccc; }
 
 .fantasy-app-empty{
+  width:100%;
   padding:48px 24px;
   text-align:center;
   color:#bbb;
+  box-sizing:border-box;
 }
 
 .fantasy-history-block{
+  width:100%;
   margin-bottom:18px;
+  min-width:0;
 }
 
 .fantasy-history-block h3{
@@ -730,10 +771,28 @@ body.fantasy-page .topbar{
 }
 
 .fantasy-slate-table--compact{
-  min-width:560px;
+  min-width:520px;
+}
+
+@media (min-width: 1200px){
+  .fantasy-value-card-grid{
+    grid-template-columns:repeat(5, minmax(0,1fr));
+  }
 }
 
 @media (max-width: 980px){
+  .fantasy-app-shell{
+    width:min(calc(100% - 32px), 1500px);
+    padding:100px 16px 40px;
+  }
+
+  .fantasy-app-nav{
+    flex-wrap:nowrap;
+    overflow-x:auto;
+    padding-bottom:4px;
+    scrollbar-width:thin;
+  }
+
   .fantasy-slate-meta-grid,
   .fantasy-value-card-grid{
     grid-template-columns:repeat(2, minmax(0,1fr));
@@ -741,9 +800,18 @@ body.fantasy-page .topbar{
 }
 
 @media (max-width: 640px){
+  .fantasy-app-shell{
+    width:min(calc(100% - 24px), 1500px);
+    padding:96px 12px 32px;
+  }
+
   .fantasy-slate-meta-grid,
   .fantasy-value-card-grid{
     grid-template-columns:1fr;
+  }
+
+  .fantasy-app-hero-panel{
+    padding:18px 16px;
   }
 }
 
