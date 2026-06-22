@@ -23,6 +23,10 @@ import {
   FANTASY_MODEL_VERSION,
   summarizeFantasySlateMeta,
 } from './_fantasy-salary-scoring.js';
+import {
+  enrichFantasySlateDrivers,
+  summarizeFantasySlateAnalytics,
+} from './_fantasy-admin-analytics.js';
 
 const SLATE_MAX_STANDINGS_POSITION = 30;
 
@@ -30,6 +34,41 @@ function extractScheduleIdFromRace(race) {
   if (race?.scheduleId) return String(race.scheduleId);
   const match = String(race?.link || '').match(/schedule_id=(\d+)/i);
   return match?.[1] ? String(match[1]) : null;
+}
+
+async function loadPriorSlateSalaryMaps(seasonId, beforeRaceNumber) {
+  const sb = supabase();
+  const empty = {
+    priorSalariesByDriver: new Map(),
+    priorRaceNumber: null,
+  };
+  if (!sb) return empty;
+
+  const { data: slates, error } = await sb
+    .from('fantasy_slates')
+    .select('id, race_number, status')
+    .eq('season_id', String(seasonId))
+    .lt('race_number', Number(beforeRaceNumber))
+    .order('race_number', { ascending: false })
+    .limit(1);
+
+  if (error || !slates?.length) return empty;
+
+  const slate = slates[0];
+  const { data: drivers } = await sb
+    .from('fantasy_slate_drivers')
+    .select('driver_id, final_salary')
+    .eq('slate_id', slate.id);
+
+  const priorSalariesByDriver = new Map();
+  for (const row of drivers || []) {
+    priorSalariesByDriver.set(String(row.driver_id), Number(row.final_salary));
+  }
+
+  return {
+    priorSalariesByDriver,
+    priorRaceNumber: slate.race_number,
+  };
 }
 
 async function loadPriorPublishedSlateMaps(seasonId, beforeRaceNumber) {
@@ -204,9 +243,33 @@ export async function loadFantasyDraftSlate(seasonId, raceNumber) {
     .eq('slate_id', slate.id)
     .order('fantasy_tier_score', { ascending: false });
 
-  return {
+  return enrichFantasyDraftPayload({
     slate,
     drivers: (drivers || []).map(normalizeSlateDriver),
+  });
+}
+
+export async function enrichFantasyDraftPayload(payload = {}) {
+  const slate = payload.slate || null;
+  const seasonId = slate?.season_id || payload.seasonId || null;
+  const raceNumber = slate?.race_number ?? payload.raceNumber ?? null;
+
+  let priorMaps = {
+    priorSalariesByDriver: new Map(),
+    priorRaceNumber: null,
+  };
+  if (seasonId && raceNumber != null) {
+    priorMaps = await loadPriorSlateSalaryMaps(seasonId, raceNumber);
+  }
+
+  const drivers = enrichFantasySlateDrivers(payload.drivers || [], priorMaps.priorSalariesByDriver);
+  const analytics = summarizeFantasySlateAnalytics(drivers);
+  analytics.priorSlateRaceNumber = priorMaps.priorRaceNumber;
+
+  return {
+    ...payload,
+    drivers,
+    analytics,
   };
 }
 
@@ -341,11 +404,17 @@ export async function generateFantasyDraftSlate(options = {}) {
     meta,
   };
 
-  const saved = await saveDraftSlate(slateRow, drivers);
-
-  return {
-    slate: saved.slate,
+  const priorDisplayMaps = await loadPriorSlateSalaryMaps(seasonId, raceNumber);
+  const enrichedDrivers = enrichFantasySlateDrivers(
     drivers,
+    priorDisplayMaps.priorSalariesByDriver
+  );
+
+  const saved = await saveDraftSlate(slateRow, enrichedDrivers);
+
+  return enrichFantasyDraftPayload({
+    slate: saved.slate,
+    drivers: enrichedDrivers,
     meta,
     targetRace: {
       raceNumber,
@@ -353,5 +422,5 @@ export async function generateFantasyDraftSlate(options = {}) {
       date: targetRace.date || null,
       lockTime: lockTime || null,
     },
-  };
+  });
 }

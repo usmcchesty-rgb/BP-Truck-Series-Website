@@ -3,6 +3,7 @@ import {
   generateFantasyDraftSlate,
   loadFantasyDraftSlate,
 } from './_fantasy-slate.js';
+import { runFantasySeasonBacktest } from './_fantasy-backtest.js';
 
 async function handleGetFantasyDraftSlate(req, res) {
   try {
@@ -64,6 +65,15 @@ export default async function handler(req, res) {
       return res.status(200).json(draft);
     } catch (error) {
       return res.status(500).json({ error: error.message || 'Failed to load draft slate.' });
+    }
+  }
+
+  if (action === 'runFantasySeasonBacktest') {
+    try {
+      const result = await runFantasySeasonBacktest();
+      return res.status(200).json(result);
+    } catch (error) {
+      return res.status(500).json({ error: error.message || 'Fantasy backtest failed.' });
     }
   }
 
