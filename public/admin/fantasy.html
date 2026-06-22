@@ -151,15 +151,6 @@
         object-fit: cover;
       }
 
-      .fantasy-brand-preview--logo {
-        max-width: 320px;
-      }
-
-      .fantasy-brand-preview--logo img {
-        max-height: 96px;
-        object-position: left center;
-      }
-
       .fantasy-brand-preview.is-empty {
         display: grid;
         place-items: center;
@@ -169,71 +160,6 @@
         font-weight: 900;
         letter-spacing: .08em;
         text-transform: uppercase;
-      }
-
-      .fantasy-brand-preview--logo.is-empty {
-        min-height: 96px;
-      }
-
-      .slider-row {
-        display: grid;
-        gap: 6px;
-        margin: 14px 0 0;
-      }
-
-      .slider-row label {
-        font-size: 11px;
-        color: #fff;
-        font-weight: 900;
-        text-transform: uppercase;
-        letter-spacing: .06em;
-      }
-
-      .slider-row .field-help {
-        margin: 0;
-      }
-
-      .slider-row input[type="range"] {
-        width: 100%;
-      }
-
-      .slider-value {
-        color: var(--gold);
-        font-weight: 900;
-      }
-
-      .fantasy-admin-hero-only-preview {
-        width: 100%;
-        max-width: 100%;
-        margin: 12px 0 0;
-        border: 1px solid #333;
-        background: #050505;
-        overflow: hidden;
-      }
-
-      .fantasy-admin-hero-only-preview__msg {
-        margin: 0;
-        padding: 24px 16px;
-        line-height: 1.5;
-        font-size: 12px;
-        color: #888;
-        text-align: center;
-      }
-
-      .fantasy-hero-preview-debug {
-        margin-top: 10px;
-        padding: 10px 12px;
-        border: 1px solid #2b2b2b;
-        border-radius: 6px;
-        background: rgba(0, 0, 0, 0.25);
-        font-size: 12px;
-        color: #ccc;
-      }
-
-      .fantasy-hero-preview-debug ul {
-        margin: 6px 0 0;
-        padding-left: 18px;
-        line-height: 1.6;
       }
 
       .branding-upload-row {
@@ -583,7 +509,7 @@
 
             <div class="branding-block">
               <div class="field-label">Fantasy Hero Background Image</div>
-              <span class="field-help">Large full-width background image displayed at the top of the Fantasy landing page.</span>
+              <span class="field-help">Full-width hero artwork for the public Fantasy landing page (single responsive image; logo should be baked into the artwork).</span>
               <div id="fantasyHeroPreview" class="fantasy-brand-preview fantasy-brand-preview--hero is-empty">No hero background</div>
               <label class="field-label" for="fantasyHeroBackgroundUrl">Image URL</label>
               <input id="fantasyHeroBackgroundUrl" class="input" type="url" placeholder="/assets/fantasy/hero-background.jpg" />
@@ -593,81 +519,6 @@
                 <button id="uploadFantasyHeroBtn" class="btn btn-secondary" type="button" disabled>Upload Hero Background</button>
                 <button id="removeFantasyHeroBtn" class="btn btn-danger" type="button" disabled>Remove Hero Background</button>
                 <button id="saveFantasyHeroUrlBtn" class="btn" type="button">Save Hero URL</button>
-              </div>
-            </div>
-
-            <div class="branding-block">
-              <div class="field-label">Fantasy Header Logo Image</div>
-              <span class="field-help">Transparent PNG logo displayed over the Fantasy hero section.</span>
-              <div id="fantasyLogoPreview" class="fantasy-brand-preview fantasy-brand-preview--logo is-empty">No header logo</div>
-              <label class="field-label" for="fantasyHeaderLogoUrl">Image URL</label>
-              <input id="fantasyHeaderLogoUrl" class="input" type="url" placeholder="/assets/fantasy/fantasy-logo.png" />
-              <label class="field-label" for="fantasyHeaderLogoFile">Upload Logo (PNG)</label>
-              <div class="branding-upload-row">
-                <input id="fantasyHeaderLogoFile" type="file" accept="image/png,.png" />
-                <button id="uploadFantasyLogoBtn" class="btn btn-secondary" type="button" disabled>Upload Header Logo</button>
-                <button id="removeFantasyLogoBtn" class="btn btn-danger" type="button" disabled>Remove Header Logo</button>
-                <button id="saveFantasyLogoUrlBtn" class="btn" type="button">Save Logo URL</button>
-              </div>
-            </div>
-
-            <div class="branding-block">
-              <div class="field-label">Fantasy Hero Preview</div>
-              <span class="field-help">Preview matches the public page: one responsive hero image (logo is baked into the artwork).</span>
-              <div id="fantasyHeroOnlyPreview" class="fantasy-admin-hero-only-preview fantasy-hero-banner" aria-label="Fantasy hero preview">
-                <p id="fantasyHeroOnlyPreviewMsg" class="fantasy-admin-hero-only-preview__msg" hidden></p>
-                <img
-                  id="fantasyHeroOnlyPreviewHero"
-                  class="fantasy-hero-banner-img"
-                  alt=""
-                  hidden
-                />
-              </div>
-              <div class="branding-upload-row">
-                <button id="refreshFantasyHeroPreviewBtn" class="btn btn-secondary" type="button">
-                  Refresh Preview
-                </button>
-              </div>
-
-              <div id="fantasyHeroPreviewDebug" class="fantasy-hero-preview-debug" aria-live="polite">
-                <div class="field-label" style="margin:0">Current Public Values</div>
-                <ul id="fantasyHeroPreviewDebugList">
-                  <li>Top: 21%</li>
-                  <li>Width: 32vw</li>
-                  <li>Max Width: 560px</li>
-                </ul>
-              </div>
-
-              <div class="slider-row">
-                <label for="fantasyLogoTopPercent">
-                  Logo Vertical Position
-                  <span class="slider-value" id="fantasyLogoTopPercentValue">21%</span>
-                </label>
-                <span class="field-help">Higher number moves the logo lower.</span>
-                <input id="fantasyLogoTopPercent" type="range" min="8" max="45" step="1" value="21" />
-              </div>
-
-              <div class="slider-row">
-                <label for="fantasyLogoWidthVw">
-                  Logo Width
-                  <span class="slider-value" id="fantasyLogoWidthVwValue">32%</span>
-                </label>
-                <span class="field-help">Controls responsive logo width.</span>
-                <input id="fantasyLogoWidthVw" type="range" min="15" max="60" step="1" value="32" />
-              </div>
-
-              <div class="slider-row">
-                <label for="fantasyLogoMaxWidthPx">
-                  Logo Max Width
-                  <span class="slider-value" id="fantasyLogoMaxWidthPxValue">560px</span>
-                </label>
-                <span class="field-help">Prevents logo from getting too large on wide screens.</span>
-                <input id="fantasyLogoMaxWidthPx" type="range" min="240" max="900" step="10" value="560" />
-              </div>
-
-              <div class="branding-upload-row">
-                <button id="resetFantasyLogoPlacementBtn" class="btn btn-secondary" type="button">Reset Logo Placement</button>
-                <button id="saveFantasyLogoPlacementBtn" class="btn" type="button">Save Logo Placement</button>
               </div>
             </div>
 
@@ -807,8 +658,6 @@
     </main>
 
 
-    <script src="/fantasy-branding-assets.js"></script>
-    <script src="/fantasy-hero-placement.js"></script>
     <script>
       const $ = (s) => document.querySelector(s);
 
@@ -1686,165 +1535,11 @@
       }
 
       const DEFAULT_FANTASY_HERO_BACKGROUND_URL = '/assets/fantasy/hero-background.jpg';
-      const DEFAULT_FANTASY_HEADER_LOGO_URL = '/assets/fantasy/fantasy-logo.png';
-      const FANTASY_ADMIN_LOGO_DEFAULTS = {
-        fantasyHeaderLogoTopPercent: 21,
-        fantasyHeaderLogoWidthVw: 32,
-        fantasyHeaderLogoMaxWidthPx: 560,
-      };
 
       let fantasyBrandingSettings = {
         fantasyHeroBackgroundUrl: '',
         fantasyHeroBackgroundUpdatedAt: null,
-        fantasyHeaderLogoUrl: '',
-        fantasyHeaderLogoUpdatedAt: null,
-        fantasyHeaderLogoTopPercent: FANTASY_ADMIN_LOGO_DEFAULTS.fantasyHeaderLogoTopPercent,
-        fantasyHeaderLogoWidthVw: FANTASY_ADMIN_LOGO_DEFAULTS.fantasyHeaderLogoWidthVw,
-        fantasyHeaderLogoMaxWidthPx: FANTASY_ADMIN_LOGO_DEFAULTS.fantasyHeaderLogoMaxWidthPx,
       };
-
-      function clampLogoPlacement(value, min, max, fallback) {
-        const n = Number(value);
-        if (!Number.isFinite(n)) return fallback;
-        return Math.min(max, Math.max(min, n));
-      }
-
-      function resolveLogoPlacement(settings = fantasyBrandingSettings) {
-        return {
-          fantasyHeaderLogoTopPercent: clampLogoPlacement(
-            settings.fantasyHeaderLogoTopPercent,
-            8,
-            45,
-            FANTASY_ADMIN_LOGO_DEFAULTS.fantasyHeaderLogoTopPercent,
-          ),
-          fantasyHeaderLogoWidthVw: clampLogoPlacement(
-            settings.fantasyHeaderLogoWidthVw,
-            15,
-            60,
-            FANTASY_ADMIN_LOGO_DEFAULTS.fantasyHeaderLogoWidthVw,
-          ),
-          fantasyHeaderLogoMaxWidthPx: clampLogoPlacement(
-            settings.fantasyHeaderLogoMaxWidthPx,
-            240,
-            900,
-            FANTASY_ADMIN_LOGO_DEFAULTS.fantasyHeaderLogoMaxWidthPx,
-          ),
-        };
-      }
-
-      function readLogoPlacementFromSliders() {
-        return {
-          fantasyHeaderLogoTopPercent: clampLogoPlacement(
-            $('#fantasyLogoTopPercent')?.value,
-            8,
-            45,
-            FANTASY_ADMIN_LOGO_DEFAULTS.fantasyHeaderLogoTopPercent,
-          ),
-          fantasyHeaderLogoWidthVw: clampLogoPlacement(
-            $('#fantasyLogoWidthVw')?.value,
-            15,
-            60,
-            FANTASY_ADMIN_LOGO_DEFAULTS.fantasyHeaderLogoWidthVw,
-          ),
-          fantasyHeaderLogoMaxWidthPx: clampLogoPlacement(
-            $('#fantasyLogoMaxWidthPx')?.value,
-            240,
-            900,
-            FANTASY_ADMIN_LOGO_DEFAULTS.fantasyHeaderLogoMaxWidthPx,
-          ),
-        };
-      }
-
-      function syncLogoPlacementSliderLabels(placement) {
-        if ($('#fantasyLogoTopPercentValue')) {
-          $('#fantasyLogoTopPercentValue').textContent = `${placement.fantasyHeaderLogoTopPercent}%`;
-        }
-        if ($('#fantasyLogoWidthVwValue')) {
-          $('#fantasyLogoWidthVwValue').textContent = `${placement.fantasyHeaderLogoWidthVw}%`;
-        }
-        if ($('#fantasyLogoMaxWidthPxValue')) {
-          $('#fantasyLogoMaxWidthPxValue').textContent = `${placement.fantasyHeaderLogoMaxWidthPx}px`;
-        }
-      }
-
-      function syncLogoPlacementSliders(placement) {
-        if ($('#fantasyLogoTopPercent')) {
-          $('#fantasyLogoTopPercent').value = String(placement.fantasyHeaderLogoTopPercent);
-        }
-        if ($('#fantasyLogoWidthVw')) {
-          $('#fantasyLogoWidthVw').value = String(placement.fantasyHeaderLogoWidthVw);
-        }
-        if ($('#fantasyLogoMaxWidthPx')) {
-          $('#fantasyLogoMaxWidthPx').value = String(placement.fantasyHeaderLogoMaxWidthPx);
-        }
-        syncLogoPlacementSliderLabels(placement);
-      }
-
-      function buildPreviewSettings(placement) {
-        return {
-          ...fantasyBrandingSettings,
-          fantasyHeaderLogoTopPercent: placement.fantasyHeaderLogoTopPercent,
-          fantasyHeaderLogoWidthVw: placement.fantasyHeaderLogoWidthVw,
-          fantasyHeaderLogoMaxWidthPx: placement.fantasyHeaderLogoMaxWidthPx,
-        };
-      }
-
-      function updateFantasyLogoPlacementUi(placement = readLogoPlacementFromSliders()) {
-        syncLogoPlacementSliderLabels(placement);
-        updateFantasyHeroPreviewDebug(placement);
-      }
-
-      function setFantasyHeroOnlyPreviewMessage(text) {
-        const msg = $('#fantasyHeroOnlyPreviewMsg');
-        const hero = $('#fantasyHeroOnlyPreviewHero');
-        if (!msg) return;
-
-        if (text) {
-          msg.textContent = text;
-          msg.hidden = false;
-          hero?.setAttribute('hidden', '');
-        } else {
-          msg.textContent = '';
-          msg.hidden = true;
-        }
-      }
-
-      function refreshFantasyHeroOnlyPreview() {
-        const previewBox = $('#fantasyHeroOnlyPreview');
-        const hero = $('#fantasyHeroOnlyPreviewHero');
-        if (!previewBox || !hero || $('#adminView')?.hidden) return;
-
-        const brandingAssets = window.BPFantasyBrandingAssets;
-        if (!brandingAssets?.applyImageFromCandidates) {
-          setFantasyHeroOnlyPreviewMessage('Preview assets unavailable.');
-          return;
-        }
-
-        const settings = fantasyBrandingSettings;
-        const heroCandidates = brandingAssets.resolveFantasyHeroBackgroundCandidates(settings);
-
-        brandingAssets.applyImageFromCandidates(hero, heroCandidates, {
-          onLoaded: () => {
-            setFantasyHeroOnlyPreviewMessage('');
-          },
-          onMissing: () => {
-            setFantasyHeroOnlyPreviewMessage('Hero image not found. Upload a hero background or check the URL.');
-          },
-        });
-      }
-
-      function updateFantasyHeroPreviewDebug(placement) {
-        const list = $('#fantasyHeroPreviewDebugList');
-        if (!list) return;
-
-        const resolved = resolveLogoPlacement(buildPreviewSettings(placement));
-
-        list.innerHTML = `
-          <li>Top: ${resolved.fantasyHeaderLogoTopPercent}%</li>
-          <li>Width: ${resolved.fantasyHeaderLogoWidthVw}%</li>
-          <li>Max Width: ${resolved.fantasyHeaderLogoMaxWidthPx}px (${((resolved.fantasyHeaderLogoMaxWidthPx / (window.BPFantasyHeroPlacement?.designWidth || 1920)) * 100).toFixed(2)}% of banner)</li>
-        `;
-      }
 
       function setBrandingMsg(text, isError = false) {
         const msg = $('#brandingMsg');
@@ -1862,32 +1557,15 @@
         return version ? withCacheBust(url, version) : url;
       }
 
-      function resolveFantasyHeaderLogoDisplayUrl(settings = fantasyBrandingSettings) {
-        const stored = stripUrlQuery(settings.fantasyHeaderLogoUrl || '');
-        const url = stored || DEFAULT_FANTASY_HEADER_LOGO_URL;
-        const version = stored
-          ? cacheVersion(settings.fantasyHeaderLogoUpdatedAt) || Date.now()
-          : null;
-        return version ? withCacheBust(url, version) : url;
-      }
-
       function heroPreviewUrl(settings = fantasyBrandingSettings) {
         const stored = stripUrlQuery(settings.fantasyHeroBackgroundUrl || '');
         if (!stored) return '';
         return resolveFantasyHeroBackgroundDisplayUrl(settings);
       }
 
-      function logoPreviewUrl(settings = fantasyBrandingSettings) {
-        const stored = stripUrlQuery(settings.fantasyHeaderLogoUrl || '');
-        if (!stored) return '';
-        return resolveFantasyHeaderLogoDisplayUrl(settings);
-      }
-
       function updateFantasyBrandingPreviews() {
         const heroPreview = $('#fantasyHeroPreview');
-        const logoPreview = $('#fantasyLogoPreview');
         const heroUrl = heroPreviewUrl();
-        const logoUrl = logoPreviewUrl();
 
         if (heroPreview) {
           if (heroUrl) {
@@ -1899,40 +1577,21 @@
           }
         }
 
-        if (logoPreview) {
-          if (logoUrl) {
-            logoPreview.classList.remove('is-empty');
-            logoPreview.innerHTML = `<img src="${logoUrl.replace(/"/g, '&quot;')}" alt="Fantasy header logo preview">`;
-          } else {
-            logoPreview.classList.add('is-empty');
-            logoPreview.textContent = 'No header logo';
-          }
+        const heroUrlInput = $('#fantasyHeroBackgroundUrl');
+        if (heroUrlInput) {
+          heroUrlInput.value = stripUrlQuery(fantasyBrandingSettings.fantasyHeroBackgroundUrl || '');
         }
 
-        const heroUrlInput = $('#fantasyHeroBackgroundUrl');
-        const logoUrlInput = $('#fantasyHeaderLogoUrl');
-        if (heroUrlInput) heroUrlInput.value = stripUrlQuery(fantasyBrandingSettings.fantasyHeroBackgroundUrl || '');
-        if (logoUrlInput) logoUrlInput.value = stripUrlQuery(fantasyBrandingSettings.fantasyHeaderLogoUrl || '');
-
         syncFantasyBrandingButtons();
-        updateFantasyLogoPlacementUi(resolveLogoPlacement(fantasyBrandingSettings));
-        refreshFantasyHeroOnlyPreview();
       }
 
       function syncFantasyBrandingButtons() {
         const heroFile = $('#fantasyHeroBackgroundFile')?.files?.[0];
-        const logoFile = $('#fantasyHeaderLogoFile')?.files?.[0];
         if ($('#uploadFantasyHeroBtn')) {
           $('#uploadFantasyHeroBtn').disabled = !heroFile;
         }
-        if ($('#uploadFantasyLogoBtn')) {
-          $('#uploadFantasyLogoBtn').disabled = !logoFile;
-        }
         if ($('#removeFantasyHeroBtn')) {
           $('#removeFantasyHeroBtn').disabled = !stripUrlQuery(fantasyBrandingSettings.fantasyHeroBackgroundUrl || '');
-        }
-        if ($('#removeFantasyLogoBtn')) {
-          $('#removeFantasyLogoBtn').disabled = !stripUrlQuery(fantasyBrandingSettings.fantasyHeaderLogoUrl || '');
         }
       }
 
@@ -1966,32 +1625,6 @@
           };
           updateFantasyBrandingPreviews();
           setBrandingMsg('Hero background URL saved.');
-        } catch (e) {
-          setBrandingMsg(e.message || 'Save failed', true);
-        }
-      }
-
-      async function saveFantasyLogoUrl() {
-        setBrandingMsg('Saving header logo URL...');
-        try {
-          const res = await fetch('/api/settings', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              password: getSessionPw(),
-              fantasyHeaderLogoUrl: $('#fantasyHeaderLogoUrl').value.trim(),
-            }),
-          });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error || 'Save failed');
-
-          fantasyBrandingSettings = {
-            ...fantasyBrandingSettings,
-            fantasyHeaderLogoUrl: stripUrlQuery(data.fantasyHeaderLogoUrl || ''),
-            fantasyHeaderLogoUpdatedAt: data.fantasyHeaderLogoUpdatedAt || null,
-          };
-          updateFantasyBrandingPreviews();
-          setBrandingMsg('Header logo URL saved.');
         } catch (e) {
           setBrandingMsg(e.message || 'Save failed', true);
         }
@@ -2036,49 +1669,6 @@
         }
       }
 
-      async function uploadFantasyHeaderLogo() {
-        const file = $('#fantasyHeaderLogoFile')?.files?.[0];
-        if (!file) {
-          setBrandingMsg('Choose a PNG file first.', true);
-          return;
-        }
-        if (file.type !== 'image/png') {
-          setBrandingMsg('Only PNG files are supported for the header logo.', true);
-          return;
-        }
-
-        setBrandingMsg('Uploading header logo...');
-        try {
-          const imageBase64 = await readFileAsDataUrl(file);
-          const res = await fetch('/api/uploads', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              password: getSessionPw(),
-              action: 'fantasy-header-logo-image',
-              imageBase64,
-            }),
-          });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error || 'Upload failed');
-
-          fantasyBrandingSettings = {
-            ...fantasyBrandingSettings,
-            fantasyHeaderLogoUrl: stripUrlQuery(
-              data.fantasyHeaderLogoUrlStored || data.fantasyHeaderLogoUrl || '',
-            ),
-            fantasyHeaderLogoUpdatedAt:
-              data.fantasyHeaderLogoUpdatedAt || new Date().toISOString(),
-          };
-          $('#fantasyHeaderLogoFile').value = '';
-          updateFantasyBrandingPreviews();
-          setBrandingMsg(data.savedTo ? `Header logo saved to ${data.savedTo}.` : 'Header logo uploaded.');
-        } catch (e) {
-          setBrandingMsg(e.message || 'Upload failed', true);
-          syncFantasyBrandingButtons();
-        }
-      }
-
       async function removeFantasyHeroBackground() {
         setBrandingMsg('Removing hero background...');
         try {
@@ -2107,70 +1697,6 @@
         }
       }
 
-      async function removeFantasyHeaderLogo() {
-        setBrandingMsg('Removing header logo...');
-        try {
-          const res = await fetch('/api/uploads', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              password: getSessionPw(),
-              action: 'remove-fantasy-header-logo-image',
-            }),
-          });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error || 'Remove failed');
-
-          fantasyBrandingSettings = {
-            ...fantasyBrandingSettings,
-            fantasyHeaderLogoUrl: '',
-            fantasyHeaderLogoUpdatedAt: data.fantasyHeaderLogoUpdatedAt || null,
-          };
-          $('#fantasyHeaderLogoFile').value = '';
-          updateFantasyBrandingPreviews();
-          setBrandingMsg('Header logo removed. Public page will use the text fallback.');
-        } catch (e) {
-          setBrandingMsg(e.message || 'Remove failed', true);
-          syncFantasyBrandingButtons();
-        }
-      }
-
-      async function saveFantasyLogoPlacement() {
-        const placement = readLogoPlacementFromSliders();
-        setBrandingMsg('Saving logo placement...');
-        try {
-          const res = await fetch('/api/settings', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              password: getSessionPw(),
-              fantasyHeaderLogoTopPercent: placement.fantasyHeaderLogoTopPercent,
-              fantasyHeaderLogoWidthVw: placement.fantasyHeaderLogoWidthVw,
-              fantasyHeaderLogoMaxWidthPx: placement.fantasyHeaderLogoMaxWidthPx,
-            }),
-          });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error || 'Save failed');
-
-          fantasyBrandingSettings = {
-            ...fantasyBrandingSettings,
-            ...resolveLogoPlacement(data),
-          };
-          syncLogoPlacementSliders(resolveLogoPlacement(fantasyBrandingSettings));
-          updateFantasyLogoPlacementUi(resolveLogoPlacement(fantasyBrandingSettings));
-          refreshFantasyHeroOnlyPreview();
-          setBrandingMsg('Logo placement saved.');
-        } catch (e) {
-          setBrandingMsg(e.message || 'Save failed', true);
-        }
-      }
-
-      function resetFantasyLogoPlacement() {
-        syncLogoPlacementSliders(FANTASY_ADMIN_LOGO_DEFAULTS);
-        updateFantasyLogoPlacementUi(FANTASY_ADMIN_LOGO_DEFAULTS);
-        setBrandingMsg('Logo placement reset to defaults. Click Save Logo Placement to publish.');
-      }
-
       async function loadFantasySettings() {
         const lockInput = $('#lineupLockTime');
         if (lockInput) lockInput.value = 'Loading...';
@@ -2188,11 +1714,7 @@
           fantasyBrandingSettings = {
             fantasyHeroBackgroundUrl: stripUrlQuery(settings.fantasyHeroBackgroundUrl || ''),
             fantasyHeroBackgroundUpdatedAt: settings.fantasyHeroBackgroundUpdatedAt || null,
-            fantasyHeaderLogoUrl: stripUrlQuery(settings.fantasyHeaderLogoUrl || ''),
-            fantasyHeaderLogoUpdatedAt: settings.fantasyHeaderLogoUpdatedAt || null,
-            ...resolveLogoPlacement(settings),
           };
-          syncLogoPlacementSliders(resolveLogoPlacement(fantasyBrandingSettings));
           updateFantasyBrandingPreviews();
         } catch {
           if (lockInput) lockInput.value = 'Not set in Admin Settings';
@@ -2263,22 +1785,12 @@
       });
 
       $('#fantasyHeroBackgroundFile')?.addEventListener('change', syncFantasyBrandingButtons);
-      $('#fantasyHeaderLogoFile')?.addEventListener('change', syncFantasyBrandingButtons);
       $('#uploadFantasyHeroBtn')?.addEventListener('click', uploadFantasyHeroBackground);
-      $('#uploadFantasyLogoBtn')?.addEventListener('click', uploadFantasyHeaderLogo);
       $('#removeFantasyHeroBtn')?.addEventListener('click', removeFantasyHeroBackground);
-      $('#removeFantasyLogoBtn')?.addEventListener('click', removeFantasyHeaderLogo);
       $('#saveFantasyHeroUrlBtn')?.addEventListener('click', saveFantasyHeroUrl);
-      $('#saveFantasyLogoUrlBtn')?.addEventListener('click', saveFantasyLogoUrl);
-      $('#saveFantasyLogoPlacementBtn')?.addEventListener('click', saveFantasyLogoPlacement);
-      $('#resetFantasyLogoPlacementBtn')?.addEventListener('click', resetFantasyLogoPlacement);
-      $('#refreshFantasyHeroPreviewBtn')?.addEventListener('click', refreshFantasyHeroOnlyPreview);
       $('#generateFantasySalariesBtn')?.addEventListener('click', generateFantasySalaries);
       $('#reloadFantasyDraftBtn')?.addEventListener('click', loadFantasyDraftSlate);
       $('#runFantasyBacktestBtn')?.addEventListener('click', runFantasySeasonBacktest);
-      $('#fantasyLogoTopPercent')?.addEventListener('input', () => updateFantasyLogoPlacementUi());
-      $('#fantasyLogoWidthVw')?.addEventListener('input', () => updateFantasyLogoPlacementUi());
-      $('#fantasyLogoMaxWidthPx')?.addEventListener('input', () => updateFantasyLogoPlacementUi());
 
       initSession();
     </script>
