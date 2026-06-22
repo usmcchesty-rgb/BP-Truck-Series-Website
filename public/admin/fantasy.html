@@ -630,9 +630,10 @@
             </div>
             <div class="admin-kv">
               <div class="admin-k">Model</div>
-              <div class="admin-v" id="fantasySlateModelVersion">fantasy-salary-v1</div>
+              <div class="admin-v" id="fantasySlateModelVersion">fantasy-salary-v2</div>
             </div>
-            <span class="field-help">Tiers are calculated automatically from the fantasy tier score. Salaries save as a draft only — nothing is published automatically.</span>
+            <div id="fantasySlateModelSummary" class="admin-note" hidden></div>
+            <span class="field-help">Tiers use field-normalized component scores and percentile slot assignment. Salaries save as draft only.</span>
             <div class="fantasy-generate-row">
               <button id="generateFantasySalariesBtn" class="btn" type="button">Generate Salaries</button>
               <button id="reloadFantasyDraftBtn" class="btn btn-secondary" type="button">Reload Draft</button>
@@ -775,20 +776,90 @@
         return date.toLocaleString();
       }
 
-      function formatScoreBreakdownHtml(breakdown = {}) {
+      function formatScoreBreakdownHtml(breakdown = {}, driver = {}) {
         const rows = [
-          ['Season', breakdown.seasonPerformance?.score],
-          ['Recent Form', breakdown.recentForm?.score],
-          ['Track History', breakdown.careerTrackHistory?.score],
-          ['Race Impact', breakdown.raceImpact?.score],
-          ['Momentum', breakdown.momentum?.score],
+          ['Season', breakdown.seasonPerformance],
+          ['Recent Form', breakdown.recentForm],
+          ['Track History', breakdown.careerTrackHistory],
+          ['Race Impact', breakdown.raceImpact],
+          ['Momentum', breakdown.momentum],
+          ['Reliability', breakdown.reliability],
         ];
+        const attendance = driver.attendanceContext || breakdown.reliability?.details || {};
+        const attendanceLines = [];
+        if (attendance.completedRacesBeforeSlate != null) {
+          attendanceLines.push(
+            `Season: ${attendance.seasonStarts ?? '?'}/${attendance.completedRacesBeforeSlate} starts`
+          );
+          attendanceLines.push(
+            `Last 3: ${attendance.last3Starts ?? '?'}/${attendance.last3WindowSize ?? '?'} starts`
+          );
+          attendanceLines.push(
+            `Last 5: ${attendance.last5Starts ?? '?'}/${attendance.last5WindowSize ?? '?'} starts`
+          );
+          attendanceLines.push(
+            `Missed latest race: ${attendance.missedLatestRace ? 'yes' : 'no'}`
+          );
+        }
+        const tierCap = driver.tierCap || breakdown._tierCap;
+        const capLine =
+          tierCap?.applied
+            ? `Tier cap: ${tierCap.previousTier} → ${driver.computedTier} (${(tierCap.reasons || []).join('; ')})`
+            : tierCap?.reasons?.length
+              ? `Tier cap note: ${tierCap.reasons.join('; ')}`
+              : null;
+        const tierRecovery = driver.tierRecovery || breakdown._tierRecovery;
+        const recoveryLine =
+          tierRecovery?.applied
+            ? `Tier recovery: ${tierRecovery.previousTier} → ${driver.computedTier} (${tierRecovery.reason || tierRecovery.type})`
+            : null;
+
         return `<ul class="fantasy-detail-list">${rows
-          .map(
-            ([label, score]) =>
-              `<li>${escapeAdminHtml(label)}: ${Number.isFinite(Number(score)) ? Number(score).toFixed(1) : 'n/a'}</li>`
+          .map(([label, component]) => {
+            if (!component) {
+              return `<li>${escapeAdminHtml(label)}: n/a</li>`;
+            }
+            const raw = Number(component.rawScore ?? component.score);
+            const normalized = Number(component.normalizedScore ?? component.score);
+            if (!Number.isFinite(raw) && !Number.isFinite(normalized)) {
+              return `<li>${escapeAdminHtml(label)}: n/a</li>`;
+            }
+            if (!Number.isFinite(normalized) || raw === normalized) {
+              return `<li>${escapeAdminHtml(label)}: ${Number.isFinite(raw) ? raw.toFixed(1) : normalized.toFixed(1)}</li>`;
+            }
+            return `<li>${escapeAdminHtml(label)}: raw ${raw.toFixed(1)} → norm ${normalized.toFixed(1)}</li>`;
+          })
+          .concat(
+            attendanceLines.map((line) => `<li>${escapeAdminHtml(line)}</li>`),
+            capLine ? [`<li>${escapeAdminHtml(capLine)}</li>`] : [],
+            recoveryLine ? [`<li>${escapeAdminHtml(recoveryLine)}</li>`] : []
           )
           .join('')}</ul>`;
+      }
+
+      function renderFantasyModelSummary(meta = null) {
+        const el = $('#fantasySlateModelSummary');
+        if (!el) return;
+
+        const stats = meta?.scoreStats;
+        const tiers = meta?.tierCounts;
+        if (!stats || !tiers) {
+          el.hidden = true;
+          el.textContent = '';
+          return;
+        }
+
+        const tierLine = Object.entries(tiers)
+          .map(([label, count]) => `${label} ${count}`)
+          .join(' · ');
+        const modelVersion = meta?.modelVersion || 'fantasy-salary-v2.1';
+        const bandViolations = meta?.salaryBandViolations?.count ?? 0;
+        const cappedCount = meta?.cappedDrivers?.count ?? 0;
+        const topTierRecovery = meta?.topTierRecoveryApplied ?? 0;
+        const eliteRecovery = meta?.eliteRecoveryApplied ?? 0;
+
+        el.hidden = false;
+        el.textContent = `${modelVersion}. Score max ${Number(stats.max).toFixed(1)}, avg ${Number(stats.avg).toFixed(1)}, median ${Number(stats.median).toFixed(1)}. Tiers: ${tierLine}. Band violations: ${bandViolations}. Tier-capped: ${cappedCount}. Top Tier recovery: ${topTierRecovery}. Elite recovery: ${eliteRecovery}.`;
       }
 
       function renderFantasySalaryReview(drivers = []) {
@@ -814,7 +885,7 @@
               <td>
                 <details class="fantasy-detail-block">
                   <summary>View</summary>
-                  ${formatScoreBreakdownHtml(driver.scoreBreakdown)}
+                  ${formatScoreBreakdownHtml(driver.scoreBreakdown, driver)}
                 </details>
               </td>
               <td>
@@ -850,7 +921,8 @@
             statusEl.className = 'fantasy-slate-status is-empty';
           }
           if (generatedEl) generatedEl.textContent = '—';
-          if (modelEl) modelEl.textContent = 'fantasy-salary-v1';
+          if (modelEl) modelEl.textContent = 'fantasy-salary-v2';
+          renderFantasyModelSummary(null);
           return;
         }
 
@@ -859,7 +931,8 @@
           statusEl.className = `fantasy-slate-status ${slate.status === 'published' ? '' : 'is-draft'}`;
         }
         if (generatedEl) generatedEl.textContent = formatFantasyDate(slate.generated_at);
-        if (modelEl) modelEl.textContent = slate.model_version || 'fantasy-salary-v1';
+        if (modelEl) modelEl.textContent = slate.model_version || 'fantasy-salary-v2';
+        renderFantasyModelSummary(slate.meta || null);
         if (raceWeekEl && slate.race_number) {
           raceWeekEl.value = `Race ${slate.race_number}`;
         }
@@ -895,11 +968,13 @@
           if (!res.ok) {
             renderFantasySalaryReview([]);
             updateFantasyDraftHeader(null);
+            renderFantasyModelSummary(null);
             return;
           }
           const data = await res.json();
           renderFantasySalaryReview(data.drivers || []);
           updateFantasyDraftHeader(data.slate || null);
+          renderFantasyModelSummary(data.slate?.meta || data.meta || null);
         } catch {
           renderFantasySalaryReview([]);
         }
@@ -928,6 +1003,7 @@
 
           renderFantasySalaryReview(data.drivers || []);
           updateFantasyDraftHeader(data.slate || null, data.targetRace || null);
+          renderFantasyModelSummary(data.meta || data.slate?.meta || null);
           if (statusEl) {
             statusEl.textContent = `Draft saved for race ${data.targetRace?.raceNumber ?? data.slate?.race_number ?? ''} (${(data.drivers || []).length} drivers).`;
           }

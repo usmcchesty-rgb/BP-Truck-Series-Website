@@ -1,10 +1,12 @@
 import { buildCareerTrackHistoryForDriver, computeTrackDollarAdjustment } from './_fantasy-track-history.js';
 import {
   FANTASY_MODEL_VERSION,
+  buildFantasyAttendanceContext,
   detectSalaryBandViolations,
   finalizeFantasySlateSalaries,
   normalizeFantasySlateComponents,
   scoreFantasyDriverRaw,
+  summarizeCappedDrivers,
   summarizeFantasyScoreStats,
   summarizeFantasyTierCounts,
 } from './_fantasy-tier-scoring.js';
@@ -21,6 +23,10 @@ export function buildFantasyDriverSalaries({
   driverRaceResultsByDriver,
   priorSalariesByDriver = new Map(),
   priorTierScoresByDriver = new Map(),
+  slateRaceNumber = null,
+  scheduleRaces = null,
+  settings = null,
+  now = new Date(),
 }) {
   const rawDrivers = standings.map((row) => {
     const driverId = String(row.driverId);
@@ -30,6 +36,21 @@ export function buildFantasyDriverSalaries({
     const raceRows = driverRaceResultsByDriver?.get(driverId) || [];
     const trackHistory = buildCareerTrackHistoryForDriver(raceRows, upcomingTrack);
     trackHistory.trackAdjustment = computeTrackDollarAdjustment(trackHistory);
+
+    const attendanceContext =
+      slateRaceNumber != null && scheduleRaces
+        ? buildFantasyAttendanceContext({
+            driverId,
+            standingsRow: row,
+            grounding,
+            alignedRaces,
+            slateRaceNumber,
+            scheduleRaces,
+            driverRaceRows: raceRows,
+            settings,
+            now,
+          })
+        : null;
 
     return scoreFantasyDriverRaw({
       driverId,
@@ -42,11 +63,18 @@ export function buildFantasyDriverSalaries({
       trackHistory,
       priorTierScore: priorTierScoresByDriver.get(driverId) ?? null,
       priorSalary: priorSalariesByDriver.get(driverId) ?? null,
+      attendanceContext,
     });
   });
 
   normalizeFantasySlateComponents(rawDrivers);
   const drivers = finalizeFantasySlateSalaries(rawDrivers);
+  const tierRecovery = drivers.tierRecoveryMeta || {
+    topTierRecoveryApplied: 0,
+    eliteRecoveryApplied: 0,
+    recoveredDrivers: [],
+  };
+  drivers.tierRecoveryMeta = tierRecovery;
 
   for (const driver of drivers) {
     driver.salaryReasons = buildFantasySalaryReasons(driver);
@@ -64,8 +92,15 @@ export function summarizeFantasySlateMeta(drivers = []) {
   const scoreStats = summarizeFantasyScoreStats(drivers);
   const tierCounts = summarizeFantasyTierCounts(drivers);
   const violations = detectSalaryBandViolations(drivers);
+  const cappedDrivers = summarizeCappedDrivers(drivers);
+  const tierRecovery = drivers.tierRecoveryMeta || {
+    topTierRecoveryApplied: 0,
+    eliteRecoveryApplied: 0,
+    recoveredDrivers: [],
+  };
 
   return {
+    modelVersion: FANTASY_MODEL_VERSION,
     driverCount: drivers.length,
     avgSalary: salaries.length ? Math.round(total / salaries.length) : null,
     minSalary: salaries.length ? Math.min(...salaries) : null,
@@ -76,5 +111,9 @@ export function summarizeFantasySlateMeta(drivers = []) {
       count: violations.length,
       violations,
     },
+    cappedDrivers,
+    topTierRecoveryApplied: tierRecovery.topTierRecoveryApplied ?? 0,
+    eliteRecoveryApplied: tierRecovery.eliteRecoveryApplied ?? 0,
+    tierRecovery,
   };
 }

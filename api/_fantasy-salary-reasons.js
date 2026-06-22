@@ -16,6 +16,12 @@ function formatComponentPair(component) {
   return `raw ${Math.round(raw)} → norm ${Math.round(normalized)}/100`;
 }
 
+function formatPercentRate(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 'n/a';
+  return `${Math.round(n * 100)}%`;
+}
+
 export function buildFantasySalaryReasons(scored = {}) {
   const reasons = [];
   const tierScore = Number(scored.fantasyTierScore);
@@ -42,9 +48,10 @@ export function buildFantasySalaryReasons(scored = {}) {
 
   if (breakdown.recentForm) {
     const avg = breakdown.recentForm.details?.last3RaceAverageFinish;
-    const neutral = breakdown.recentForm.details?.neutralApplied ? ' [neutral raw]' : '';
+    const dnp = breakdown.recentForm.details?.dnpPathApplied ? ' [DNP path]' : '';
+    const neutral = breakdown.recentForm.details?.neutralApplied ? ' [no window neutral]' : '';
     reasons.push(
-      `Recent Form ${formatComponentPair(breakdown.recentForm)}${avg != null ? ` (avg finish ${avg} last 3)` : ''}${neutral}`
+      `Recent Form ${formatComponentPair(breakdown.recentForm)}${avg != null ? ` (avg finish ${avg} last 3)` : ''}${dnp}${neutral}`
     );
   }
 
@@ -56,15 +63,19 @@ export function buildFantasySalaryReasons(scored = {}) {
       : scope === 'similar_track_type'
         ? 'similar track type'
         : 'blended track profile';
+    const regression = breakdown.careerTrackHistory.details?.regressionApplied
+      ? `; sample ${breakdown.careerTrackHistory.details?.sampleSize ?? summary?.starts ?? 0}, actual ${Math.round(breakdown.careerTrackHistory.details?.actualTrackScore ?? 0)} → regressed ${Math.round(breakdown.careerTrackHistory.details?.regressedScore ?? 0)}`
+      : '';
     reasons.push(
-      `Career Track History ${formatComponentPair(breakdown.careerTrackHistory)} (${scopeLabel}${summary?.starts != null ? `, ${summary.starts} starts` : ''})`
+      `Career Track History ${formatComponentPair(breakdown.careerTrackHistory)} (${scopeLabel}${summary?.starts != null ? `, ${summary.starts} starts` : ''}${regression})`
     );
   }
 
   if (breakdown.raceImpact) {
     const finish = breakdown.raceImpact.details?.finish;
+    const missed = breakdown.raceImpact.details?.missedLatestRace ? ' [missed latest]' : '';
     reasons.push(
-      `Race Impact ${formatComponentPair(breakdown.raceImpact)}${finish != null ? ` (latest finish P${finish})` : ''}`
+      `Race Impact ${formatComponentPair(breakdown.raceImpact)}${finish != null ? ` (latest finish P${finish})` : ''}${missed}`
     );
   }
 
@@ -73,6 +84,36 @@ export function buildFantasySalaryReasons(scored = {}) {
     const neutral = breakdown.momentum.details?.neutralApplied ? ' [first slate neutral]' : '';
     reasons.push(
       `Momentum ${formatComponentPair(breakdown.momentum)}${prior != null ? ` (prior tier score ${prior})` : ''}${neutral}`
+    );
+  }
+
+  if (breakdown.reliability) {
+    const rel = breakdown.reliability.details || {};
+    reasons.push(
+      `Reliability ${formatComponentPair(breakdown.reliability)} (season ${rel.seasonStarts ?? '?'}/${rel.completedRacesBeforeSlate ?? '?'} ${formatPercentRate(rel.seasonAttendanceRate)}; last 5 ${rel.last5Starts ?? '?'}/${rel.last5WindowSize ?? '?'} ${formatPercentRate(rel.last5AttendanceRate)})`
+    );
+  }
+
+  const attendance = scored.attendanceContext || breakdown.reliability?.details || {};
+  if (attendance.completedRacesBeforeSlate != null) {
+    reasons.push(
+      `Attendance: season ${attendance.seasonStarts}/${attendance.completedRacesBeforeSlate}; last 3 ${attendance.last3Starts}/${attendance.last3WindowSize}; last 5 ${attendance.last5Starts}/${attendance.last5WindowSize}; missed latest ${attendance.missedLatestRace ? 'yes' : 'no'}`
+    );
+  }
+
+  const tierCap = scored.tierCap || breakdown._tierCap;
+  if (tierCap?.applied) {
+    reasons.push(
+      `Tier cap: ${tierCap.previousTier} → ${tier} (${(tierCap.reasons || []).join('; ')})`
+    );
+  } else if (tierCap?.reasons?.length) {
+    reasons.push(`Tier cap note: ${tierCap.reasons.join('; ')}`);
+  }
+
+  const tierRecovery = scored.tierRecovery || breakdown._tierRecovery;
+  if (tierRecovery?.applied) {
+    reasons.push(
+      `Tier recovery: ${tierRecovery.previousTier} → ${tier} (${tierRecovery.reason || tierRecovery.type})`
     );
   }
 

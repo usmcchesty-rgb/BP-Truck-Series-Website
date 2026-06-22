@@ -5,15 +5,17 @@ import {
   clampScore,
   explainSeasonPerformanceScore,
 } from './_power-rankings-scoring.js';
+import { getCompletedPointsRaces } from './_schedule-points-races.js';
 
-export const FANTASY_MODEL_VERSION = 'fantasy-salary-v2';
+export const FANTASY_MODEL_VERSION = 'fantasy-salary-v2.1';
 
 export const FANTASY_TIER_WEIGHTS = {
-  seasonPerformance: 0.3,
-  recentForm: 0.25,
-  careerTrackHistory: 0.25,
+  seasonPerformance: 0.25,
+  recentForm: 0.2,
+  careerTrackHistory: 0.2,
   raceImpact: 0.1,
   momentum: 0.1,
+  reliability: 0.15,
 };
 
 export const FANTASY_COMPONENT_KEYS = [
@@ -22,6 +24,7 @@ export const FANTASY_COMPONENT_KEYS = [
   'careerTrackHistory',
   'raceImpact',
   'momentum',
+  'reliability',
 ];
 
 export const FANTASY_TIER_SLOT_ORDER = [
@@ -73,6 +76,18 @@ export const FANTASY_TIERS = [
 ];
 
 export const FANTASY_NEUTRAL_COMPONENT_SCORE = 50;
+
+export const FANTASY_TIER_RANK = {
+  top_tier: 5,
+  elite: 4,
+  strong: 3,
+  midrange: 2,
+  value: 1,
+};
+
+export const FANTASY_SEASON_ATTENDANCE_CAP_THRESHOLD = 0.6;
+export const FANTASY_SEASON_ATTENDANCE_ELITE_THRESHOLD = 0.8;
+export const FANTASY_ELITE_RECOVERY_TARGET = 3;
 
 export const SALARY_GLOBAL_MIN = 4500;
 export const SALARY_GLOBAL_MAX = 15000;
@@ -226,18 +241,20 @@ export function applySalarySmoothing(computedSalary, priorSalary, priorWeight = 
 }
 
 export function buildFantasyRecentFormRaw(grounding, alignedRaces, driverId) {
+  const windowSize = Array.isArray(alignedRaces) ? alignedRaces.length : 0;
   const recentFinishes = (grounding?.recentRaceFinishes || [])
     .map((race) => Number(race.finish))
     .filter((finish) => Number.isFinite(finish) && finish >= 1);
 
-  if (!recentFinishes.length) {
+  if (windowSize === 0) {
     return {
       score: FANTASY_NEUTRAL_COMPONENT_SCORE,
       details: {
         neutralApplied: true,
-        reason: 'No recent race finishes available; neutral 50 before field normalization.',
+        reason: 'No completed recent race window; neutral 50 before field normalization.',
         last3Finishes: [],
         last3RaceStarts: 0,
+        last3RaceWindowSize: 0,
       },
     };
   }
@@ -247,9 +264,325 @@ export function buildFantasyRecentFormRaw(grounding, alignedRaces, driverId) {
     score: Number(recentForm.score.toFixed(2)),
     details: {
       neutralApplied: false,
+      dnpPathApplied: recentFinishes.length === 0,
       ...recentForm.details,
+      last3RaceWindowSize: windowSize,
     },
   };
+}
+
+export function buildFantasyAttendanceContext({
+  driverId,
+  standingsRow,
+  grounding,
+  alignedRaces,
+  slateRaceNumber,
+  scheduleRaces,
+  driverRaceRows = [],
+  settings = null,
+  now = new Date(),
+}) {
+  const completed = getCompletedPointsRaces(scheduleRaces, { now, settings }).filter(
+    (race) =>
+      race.officialPointsRaceNumber != null &&
+      Number(race.officialPointsRaceNumber) < Number(slateRaceNumber)
+  );
+  const completedRacesBeforeSlate = completed.length;
+  const seasonStarts = Number(standingsRow?.races) || 0;
+  const seasonAttendanceRate =
+    completedRacesBeforeSlate > 0
+      ? Number((seasonStarts / completedRacesBeforeSlate).toFixed(3))
+      : null;
+
+  const last5Races = completed.slice(-5);
+  const last5WindowSize = last5Races.length;
+  const last5RaceNumbers = new Set(
+    last5Races.map((race) => Number(race.officialPointsRaceNumber))
+  );
+  const last5Starts = (driverRaceRows || []).filter((row) =>
+    last5RaceNumbers.has(Number(row.pointsRaceNumber))
+  ).length;
+  const last5AttendanceRate =
+    last5WindowSize > 0 ? Number((last5Starts / last5WindowSize).toFixed(3)) : null;
+
+  const last3WindowSize = Array.isArray(alignedRaces) ? alignedRaces.length : 0;
+  const last3Starts =
+    grounding?.last3RaceStarts ??
+    (grounding?.recentRaceFinishes || []).filter((race) =>
+      Number.isFinite(Number(race.finish))
+    ).length;
+  const last3DnpCount =
+    grounding?.last3RaceDnpCount ??
+    Math.max(0, last3WindowSize - last3Starts);
+
+  const latestRace = alignedRaces?.[alignedRaces.length - 1] || null;
+  const latestFinish = latestRace?.finishes?.[String(driverId)];
+  const missedLatestRace =
+    latestRace != null && !Number.isFinite(Number(latestFinish));
+
+  const seasonPart =
+    seasonAttendanceRate != null ? seasonAttendanceRate * 100 : FANTASY_NEUTRAL_COMPONENT_SCORE;
+  const recentPart =
+    last5AttendanceRate != null ? last5AttendanceRate * 100 : FANTASY_NEUTRAL_COMPONENT_SCORE;
+  const reliabilityScore = Number(
+    clampScore(seasonPart * 0.5 + recentPart * 0.5, 0, 100).toFixed(2)
+  );
+
+  return {
+    completedRacesBeforeSlate,
+    seasonStarts,
+    seasonAttendanceRate,
+    last5WindowSize,
+    last5Starts,
+    last5AttendanceRate,
+    last3WindowSize,
+    last3Starts,
+    last3DnpCount,
+    missedLatestRace,
+    reliabilityScore,
+    missedRecentRaceNames: grounding?.missedRecentRaceNames || [],
+  };
+}
+
+export function computeMaxAllowedTierKey(attendance = {}) {
+  const reasons = [];
+  let maxTierKey = 'top_tier';
+  let maxRank = FANTASY_TIER_RANK.top_tier;
+
+  const applyCap = (tierKey, reason) => {
+    const rank = FANTASY_TIER_RANK[tierKey];
+    if (rank != null && rank < maxRank) {
+      maxRank = rank;
+      maxTierKey = tierKey;
+      reasons.push(reason);
+    }
+  };
+
+  if (attendance.last3WindowSize > 0 && attendance.last3Starts === 0) {
+    applyCap('midrange', 'Missed all last 3 races → max tier Midrange');
+  }
+
+  if (
+    attendance.completedRacesBeforeSlate > 0 &&
+    attendance.seasonAttendanceRate != null &&
+    attendance.seasonAttendanceRate < FANTASY_SEASON_ATTENDANCE_CAP_THRESHOLD
+  ) {
+    applyCap(
+      'midrange',
+      `Season attendance below ${Math.round(FANTASY_SEASON_ATTENDANCE_CAP_THRESHOLD * 100)}% → max tier Midrange`
+    );
+  }
+
+  if (attendance.last3WindowSize > 0 && attendance.last3DnpCount >= 2) {
+    if (
+      attendance.seasonAttendanceRate != null &&
+      attendance.seasonAttendanceRate < FANTASY_SEASON_ATTENDANCE_ELITE_THRESHOLD
+    ) {
+      applyCap(
+        'strong',
+        `Missed 2+ of last 3 races with season attendance below ${Math.round(FANTASY_SEASON_ATTENDANCE_ELITE_THRESHOLD * 100)}% → max Strong`
+      );
+    } else {
+      applyCap('elite', 'Missed 2+ of last 3 races → max Elite');
+    }
+  }
+
+  if (attendance.missedLatestRace && attendance.last3Starts < 2) {
+    applyCap(
+      'elite',
+      'Missed latest race with fewer than 2 last-3 starts → cannot be Top Tier'
+    );
+  }
+
+  return { maxTierKey, reasons };
+}
+
+export function isPremiumRecoveryEligible(driver, targetTierKey = 'top_tier') {
+  const attendance = driver.attendanceContext || {};
+  const { maxTierKey } = computeMaxAllowedTierKey(attendance);
+  const targetRank = FANTASY_TIER_RANK[targetTierKey] ?? 0;
+  const maxRank = FANTASY_TIER_RANK[maxTierKey] ?? 0;
+  if (maxRank < targetRank) return false;
+
+  return isTopTierRecoveryEligible(driver);
+}
+
+export function isTopTierRecoveryEligible(driver) {
+  const attendance = driver.attendanceContext || {};
+
+  if (attendance.last3WindowSize > 0 && attendance.last3Starts === 0) return false;
+
+  if (
+    attendance.completedRacesBeforeSlate > 0 &&
+    attendance.seasonAttendanceRate != null &&
+    attendance.seasonAttendanceRate < FANTASY_SEASON_ATTENDANCE_CAP_THRESHOLD
+  ) {
+    return false;
+  }
+
+  if (
+    attendance.seasonAttendanceRate != null &&
+    attendance.seasonAttendanceRate < FANTASY_SEASON_ATTENDANCE_ELITE_THRESHOLD
+  ) {
+    return false;
+  }
+
+  if (attendance.last3Starts < 1) return false;
+
+  return true;
+}
+
+function assignDriverToRecoveredTier(driver, tierKey, tierByKey, reason, recoveryType) {
+  const tier = tierByKey[tierKey];
+  const previousTier = driver.computedTier;
+  const previousTierKey = driver.computedTierKey;
+
+  driver.computedTierKey = tier.key;
+  driver.computedTier = tier.label;
+  driver.salaryBand = {
+    min: tier.salaryMin,
+    max: tier.salaryMax,
+  };
+  driver.tierRecovery = {
+    applied: true,
+    type: recoveryType,
+    previousTier,
+    previousTierKey,
+    reason,
+  };
+  if (driver.scoreBreakdown) {
+    driver.scoreBreakdown._tierRecovery = driver.tierRecovery;
+  }
+}
+
+export function applyPremiumTierRecovery(drivers = []) {
+  const tierByKey = Object.fromEntries(FANTASY_TIERS.map((tier) => [tier.key, tier]));
+  const sorted = [...drivers].sort(
+    (a, b) => Number(b.fantasyTierScore) - Number(a.fantasyTierScore)
+  );
+
+  const countByTierKey = () => {
+    const counts = Object.fromEntries(FANTASY_TIERS.map((tier) => [tier.key, 0]));
+    for (const driver of drivers) {
+      if (driver.computedTierKey) {
+        counts[driver.computedTierKey] = (counts[driver.computedTierKey] || 0) + 1;
+      }
+    }
+    return counts;
+  };
+
+  let topTierRecoveryApplied = 0;
+  let eliteRecoveryApplied = 0;
+  const recoveredDrivers = [];
+
+  let counts = countByTierKey();
+  const slotTargets = computeFantasyTierSlotCounts(drivers.length);
+  const topTierTarget = slotTargets.top_tier || 1;
+
+  if ((counts.top_tier || 0) < topTierTarget) {
+    const needed = topTierTarget - (counts.top_tier || 0);
+    const candidates = sorted.filter(
+      (driver) =>
+        driver.computedTierKey !== 'top_tier' && isTopTierRecoveryEligible(driver)
+    );
+
+    for (const candidate of candidates.slice(0, needed)) {
+      assignDriverToRecoveredTier(
+        candidate,
+        'top_tier',
+        tierByKey,
+        'Premium tier recovery: promoted to Top Tier (eligible highest score)',
+        'top_tier'
+      );
+      topTierRecoveryApplied += 1;
+      recoveredDrivers.push({
+        driverId: candidate.driverId,
+        driverName: candidate.driverName,
+        tier: 'Top Tier',
+      });
+    }
+  }
+
+  counts = countByTierKey();
+
+  const eliteTarget = Math.max(FANTASY_ELITE_RECOVERY_TARGET, slotTargets.elite || 0);
+
+  if ((counts.elite || 0) < eliteTarget) {
+    const needed = eliteTarget - (counts.elite || 0);
+    const candidates = sorted.filter(
+      (driver) =>
+        driver.computedTierKey !== 'top_tier' &&
+        driver.computedTierKey !== 'elite' &&
+        isTopTierRecoveryEligible(driver)
+    );
+
+    for (const candidate of candidates.slice(0, needed)) {
+      assignDriverToRecoveredTier(
+        candidate,
+        'elite',
+        tierByKey,
+        'Premium tier recovery: promoted to Elite (eligible)',
+        'elite'
+      );
+      eliteRecoveryApplied += 1;
+      recoveredDrivers.push({
+        driverId: candidate.driverId,
+        driverName: candidate.driverName,
+        tier: 'Elite',
+      });
+    }
+  }
+
+  return {
+    topTierRecoveryApplied,
+    eliteRecoveryApplied,
+    recoveredDrivers,
+  };
+}
+
+export function applyAttendanceTierCaps(drivers = []) {
+  const tierByKey = Object.fromEntries(FANTASY_TIERS.map((tier) => [tier.key, tier]));
+
+  for (const driver of drivers) {
+    const attendance = driver.attendanceContext || {};
+    const { maxTierKey, reasons } = computeMaxAllowedTierKey(attendance);
+    const assignedKey = driver.computedTierKey;
+    const assignedRank = FANTASY_TIER_RANK[assignedKey] || 0;
+    const maxRank = FANTASY_TIER_RANK[maxTierKey] || 0;
+
+    if (assignedRank > maxRank) {
+      const cappedTier = tierByKey[maxTierKey];
+      driver.uncappedTierKey = assignedKey;
+      driver.uncappedTier = driver.computedTier;
+      driver.computedTierKey = cappedTier.key;
+      driver.computedTier = cappedTier.label;
+      driver.salaryBand = {
+        min: cappedTier.salaryMin,
+        max: cappedTier.salaryMax,
+      };
+      driver.tierCap = {
+        applied: true,
+        maxTierKey,
+        previousTierKey: assignedKey,
+        previousTier: driver.uncappedTier,
+        reasons,
+      };
+      if (driver.scoreBreakdown) {
+        driver.scoreBreakdown._tierCap = driver.tierCap;
+      }
+    } else {
+      driver.tierCap = {
+        applied: false,
+        maxTierKey,
+        reasons: reasons.length ? reasons : [],
+      };
+      if (driver.scoreBreakdown && reasons.length) {
+        driver.scoreBreakdown._tierCap = driver.tierCap;
+      }
+    }
+  }
+
+  return drivers;
 }
 
 export function buildFantasyMomentumRaw(priorTierScore) {
@@ -297,12 +630,15 @@ export function buildFantasyRawComponents({
   schedules,
   careerTrackHistoryScore,
   priorTierScore = null,
+  attendanceContext = null,
 }) {
   const latestRace = alignedRaces?.[alignedRaces.length - 1] || null;
   const season = explainSeasonPerformanceScore(standingsRow, schedules, driverId);
   const recentForm = buildFantasyRecentFormRaw(grounding, alignedRaces, driverId);
   const raceImpact = buildRaceImpactComponent(latestRace, schedules, driverId);
   const momentum = buildFantasyMomentumRaw(priorTierScore);
+  const reliabilityScore =
+    attendanceContext?.reliabilityScore ?? FANTASY_NEUTRAL_COMPONENT_SCORE;
 
   const components = {
     seasonPerformance: {
@@ -344,6 +680,25 @@ export function buildFantasyRawComponents({
       weight: FANTASY_TIER_WEIGHTS.momentum,
       details: momentum.details,
     },
+    reliability: {
+      rawScore: reliabilityScore,
+      normalizedScore: null,
+      score: reliabilityScore,
+      weight: FANTASY_TIER_WEIGHTS.reliability,
+      details: attendanceContext
+        ? {
+            seasonStarts: attendanceContext.seasonStarts,
+            completedRacesBeforeSlate: attendanceContext.completedRacesBeforeSlate,
+            seasonAttendanceRate: attendanceContext.seasonAttendanceRate,
+            last3Starts: attendanceContext.last3Starts,
+            last3WindowSize: attendanceContext.last3WindowSize,
+            last5Starts: attendanceContext.last5Starts,
+            last5WindowSize: attendanceContext.last5WindowSize,
+            last5AttendanceRate: attendanceContext.last5AttendanceRate,
+            missedLatestRace: attendanceContext.missedLatestRace,
+          }
+        : {},
+    },
   };
 
   const fantasyTierScoreRaw = Number(
@@ -352,7 +707,8 @@ export function buildFantasyRawComponents({
       components.recentForm.rawScore * FANTASY_TIER_WEIGHTS.recentForm +
       components.careerTrackHistory.rawScore * FANTASY_TIER_WEIGHTS.careerTrackHistory +
       components.raceImpact.rawScore * FANTASY_TIER_WEIGHTS.raceImpact +
-      components.momentum.rawScore * FANTASY_TIER_WEIGHTS.momentum
+      components.momentum.rawScore * FANTASY_TIER_WEIGHTS.momentum +
+      components.reliability.rawScore * FANTASY_TIER_WEIGHTS.reliability
     ).toFixed(2)
   );
 
@@ -370,7 +726,8 @@ export function computeWeightedFantasyTierScore(components) {
       components.recentForm.normalizedScore * FANTASY_TIER_WEIGHTS.recentForm +
       components.careerTrackHistory.normalizedScore * FANTASY_TIER_WEIGHTS.careerTrackHistory +
       components.raceImpact.normalizedScore * FANTASY_TIER_WEIGHTS.raceImpact +
-      components.momentum.normalizedScore * FANTASY_TIER_WEIGHTS.momentum
+      components.momentum.normalizedScore * FANTASY_TIER_WEIGHTS.momentum +
+      components.reliability.normalizedScore * FANTASY_TIER_WEIGHTS.reliability
     ).toFixed(2)
   );
 }
@@ -398,11 +755,10 @@ export function normalizeFantasySlateComponents(drivers = []) {
   return drivers;
 }
 
-export function finalizeFantasySlateSalaries(drivers = []) {
-  const tiered = assignTiersByPercentileSlots(drivers);
+export function computeFantasySlateSalaries(drivers = []) {
   const tierGroups = Object.fromEntries(FANTASY_TIERS.map((tier) => [tier.key, []]));
 
-  for (const driver of tiered) {
+  for (const driver of drivers) {
     tierGroups[driver.computedTierKey]?.push(driver);
   }
 
@@ -443,7 +799,19 @@ export function finalizeFantasySlateSalaries(drivers = []) {
     }
   }
 
-  return tiered.sort((a, b) => Number(b.fantasyTierScore) - Number(a.fantasyTierScore));
+  return drivers;
+}
+
+export function finalizeFantasySlateSalaries(drivers = []) {
+  assignTiersByPercentileSlots(drivers);
+  applyAttendanceTierCaps(drivers);
+  const tierRecovery = applyPremiumTierRecovery(drivers);
+  computeFantasySlateSalaries(drivers);
+  const sorted = drivers.sort(
+    (a, b) => Number(b.fantasyTierScore) - Number(a.fantasyTierScore)
+  );
+  sorted.tierRecoveryMeta = tierRecovery;
+  return sorted;
 }
 
 export function scoreFantasyDriverRaw({
@@ -457,6 +825,7 @@ export function scoreFantasyDriverRaw({
   trackHistory,
   priorTierScore = null,
   priorSalary = null,
+  attendanceContext = null,
 }) {
   const { fantasyTierScoreRaw, components } = buildFantasyRawComponents({
     driverId,
@@ -466,6 +835,7 @@ export function scoreFantasyDriverRaw({
     schedules,
     careerTrackHistoryScore: trackHistory?.score ?? FANTASY_NEUTRAL_COMPONENT_SCORE,
     priorTierScore,
+    attendanceContext,
   });
 
   components.careerTrackHistory.details = {
@@ -473,6 +843,10 @@ export function scoreFantasyDriverRaw({
     fallbackUsed: trackHistory?.fallbackUsed ?? false,
     summary: trackHistory?.summary ?? null,
     scoreDetails: trackHistory?.scoreDetails ?? null,
+    actualTrackScore: trackHistory?.actualTrackScore ?? null,
+    sampleSize: trackHistory?.summary?.starts ?? trackHistory?.scoreDetails?.sampleSize ?? null,
+    regressionApplied: trackHistory?.scoreDetails?.regressionApplied ?? false,
+    regressedScore: trackHistory?.score ?? null,
   };
 
   return {
@@ -505,6 +879,10 @@ export function scoreFantasyDriverRaw({
     generatedSalary: null,
     salaryOverride: null,
     finalSalary: null,
+    attendanceContext: attendanceContext || null,
+    tierCap: null,
+    uncappedTier: null,
+    uncappedTierKey: null,
   };
 }
 
@@ -562,4 +940,18 @@ export function detectSalaryBandViolations(drivers = []) {
   }
 
   return violations;
+}
+
+export function summarizeCappedDrivers(drivers = []) {
+  const capped = drivers.filter((driver) => driver.tierCap?.applied);
+  return {
+    count: capped.length,
+    drivers: capped.map((driver) => ({
+      driverId: driver.driverId,
+      driverName: driver.driverName,
+      previousTier: driver.tierCap?.previousTier,
+      computedTier: driver.computedTier,
+      reasons: driver.tierCap?.reasons || [],
+    })),
+  };
 }

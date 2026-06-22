@@ -17,6 +17,7 @@ import {
 } from '../api/_fantasy-track-history.js';
 import {
   buildFantasyDriverSalaries,
+  FANTASY_MODEL_VERSION,
   summarizeFantasySlateMeta,
 } from '../api/_fantasy-salary-scoring.js';
 
@@ -24,6 +25,7 @@ const SLATE_MAX_STANDINGS_POSITION = 30;
 const raceNumber = 14;
 
 const settings = await getSettings();
+const now = new Date();
 const scheduleHtml = await fetchHtml(settings.scheduleUrl);
 const scheduleRaces = enrichScheduleRaces(parseScheduleRacesFromHtml(scheduleHtml));
 const targetRace = scheduleRaces.find(
@@ -34,7 +36,7 @@ if (!targetRace) {
   throw new Error(`Race ${raceNumber} not found on schedule.`);
 }
 
-const raceDebug = buildRaceNumberDebug(scheduleRaces, raceNumber, { now: new Date(), settings });
+const raceDebug = buildRaceNumberDebug(scheduleRaces, raceNumber, { now, settings });
 const standingsResult = await fetchStandingsRows(settings, raceDebug.standingsScheduleId);
 const standings = standingsResult.rows.filter(
   (row) =>
@@ -76,7 +78,7 @@ const allAligned = alignAllCompletedPointsRaces(
   scheduleRaces,
   standingsResult.schedules,
   driverLookup,
-  { now: new Date(), settings }
+  { now, settings }
 );
 const driverIds = standings.map((row) => String(row.driverId));
 const driverRaceResultsByDriver = buildDriverRaceResultsByDriver(
@@ -94,26 +96,57 @@ const drivers = buildFantasyDriverSalaries({
   driverRaceResultsByDriver,
   priorSalariesByDriver: new Map(),
   priorTierScoresByDriver: new Map(),
+  slateRaceNumber: raceNumber,
+  scheduleRaces,
+  settings,
+  now,
 }).sort((a, b) => b.fantasyTierScore - a.fantasyTierScore);
 
 const meta = summarizeFantasySlateMeta(drivers);
 
-const top10 = drivers.slice(0, 10).map((d) => ({
-  driver: d.driverName,
-  tier: d.computedTier,
-  score: d.fantasyTierScore,
-  base: d.baseSalaryInBand,
-  generated: d.generatedSalary,
-  final: d.finalSalary,
-  band: d.salaryBand,
-  bandEnforced: d.bandEnforcement?.applied ?? false,
-}));
+function driverSnapshot(d) {
+  if (!d) return null;
+  return {
+    rank: drivers.findIndex((x) => x.driverId === d.driverId) + 1,
+    driverName: d.driverName,
+    standingsPosition: standings.find((r) => String(r.driverId) === d.driverId)?.position,
+    fantasyTierScore: d.fantasyTierScore,
+    computedTier: d.computedTier,
+    uncappedTier: d.uncappedTier || null,
+    generatedSalary: d.generatedSalary,
+    tierCap: d.tierCap,
+    tierRecovery: d.tierRecovery || null,
+    attendance: d.attendanceContext,
+  };
+}
 
-console.log(JSON.stringify({
-  track: targetRace.track,
-  tierCounts: meta.tierCounts,
-  scoreStats: meta.scoreStats,
-  salaryBandViolations: meta.salaryBandViolations,
-  top10,
-  dalton: drivers.find((d) => /kilroe/i.test(d.driverName)),
-}, null, 2));
+const watchNames = [/marasco/i, /kilroe/i, /lawson/i, /carroll/i];
+
+console.log(
+  JSON.stringify(
+    {
+      modelVersion: FANTASY_MODEL_VERSION,
+      track: targetRace.track,
+      scoreStats: meta.scoreStats,
+      tierCounts: meta.tierCounts,
+      cappedDrivers: meta.cappedDrivers,
+      topTierRecoveryApplied: meta.topTierRecoveryApplied,
+      eliteRecoveryApplied: meta.eliteRecoveryApplied,
+      tierRecovery: meta.tierRecovery,
+      salaryBandViolations: meta.salaryBandViolations,
+      top15: drivers.slice(0, 15).map((d) => ({
+        driver: d.driverName,
+        tier: d.computedTier,
+        score: d.fantasyTierScore,
+        salary: d.generatedSalary,
+        capped: d.tierCap?.applied ?? false,
+        recovered: d.tierRecovery?.applied ?? false,
+      })),
+      watched: drivers
+        .filter((d) => watchNames.some((re) => re.test(d.driverName)))
+        .map(driverSnapshot),
+    },
+    null,
+    2
+  )
+);
