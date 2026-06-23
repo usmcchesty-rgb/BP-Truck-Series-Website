@@ -150,13 +150,15 @@
 
     return `
       <section class="fantasy-driver-hero fantasy-app-hero-panel fantasy-glass-panel">
-        <div class="fantasy-driver-hero__content">
-          <p class="fantasy-app-eyebrow">Driver Detail</p>
-          <h1 class="fantasy-app-page-title">${escapeHtml(name)}${driver.carNumber ? ` <span class="muted">#${escapeHtml(driver.carNumber)}</span>` : ''}</h1>
-          ${renderHeroBadges(driver)}
-          <p class="fantasy-app-readonly-note">Race ${escapeHtml(slate.raceNumber ?? '—')} · ${escapeHtml(slate.track || 'TBD')} · Read-only preview</p>
+        <div class="fantasy-driver-hero-inner">
+          <div class="fantasy-driver-hero__content">
+            <p class="fantasy-app-eyebrow">Driver Detail</p>
+            <h1 class="fantasy-app-page-title">${escapeHtml(name)}${driver.carNumber ? ` <span class="muted">#${escapeHtml(driver.carNumber)}</span>` : ''}</h1>
+            ${renderHeroBadges(driver)}
+            <p class="fantasy-app-readonly-note">Race ${escapeHtml(slate.raceNumber ?? '—')} · ${escapeHtml(slate.track || 'TBD')} · Read-only preview</p>
+          </div>
+          ${photoHtml}
         </div>
-        ${photoHtml}
       </section>
     `;
   }
