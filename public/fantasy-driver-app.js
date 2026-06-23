@@ -32,6 +32,21 @@
     return null;
   }
 
+  function valueGradeBadgeClass(grade) {
+    const normalized = String(grade || '').trim().toUpperCase();
+    if (normalized === 'A+') return 'fantasy-value-grade-badge--a-plus';
+    if (normalized === 'A') return 'fantasy-value-grade-badge--a';
+    if (normalized.startsWith('B')) return 'fantasy-value-grade-badge--b';
+    if (normalized.startsWith('C')) return 'fantasy-value-grade-badge--c';
+    if (normalized === 'D') return 'fantasy-value-grade-badge--d';
+    return 'fantasy-value-grade-badge--default';
+  }
+
+  function renderValueGradeBadge(grade) {
+    if (!grade) return '—';
+    return `<span class="fantasy-value-grade-badge ${valueGradeBadgeClass(grade)}">${escapeHtml(grade)}</span>`;
+  }
+
   function driverImage(name) {
     const slug = String(name || '')
       .toLowerCase()
@@ -142,7 +157,6 @@
       driver.projectedOwnershipPct != null
         ? `${driver.projectedOwnershipPct}%`
         : '—';
-    const value = driver.valueGrade || '—';
     const trend = driver.salaryChangeLabel || '—';
     const trendClass = changeClass(driver.salaryChangeDirection);
 
@@ -152,8 +166,8 @@
         <strong>${escapeHtml(ownership)}</strong>
       </div>
       <div class="fantasy-driver-quick-stat">
-        <span class="fantasy-driver-quick-stat__label">Value</span>
-        <strong>${driver.valueGrade ? `<span class="fantasy-grade-pill">${escapeHtml(value)}</span>` : escapeHtml(value)}</strong>
+        <span class="fantasy-driver-quick-stat__label">Value Grade</span>
+        <strong class="fantasy-driver-quick-stat__value">${renderValueGradeBadge(driver.valueGrade)}</strong>
       </div>
       <div class="fantasy-driver-quick-stat">
         <span class="fantasy-driver-quick-stat__label">Salary Trend</span>
@@ -456,7 +470,7 @@
           <div><span>Current Salary</span><strong class="salary">${formatMoney(driver.salary)}</strong></div>
           <div><span>Previous Salary</span><strong>${formatMoney(driver.previousSalary)}</strong></div>
           <div><span>Salary Change</span><strong><span class="fantasy-change ${changeClass(driver.salaryChangeDirection)}">${escapeHtml(driver.salaryChangeLabel || '—')}</span></strong></div>
-          <div><span>Value Grade</span><strong>${driver.valueGrade ? `<span class="fantasy-grade-pill">${escapeHtml(driver.valueGrade)}</span>` : '—'}</strong></div>
+          <div><span>Value Grade</span><strong class="fantasy-driver-detail-grid__value">${renderValueGradeBadge(driver.valueGrade)}</strong></div>
           <div><span>Value Score</span><strong>${driver.valueScore != null ? Number(driver.valueScore).toFixed(2) : '—'}</strong></div>
           <div><span>Fantasy Rank</span><strong>${driver.fantasyRank != null ? `#${escapeHtml(driver.fantasyRank)}` : '—'}</strong></div>
           <div><span>Tier</span><strong>${escapeHtml(driver.tier || '—')}</strong></div>

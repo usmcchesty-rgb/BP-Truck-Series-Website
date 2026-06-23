@@ -990,6 +990,75 @@ body.fantasy-page main.fantasy-app-page{
   font-size:14px;
 }
 
+.fantasy-driver-detail-grid__value,
+.fantasy-driver-quick-stat__value{
+  display:flex;
+  align-items:center;
+  width:fit-content;
+  max-width:100%;
+}
+
+.fantasy-value-grade-badge{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:fit-content;
+  max-width:60px;
+  min-width:28px;
+  height:22px;
+  padding:0 8px;
+  border-radius:4px;
+  border:1px solid rgba(255,255,255,.14);
+  font-size:11px;
+  font-weight:900;
+  letter-spacing:.04em;
+  line-height:1;
+  text-transform:uppercase;
+  box-sizing:border-box;
+}
+
+.fantasy-value-grade-badge--a-plus{
+  color:#1a1400;
+  background:linear-gradient(180deg, #f0c040 0%, #c87800 100%);
+  border-color:rgba(240,192,64,.65);
+  box-shadow:0 0 10px rgba(240,192,64,.35);
+}
+
+.fantasy-value-grade-badge--a{
+  color:#eaffea;
+  background:linear-gradient(180deg, rgba(76,175,80,.42) 0%, rgba(30,90,34,.75) 100%);
+  border-color:rgba(76,175,80,.55);
+  box-shadow:0 0 10px rgba(76,175,80,.28);
+}
+
+.fantasy-value-grade-badge--b{
+  color:#e8f2ff;
+  background:linear-gradient(180deg, rgba(74,144,226,.42) 0%, rgba(26,74,122,.78) 100%);
+  border-color:rgba(74,144,226,.55);
+  box-shadow:0 0 10px rgba(74,144,226,.28);
+}
+
+.fantasy-value-grade-badge--c{
+  color:#fff4e8;
+  background:linear-gradient(180deg, rgba(255,152,0,.4) 0%, rgba(180,90,0,.78) 100%);
+  border-color:rgba(255,152,0,.55);
+  box-shadow:0 0 10px rgba(255,152,0,.28);
+}
+
+.fantasy-value-grade-badge--d{
+  color:#ffe8e8;
+  background:linear-gradient(180deg, rgba(229,9,20,.42) 0%, rgba(100,0,0,.82) 100%);
+  border-color:rgba(229,9,20,.55);
+  box-shadow:0 0 10px rgba(229,9,20,.32);
+}
+
+.fantasy-value-grade-badge--default{
+  color:#fff;
+  background:rgba(255,255,255,.08);
+  border-color:rgba(255,255,255,.18);
+  box-shadow:0 0 8px rgba(255,255,255,.08);
+}
+
 .fantasy-driver-reasons{
   margin:0;
   padding-left:18px;
