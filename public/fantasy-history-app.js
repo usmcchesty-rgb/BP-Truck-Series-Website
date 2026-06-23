@@ -1,14 +1,11 @@
 (function () {
+  const { link: driverLink, escapeHtml } = window.BPFantasyDriverLinks || {
+    link: (d, l) => escapeHtml(l ?? d?.driverName),
+    escapeHtml: (v) => String(v ?? ''),
+  };
+
   function $(selector) {
     return document.querySelector(selector);
-  }
-
-  function escapeHtml(value) {
-    return String(value ?? '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
   }
 
   function formatMoney(value) {
@@ -17,10 +14,78 @@
     return `$${n.toLocaleString('en-US')}`;
   }
 
+  function formatChange(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return '—';
+    if (n === 0) return '—';
+    return `${n > 0 ? '+' : '-'}$${Math.abs(n).toLocaleString('en-US')}`;
+  }
+
   function renderEmpty(message) {
     const root = $('#fantasyHistoryRoot');
     if (!root) return;
     root.innerHTML = `<section class="fantasy-app-empty"><p>${escapeHtml(message)}</p></section>`;
+  }
+
+  function renderInsights(insights = {}) {
+    if (!insights.hasEnoughHistory) {
+      return `<section class="fantasy-app-section"><p class="fantasy-insights-notice">${escapeHtml(insights.notice || 'More salary trend data will appear after multiple fantasy slates are generated.')}</p></section>`;
+    }
+
+    const cards = [
+      insights.biggestThreeRaceRiser
+        ? {
+            label: 'Biggest 3-Race Riser',
+            name: insights.biggestThreeRaceRiser.driverName,
+            stat: formatChange(insights.biggestThreeRaceRiser.salaryChange),
+          }
+        : null,
+      insights.biggestThreeRaceFaller
+        ? {
+            label: 'Biggest 3-Race Faller',
+            name: insights.biggestThreeRaceFaller.driverName,
+            stat: formatChange(insights.biggestThreeRaceFaller.salaryChange),
+          }
+        : null,
+      insights.highestAverageSalary
+        ? {
+            label: 'Highest Avg Salary',
+            name: insights.highestAverageSalary.driverName,
+            stat: formatMoney(insights.highestAverageSalary.averageSalary),
+          }
+        : null,
+      insights.mostVolatileSalary
+        ? {
+            label: 'Most Volatile Salary',
+            name: insights.mostVolatileSalary.driverName,
+            stat: formatChange(insights.mostVolatileSalary.volatility),
+          }
+        : null,
+      insights.currentBestValue
+        ? {
+            label: 'Current Best Value',
+            name: insights.currentBestValue.driverName,
+            stat: `${insights.currentBestValue.valueGrade || ''} (${Number(insights.currentBestValue.valueScore).toFixed(2)})`,
+          }
+        : null,
+    ].filter(Boolean);
+
+    return `
+      <section class="fantasy-app-section">
+        <h2 class="fantasy-app-section-title">Salary Trend Insights</h2>
+        <div class="fantasy-value-card-grid">
+          ${cards
+            .map(
+              (card) => `<article class="fantasy-value-card">
+              <div class="fantasy-value-card__meta">${escapeHtml(card.label)}</div>
+              <div class="fantasy-value-card__name">${driverLink({ driverName: card.name }, card.name)}</div>
+              <div class="fantasy-value-card__stat">${escapeHtml(card.stat)}</div>
+            </article>`
+            )
+            .join('')}
+        </div>
+      </section>
+    `;
   }
 
   function renderMoverCards(movers = {}) {
@@ -41,7 +106,7 @@
               ${cards
                 .map(
                   (driver) => `<article class="fantasy-value-card">
-                    <div class="fantasy-value-card__name">${escapeHtml(driver.driverName)}</div>
+                    <div class="fantasy-value-card__name">${driverLink(driver, driver.driverName)}</div>
                     <div class="fantasy-value-card__meta">${escapeHtml(driver.tier || '')}</div>
                     <div class="fantasy-value-card__stat">${formatMoney(driver.salary)}</div>
                     <div class="fantasy-value-card__sub">${escapeHtml(driver.salaryChangeLabel || driver.valueGrade || '')}</div>
@@ -67,7 +132,7 @@
         ${featured
           .map(
             (driver) => `<div class="fantasy-history-block">
-              <h3>${escapeHtml(driver.driverName)} <span class="muted">${formatMoney(driver.salary)} · ${escapeHtml(driver.valueGrade || '—')}</span></h3>
+              <h3>${driverLink(driver, driver.driverName)} <span class="muted">${formatMoney(driver.salary)} · ${escapeHtml(driver.valueGrade || '—')}</span></h3>
               <div class="fantasy-table-wrap">
                 <table class="fantasy-slate-table fantasy-slate-table--compact">
                   <thead><tr><th>Race</th><th>Track</th><th>Salary</th><th>Tier</th><th>Score</th></tr></thead>
@@ -106,7 +171,7 @@
               ${drivers
                 .map(
                   (driver) => `<tr>
-                    <td>${escapeHtml(driver.driverName)}</td>
+                    <td>${driverLink(driver, driver.driverName)}</td>
                     <td class="salary">${formatMoney(driver.salary)}</td>
                     <td class="salary">${formatMoney(driver.previousSalary)}</td>
                     <td>${escapeHtml(driver.salaryChangeLabel || '—')}</td>
@@ -137,6 +202,7 @@
           <h1 class="fantasy-app-page-title">Race ${escapeHtml(data.latestSlate?.raceNumber ?? '—')} Salary Movement</h1>
           <p class="fantasy-app-readonly-note">Read-only salary history preview based on saved fantasy slates.</p>
         </section>
+        ${renderInsights(data.insights || {})}
         ${renderMoverCards(data.movers || {})}
         ${renderLatestTable(data.drivers || [])}
         ${renderFeaturedHistory(data.drivers || [])}

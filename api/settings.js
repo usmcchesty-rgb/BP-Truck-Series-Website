@@ -5,6 +5,7 @@ import {
 } from './_fantasy-slate.js';
 import { runFantasySeasonBacktest } from './_fantasy-backtest.js';
 import {
+  buildFantasyDriverDetailResponse,
   buildFantasyPublicSlateResponse,
   buildFantasySalaryHistoryResponse,
   runFantasyLineupOptimizerForLatestSlate,
@@ -58,6 +59,22 @@ export default async function handler(req, res) {
         return res.status(200).json(history);
       } catch (error) {
         return res.status(500).json({ error: error.message || 'Failed to load salary history.' });
+      }
+    }
+    if (queryAction === 'getFantasyDriverDetail') {
+      try {
+        const settings = await getSettings();
+        const seasonId = req.query?.seasonId || settings.seasonId || '27987';
+        const detail = await buildFantasyDriverDetailResponse(seasonId, {
+          driverId: req.query?.id || req.query?.driverId || null,
+          driverName: req.query?.driver || req.query?.driverName || null,
+        });
+        if (!detail) {
+          return res.status(404).json({ error: 'Driver not found in current fantasy slate.' });
+        }
+        return res.status(200).json(detail);
+      } catch (error) {
+        return res.status(500).json({ error: error.message || 'Failed to load driver detail.' });
       }
     }
     return res.status(200).json(await getSettings());

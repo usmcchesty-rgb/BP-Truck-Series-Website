@@ -1,55 +1,27 @@
 import { getSettings, supabase } from './_lib.js';
 import { enrichFantasyDraftPayload, normalizeSlateDriver } from './_fantasy-slate.js';
 import { MIN_BEST_VALUE_SALARY } from './_fantasy-admin-analytics.js';
+import {
+  buildPublicAnalysis,
+  buildDriverDetailResponse,
+  buildSalaryHistoryInsights,
+  enrichPublicDriver,
+  formatSalaryChangeLabel,
+} from './_fantasy-public-analysis.js';
 
 const SALARY_CAP = 50000;
-
-function publicDriverStatus(driver) {
-  if (driver.trackHistoryLimitedSample) return 'Limited sample';
-  return 'Active';
-}
-
-function formatSalaryChange(driver) {
-  if (driver.salaryChangeDirection === 'new') return 'New';
-  if (driver.salaryChange == null || !Number.isFinite(Number(driver.salaryChange))) return '—';
-  if (Number(driver.salaryChange) === 0) return 'Same';
-  const change = Number(driver.salaryChange);
-  return `${change > 0 ? '+' : ''}$${Math.abs(change).toLocaleString('en-US')}`;
-}
-
-function toPublicDriver(driver) {
-  return {
-    driverId: driver.driverId,
-    driverName: driver.driverName,
-    carNumber: driver.carNumber || null,
-    tier: driver.computedTier || '',
-    salary: driver.finalSalary ?? driver.generatedSalary ?? null,
-    previousSalary: driver.previousSalary ?? null,
-    salaryChange: driver.salaryChange ?? null,
-    salaryChangeLabel: formatSalaryChange(driver),
-    salaryChangeDirection: driver.salaryChangeDirection ?? null,
-    valueGrade: driver.valueGrade ?? null,
-    valueScore: driver.valueScore ?? null,
-    trackRank: driver.provenTrackHistoryRank ?? driver.trackHistoryRank ?? null,
-    trackRankLabel:
-      driver.provenTrackHistoryRank != null
-        ? `#${driver.provenTrackHistoryRank}`
-        : driver.trackHistoryRank != null
-          ? `#${driver.trackHistoryRank}`
-          : '—',
-    status: publicDriverStatus(driver),
-  };
-}
 
 function topDrivers(drivers, predicate, sortFn, limit = 3) {
   return drivers
     .filter(predicate)
     .sort(sortFn)
     .slice(0, limit)
-    .map(toPublicDriver);
+    .map((driver) => enrichPublicDriver(driver, { rankByDriver: new Map(), ownershipByDriver: new Map() }));
 }
 
-export function buildPublicSlateCards(drivers = [], meta = null) {
+export function buildPublicSlateCards(drivers = [], meta = null, analysis = {}) {
+  const enrich = (driver) => enrichPublicDriver(driver, analysis);
+
   const bestValuePicks = topDrivers(
     drivers,
     (driver) => {
@@ -86,7 +58,7 @@ export function buildPublicSlateCards(drivers = [], meta = null) {
     .filter((driver) => driver.provenTrackHistoryRank != null)
     .sort((a, b) => Number(a.provenTrackHistoryRank) - Number(b.provenTrackHistoryRank))
     .slice(0, 5)
-    .map(toPublicDriver);
+    .map(enrich);
 
   const metaTrackHistory =
     meta?.topProvenTrackHistoryDrivers?.slice(0, 5)?.map((row) => ({
@@ -152,8 +124,15 @@ export async function buildFantasyPublicSlateResponse(seasonId) {
   const payload = await loadLatestFantasySlate(seasonId);
   if (!payload?.slate) return null;
 
-  const drivers = payload.drivers || [];
-  const cards = buildPublicSlateCards(drivers, payload.slate.meta || payload.meta || null);
+  const rawDrivers = payload.drivers || [];
+  const slateMeta = {
+    raceNumber: payload.slate.race_number,
+    track: payload.slate.track || 'TBD',
+  };
+
+  const analysis = buildPublicAnalysis(rawDrivers, slateMeta);
+  const cards = buildPublicSlateCards(rawDrivers, payload.slate.meta || payload.meta || null, analysis);
+  const publicDrivers = rawDrivers.map((driver) => enrichPublicDriver(driver, analysis));
 
   return {
     slate: {
@@ -166,8 +145,16 @@ export async function buildFantasyPublicSlateResponse(seasonId) {
       salaryCap: SALARY_CAP,
       lineupSize: 5,
     },
-    drivers: drivers.map(toPublicDriver),
+    drivers: publicDrivers,
     cards,
+    fantasyPowerRankings: analysis.fantasyPowerRankings,
+    spotlightCards: analysis.spotlightCards,
+    ownershipProjection: analysis.ownershipProjection,
+    weeklyBreakdown: analysis.weeklyBreakdown,
+    salaryMovers: {
+      biggestRisers: cards.biggestRisers,
+      biggestFallers: cards.biggestFallers,
+    },
     analytics: payload.analytics || null,
     readOnly: true,
   };
@@ -233,6 +220,7 @@ export async function buildFantasySalaryHistoryResponse(seasonId) {
   });
 
   const newDrivers = latest.drivers.filter((driver) => driver.salaryChangeDirection === 'new');
+  const insights = buildSalaryHistoryInsights(slates, latest.drivers || []);
 
   return {
     latestSlate: latest.slate,
@@ -242,10 +230,45 @@ export async function buildFantasySalaryHistoryResponse(seasonId) {
       newDrivers,
       highestSalaries: latest.cards.highestSalaries,
     },
+    insights,
     slates,
     drivers,
     readOnly: true,
   };
+}
+
+export async function buildFantasyDriverDetailResponse(seasonId, options = {}) {
+  const payload = await loadLatestFantasySlate(seasonId);
+  if (!payload?.drivers?.length) return null;
+
+  const rawDrivers = payload.drivers || [];
+  const slateMeta = {
+    raceNumber: payload.slate.race_number,
+    track: payload.slate.track || 'TBD',
+  };
+  const analysis = buildPublicAnalysis(rawDrivers, slateMeta);
+
+  const driverId = options.driverId != null ? String(options.driverId).trim() : '';
+  const driverName = options.driverName != null ? String(options.driverName).trim().toLowerCase() : '';
+
+  let driver = null;
+  if (driverId) {
+    driver = rawDrivers.find((row) => String(row.driverId) === driverId);
+  } else if (driverName) {
+    driver = rawDrivers.find((row) => String(row.driverName).toLowerCase() === driverName);
+  }
+
+  if (!driver) return null;
+
+  const historyPayload = await buildFantasySalaryHistoryResponse(seasonId);
+  const historyRow = historyPayload.drivers?.find((row) => String(row.driverId) === String(driver.driverId));
+
+  return buildDriverDetailResponse(
+    driver,
+    payload.slate,
+    historyRow?.history || [],
+    analysis
+  );
 }
 
 export async function runFantasyLineupOptimizerForLatestSlate(options = {}) {
@@ -259,3 +282,5 @@ export async function runFantasyLineupOptimizerForLatestSlate(options = {}) {
   const { optimizeFantasyLineup } = await import('./_fantasy-lineup-optimizer.js');
   return optimizeFantasyLineup(payload.drivers, options);
 }
+
+export { formatSalaryChangeLabel };

@@ -1,14 +1,11 @@
 (function () {
+  const { link: driverLink, escapeHtml } = window.BPFantasyDriverLinks || {
+    link: (d, l) => escapeHtml(l ?? d?.driverName),
+    escapeHtml: (v) => String(v ?? ''),
+  };
+
   function $(selector) {
     return document.querySelector(selector);
-  }
-
-  function escapeHtml(value) {
-    return String(value ?? '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
   }
 
   function formatMoney(value) {
@@ -24,61 +21,175 @@
     return 'is-same';
   }
 
+  function ownershipLabelClass(label) {
+    const map = {
+      Chalk: 'is-chalk',
+      Popular: 'is-popular',
+      Balanced: 'is-balanced',
+      Sleeper: 'is-sleeper',
+      'Long Shot': 'is-longshot',
+    };
+    return map[label] || '';
+  }
+
   function renderEmpty(message) {
     const root = $('#fantasySlateRoot');
     if (!root) return;
     root.innerHTML = `<section class="fantasy-app-empty"><p>${escapeHtml(message)}</p><a class="fantasy-btn fantasy-btn--secondary" href="/fantasy.html">Back to Fantasy Home</a></section>`;
   }
 
-  function renderCardGrid(title, cards, renderCard) {
-    if (!cards?.length) return '';
+  function renderPowerRankings(rankings = []) {
+    if (!rankings.length) return '';
     return `
       <section class="fantasy-app-section">
-        <h2 class="fantasy-app-section-title">${escapeHtml(title)}</h2>
-        <div class="fantasy-value-card-grid">
-          ${cards.map(renderCard).join('')}
+        <h2 class="fantasy-app-section-title">Fantasy Power Rankings</h2>
+        <div class="fantasy-table-wrap">
+          <table class="fantasy-slate-table">
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Driver</th>
+                <th>Salary</th>
+                <th>Value</th>
+                <th>Ownership</th>
+                <th>Why</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rankings
+                .map(
+                  (row) => `<tr>
+                  <td><span class="fantasy-rank-badge">#${escapeHtml(row.rank)}</span></td>
+                  <td>${driverLink(row, row.driverName)}${row.carNumber ? ` <span class="muted">#${escapeHtml(row.carNumber)}</span>` : ''}</td>
+                  <td class="salary">${formatMoney(row.salary)}</td>
+                  <td>${row.valueGrade ? `<span class="fantasy-grade-pill">${escapeHtml(row.valueGrade)}</span>` : '—'}</td>
+                  <td>${row.projectedOwnership != null ? `${row.projectedOwnership}% <span class="fantasy-ownership-tag ${ownershipLabelClass(row.ownershipLabel)}">${escapeHtml(row.ownershipLabel || '')}</span>` : '—'}</td>
+                  <td class="fantasy-reason-cell">${escapeHtml(row.shortReason || '')}</td>
+                </tr>`
+                )
+                .join('')}
+            </tbody>
+          </table>
         </div>
       </section>
     `;
   }
 
-  function renderDriverCard(driver, extra = '') {
+  function renderSpotlightCard(key, card) {
+    if (!card?.driverName) {
+      return `<article class="fantasy-spotlight-card fantasy-spotlight-card--${key}">
+        <div class="fantasy-spotlight-card__label">${escapeHtml(card?.label || key)}</div>
+        <p class="fantasy-spotlight-card__empty">No driver selected.</p>
+      </article>`;
+    }
     return `
-      <article class="fantasy-value-card">
-        <div class="fantasy-value-card__name">${escapeHtml(driver.driverName)}</div>
-        <div class="fantasy-value-card__meta">${escapeHtml(driver.carNumber ? `#${driver.carNumber}` : '')} ${escapeHtml(driver.tier || '')}</div>
-        <div class="fantasy-value-card__stat">${formatMoney(driver.salary)}</div>
-        ${driver.valueGrade ? `<div class="fantasy-value-card__badge">${escapeHtml(driver.valueGrade)}</div>` : ''}
-        ${extra ? `<div class="fantasy-value-card__sub">${extra}</div>` : ''}
+      <article class="fantasy-spotlight-card fantasy-spotlight-card--${key}">
+        <div class="fantasy-spotlight-card__label">${escapeHtml(card.label || '')}</div>
+        <div class="fantasy-spotlight-card__name">${driverLink(card, card.driverName)}</div>
+        <div class="fantasy-spotlight-card__meta">${formatMoney(card.salary)} · ${escapeHtml(card.tier || '')}</div>
+        <div class="fantasy-spotlight-card__stat">${escapeHtml(card.statLine || '')}</div>
+        <p class="fantasy-spotlight-card__copy">${escapeHtml(card.explanation || '')}</p>
       </article>
     `;
   }
 
-  function renderCards(cards = {}) {
-    return [
-      renderCardGrid('Best Value Picks', cards.bestValuePicks, (driver) =>
-        renderDriverCard(driver, `Value ${escapeHtml(driver.valueScore ?? '—')}`)
-      ),
-      renderCardGrid('Biggest Salary Risers', cards.biggestRisers, (driver) =>
-        renderDriverCard(driver, escapeHtml(driver.salaryChangeLabel || ''))
-      ),
-      renderCardGrid('Biggest Salary Fallers', cards.biggestFallers, (driver) =>
-        renderDriverCard(driver, escapeHtml(driver.salaryChangeLabel || ''))
-      ),
-      renderCardGrid('Highest Salaries', cards.highestSalaries, (driver) => renderDriverCard(driver)),
-      renderCardGrid(
-        'Top Proven Track History Drivers',
-        cards.topTrackHistory,
-        (driver) =>
-          renderDriverCard(
-            driver,
-            `Track rank ${escapeHtml(driver.trackRankLabel || '—')}`
-          )
-      ),
+  function renderSpotlightCards(spotlight = {}) {
+    const keys = ['bestValue', 'hottestDriver', 'trackSpecialist', 'riskyPick'];
+    const cards = keys.map((key) => renderSpotlightCard(key, spotlight[key])).join('');
+    return `
+      <section class="fantasy-app-section">
+        <h2 class="fantasy-app-section-title">Spotlight Cards</h2>
+        <div class="fantasy-spotlight-grid">${cards}</div>
+      </section>
+    `;
+  }
+
+  function renderOwnershipProjection(projections = []) {
+    const top = projections.slice(0, 12);
+    if (!top.length) return '';
+    return `
+      <section class="fantasy-app-section">
+        <h2 class="fantasy-app-section-title">Ownership Projection</h2>
+        <div class="fantasy-ownership-list">
+          ${top
+            .map(
+              (row) => `<div class="fantasy-ownership-row">
+              <div class="fantasy-ownership-row__head">
+                <span>${driverLink(row, row.driverName)}</span>
+                <span>${row.projectedOwnershipPct}% · ${escapeHtml(row.ownershipLabel || '')}</span>
+              </div>
+              <div class="fantasy-ownership-bar" aria-hidden="true">
+                <span class="fantasy-ownership-bar__fill ${ownershipLabelClass(row.ownershipLabel)}" style="width:${Math.min(100, row.projectedOwnershipPct)}%"></span>
+              </div>
+            </div>`
+            )
+            .join('')}
+        </div>
+      </section>
+    `;
+  }
+
+  function renderSalaryMovers(movers = {}) {
+    const renderList = (title, drivers) => {
+      if (!drivers?.length) return '';
+      return `
+        <div class="fantasy-mover-column">
+          <h3 class="fantasy-mover-column__title">${escapeHtml(title)}</h3>
+          <div class="fantasy-value-card-grid">
+            ${drivers
+              .map(
+                (driver) => `<article class="fantasy-value-card">
+                <div class="fantasy-value-card__name">${driverLink(driver, driver.driverName)}</div>
+                <div class="fantasy-value-card__meta">${escapeHtml(driver.tier || '')}</div>
+                <div class="fantasy-value-card__stat">${formatMoney(driver.salary)}</div>
+                <div class="fantasy-value-card__sub"><span class="fantasy-change ${changeClass(driver.salaryChangeDirection)}">${escapeHtml(driver.salaryChangeLabel || '—')}</span></div>
+              </article>`
+              )
+              .join('')}
+          </div>
+        </div>
+      `;
+    };
+
+    const html = [
+      renderList('Biggest Risers', movers.biggestRisers),
+      renderList('Biggest Fallers', movers.biggestFallers),
     ].join('');
+    if (!html.trim()) return '';
+
+    return `
+      <section class="fantasy-app-section">
+        <h2 class="fantasy-app-section-title">Salary Movers</h2>
+        <div class="fantasy-mover-grid">${html}</div>
+      </section>
+    `;
+  }
+
+  function renderWeeklyBreakdown(breakdown = {}) {
+    if (!breakdown?.narrative) return '';
+    return `
+      <section class="fantasy-app-section fantasy-breakdown-panel">
+        <h2 class="fantasy-app-section-title">Weekly Fantasy Breakdown</h2>
+        <p class="fantasy-breakdown-narrative">${escapeHtml(breakdown.narrative)}</p>
+        <div class="fantasy-breakdown-grid">
+          <div><span>Core Picks</span><strong>${escapeHtml(breakdown.thisWeeksCorePicks || '—')}</strong></div>
+          <div><span>Best Values</span><strong>${escapeHtml(breakdown.bestValues || '—')}</strong></div>
+          <div><span>High Risk / High Reward</span><strong>${escapeHtml(breakdown.highRiskHighReward || '—')}</strong></div>
+          <div><span>Drivers To Avoid</span><strong>${escapeHtml(breakdown.driversToAvoid || '—')}</strong></div>
+          <div><span>Track History Edge</span><strong>${escapeHtml(breakdown.trackHistoryEdge || '—')}</strong></div>
+          <div><span>Predicted Favorite</span><strong>${escapeHtml(breakdown.predictedFavorite || '—')}</strong></div>
+        </div>
+      </section>
+    `;
   }
 
   function renderDriverTable(drivers = []) {
+    const sorted = [...drivers].sort((a, b) => {
+      const rankA = a.fantasyRank ?? 999;
+      const rankB = b.fantasyRank ?? 999;
+      return rankA - rankB;
+    });
+
     return `
       <section class="fantasy-app-section">
         <h2 class="fantasy-app-section-title">Driver Salaries</h2>
@@ -86,26 +197,30 @@
           <table class="fantasy-slate-table">
             <thead>
               <tr>
+                <th>Rank</th>
                 <th>Driver</th>
                 <th>Car #</th>
                 <th>Tier</th>
                 <th>Salary</th>
                 <th>Change</th>
                 <th>Value</th>
+                <th>Ownership</th>
                 <th>Track Rank</th>
                 <th>Status</th>
               </tr>
             </thead>
             <tbody>
-              ${drivers
+              ${sorted
                 .map(
                   (driver) => `<tr>
-                  <td>${escapeHtml(driver.driverName)}</td>
+                  <td>${driver.fantasyRank != null ? `<span class="fantasy-rank-badge">#${escapeHtml(driver.fantasyRank)}</span>` : '—'}</td>
+                  <td>${driverLink(driver, driver.driverName)}</td>
                   <td>${driver.carNumber ? `#${escapeHtml(driver.carNumber)}` : '—'}</td>
                   <td><span class="fantasy-tier-pill">${escapeHtml(driver.tier || '—')}</span></td>
                   <td class="salary">${formatMoney(driver.salary)}</td>
                   <td><span class="fantasy-change ${changeClass(driver.salaryChangeDirection)}">${escapeHtml(driver.salaryChangeLabel || '—')}</span></td>
                   <td>${driver.valueGrade ? `<span class="fantasy-grade-pill">${escapeHtml(driver.valueGrade)}</span>` : '—'}</td>
+                  <td>${driver.projectedOwnershipPct != null ? `${driver.projectedOwnershipPct}%` : '—'}</td>
                   <td>${escapeHtml(driver.trackRankLabel || '—')}</td>
                   <td>${escapeHtml(driver.status || 'Active')}</td>
                 </tr>`
@@ -139,7 +254,11 @@
     if (!root) return;
     root.innerHTML = `
       ${renderSlateHeader(data.slate || {})}
-      ${renderCards(data.cards || {})}
+      ${renderPowerRankings(data.fantasyPowerRankings || [])}
+      ${renderSpotlightCards(data.spotlightCards || {})}
+      ${renderOwnershipProjection(data.ownershipProjection || [])}
+      ${renderSalaryMovers(data.salaryMovers || data.cards || {})}
+      ${renderWeeklyBreakdown(data.weeklyBreakdown || {})}
       ${renderDriverTable(data.drivers || [])}
     `;
   }

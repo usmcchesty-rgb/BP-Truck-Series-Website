@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>BP Fantasy — Salary History</title>
+    <title>BP Fantasy — Driver Detail</title>
     <link rel="stylesheet" href="/styles.css" />
     <link rel="stylesheet" href="/fantasy.css" />
   </head>
@@ -14,8 +14,8 @@
     <main class="fantasy-app-page">
       <div class="fantasy-app-shell">
         <div id="fantasyAppNav"></div>
-        <div class="fantasy-app-main" id="fantasyHistoryRoot">
-          <section class="fantasy-app-empty"><p>Loading salary history…</p></section>
+        <div class="fantasy-app-main" id="fantasyDriverRoot">
+          <section class="fantasy-app-empty"><p>Loading driver detail…</p></section>
         </div>
       </div>
     </main>
@@ -25,16 +25,16 @@
     <script src="/public-nav.js"></script>
     <script src="/fantasy-app-nav.js"></script>
     <script src="/fantasy-driver-links.js"></script>
-    <script src="/fantasy-history-app.js"></script>
+    <script src="/fantasy-driver-app.js"></script>
     <script>
       BPPublicNav.init({
         active: "fantasy",
         title: "BP FANTASY",
-        subtitle: "SALARY HISTORY",
+        subtitle: "DRIVER DETAIL",
         right: "tagline",
       });
-      BPFantasyAppNav.init("history");
-      BPFantasyHistoryApp.init();
+      BPFantasyAppNav.init("slate");
+      BPFantasyDriverApp.init();
     </script>
   </body>
 </html>
