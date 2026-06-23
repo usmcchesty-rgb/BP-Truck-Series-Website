@@ -7,8 +7,6 @@
   const Pills = window.BPFantasyPills || {};
   const renderFantasyGradePill = (grade) =>
     Pills.renderFantasyGradePill ? Pills.renderFantasyGradePill(grade) : escapeHtml(grade || '—');
-  const renderFantasyTierPill = (tier) =>
-    Pills.renderFantasyTierPill ? Pills.renderFantasyTierPill(tier) : escapeHtml(tier || '');
 
   function $(selector) {
     return document.querySelector(selector);
@@ -113,9 +111,9 @@
                 .map(
                   (driver) => `<article class="fantasy-value-card">
                     <div class="fantasy-value-card__name">${driverLink(driver, driver.driverName)}</div>
-                    <div class="fantasy-value-card__meta">${renderFantasyTierPill(driver.tier)}</div>
+                    <div class="fantasy-value-card__meta">${escapeHtml(driver.tier || '')}</div>
                     <div class="fantasy-value-card__stat">${formatMoney(driver.salary)}</div>
-                    <div class="fantasy-value-card__sub">${escapeHtml(driver.salaryChangeLabel || '')}${driver.salaryChangeLabel && driver.valueGrade ? ' · ' : ''}${driver.valueGrade ? renderFantasyGradePill(driver.valueGrade) : ''}</div>
+                    <div class="fantasy-value-card__sub">${escapeHtml(driver.salaryChangeLabel || driver.valueGrade || '')}</div>
                   </article>`
                 )
                 .join('')}
@@ -181,7 +179,7 @@
                     <td class="salary">${formatMoney(driver.salary)}</td>
                     <td class="salary">${formatMoney(driver.previousSalary)}</td>
                     <td>${escapeHtml(driver.salaryChangeLabel || '—')}</td>
-                    <td class="fantasy-pill-cell">${renderFantasyGradePill(driver.valueGrade)}</td>
+                    <td class="fantasy-value-grade-cell">${renderFantasyGradePill(driver.valueGrade)}</td>
                   </tr>`
                 )
                 .join('')}

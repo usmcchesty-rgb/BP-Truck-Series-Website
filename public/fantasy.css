@@ -726,197 +726,89 @@ body.fantasy-page main.fantasy-app-page{
   font-weight:900;
 }
 
-.fantasy-pill{
+.fantasy-tier-pill,
+.fantasy-grade-pill{
+  display:inline-block;
+  padding:2px 8px;
+  border-radius:4px;
+  background:rgba(229,9,20,.18);
+  border:1px solid rgba(229,9,20,.35);
+  color:#fff;
+  font-size:10px;
+  font-weight:900;
+  text-transform:uppercase;
+}
+
+.fantasy-value-grade-badge{
   display:inline-flex;
   align-items:center;
   justify-content:center;
-  text-align:center;
-  white-space:nowrap;
-  vertical-align:middle;
   box-sizing:border-box;
-  font-weight:900;
-  letter-spacing:.04em;
-  text-transform:uppercase;
-  line-height:1;
-  border-radius:6px;
-  border:1px solid transparent;
-}
-
-.fantasy-pill--grade{
   width:44px;
   height:24px;
   padding:0;
+  border-radius:4px;
+  border:1px solid rgba(255,255,255,.14);
   font-size:11px;
+  font-weight:900;
+  letter-spacing:.04em;
+  line-height:1;
+  text-align:center;
+  white-space:nowrap;
+  vertical-align:middle;
   flex:0 0 auto;
 }
 
-.fantasy-pill--grade-a-plus{
-  color:#111;
-  background:linear-gradient(180deg, #f0c040 0%, #d4a017 100%);
-  border-color:rgba(240,192,64,.75);
+.fantasy-value-grade-badge--a-plus{
+  color:#1a1400;
+  background:linear-gradient(180deg, rgba(240,192,64,.92) 0%, rgba(200,120,0,.88) 100%);
+  border-color:rgba(240,192,64,.65);
   box-shadow:0 0 10px rgba(240,192,64,.35);
 }
 
-.fantasy-pill--grade-a{
-  color:#fff;
-  background:linear-gradient(180deg, #43a047 0%, #1b5e20 100%);
-  border-color:rgba(76,175,80,.65);
+.fantasy-value-grade-badge--a{
+  color:#eaffea;
+  background:linear-gradient(180deg, rgba(76,175,80,.42) 0%, rgba(30,90,34,.75) 100%);
+  border-color:rgba(76,175,80,.55);
   box-shadow:0 0 10px rgba(76,175,80,.28);
 }
 
-.fantasy-pill--grade-b-plus,
-.fantasy-pill--grade-b{
-  color:#fff;
-  background:linear-gradient(180deg, #4a90e2 0%, #1a4a7a 100%);
-  border-color:rgba(74,144,226,.65);
+.fantasy-value-grade-badge--b-plus,
+.fantasy-value-grade-badge--b{
+  color:#e8f2ff;
+  background:linear-gradient(180deg, rgba(74,144,226,.42) 0%, rgba(26,74,122,.78) 100%);
+  border-color:rgba(74,144,226,.55);
   box-shadow:0 0 10px rgba(74,144,226,.28);
 }
 
-.fantasy-pill--grade-c-plus,
-.fantasy-pill--grade-c{
-  color:#fff;
-  background:linear-gradient(180deg, #9b59d9 0%, #5e2d91 100%);
-  border-color:rgba(155,89,217,.65);
+.fantasy-value-grade-badge--c-plus,
+.fantasy-value-grade-badge--c{
+  color:#f0e6ff;
+  background:linear-gradient(180deg, rgba(155,89,217,.42) 0%, rgba(94,45,145,.78) 100%);
+  border-color:rgba(155,89,217,.55);
   box-shadow:0 0 10px rgba(155,89,217,.32);
 }
 
-.fantasy-pill--grade-d{
-  color:#fff;
-  background:linear-gradient(180deg, #e50914 0%, #7a0000 100%);
-  border-color:rgba(229,9,20,.65);
+.fantasy-value-grade-badge--d{
+  color:#ffe8e8;
+  background:linear-gradient(180deg, rgba(229,9,20,.42) 0%, rgba(100,0,0,.82) 100%);
+  border-color:rgba(229,9,20,.55);
   box-shadow:0 0 10px rgba(229,9,20,.32);
 }
 
-.fantasy-pill--grade-unknown{
+.fantasy-value-grade-badge--unknown{
   color:#fff;
-  background:linear-gradient(180deg, #555 0%, #333 100%);
+  background:rgba(255,255,255,.08);
   border-color:rgba(255,255,255,.18);
   box-shadow:0 0 8px rgba(255,255,255,.08);
 }
 
-.fantasy-pill--form{
-  width:46px;
-  height:28px;
-  padding:0;
-  border-radius:999px;
-  font-size:12px;
-  flex:0 0 auto;
+.fantasy-value-grade-cell{
+  vertical-align:middle;
 }
 
-.fantasy-pill--form-top{
-  color:#eaffea;
-  background:linear-gradient(180deg, #43a047 0%, #1b5e20 100%);
-  border-color:rgba(76,175,80,.55);
-}
-
-.fantasy-pill--form-mid{
-  color:#e8f2ff;
-  background:linear-gradient(180deg, #4a90e2 0%, #1a4a7a 100%);
-  border-color:rgba(74,144,226,.55);
-}
-
-.fantasy-pill--form-low{
-  color:#1a1400;
-  background:linear-gradient(180deg, #f0c040 0%, #c89800 100%);
-  border-color:rgba(240,192,64,.55);
-}
-
-.fantasy-pill--form-poor{
-  color:#ffe8e8;
-  background:linear-gradient(180deg, #e50914 0%, #7a0000 100%);
-  border-color:rgba(229,9,20,.55);
-}
-
-.fantasy-pill--form-muted{
-  color:#ddd;
-  background:linear-gradient(180deg, #666 0%, #3a3a3a 100%);
-  border-color:rgba(255,255,255,.16);
-}
-
-.fantasy-pill--ownership{
-  height:24px;
-  padding:0 8px;
-  font-size:10px;
-  border-radius:6px;
-}
-
-.fantasy-pill--ownership-chalk{
-  color:#fff;
-  background:linear-gradient(180deg, #e50914 0%, #7a0000 100%);
-  border-color:rgba(229,9,20,.55);
-}
-
-.fantasy-pill--ownership-popular{
-  color:#1a1400;
-  background:linear-gradient(180deg, #f0c040 0%, #c89800 100%);
-  border-color:rgba(240,192,64,.55);
-}
-
-.fantasy-pill--ownership-balanced{
-  color:#fff;
-  background:linear-gradient(180deg, #4a90e2 0%, #1a4a7a 100%);
-  border-color:rgba(74,144,226,.55);
-}
-
-.fantasy-pill--ownership-sleeper{
-  color:#fff;
-  background:linear-gradient(180deg, #43a047 0%, #1b5e20 100%);
-  border-color:rgba(76,175,80,.55);
-}
-
-.fantasy-pill--ownership-longshot{
-  color:#fff;
-  background:linear-gradient(180deg, #9b59d9 0%, #5e2d91 100%);
-  border-color:rgba(155,89,217,.55);
-}
-
-.fantasy-pill--ownership-unknown{
-  color:#fff;
-  background:rgba(255,255,255,.1);
-  border-color:rgba(255,255,255,.18);
-}
-
-.fantasy-pill--status{
-  height:24px;
-  padding:0 10px;
-  font-size:10px;
-}
-
-.fantasy-pill--status-active{
-  color:#eaffea;
-  background:rgba(76,175,80,.18);
-  border-color:rgba(76,175,80,.45);
-}
-
-.fantasy-pill--status-limited{
-  color:#f0e6ff;
-  background:rgba(155,89,217,.2);
-  border-color:rgba(155,89,217,.45);
-}
-
-.fantasy-pill--status-new{
-  color:#e8f2ff;
-  background:rgba(74,144,226,.2);
-  border-color:rgba(74,144,226,.45);
-}
-
-.fantasy-pill--status-risk{
-  color:#ffe8e8;
-  background:rgba(229,9,20,.2);
-  border-color:rgba(229,9,20,.45);
-}
-
-.fantasy-pill--status-neutral,
-.fantasy-pill--tier{
-  color:#fff;
-  background:rgba(229,9,20,.18);
-  border-color:rgba(229,9,20,.35);
-}
-
-.fantasy-pill-cell{
-  display:flex;
-  align-items:center;
-  width:fit-content;
+.fantasy-value-grade-cell .fantasy-value-grade-badge{
+  margin:0 auto;
 }
 
 .fantasy-change.is-up{ color:var(--green); font-weight:900; }
@@ -1064,16 +956,20 @@ body.fantasy-page main.fantasy-app-page{
   background:linear-gradient(90deg, rgba(229,9,20,.85), rgba(255,60,60,.55));
 }
 
-.fantasy-ownership-bar__fill.is-chalk,
-.fantasy-ownership-bar__fill.fantasy-pill--ownership-chalk{ background:linear-gradient(90deg, #e50914, #ff5555); }
-.fantasy-ownership-bar__fill.is-popular,
-.fantasy-ownership-bar__fill.fantasy-pill--ownership-popular{ background:linear-gradient(90deg, #c89800, #f0c040); }
-.fantasy-ownership-bar__fill.is-balanced,
-.fantasy-ownership-bar__fill.fantasy-pill--ownership-balanced{ background:linear-gradient(90deg, #1a4a7a, #4a90e2); }
-.fantasy-ownership-bar__fill.is-sleeper,
-.fantasy-ownership-bar__fill.fantasy-pill--ownership-sleeper{ background:linear-gradient(90deg, #1b5e20, #43a047); }
-.fantasy-ownership-bar__fill.is-longshot,
-.fantasy-ownership-bar__fill.fantasy-pill--ownership-longshot{ background:linear-gradient(90deg, #5e2d91, #9b59d9); }
+.fantasy-ownership-bar__fill.is-chalk{ background:linear-gradient(90deg, #d40000, #ff5555); }
+.fantasy-ownership-bar__fill.is-popular{ background:linear-gradient(90deg, #c87800, #f0c040); }
+.fantasy-ownership-bar__fill.is-balanced{ background:linear-gradient(90deg, #2a6a2a, #4caf50); }
+.fantasy-ownership-bar__fill.is-sleeper{ background:linear-gradient(90deg, #1a4a7a, #4a90e2); }
+.fantasy-ownership-bar__fill.is-longshot{ background:linear-gradient(90deg, #444, #888); }
+
+.fantasy-ownership-tag{
+  margin-left:6px;
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  color:#aaa;
+}
 
 .fantasy-mover-grid{
   display:grid;
@@ -1168,10 +1064,20 @@ body.fantasy-page main.fantasy-app-page{
 
 .fantasy-driver-detail-grid__value,
 .fantasy-driver-quick-stat__value{
-  display:flex;
+  display:inline-flex;
   align-items:center;
+  justify-content:center;
   width:fit-content;
   max-width:100%;
+  min-height:24px;
+  margin-top:4px;
+}
+
+.fantasy-driver-quick-stat strong.fantasy-driver-quick-stat__value{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-height:24px;
 }
 
 .fantasy-driver-reasons{
@@ -1306,6 +1212,44 @@ body.fantasy-page main.fantasy-app-page{
   border:1px solid rgba(255,255,255,.08);
   border-radius:8px;
   background:rgba(0,0,0,.24);
+}
+
+.fantasy-finish-pill{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:38px;
+  padding:4px 10px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.12);
+  background:rgba(255,255,255,.06);
+  color:#fff;
+  font-size:12px;
+  font-weight:900;
+  line-height:1;
+}
+
+.fantasy-finish-pill.is-win{
+  border-color:rgba(240,192,64,.55);
+  background:rgba(240,192,64,.16);
+  color:var(--gold);
+}
+
+.fantasy-finish-pill.is-strong{
+  border-color:rgba(76,175,80,.45);
+  background:rgba(76,175,80,.14);
+  color:#9be7a0;
+}
+
+.fantasy-finish-pill.is-mid{
+  border-color:rgba(255,255,255,.14);
+  color:#ddd;
+}
+
+.fantasy-finish-pill.is-weak{
+  border-color:rgba(229,9,20,.35);
+  background:rgba(229,9,20,.12);
+  color:#ffb4b4;
 }
 
 .fantasy-recent-form-pills{
