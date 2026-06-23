@@ -496,6 +496,12 @@ export function buildDriverDetailResponse(driver, slate = {}, history = [], anal
 
   const publicDriver = enrichPublicDriver(driver, analysis);
   const rf = driver.scoreBreakdown?.recentForm?.details || {};
+  const recentFormFinishes = Array.isArray(rf.last3Finishes)
+    ? rf.last3Finishes
+        .map((finish) => Number(finish))
+        .filter((finish) => Number.isFinite(finish) && finish >= 1)
+        .slice(0, 5)
+    : [];
 
   return {
     driver: {
@@ -507,6 +513,12 @@ export function buildDriverDetailResponse(driver, slate = {}, history = [], anal
           : recentFormScore(driver) >= 60
             ? 'Recent form score is above average for this slate'
             : 'Recent form is neutral on this slate',
+      recentFormFinishes,
+      recentFormScore: num(
+        driver.scoreBreakdown?.recentForm?.normalizedScore ??
+          driver.scoreBreakdown?.recentForm?.score
+      ),
+      trackHistoryLimitedSample: Boolean(driver.trackHistoryLimitedSample),
       breakdownSummary: (driver.salaryReasons || []).slice(0, 6),
     },
     slate: {

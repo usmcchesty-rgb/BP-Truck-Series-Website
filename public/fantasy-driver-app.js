@@ -1,6 +1,5 @@
 (function () {
-  const { link: driverLink, escapeHtml } = window.BPFantasyDriverLinks || {
-    link: (d, l) => escapeHtml(l ?? d?.driverName),
+  const { escapeHtml } = window.BPFantasyDriverLinks || {
     escapeHtml: (v) => String(v ?? ''),
   };
 
@@ -8,10 +7,6 @@
 
   function $(selector) {
     return document.querySelector(selector);
-  }
-
-  function escapeAttr(value) {
-    return escapeHtml(value).replace(/'/g, '&#39;');
   }
 
   function formatMoney(value) {
@@ -74,7 +69,7 @@
           if (profile?.driver_id) return profile;
         }
       } catch {
-        /* fall through to list lookup */
+        /* fall through */
       }
     }
 
@@ -93,24 +88,12 @@
     return null;
   }
 
-  function renderHeroPhoto(profile, name) {
-    const standing = window.BPDriverStandingPhoto;
-    if (standing?.hasStandingPhoto(profile)) {
-      const url = standing.displayUrl(profile);
-      const style = standing.cropStyle(profile);
-      return `<div class="fantasy-driver-hero-media fantasy-driver-hero-media--standing">
-        <div class="fantasy-driver-standing-wrap" style="${escapeAttr(style)}">
-          <img
-            class="fantasy-driver-standing-photo"
-            src="${escapeAttr(url)}"
-            alt="${escapeAttr(name)}"
-            onerror="this.onerror=null;this.src='${PLACEHOLDER_PHOTO}'"
-          />
-        </div>
-      </div>`;
-    }
+  function resolveDriverPhoto(profile, name) {
+    return profile?.photoUrl || profile?.photo_url || driverImage(name);
+  }
 
-    const photo = profile?.photoUrl || profile?.photo_url || driverImage(name);
+  function renderHeroPhoto(profile, name) {
+    const photo = resolveDriverPhoto(profile, name);
     return `<div class="fantasy-driver-hero-media">
       <img
         class="fantasy-driver-hero-photo"
@@ -144,10 +127,37 @@
     </div>`;
   }
 
+  function renderHeroQuickStats(driver = {}) {
+    const ownership =
+      driver.projectedOwnershipPct != null
+        ? `${driver.projectedOwnershipPct}%`
+        : '—';
+    const value = driver.valueGrade || '—';
+    const trend = driver.salaryChangeLabel || '—';
+    const trendClass = changeClass(driver.salaryChangeDirection);
+
+    return `<div class="fantasy-driver-quick-stats">
+      <div class="fantasy-driver-quick-stat">
+        <span class="fantasy-driver-quick-stat__label">Ownership</span>
+        <strong>${escapeHtml(ownership)}</strong>
+      </div>
+      <div class="fantasy-driver-quick-stat">
+        <span class="fantasy-driver-quick-stat__label">Value</span>
+        <strong>${driver.valueGrade ? `<span class="fantasy-grade-pill">${escapeHtml(value)}</span>` : escapeHtml(value)}</strong>
+      </div>
+      <div class="fantasy-driver-quick-stat">
+        <span class="fantasy-driver-quick-stat__label">Salary Trend</span>
+        <strong><span class="fantasy-change ${trendClass}">${escapeHtml(trend)}</span></strong>
+      </div>
+      <div class="fantasy-driver-quick-stat">
+        <span class="fantasy-driver-quick-stat__label">Current Salary</span>
+        <strong class="salary">${formatMoney(driver.salary)}</strong>
+      </div>
+    </div>`;
+  }
+
   function renderHero(driver = {}, slate = {}, profile = null) {
     const name = driver.driverName || 'Driver';
-    const photoHtml = renderHeroPhoto(profile, name);
-
     return `
       <section class="fantasy-driver-hero fantasy-app-hero-panel fantasy-glass-panel">
         <div class="fantasy-driver-hero-inner">
@@ -157,34 +167,216 @@
             ${renderHeroBadges(driver)}
             <p class="fantasy-app-readonly-note">Race ${escapeHtml(slate.raceNumber ?? '—')} · ${escapeHtml(slate.track || 'TBD')} · Read-only preview</p>
           </div>
-          ${photoHtml}
+          ${renderHeroPhoto(profile, name)}
+          ${renderHeroQuickStats(driver)}
         </div>
       </section>
     `;
   }
 
-  function queryParams() {
-    const params = new URLSearchParams(window.location.search);
-    return {
-      id: params.get('id') || params.get('driverId') || '',
-      driver: params.get('driver') || params.get('driverName') || '',
-    };
+  function finishPillClass(finish) {
+    const n = Number(finish);
+    if (n === 1) return 'is-win';
+    if (n <= 5) return 'is-strong';
+    if (n <= 10) return 'is-mid';
+    return 'is-weak';
   }
 
-  function renderEmpty(message) {
-    const root = $('#fantasyDriverRoot');
-    if (!root) return;
-    root.innerHTML = `
-      <section class="fantasy-app-empty">
-        <p>${escapeHtml(message)}</p>
-        <a class="fantasy-btn fantasy-btn--secondary" href="/fantasy/slate.html">Back to Race Slate</a>
+  function renderRecentFormStrip(driver = {}) {
+    const finishes = Array.isArray(driver.recentFormFinishes) ? driver.recentFormFinishes : [];
+    const hasPills = finishes.length > 0;
+
+    let body = '';
+    if (hasPills) {
+      body = `<div class="fantasy-recent-form-pills">
+        ${finishes
+          .map(
+            (finish) =>
+              `<span class="fantasy-finish-pill ${finishPillClass(finish)}">P${escapeHtml(finish)}</span>`
+          )
+          .join('')}
+      </div>`;
+    } else {
+      body = `<p class="fantasy-recent-form-summary">${escapeHtml(driver.recentFormSummary || 'Recent form data unavailable.')}</p>`;
+    }
+
+    const scoreLine =
+      driver.recentFormScore != null && Number.isFinite(Number(driver.recentFormScore))
+        ? `<span class="fantasy-recent-form-score">Form score ${Number(driver.recentFormScore).toFixed(0)}</span>`
+        : '';
+
+    const summaryLine =
+      hasPills && driver.recentFormSummary
+        ? `<p class="fantasy-recent-form-summary">${escapeHtml(driver.recentFormSummary)}</p>`
+        : '';
+
+    return `
+      <section class="fantasy-app-section fantasy-recent-form-panel">
+        <h2 class="fantasy-app-section-title">Recent Form</h2>
+        ${body}
+        ${summaryLine}
+        ${scoreLine}
       </section>
     `;
   }
 
-  function renderReasons(reasons = []) {
-    if (!reasons.length) return '<p class="muted">No breakdown reasons available.</p>';
-    return `<ul class="fantasy-driver-reasons">${reasons.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}</ul>`;
+  function buildRankedInsights(driver = {}) {
+    const bullets = [];
+    const grade = String(driver.valueGrade || '').toUpperCase();
+
+    if (grade === 'A+' || grade === 'A') {
+      bullets.push(`Strong value grade: ${driver.valueGrade}`);
+    } else if (driver.valueGrade) {
+      bullets.push(`Value grade: ${driver.valueGrade}`);
+    }
+
+    if (driver.projectedOwnershipPct != null) {
+      bullets.push(
+        `Projected ownership: ${driver.projectedOwnershipPct}% ${driver.ownershipLabel || ''}`.trim()
+      );
+    }
+
+    if (driver.provenTrackHistoryRank != null && Number(driver.provenTrackHistoryRank) <= 5) {
+      bullets.push(`Proven track rank: #${driver.provenTrackHistoryRank}`);
+    } else if (driver.trackRankLabel && driver.trackRankLabel !== '—') {
+      bullets.push(`Track rank: ${driver.trackRankLabel}`);
+    }
+
+    if (driver.recentFormSummary) {
+      bullets.push(`Recent form: ${driver.recentFormSummary}`);
+    }
+
+    if (driver.salary != null && driver.tier) {
+      bullets.push(`Salary: ${formatMoney(driver.salary)} ${driver.tier} tier`);
+    } else if (driver.salary != null) {
+      bullets.push(`Salary: ${formatMoney(driver.salary)}`);
+    }
+
+    if (driver.fantasyRank != null) {
+      bullets.push(`Fantasy tier score: ${driver.fantasyTierScore != null ? Number(driver.fantasyTierScore).toFixed(1) : '—'}`);
+    }
+
+    return bullets.slice(0, 6);
+  }
+
+  function buildRiskFactors(driver = {}) {
+    const risks = [];
+    const grade = String(driver.valueGrade || '').toUpperCase();
+    const salary = Number(driver.salary);
+
+    if (Number.isFinite(salary) && salary >= 13000) {
+      risks.push('Higher salary requires a strong finish to pay off');
+    }
+
+    if (driver.provenTrackHistoryRank != null && Number(driver.provenTrackHistoryRank) > 5) {
+      risks.push(`Track history outside top 5 (#${driver.provenTrackHistoryRank})`);
+    } else if (
+      driver.trackRankLabel &&
+      driver.trackRankLabel !== '—' &&
+      !driver.provenTrackHistoryRank
+    ) {
+      risks.push(`Track history outside top 5 (${driver.trackRankLabel})`);
+    }
+
+    if (driver.trackHistoryLimitedSample || driver.status === 'Limited sample') {
+      risks.push('Limited track-history sample size');
+    }
+
+    if (driver.salaryChangeDirection === 'down') {
+      risks.push('Salary trending down from prior slate');
+    }
+
+    if (grade === 'C' || grade === 'D') {
+      risks.push(`Weaker value grade (${driver.valueGrade}) for this salary`);
+    }
+
+    if (driver.projectedOwnershipPct != null && driver.projectedOwnershipPct >= 40) {
+      risks.push('High projected ownership may limit differentiation');
+    }
+
+    return risks.slice(0, 5);
+  }
+
+  function renderInsightsSection(driver = {}) {
+    const rank = driver.fantasyRank != null ? driver.fantasyRank : '—';
+    const positives = buildRankedInsights(driver);
+    const risks = buildRiskFactors(driver);
+
+    return `
+      <section class="fantasy-app-section fantasy-insight-panel">
+        <h2 class="fantasy-app-section-title">Why He's Ranked #${escapeHtml(rank)}</h2>
+        ${
+          positives.length
+            ? `<ul class="fantasy-insight-list fantasy-insight-list--positive">${positives.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}</ul>`
+            : '<p class="muted">No insight bullets available.</p>'
+        }
+        ${
+          risks.length
+            ? `<h3 class="fantasy-insight-subtitle">Risk Factors</h3>
+               <ul class="fantasy-insight-list fantasy-insight-list--risk">${risks.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}</ul>`
+            : ''
+        }
+      </section>
+    `;
+  }
+
+  function renderModelBreakdown(reasons = []) {
+    if (!reasons.length) {
+      return `
+        <section class="fantasy-app-section">
+          <details class="fantasy-model-breakdown">
+            <summary class="fantasy-app-section-title">Model Breakdown</summary>
+            <p class="muted">No model breakdown lines available.</p>
+          </details>
+        </section>
+      `;
+    }
+
+    return `
+      <section class="fantasy-app-section">
+        <details class="fantasy-model-breakdown">
+          <summary class="fantasy-app-section-title">Model Breakdown</summary>
+          <ul class="fantasy-driver-reasons fantasy-driver-reasons--compact">${reasons.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}</ul>
+        </details>
+      </section>
+    `;
+  }
+
+  function renderSalaryTrendCard(history = [], driver = {}) {
+    const salaries = history
+      .map((row) => Number(row.salary))
+      .filter((value) => Number.isFinite(value));
+
+    if (salaries.length <= 1) {
+      return `
+        <section class="fantasy-app-section fantasy-salary-trend-card">
+          <h2 class="fantasy-app-section-title">Salary Trend</h2>
+          <p class="fantasy-insights-notice">More salary trend data will appear after additional slates are generated.</p>
+          <div class="fantasy-salary-trend-grid">
+            <div><span>Current</span><strong class="salary">${formatMoney(driver.salary)}</strong></div>
+            <div><span>Previous</span><strong>${formatMoney(driver.previousSalary)}</strong></div>
+            <div><span>Change</span><strong><span class="fantasy-change ${changeClass(driver.salaryChangeDirection)}">${escapeHtml(driver.salaryChangeLabel || '—')}</span></strong></div>
+          </div>
+        </section>
+      `;
+    }
+
+    const highest = Math.max(...salaries);
+    const lowest = Math.min(...salaries);
+
+    return `
+      <section class="fantasy-app-section fantasy-salary-trend-card">
+        <h2 class="fantasy-app-section-title">Salary Trend</h2>
+        <div class="fantasy-salary-trend-grid">
+          <div><span>Current</span><strong class="salary">${formatMoney(driver.salary)}</strong></div>
+          <div><span>Previous</span><strong>${formatMoney(driver.previousSalary)}</strong></div>
+          <div><span>Change</span><strong><span class="fantasy-change ${changeClass(driver.salaryChangeDirection)}">${escapeHtml(driver.salaryChangeLabel || '—')}</span></strong></div>
+          <div><span>High</span><strong class="salary">${formatMoney(highest)}</strong></div>
+          <div><span>Low</span><strong class="salary">${formatMoney(lowest)}</strong></div>
+          <div><span>Races Tracked</span><strong>${salaries.length}</strong></div>
+        </div>
+      </section>
+    `;
   }
 
   function renderHistoryTable(history = []) {
@@ -213,15 +405,37 @@
     `;
   }
 
+  function queryParams() {
+    const params = new URLSearchParams(window.location.search);
+    return {
+      id: params.get('id') || params.get('driverId') || '',
+      driver: params.get('driver') || params.get('driverName') || '',
+    };
+  }
+
+  function renderEmpty(message) {
+    const root = $('#fantasyDriverRoot');
+    if (!root) return;
+    root.innerHTML = `
+      <section class="fantasy-app-empty">
+        <p>${escapeHtml(message)}</p>
+        <a class="fantasy-btn fantasy-btn--secondary" href="/fantasy/slate.html">Back to Race Slate</a>
+      </section>
+    `;
+  }
+
   function renderDriverPage(data, profile = null) {
     const root = $('#fantasyDriverRoot');
     if (!root) return;
 
     const driver = data.driver || {};
     const slate = data.slate || {};
+    const history = data.salaryHistory || [];
 
     root.innerHTML = `
       ${renderHero(driver, slate, profile)}
+      ${renderRecentFormStrip(driver)}
+      ${renderInsightsSection(driver)}
 
       <section class="fantasy-app-section">
         <h2 class="fantasy-app-section-title">Slate Profile</h2>
@@ -241,15 +455,14 @@
         </div>
       </section>
 
-      <section class="fantasy-app-section">
-        <h2 class="fantasy-app-section-title">Salary History</h2>
-        ${renderHistoryTable(data.salaryHistory || [])}
-      </section>
+      ${renderSalaryTrendCard(history, driver)}
 
       <section class="fantasy-app-section">
-        <h2 class="fantasy-app-section-title">Breakdown Summary</h2>
-        ${renderReasons(driver.breakdownSummary || [])}
+        <h2 class="fantasy-app-section-title">Salary History</h2>
+        ${renderHistoryTable(history)}
       </section>
+
+      ${renderModelBreakdown(driver.breakdownSummary || [])}
 
       <p><a class="fantasy-btn fantasy-btn--secondary" href="/fantasy/slate.html">Back to Race Slate</a></p>
     `;
