@@ -139,14 +139,14 @@ export function buildOwnershipProjections(drivers = []) {
   return { projections, byDriverId };
 }
 
-export function buildFantasyPowerRankings(drivers = [], ownershipByDriver = new Map()) {
+function rankDriversByPowerComposite(drivers = []) {
   const tierNorm = normalizeField(drivers.map((d) => num(d.fantasyTierScore, 0)));
   const valueNorm = normalizeField(drivers.map((d) => num(d.valueScore, 0)));
   const trackNorm = drivers.map((d) => trackHistoryComponent(d));
   const recentNorm = drivers.map((d) => recentFormScore(d));
   const impactNorm = drivers.map((d) => raceImpactScore(d));
 
-  const ranked = drivers
+  return drivers
     .map((driver, index) => ({
       driver,
       composite: powerCompositeScore(driver, {
@@ -157,8 +157,39 @@ export function buildFantasyPowerRankings(drivers = [], ownershipByDriver = new 
         raceImpact: impactNorm[index],
       }),
     }))
-    .sort((a, b) => b.composite - a.composite)
-    .slice(0, 10);
+    .sort((a, b) => {
+      const compositeDiff = b.composite - a.composite;
+      if (compositeDiff !== 0) return compositeDiff;
+      return num(b.driver.fantasyTierScore) - num(a.driver.fantasyTierScore);
+    });
+}
+
+export function buildFantasyRankByDriver(drivers = []) {
+  const ranked = rankDriversByPowerComposite(drivers);
+  const rankByDriver = new Map();
+  ranked.forEach((entry, index) => {
+    rankByDriver.set(String(entry.driver.driverId), index + 1);
+  });
+  return rankByDriver;
+}
+
+export function deriveFantasyRankFromSlate(drivers = [], driverId) {
+  const id = String(driverId ?? '').trim();
+  if (!id || !drivers.length) return null;
+
+  const rankByDriver = buildFantasyRankByDriver(drivers);
+  const ranked = rankByDriver.get(id);
+  if (ranked != null) return ranked;
+
+  const sorted = [...drivers].sort(
+    (a, b) => num(b.fantasyTierScore) - num(a.fantasyTierScore)
+  );
+  const index = sorted.findIndex((row) => String(row.driverId) === id);
+  return index >= 0 ? index + 1 : null;
+}
+
+export function buildFantasyPowerRankings(drivers = [], ownershipByDriver = new Map()) {
+  const ranked = rankDriversByPowerComposite(drivers).slice(0, 10);
 
   return ranked.map((entry, index) => {
     const driver = entry.driver;
@@ -431,12 +462,9 @@ export function buildSalaryHistoryInsights(slates = [], latestDrivers = []) {
 
 export function buildPublicAnalysis(drivers = [], slate = {}) {
   const { projections, byDriverId } = buildOwnershipProjections(drivers);
+  const rankByDriver = buildFantasyRankByDriver(drivers);
   const fantasyPowerRankings = buildFantasyPowerRankings(drivers, byDriverId);
   const spotlightCards = buildSpotlightCards(drivers);
-
-  const rankByDriver = new Map(
-    fantasyPowerRankings.map((row) => [String(row.driverId), row.rank])
-  );
 
   const ownershipProjection = projections.sort(
     (a, b) => b.projectedOwnershipPct - a.projectedOwnershipPct
@@ -491,10 +519,21 @@ export function enrichPublicDriver(driver, analysis = {}) {
   };
 }
 
-export function buildDriverDetailResponse(driver, slate = {}, history = [], analysis = {}) {
+export function buildDriverDetailResponse(
+  driver,
+  slate = {},
+  history = [],
+  analysis = {},
+  allDrivers = []
+) {
   if (!driver) return null;
 
   const publicDriver = enrichPublicDriver(driver, analysis);
+  let fantasyRank = publicDriver.fantasyRank;
+  if (fantasyRank == null) {
+    fantasyRank = deriveFantasyRankFromSlate(allDrivers.length ? allDrivers : [driver], driver.driverId);
+  }
+
   const rf = driver.scoreBreakdown?.recentForm?.details || {};
   const recentFormFinishes = Array.isArray(rf.last3Finishes)
     ? rf.last3Finishes
@@ -506,6 +545,7 @@ export function buildDriverDetailResponse(driver, slate = {}, history = [], anal
   return {
     driver: {
       ...publicDriver,
+      fantasyRank,
       fantasyTierScore: num(driver.fantasyTierScore),
       recentFormSummary:
         rf.last3RaceAverageFinish != null
@@ -525,6 +565,7 @@ export function buildDriverDetailResponse(driver, slate = {}, history = [], anal
       raceNumber: slate.raceNumber ?? slate.race_number ?? null,
       track: slate.track || 'TBD',
     },
+    fantasyRank,
     salaryHistory: history,
     readOnly: true,
   };

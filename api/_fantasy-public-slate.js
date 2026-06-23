@@ -267,7 +267,8 @@ export async function buildFantasyDriverDetailResponse(seasonId, options = {}) {
     driver,
     payload.slate,
     historyRow?.history || [],
-    analysis
+    analysis,
+    rawDrivers
   );
 }
 

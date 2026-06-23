@@ -22,6 +22,16 @@
     return 'is-same';
   }
 
+  function resolveFantasyRank(driver = {}, detail = {}) {
+    if (driver.fantasyRank != null && Number.isFinite(Number(driver.fantasyRank))) {
+      return Number(driver.fantasyRank);
+    }
+    if (detail.fantasyRank != null && Number.isFinite(Number(detail.fantasyRank))) {
+      return Number(detail.fantasyRank);
+    }
+    return null;
+  }
+
   function driverImage(name) {
     const slug = String(name || '')
       .toLowerCase()
@@ -428,7 +438,10 @@
     const root = $('#fantasyDriverRoot');
     if (!root) return;
 
-    const driver = data.driver || {};
+    const driver = {
+      ...(data.driver || {}),
+      fantasyRank: resolveFantasyRank(data.driver || {}, data),
+    };
     const slate = data.slate || {};
     const history = data.salaryHistory || [];
 
