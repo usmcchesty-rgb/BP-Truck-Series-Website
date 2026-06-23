@@ -33,7 +33,7 @@ const LINEUP_SALARY_CAP = 50000;
 const APPROXIMATION_NOTICE =
   'Approximate backtest — not locked pre-race simulation yet.';
 
-function simulatedNowForRace(race, fallbackNow) {
+export function simulatedNowForRace(race, fallbackNow) {
   const parts = parseScheduleDateParts(race?.date);
   if (!parts?.year || !parts?.month || !parts?.day) return fallbackNow;
   const simulated = new Date(parts.year, parts.month - 1, parts.day, 23, 59, 59);
@@ -110,7 +110,7 @@ function buildRaceModelNotes({
   return parts.join('. ') || 'No model notes available.';
 }
 
-async function buildFantasyDriversForRace({
+export async function buildFantasyDriversForRace({
   scheduleRaces,
   raceNumber,
   settings,

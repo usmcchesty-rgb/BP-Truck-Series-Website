@@ -3,6 +3,7 @@ import {
   generateFantasyDraftSlate,
   loadFantasyDraftSlate,
 } from './_fantasy-slate.js';
+import { backfillFantasyHistoricalSlates } from './_fantasy-historical-backfill.js';
 import { runFantasySeasonBacktest } from './_fantasy-backtest.js';
 import {
   buildFantasyDriverDetailResponse,
@@ -137,6 +138,18 @@ export default async function handler(req, res) {
       return res.status(200).json(result);
     } catch (error) {
       return res.status(500).json({ error: error.message || 'Lineup optimizer failed.' });
+    }
+  }
+
+  if (action === 'backfillFantasyHistoricalSlates') {
+    try {
+      const result = await backfillFantasyHistoricalSlates({
+        overwrite: body.overwrite === true,
+        seasonId: body.seasonId,
+      });
+      return res.status(200).json(result);
+    } catch (error) {
+      return res.status(500).json({ error: error.message || 'Historical slate backfill failed.' });
     }
   }
 

@@ -657,6 +657,21 @@
             <div id="fantasyOptimizerOutput" class="fantasy-backtest-output" hidden></div>
           </div>
 
+          <!-- Historical Slate Backfill -->
+          <div class="admin-card admin-card--full">
+            <div class="admin-card-title">Historical Slate Backfill</div>
+            <span class="field-help">Generate saved draft slates for completed races earlier in the season so public salary history and driver trend pages populate. Uses the current fantasy salary model and is approximate.</span>
+            <label class="field-label" style="display:flex;align-items:center;gap:8px;margin-top:10px;">
+              <input id="backfillOverwriteExisting" type="checkbox" />
+              Overwrite existing historical slates
+            </label>
+            <div class="fantasy-generate-row">
+              <button id="backfillHistoricalSlatesBtn" class="btn" type="button">Backfill Historical Slates</button>
+              <span id="backfillHistoricalStatus" class="fantasy-generate-status"></span>
+            </div>
+            <div id="backfillHistoricalOutput" class="fantasy-backtest-output" hidden></div>
+          </div>
+
           <!-- Fantasy Backtest -->
           <div class="admin-card admin-card--full">
             <div class="admin-card-title">Fantasy Backtest</div>
@@ -1422,6 +1437,92 @@
         }
       }
 
+      function renderFantasyBackfillOutput(result = null) {
+        const output = $('#backfillHistoricalOutput');
+        if (!output) return;
+
+        try {
+          if (!result || typeof result !== 'object') {
+            safeHide(output, true);
+            safeSetInnerHtml(output, '');
+            return;
+          }
+
+          const skippedRows = (result.skipped || [])
+            .map(
+              (row) =>
+                `<li>Race ${escapeHtml(row.raceNumber)}: ${escapeHtml(row.reason || 'Skipped')}</li>`
+            )
+            .join('');
+          const failureRows = (result.failures || [])
+            .map(
+              (row) =>
+                `<li>Race ${escapeHtml(row.raceNumber)}: ${escapeHtml(row.error || 'Failed')}</li>`
+            )
+            .join('');
+
+          safeSetInnerHtml(
+            output,
+            `<div class="fantasy-backtest-summary">
+              <p><strong>Created:</strong> ${Number(result.racesCreated ?? 0)}</p>
+              <p><strong>Skipped:</strong> ${Number(result.racesSkipped ?? 0)}</p>
+              <p><strong>Failed:</strong> ${Number(result.racesFailed ?? 0)}</p>
+              <p class="admin-note">${escapeHtml(result.warning || 'Historical backfill uses current model and is approximate.')}</p>
+              ${
+                result.generatedRaceNumbers?.length
+                  ? `<p><strong>Generated races:</strong> ${result.generatedRaceNumbers.join(', ')}</p>`
+                  : ''
+              }
+              ${skippedRows ? `<p><strong>Skipped races</strong></p><ul>${skippedRows}</ul>` : ''}
+              ${failureRows ? `<p><strong>Failures</strong></p><ul>${failureRows}</ul>` : ''}
+            </div>`
+          );
+          safeHide(output, false);
+        } catch (err) {
+          console.error('[Fantasy Admin] Backfill render failed:', err);
+          safeHide(output, true);
+        }
+      }
+
+      async function backfillHistoricalSlates() {
+        const statusEl = $('#backfillHistoricalStatus');
+        const btn = $('#backfillHistoricalSlatesBtn');
+        const overwrite = $('#backfillOverwriteExisting')?.checked === true;
+
+        if (statusEl) {
+          statusEl.textContent = 'Backfilling historical slates...';
+          statusEl.classList.remove('error');
+        }
+        if (btn) btn.disabled = true;
+
+        try {
+          const res = await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              password: getSessionPw(),
+              action: 'backfillFantasyHistoricalSlates',
+              overwrite,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Backfill failed');
+
+          renderFantasyBackfillOutput(data);
+          if (statusEl) {
+            statusEl.textContent = `Backfill complete — created ${data.racesCreated ?? 0}, skipped ${data.racesSkipped ?? 0}, failed ${data.racesFailed ?? 0}.`;
+          }
+        } catch (error) {
+          renderFantasyBackfillOutput(null);
+          if (statusEl) {
+            statusEl.textContent = error.message || 'Backfill failed';
+            statusEl.classList.add('error');
+          }
+        } finally {
+          if (btn) btn.disabled = false;
+        }
+      }
+
       function renderFantasyBacktestOutput(result = null) {
         const output = $('#fantasyBacktestOutput');
         if (!output) return;
@@ -1926,6 +2027,7 @@
       $('#reloadFantasyDraftBtn')?.addEventListener('click', loadFantasyDraftSlate);
       $('#runFantasyOptimizerBtn')?.addEventListener('click', runFantasyLineupOptimizer);
       $('#runFantasyBacktestBtn')?.addEventListener('click', runFantasySeasonBacktest);
+      $('#backfillHistoricalSlatesBtn')?.addEventListener('click', backfillHistoricalSlates);
 
       initSession();
     </script>

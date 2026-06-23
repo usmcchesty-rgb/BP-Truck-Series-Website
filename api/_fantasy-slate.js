@@ -30,16 +30,25 @@ import {
 
 const SLATE_MAX_STANDINGS_POSITION = 30;
 
-function extractScheduleIdFromRace(race) {
+export function extractScheduleIdFromRace(race) {
   if (race?.scheduleId) return String(race.scheduleId);
   const match = String(race?.link || '').match(/schedule_id=(\d+)/i);
   return match?.[1] ? String(match[1]) : null;
 }
 
 async function loadPriorSlateSalaryMaps(seasonId, beforeRaceNumber) {
+  const maps = await loadPriorFantasySlateMaps(seasonId, beforeRaceNumber);
+  return {
+    priorSalariesByDriver: maps.priorSalariesByDriver,
+    priorRaceNumber: maps.priorRaceNumber,
+  };
+}
+
+export async function loadPriorFantasySlateMaps(seasonId, beforeRaceNumber) {
   const sb = supabase();
   const empty = {
     priorSalariesByDriver: new Map(),
+    priorTierScoresByDriver: new Map(),
     priorRaceNumber: null,
   };
   if (!sb) return empty;
@@ -57,16 +66,19 @@ async function loadPriorSlateSalaryMaps(seasonId, beforeRaceNumber) {
   const slate = slates[0];
   const { data: drivers } = await sb
     .from('fantasy_slate_drivers')
-    .select('driver_id, final_salary')
+    .select('driver_id, final_salary, fantasy_tier_score')
     .eq('slate_id', slate.id);
 
   const priorSalariesByDriver = new Map();
+  const priorTierScoresByDriver = new Map();
   for (const row of drivers || []) {
     priorSalariesByDriver.set(String(row.driver_id), Number(row.final_salary));
+    priorTierScoresByDriver.set(String(row.driver_id), Number(row.fantasy_tier_score));
   }
 
   return {
     priorSalariesByDriver,
+    priorTierScoresByDriver,
     priorRaceNumber: slate.race_number,
   };
 }
