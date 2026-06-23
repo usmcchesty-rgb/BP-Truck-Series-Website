@@ -4,6 +4,12 @@
     escapeHtml: (v) => String(v ?? ''),
   };
 
+  const Pills = window.BPFantasyPills || {};
+  const renderFantasyGradePill = (grade) =>
+    Pills.renderFantasyGradePill ? Pills.renderFantasyGradePill(grade) : escapeHtml(grade || '—');
+  const renderFantasyTierPill = (tier) =>
+    Pills.renderFantasyTierPill ? Pills.renderFantasyTierPill(tier) : escapeHtml(tier || '');
+
   function $(selector) {
     return document.querySelector(selector);
   }
@@ -65,7 +71,7 @@
         ? {
             label: 'Current Best Value',
             name: insights.currentBestValue.driverName,
-            stat: `${insights.currentBestValue.valueGrade || ''} (${Number(insights.currentBestValue.valueScore).toFixed(2)})`,
+            statHtml: `${renderFantasyGradePill(insights.currentBestValue.valueGrade)} (${Number(insights.currentBestValue.valueScore).toFixed(2)})`,
           }
         : null,
     ].filter(Boolean);
@@ -79,7 +85,7 @@
               (card) => `<article class="fantasy-value-card">
               <div class="fantasy-value-card__meta">${escapeHtml(card.label)}</div>
               <div class="fantasy-value-card__name">${driverLink({ driverName: card.name }, card.name)}</div>
-              <div class="fantasy-value-card__stat">${escapeHtml(card.stat)}</div>
+              <div class="fantasy-value-card__stat">${card.statHtml || escapeHtml(card.stat || '')}</div>
             </article>`
             )
             .join('')}
@@ -107,9 +113,9 @@
                 .map(
                   (driver) => `<article class="fantasy-value-card">
                     <div class="fantasy-value-card__name">${driverLink(driver, driver.driverName)}</div>
-                    <div class="fantasy-value-card__meta">${escapeHtml(driver.tier || '')}</div>
+                    <div class="fantasy-value-card__meta">${renderFantasyTierPill(driver.tier)}</div>
                     <div class="fantasy-value-card__stat">${formatMoney(driver.salary)}</div>
-                    <div class="fantasy-value-card__sub">${escapeHtml(driver.salaryChangeLabel || driver.valueGrade || '')}</div>
+                    <div class="fantasy-value-card__sub">${escapeHtml(driver.salaryChangeLabel || '')}${driver.salaryChangeLabel && driver.valueGrade ? ' · ' : ''}${driver.valueGrade ? renderFantasyGradePill(driver.valueGrade) : ''}</div>
                   </article>`
                 )
                 .join('')}
@@ -132,7 +138,7 @@
         ${featured
           .map(
             (driver) => `<div class="fantasy-history-block">
-              <h3>${driverLink(driver, driver.driverName)} <span class="muted">${formatMoney(driver.salary)} · ${escapeHtml(driver.valueGrade || '—')}</span></h3>
+              <h3>${driverLink(driver, driver.driverName)} <span class="muted">${formatMoney(driver.salary)} · ${renderFantasyGradePill(driver.valueGrade)}</span></h3>
               <div class="fantasy-table-wrap">
                 <table class="fantasy-slate-table fantasy-slate-table--compact">
                   <thead><tr><th>Race</th><th>Track</th><th>Salary</th><th>Tier</th><th>Score</th></tr></thead>
@@ -175,7 +181,7 @@
                     <td class="salary">${formatMoney(driver.salary)}</td>
                     <td class="salary">${formatMoney(driver.previousSalary)}</td>
                     <td>${escapeHtml(driver.salaryChangeLabel || '—')}</td>
-                    <td>${escapeHtml(driver.valueGrade || '—')}</td>
+                    <td class="fantasy-pill-cell">${renderFantasyGradePill(driver.valueGrade)}</td>
                   </tr>`
                 )
                 .join('')}

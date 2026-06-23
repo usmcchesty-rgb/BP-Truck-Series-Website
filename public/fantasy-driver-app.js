@@ -3,6 +3,16 @@
     escapeHtml: (v) => String(v ?? ''),
   };
 
+  const Pills = window.BPFantasyPills || {};
+  const renderFantasyGradePill = (grade) =>
+    Pills.renderFantasyGradePill ? Pills.renderFantasyGradePill(grade) : escapeHtml(grade || '—');
+  const renderFantasyFinishPill = (finish) =>
+    Pills.renderFantasyFinishPill ? Pills.renderFantasyFinishPill(finish) : escapeHtml(finish || '');
+  const renderFantasyOwnershipPill = (label) =>
+    Pills.renderFantasyOwnershipPill ? Pills.renderFantasyOwnershipPill(label) : escapeHtml(label || '');
+  const renderFantasyTierPill = (tier) =>
+    Pills.renderFantasyTierPill ? Pills.renderFantasyTierPill(tier) : escapeHtml(tier || '—');
+
   const PLACEHOLDER_PHOTO = '/assets/drivers/placeholder.png';
 
   function $(selector) {
@@ -30,21 +40,6 @@
       return Number(detail.fantasyRank);
     }
     return null;
-  }
-
-  function valueGradeBadgeClass(grade) {
-    const normalized = String(grade || '').trim().toUpperCase();
-    if (normalized === 'A+') return 'fantasy-value-grade-badge--a-plus';
-    if (normalized === 'A') return 'fantasy-value-grade-badge--a';
-    if (normalized.startsWith('B')) return 'fantasy-value-grade-badge--b';
-    if (normalized.startsWith('C')) return 'fantasy-value-grade-badge--c';
-    if (normalized === 'D') return 'fantasy-value-grade-badge--d';
-    return 'fantasy-value-grade-badge--default';
-  }
-
-  function renderValueGradeBadge(grade) {
-    if (!grade) return '—';
-    return `<span class="fantasy-value-grade-badge ${valueGradeBadgeClass(grade)}">${escapeHtml(grade)}</span>`;
   }
 
   function driverImage(name) {
@@ -167,7 +162,7 @@
       </div>
       <div class="fantasy-driver-quick-stat">
         <span class="fantasy-driver-quick-stat__label">Value Grade</span>
-        <strong class="fantasy-driver-quick-stat__value">${renderValueGradeBadge(driver.valueGrade)}</strong>
+        <strong class="fantasy-driver-quick-stat__value">${renderFantasyGradePill(driver.valueGrade)}</strong>
       </div>
       <div class="fantasy-driver-quick-stat">
         <span class="fantasy-driver-quick-stat__label">Salary Trend</span>
@@ -198,14 +193,6 @@
     `;
   }
 
-  function finishPillClass(finish) {
-    const n = Number(finish);
-    if (n === 1) return 'is-win';
-    if (n <= 5) return 'is-strong';
-    if (n <= 10) return 'is-mid';
-    return 'is-weak';
-  }
-
   function renderRecentFormStrip(driver = {}) {
     const finishes = Array.isArray(driver.recentFormFinishes) ? driver.recentFormFinishes : [];
     const hasPills = finishes.length > 0;
@@ -213,12 +200,7 @@
     let body = '';
     if (hasPills) {
       body = `<div class="fantasy-recent-form-pills">
-        ${finishes
-          .map(
-            (finish) =>
-              `<span class="fantasy-finish-pill ${finishPillClass(finish)}">P${escapeHtml(finish)}</span>`
-          )
-          .join('')}
+        ${finishes.map((finish) => renderFantasyFinishPill(finish)).join('')}
       </div>`;
     } else {
       body = `<p class="fantasy-recent-form-summary">${escapeHtml(driver.recentFormSummary || 'Recent form data unavailable.')}</p>`;
@@ -470,13 +452,13 @@
           <div><span>Current Salary</span><strong class="salary">${formatMoney(driver.salary)}</strong></div>
           <div><span>Previous Salary</span><strong>${formatMoney(driver.previousSalary)}</strong></div>
           <div><span>Salary Change</span><strong><span class="fantasy-change ${changeClass(driver.salaryChangeDirection)}">${escapeHtml(driver.salaryChangeLabel || '—')}</span></strong></div>
-          <div><span>Value Grade</span><strong class="fantasy-driver-detail-grid__value">${renderValueGradeBadge(driver.valueGrade)}</strong></div>
+          <div><span>Value Grade</span><strong class="fantasy-driver-detail-grid__value">${renderFantasyGradePill(driver.valueGrade)}</strong></div>
           <div><span>Value Score</span><strong>${driver.valueScore != null ? Number(driver.valueScore).toFixed(2) : '—'}</strong></div>
           <div><span>Fantasy Rank</span><strong>${driver.fantasyRank != null ? `#${escapeHtml(driver.fantasyRank)}` : '—'}</strong></div>
-          <div><span>Tier</span><strong>${escapeHtml(driver.tier || '—')}</strong></div>
+          <div><span>Tier</span><strong>${renderFantasyTierPill(driver.tier)}</strong></div>
           <div><span>Track Rank</span><strong>${escapeHtml(driver.trackRankLabel || '—')}</strong></div>
           <div><span>Proven Track Rank</span><strong>${driver.provenTrackHistoryRank != null ? `#${escapeHtml(driver.provenTrackHistoryRank)}` : '—'}</strong></div>
-          <div><span>Projected Ownership</span><strong>${driver.projectedOwnershipPct != null ? `${driver.projectedOwnershipPct}% (${escapeHtml(driver.ownershipLabel || '')})` : '—'}</strong></div>
+          <div><span>Projected Ownership</span><strong>${driver.projectedOwnershipPct != null ? `${driver.projectedOwnershipPct}% ${renderFantasyOwnershipPill(driver.ownershipLabel)}` : '—'}</strong></div>
           <div><span>Fantasy Tier Score</span><strong>${driver.fantasyTierScore != null ? Number(driver.fantasyTierScore).toFixed(1) : '—'}</strong></div>
           <div><span>Recent Form</span><strong>${escapeHtml(driver.recentFormSummary || '—')}</strong></div>
         </div>

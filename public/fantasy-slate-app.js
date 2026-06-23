@@ -4,6 +4,18 @@
     escapeHtml: (v) => String(v ?? ''),
   };
 
+  const Pills = window.BPFantasyPills || {};
+  const renderFantasyGradePill = (grade) =>
+    Pills.renderFantasyGradePill ? Pills.renderFantasyGradePill(grade) : escapeHtml(grade || '—');
+  const renderFantasyOwnershipPill = (label) =>
+    Pills.renderFantasyOwnershipPill ? Pills.renderFantasyOwnershipPill(label) : escapeHtml(label || '');
+  const renderFantasyTierPill = (tier) =>
+    Pills.renderFantasyTierPill ? Pills.renderFantasyTierPill(tier) : escapeHtml(tier || '—');
+  const renderFantasyStatusPill = (status) =>
+    Pills.renderFantasyStatusPill ? Pills.renderFantasyStatusPill(status) : escapeHtml(status || '—');
+  const ownershipBarClass = (label) =>
+    Pills.ownershipModifier ? `fantasy-pill--${Pills.ownershipModifier(label)}` : '';
+
   function $(selector) {
     return document.querySelector(selector);
   }
@@ -22,14 +34,7 @@
   }
 
   function ownershipLabelClass(label) {
-    const map = {
-      Chalk: 'is-chalk',
-      Popular: 'is-popular',
-      Balanced: 'is-balanced',
-      Sleeper: 'is-sleeper',
-      'Long Shot': 'is-longshot',
-    };
-    return map[label] || '';
+    return ownershipBarClass(label);
   }
 
   function renderEmpty(message) {
@@ -62,8 +67,8 @@
                   <td><span class="fantasy-rank-badge">#${escapeHtml(row.rank)}</span></td>
                   <td>${driverLink(row, row.driverName)}${row.carNumber ? ` <span class="muted">#${escapeHtml(row.carNumber)}</span>` : ''}</td>
                   <td class="salary">${formatMoney(row.salary)}</td>
-                  <td>${row.valueGrade ? `<span class="fantasy-grade-pill">${escapeHtml(row.valueGrade)}</span>` : '—'}</td>
-                  <td>${row.projectedOwnership != null ? `${row.projectedOwnership}% <span class="fantasy-ownership-tag ${ownershipLabelClass(row.ownershipLabel)}">${escapeHtml(row.ownershipLabel || '')}</span>` : '—'}</td>
+                  <td class="fantasy-pill-cell">${renderFantasyGradePill(row.valueGrade)}</td>
+                  <td>${row.projectedOwnership != null ? `${row.projectedOwnership}% ${renderFantasyOwnershipPill(row.ownershipLabel)}` : '—'}</td>
                   <td class="fantasy-reason-cell">${escapeHtml(row.shortReason || '')}</td>
                 </tr>`
                 )
@@ -73,6 +78,16 @@
         </div>
       </section>
     `;
+  }
+
+  function renderSpotlightStatLine(key, card) {
+    if (key === 'bestValue' && card.statLine) {
+      const match = String(card.statLine).match(/^([\d.]+)\s+value\s·\s*(.+)$/i);
+      if (match) {
+        return `${escapeHtml(match[1])} value · ${renderFantasyGradePill(match[2].trim())}`;
+      }
+    }
+    return escapeHtml(card.statLine || '');
   }
 
   function renderSpotlightCard(key, card) {
@@ -87,7 +102,7 @@
         <div class="fantasy-spotlight-card__label">${escapeHtml(card.label || '')}</div>
         <div class="fantasy-spotlight-card__name">${driverLink(card, card.driverName)}</div>
         <div class="fantasy-spotlight-card__meta">${formatMoney(card.salary)} · ${escapeHtml(card.tier || '')}</div>
-        <div class="fantasy-spotlight-card__stat">${escapeHtml(card.statLine || '')}</div>
+        <div class="fantasy-spotlight-card__stat">${renderSpotlightStatLine(key, card)}</div>
         <p class="fantasy-spotlight-card__copy">${escapeHtml(card.explanation || '')}</p>
       </article>
     `;
@@ -116,7 +131,7 @@
               (row) => `<div class="fantasy-ownership-row">
               <div class="fantasy-ownership-row__head">
                 <span>${driverLink(row, row.driverName)}</span>
-                <span>${row.projectedOwnershipPct}% · ${escapeHtml(row.ownershipLabel || '')}</span>
+                <span>${row.projectedOwnershipPct}% · ${renderFantasyOwnershipPill(row.ownershipLabel)}</span>
               </div>
               <div class="fantasy-ownership-bar" aria-hidden="true">
                 <span class="fantasy-ownership-bar__fill ${ownershipLabelClass(row.ownershipLabel)}" style="width:${Math.min(100, row.projectedOwnershipPct)}%"></span>
@@ -216,13 +231,13 @@
                   <td>${driver.fantasyRank != null ? `<span class="fantasy-rank-badge">#${escapeHtml(driver.fantasyRank)}</span>` : '—'}</td>
                   <td>${driverLink(driver, driver.driverName)}</td>
                   <td>${driver.carNumber ? `#${escapeHtml(driver.carNumber)}` : '—'}</td>
-                  <td><span class="fantasy-tier-pill">${escapeHtml(driver.tier || '—')}</span></td>
+                  <td>${renderFantasyTierPill(driver.tier)}</td>
                   <td class="salary">${formatMoney(driver.salary)}</td>
                   <td><span class="fantasy-change ${changeClass(driver.salaryChangeDirection)}">${escapeHtml(driver.salaryChangeLabel || '—')}</span></td>
-                  <td>${driver.valueGrade ? `<span class="fantasy-grade-pill">${escapeHtml(driver.valueGrade)}</span>` : '—'}</td>
+                  <td class="fantasy-pill-cell">${renderFantasyGradePill(driver.valueGrade)}</td>
                   <td>${driver.projectedOwnershipPct != null ? `${driver.projectedOwnershipPct}%` : '—'}</td>
                   <td>${escapeHtml(driver.trackRankLabel || '—')}</td>
-                  <td>${escapeHtml(driver.status || 'Active')}</td>
+                  <td>${renderFantasyStatusPill(driver.status || 'Active')}</td>
                 </tr>`
                 )
                 .join('')}
