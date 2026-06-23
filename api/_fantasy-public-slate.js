@@ -1,4 +1,7 @@
-import { getSettings, supabase } from './_lib.js';
+import { fetchHtml, getSettings, supabase } from './_lib.js';
+import { parseScheduleRacesFromHtml } from './_caution-stats.js';
+import { enrichScheduleRaces } from './_schedule-points-races.js';
+import { findEffectiveNextPointsRace } from './_race-date-status.js';
 import { enrichFantasyDraftPayload, normalizeSlateDriver } from './_fantasy-slate.js';
 import { MIN_BEST_VALUE_SALARY } from './_fantasy-admin-analytics.js';
 import {
@@ -77,34 +80,85 @@ export function buildPublicSlateCards(drivers = [], meta = null, analysis = {}) 
   };
 }
 
-async function loadLatestSlateRow(seasonId) {
+function isBackfilledSlate(row) {
+  const meta = row?.meta;
+  if (!meta) return false;
+  if (typeof meta === 'string') {
+    try {
+      return JSON.parse(meta)?.backfilled === true;
+    } catch {
+      return false;
+    }
+  }
+  return meta.backfilled === true;
+}
+
+async function resolveUpcomingRaceNumber(seasonId) {
+  const settings = await getSettings();
+  const scheduleHtml = await fetchHtml(settings.scheduleUrl);
+  const scheduleRaces = enrichScheduleRaces(parseScheduleRacesFromHtml(scheduleHtml));
+  const nextRace = findEffectiveNextPointsRace(scheduleRaces, {
+    now: new Date(),
+    settings,
+  })?.race;
+
+  return nextRace?.officialPointsRaceNumber != null
+    ? Number(nextRace.officialPointsRaceNumber)
+    : null;
+}
+
+async function loadSlateForRace(seasonId, raceNumber, status) {
   const sb = supabase();
-  if (!sb) return null;
+  if (!sb || raceNumber == null) return null;
 
-  const base = sb.from('fantasy_slates').select('*').eq('season_id', String(seasonId));
-
-  const { data: published } = await base
-    .eq('status', 'published')
-    .order('race_number', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (published) return published;
-
-  const { data: draft } = await sb
+  const { data, error } = await sb
     .from('fantasy_slates')
     .select('*')
     .eq('season_id', String(seasonId))
-    .eq('status', 'draft')
-    .order('generated_at', { ascending: false })
-    .limit(1)
+    .eq('race_number', Number(raceNumber))
+    .eq('status', status)
     .maybeSingle();
 
+  if (error || !data || isBackfilledSlate(data)) return null;
+  return data;
+}
+
+async function loadFallbackPublicSlateRow(seasonId) {
+  const sb = supabase();
+  if (!sb) return null;
+
+  const { data: rows, error } = await sb
+    .from('fantasy_slates')
+    .select('*')
+    .eq('season_id', String(seasonId))
+    .order('race_number', { ascending: false });
+
+  if (error || !rows?.length) return null;
+
+  const eligible = rows.filter((row) => !isBackfilledSlate(row));
+  const published = eligible.find((row) => row.status === 'published');
+  if (published) return published;
+
+  const draft = eligible.find((row) => row.status === 'draft');
   return draft || null;
 }
 
+async function loadPublicCurrentSlateRow(seasonId) {
+  const upcomingRaceNumber = await resolveUpcomingRaceNumber(seasonId);
+
+  if (upcomingRaceNumber != null) {
+    const published = await loadSlateForRace(seasonId, upcomingRaceNumber, 'published');
+    if (published) return published;
+
+    const draft = await loadSlateForRace(seasonId, upcomingRaceNumber, 'draft');
+    if (draft) return draft;
+  }
+
+  return loadFallbackPublicSlateRow(seasonId);
+}
+
 export async function loadLatestFantasySlate(seasonId) {
-  const slate = await loadLatestSlateRow(seasonId);
+  const slate = await loadPublicCurrentSlateRow(seasonId);
   if (!slate) return null;
 
   const sb = supabase();
