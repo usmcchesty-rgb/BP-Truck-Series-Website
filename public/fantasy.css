@@ -744,14 +744,17 @@ body.fantasy-page main.fantasy-app-page{
   align-items:center;
   justify-content:center;
   box-sizing:border-box;
-  width:44px;
-  height:24px;
+  width:32px;
+  min-width:32px;
+  max-width:32px;
+  height:18px;
+  margin:0;
   padding:0;
   border-radius:4px;
-  border:1px solid rgba(255,255,255,.14);
-  font-size:11px;
+  border:1px solid rgba(255,255,255,.12);
+  font-size:9px;
   font-weight:900;
-  letter-spacing:.04em;
+  letter-spacing:0;
   line-height:1;
   text-align:center;
   white-space:nowrap;
@@ -760,47 +763,47 @@ body.fantasy-page main.fantasy-app-page{
 }
 
 .fantasy-value-grade-badge--a-plus{
-  color:#1a1400;
-  background:linear-gradient(180deg, rgba(240,192,64,.92) 0%, rgba(200,120,0,.88) 100%);
-  border-color:rgba(240,192,64,.65);
-  box-shadow:0 0 10px rgba(240,192,64,.35);
+  color:#fff;
+  background:linear-gradient(180deg, rgba(160,120,20,.5) 0%, rgba(100,70,8,.72) 100%);
+  border-color:rgba(190,145,35,.42);
+  box-shadow:0 0 4px rgba(190,145,35,.12);
 }
 
 .fantasy-value-grade-badge--a{
-  color:#eaffea;
-  background:linear-gradient(180deg, rgba(76,175,80,.42) 0%, rgba(30,90,34,.75) 100%);
-  border-color:rgba(76,175,80,.55);
-  box-shadow:0 0 10px rgba(76,175,80,.28);
+  color:#fff;
+  background:linear-gradient(180deg, rgba(76,175,80,.32) 0%, rgba(24,70,28,.68) 100%);
+  border-color:rgba(76,175,80,.4);
+  box-shadow:0 0 4px rgba(76,175,80,.1);
 }
 
 .fantasy-value-grade-badge--b-plus,
 .fantasy-value-grade-badge--b{
-  color:#e8f2ff;
-  background:linear-gradient(180deg, rgba(74,144,226,.42) 0%, rgba(26,74,122,.78) 100%);
-  border-color:rgba(74,144,226,.55);
-  box-shadow:0 0 10px rgba(74,144,226,.28);
+  color:#fff;
+  background:linear-gradient(180deg, rgba(74,144,226,.32) 0%, rgba(22,58,96,.68) 100%);
+  border-color:rgba(74,144,226,.4);
+  box-shadow:0 0 4px rgba(74,144,226,.1);
 }
 
 .fantasy-value-grade-badge--c-plus,
 .fantasy-value-grade-badge--c{
-  color:#f0e6ff;
-  background:linear-gradient(180deg, rgba(155,89,217,.42) 0%, rgba(94,45,145,.78) 100%);
-  border-color:rgba(155,89,217,.55);
-  box-shadow:0 0 10px rgba(155,89,217,.32);
+  color:#fff;
+  background:linear-gradient(180deg, rgba(155,89,217,.32) 0%, rgba(72,36,112,.68) 100%);
+  border-color:rgba(155,89,217,.4);
+  box-shadow:0 0 4px rgba(155,89,217,.1);
 }
 
 .fantasy-value-grade-badge--d{
-  color:#ffe8e8;
-  background:linear-gradient(180deg, rgba(229,9,20,.42) 0%, rgba(100,0,0,.82) 100%);
-  border-color:rgba(229,9,20,.55);
-  box-shadow:0 0 10px rgba(229,9,20,.32);
+  color:#fff;
+  background:linear-gradient(180deg, rgba(229,9,20,.32) 0%, rgba(90,8,12,.72) 100%);
+  border-color:rgba(229,9,20,.4);
+  box-shadow:0 0 4px rgba(229,9,20,.1);
 }
 
 .fantasy-value-grade-badge--unknown{
   color:#fff;
-  background:rgba(255,255,255,.08);
-  border-color:rgba(255,255,255,.18);
-  box-shadow:0 0 8px rgba(255,255,255,.08);
+  background:rgba(255,255,255,.07);
+  border-color:rgba(255,255,255,.16);
+  box-shadow:none;
 }
 
 .fantasy-value-grade-cell{
@@ -809,6 +812,11 @@ body.fantasy-page main.fantasy-app-page{
 
 .fantasy-value-grade-cell .fantasy-value-grade-badge{
   margin:0 auto;
+}
+
+.fantasy-driver-detail-grid .fantasy-value-grade-badge,
+.fantasy-driver-quick-stat .fantasy-value-grade-badge{
+  margin-top:4px;
 }
 
 .fantasy-change.is-up{ color:var(--green); font-weight:900; }
@@ -1060,24 +1068,6 @@ body.fantasy-page main.fantasy-app-page{
   margin-top:4px;
   color:#fff;
   font-size:14px;
-}
-
-.fantasy-driver-detail-grid__value,
-.fantasy-driver-quick-stat__value{
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  width:fit-content;
-  max-width:100%;
-  min-height:24px;
-  margin-top:4px;
-}
-
-.fantasy-driver-quick-stat strong.fantasy-driver-quick-stat__value{
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  min-height:24px;
 }
 
 .fantasy-driver-reasons{
