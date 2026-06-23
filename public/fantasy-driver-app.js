@@ -4,8 +4,14 @@
     escapeHtml: (v) => String(v ?? ''),
   };
 
+  const PLACEHOLDER_PHOTO = '/assets/drivers/placeholder.png';
+
   function $(selector) {
     return document.querySelector(selector);
+  }
+
+  function escapeAttr(value) {
+    return escapeHtml(value).replace(/'/g, '&#39;');
   }
 
   function formatMoney(value) {
@@ -19,6 +25,140 @@
     if (direction === 'down') return 'is-down';
     if (direction === 'new') return 'is-new';
     return 'is-same';
+  }
+
+  function driverImage(name) {
+    const slug = String(name || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+    return `/assets/drivers/${slug}.png`;
+  }
+
+  function normalizeLookupName(value) {
+    return String(value || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function findProfileByName(profiles, name, driverId) {
+    if (!Array.isArray(profiles) || !profiles.length) return null;
+
+    if (driverId) {
+      const match = profiles.find((row) => String(row.driver_id) === String(driverId));
+      if (match) return match;
+    }
+
+    const lookupName = normalizeLookupName(name);
+    if (!lookupName) return null;
+
+    return (
+      profiles.find((row) => {
+        const names = [row.display_name, row.iracing_name, row.driver_name].map(normalizeLookupName);
+        return names.includes(lookupName);
+      }) || null
+    );
+  }
+
+  async function resolveDriverProfile(fantasyDriver = {}, queryId = '', queryName = '') {
+    const name = fantasyDriver.driverName || queryName || '';
+    const id = fantasyDriver.driverId || queryId || '';
+
+    if (id) {
+      try {
+        const res = await fetch(`/api/drivers?driver_id=${encodeURIComponent(id)}`);
+        if (res.ok) {
+          const profile = await res.json();
+          if (profile?.driver_id) return profile;
+        }
+      } catch {
+        /* fall through to list lookup */
+      }
+    }
+
+    if (name || id) {
+      try {
+        const res = await fetch('/api/drivers');
+        if (res.ok) {
+          const profiles = await res.json();
+          return findProfileByName(Array.isArray(profiles) ? profiles : [], name, id);
+        }
+      } catch {
+        return null;
+      }
+    }
+
+    return null;
+  }
+
+  function renderHeroPhoto(profile, name) {
+    const standing = window.BPDriverStandingPhoto;
+    if (standing?.hasStandingPhoto(profile)) {
+      const url = standing.displayUrl(profile);
+      const style = standing.cropStyle(profile);
+      return `<div class="fantasy-driver-hero-media fantasy-driver-hero-media--standing">
+        <div class="fantasy-driver-standing-wrap" style="${escapeAttr(style)}">
+          <img
+            class="fantasy-driver-standing-photo"
+            src="${escapeAttr(url)}"
+            alt="${escapeAttr(name)}"
+            onerror="this.onerror=null;this.src='${PLACEHOLDER_PHOTO}'"
+          />
+        </div>
+      </div>`;
+    }
+
+    const photo = profile?.photoUrl || profile?.photo_url || driverImage(name);
+    return `<div class="fantasy-driver-hero-media">
+      <img
+        class="fantasy-driver-hero-photo"
+        src="${escapeHtml(photo)}"
+        alt="${escapeHtml(name)}"
+        onerror="this.onerror=null;this.src='${PLACEHOLDER_PHOTO}'"
+      />
+    </div>`;
+  }
+
+  function renderHeroBadges(driver = {}) {
+    const badges = [
+      driver.tier ? { label: 'Tier', value: driver.tier } : null,
+      driver.fantasyRank != null ? { label: 'Fantasy Rank', value: `#${driver.fantasyRank}` } : null,
+      driver.trackRankLabel && driver.trackRankLabel !== '—'
+        ? { label: 'Track Rank', value: driver.trackRankLabel }
+        : null,
+    ].filter(Boolean);
+
+    if (!badges.length) return '';
+
+    return `<div class="fantasy-driver-hero-badges">
+      ${badges
+        .map(
+          (badge) => `<span class="fantasy-driver-hero-badge">
+            <span class="fantasy-driver-hero-badge__label">${escapeHtml(badge.label)}</span>
+            <span class="fantasy-driver-hero-badge__value">${escapeHtml(badge.value)}</span>
+          </span>`
+        )
+        .join('')}
+    </div>`;
+  }
+
+  function renderHero(driver = {}, slate = {}, profile = null) {
+    const name = driver.driverName || 'Driver';
+    const photoHtml = renderHeroPhoto(profile, name);
+
+    return `
+      <section class="fantasy-driver-hero fantasy-app-hero-panel fantasy-glass-panel">
+        <div class="fantasy-driver-hero__content">
+          <p class="fantasy-app-eyebrow">Driver Detail</p>
+          <h1 class="fantasy-app-page-title">${escapeHtml(name)}${driver.carNumber ? ` <span class="muted">#${escapeHtml(driver.carNumber)}</span>` : ''}</h1>
+          ${renderHeroBadges(driver)}
+          <p class="fantasy-app-readonly-note">Race ${escapeHtml(slate.raceNumber ?? '—')} · ${escapeHtml(slate.track || 'TBD')} · Read-only preview</p>
+        </div>
+        ${photoHtml}
+      </section>
+    `;
   }
 
   function queryParams() {
@@ -71,7 +211,7 @@
     `;
   }
 
-  function renderDriverPage(data) {
+  function renderDriverPage(data, profile = null) {
     const root = $('#fantasyDriverRoot');
     if (!root) return;
 
@@ -79,11 +219,7 @@
     const slate = data.slate || {};
 
     root.innerHTML = `
-      <section class="fantasy-app-hero-panel fantasy-glass-panel">
-        <p class="fantasy-app-eyebrow">Driver Detail</p>
-        <h1 class="fantasy-app-page-title">${escapeHtml(driver.driverName || 'Driver')}${driver.carNumber ? ` <span class="muted">#${escapeHtml(driver.carNumber)}</span>` : ''}</h1>
-        <p class="fantasy-app-readonly-note">Race ${escapeHtml(slate.raceNumber ?? '—')} · ${escapeHtml(slate.track || 'TBD')} · Read-only preview</p>
-      </section>
+      ${renderHero(driver, slate, profile)}
 
       <section class="fantasy-app-section">
         <h2 class="fantasy-app-section-title">Slate Profile</h2>
@@ -129,13 +265,20 @@
       : `driver=${encodeURIComponent(driver)}`;
 
     try {
-      const res = await fetch(`/api/settings?action=getFantasyDriverDetail&${query}`);
-      if (!res.ok) {
+      const [detailRes, profile] = await Promise.all([
+        fetch(`/api/settings?action=getFantasyDriverDetail&${query}`),
+        resolveDriverProfile({ driverId: id, driverName: driver }, id, driver),
+      ]);
+
+      if (!detailRes.ok) {
         renderEmpty('Driver not found in current fantasy slate.');
         return;
       }
-      const data = await res.json();
-      renderDriverPage(data);
+
+      const data = await detailRes.json();
+      const resolvedProfile =
+        profile || (await resolveDriverProfile(data.driver || {}, id, driver));
+      renderDriverPage(data, resolvedProfile);
     } catch {
       renderEmpty('Driver not found in current fantasy slate.');
     }
