@@ -1268,6 +1268,38 @@ body.fantasy-page main.fantasy-app-page{
   text-transform:uppercase;
 }
 
+.fantasy-driver-analysis-card{
+  padding:20px 24px;
+  border-radius:8px;
+}
+
+.fantasy-driver-analysis-grid{
+  display:grid;
+  grid-template-columns:1fr 1.5fr 1.2fr;
+  gap:28px;
+}
+
+.fantasy-driver-analysis-col{
+  min-width:0;
+}
+
+.fantasy-driver-analysis-col__title{
+  margin:0 0 12px;
+  color:var(--red);
+  font-size:11px;
+  font-weight:900;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+}
+
+.fantasy-driver-analysis-col .fantasy-recent-form-summary{
+  margin-top:8px;
+}
+
+.fantasy-driver-analysis-col .fantasy-insight-list{
+  margin-top:0;
+}
+
 .fantasy-insight-panel{
   padding:16px 18px;
   border:1px solid rgba(255,255,255,.08);
@@ -1405,6 +1437,14 @@ body.fantasy-page main.fantasy-app-page{
     grid-template-columns:repeat(2, minmax(0,1fr));
   }
 
+  .fantasy-driver-analysis-grid{
+    grid-template-columns:1fr 1fr;
+  }
+
+  .fantasy-driver-analysis-col--risk{
+    grid-column:1 / -1;
+  }
+
   .fantasy-driver-hero,
   .fantasy-driver-hero.fantasy-app-hero-panel{
     padding:18px 20px;
@@ -1461,6 +1501,15 @@ body.fantasy-page main.fantasy-app-page{
 
   .fantasy-salary-trend-grid{
     grid-template-columns:1fr;
+  }
+
+  .fantasy-driver-analysis-grid{
+    grid-template-columns:1fr;
+    gap:20px;
+  }
+
+  .fantasy-driver-analysis-col--risk{
+    grid-column:auto;
   }
 
   .fantasy-app-hero-panel{

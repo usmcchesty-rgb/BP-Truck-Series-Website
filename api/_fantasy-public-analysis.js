@@ -121,10 +121,10 @@ export function buildOwnershipProjections(drivers = []) {
   const projections = drivers.map((driver) => {
     const raw = rawByDriver.get(String(driver.driverId)) ?? 0;
     const pct = clamp(Math.round((raw / maxRaw) * 48 + 6), 5, 55);
-    let ownershipLabel = 'Long Shot';
-    if (pct >= 40) ownershipLabel = 'Chalk';
+    let ownershipLabel = 'Dark Horse';
+    if (pct >= 40) ownershipLabel = 'Favorite';
     else if (pct >= 28) ownershipLabel = 'Popular';
-    else if (pct >= 18) ownershipLabel = 'Balanced';
+    else if (pct >= 18) ownershipLabel = 'Moderate';
     else if (pct >= 10) ownershipLabel = 'Sleeper';
 
     return {

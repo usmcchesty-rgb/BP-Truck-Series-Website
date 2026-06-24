@@ -195,7 +195,7 @@
     return 'is-weak';
   }
 
-  function renderRecentFormStrip(driver = {}) {
+  function renderRecentFormColumn(driver = {}) {
     const finishes = Array.isArray(driver.recentFormFinishes) ? driver.recentFormFinishes : [];
     const hasPills = finishes.length > 0;
 
@@ -223,12 +223,40 @@
         ? `<p class="fantasy-recent-form-summary">${escapeHtml(driver.recentFormSummary)}</p>`
         : '';
 
+    return `${body}${summaryLine}${scoreLine}`;
+  }
+
+  function renderDriverAnalysisCard(driver = {}) {
+    const rank = driver.fantasyRank != null ? driver.fantasyRank : '—';
+    const positives = buildRankedInsights(driver);
+    const risks = buildRiskFactors(driver);
+
     return `
-      <section class="fantasy-app-section fantasy-recent-form-panel">
-        <h2 class="fantasy-app-section-title">Recent Form</h2>
-        ${body}
-        ${summaryLine}
-        ${scoreLine}
+      <section class="fantasy-app-section">
+        <div class="fantasy-driver-analysis-card fantasy-glass-panel">
+          <div class="fantasy-driver-analysis-grid">
+            <div class="fantasy-driver-analysis-col">
+              <h3 class="fantasy-driver-analysis-col__title">Recent Form</h3>
+              ${renderRecentFormColumn(driver)}
+            </div>
+            <div class="fantasy-driver-analysis-col">
+              <h3 class="fantasy-driver-analysis-col__title">Why He's Ranked #${escapeHtml(rank)}</h3>
+              ${
+                positives.length
+                  ? `<ul class="fantasy-insight-list fantasy-insight-list--positive">${positives.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}</ul>`
+                  : '<p class="muted">No insight bullets available.</p>'
+              }
+            </div>
+            <div class="fantasy-driver-analysis-col fantasy-driver-analysis-col--risk">
+              <h3 class="fantasy-driver-analysis-col__title">Risk Factors</h3>
+              ${
+                risks.length
+                  ? `<ul class="fantasy-insight-list fantasy-insight-list--risk">${risks.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}</ul>`
+                  : '<p class="muted">No major risk flags.</p>'
+              }
+            </div>
+          </div>
+        </div>
       </section>
     `;
   }
@@ -304,33 +332,10 @@
     }
 
     if (driver.projectedOwnershipPct != null && driver.projectedOwnershipPct >= 40) {
-      risks.push('High projected ownership may limit differentiation');
+      risks.push('High projected ownership means many players may choose him');
     }
 
     return risks.slice(0, 5);
-  }
-
-  function renderInsightsSection(driver = {}) {
-    const rank = driver.fantasyRank != null ? driver.fantasyRank : '—';
-    const positives = buildRankedInsights(driver);
-    const risks = buildRiskFactors(driver);
-
-    return `
-      <section class="fantasy-app-section fantasy-insight-panel">
-        <h2 class="fantasy-app-section-title">Why He's Ranked #${escapeHtml(rank)}</h2>
-        ${
-          positives.length
-            ? `<ul class="fantasy-insight-list fantasy-insight-list--positive">${positives.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}</ul>`
-            : '<p class="muted">No insight bullets available.</p>'
-        }
-        ${
-          risks.length
-            ? `<h3 class="fantasy-insight-subtitle">Risk Factors</h3>
-               <ul class="fantasy-insight-list fantasy-insight-list--risk">${risks.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}</ul>`
-            : ''
-        }
-      </section>
-    `;
   }
 
   function renderModelBreakdown(reasons = []) {
@@ -450,8 +455,7 @@
 
     root.innerHTML = `
       ${renderHero(driver, slate, profile)}
-      ${renderRecentFormStrip(driver)}
-      ${renderInsightsSection(driver)}
+      ${renderDriverAnalysisCard(driver)}
 
       <section class="fantasy-app-section">
         <h2 class="fantasy-app-section-title">Slate Profile</h2>

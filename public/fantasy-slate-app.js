@@ -27,10 +27,13 @@
 
   function ownershipLabelClass(label) {
     const map = {
+      Favorite: 'is-chalk',
       Chalk: 'is-chalk',
       Popular: 'is-popular',
+      Moderate: 'is-balanced',
       Balanced: 'is-balanced',
       Sleeper: 'is-sleeper',
+      'Dark Horse': 'is-longshot',
       'Long Shot': 'is-longshot',
     };
     return map[label] || '';
