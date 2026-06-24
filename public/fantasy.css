@@ -1269,8 +1269,19 @@ body.fantasy-page main.fantasy-app-page{
 }
 
 .fantasy-driver-analysis-card{
-  padding:20px 24px;
+  padding:16px 18px;
+  border:1px solid rgba(255,255,255,.08);
   border-radius:8px;
+  background:rgba(0,0,0,.24);
+}
+
+.fantasy-driver-analysis-card.fantasy-glass-panel{
+  background:rgba(0,0,0,.24);
+  box-shadow:none;
+}
+
+.fantasy-driver-analysis-card.fantasy-glass-panel::before{
+  display:none;
 }
 
 .fantasy-driver-analysis-grid{
@@ -1285,11 +1296,16 @@ body.fantasy-page main.fantasy-app-page{
 
 .fantasy-driver-analysis-col__title{
   margin:0 0 12px;
-  color:var(--red);
-  font-size:11px;
+  color:#fff;
+  font-size:14px;
   font-weight:900;
   letter-spacing:.12em;
   text-transform:uppercase;
+}
+
+.fantasy-driver-analysis-col--risk .fantasy-driver-analysis-col__title{
+  color:var(--red);
+  font-size:11px;
 }
 
 .fantasy-driver-analysis-col .fantasy-recent-form-summary{
