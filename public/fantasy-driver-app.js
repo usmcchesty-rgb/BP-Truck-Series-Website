@@ -459,7 +459,10 @@
           <div><span>Current Salary</span><strong class="salary">${formatMoney(driver.salary)}</strong></div>
           <div><span>Previous Salary</span><strong>${formatMoney(driver.previousSalary)}</strong></div>
           <div><span>Salary Change</span><strong><span class="fantasy-change ${changeClass(driver.salaryChangeDirection)}">${escapeHtml(driver.salaryChangeLabel || '—')}</span></strong></div>
-          <div><span>Value Grade</span><div class="fantasy-driver-detail-value">${renderFantasyGradePill(driver.valueGrade)}</div></div>
+          <div class="fantasy-driver-quick-stat">
+            <span class="fantasy-driver-quick-stat__label">Value Grade</span>
+            ${renderFantasyGradePill(driver.valueGrade)}
+          </div>
           <div><span>Value Score</span><strong>${driver.valueScore != null ? Number(driver.valueScore).toFixed(2) : '—'}</strong></div>
           <div><span>Fantasy Rank</span><strong>${driver.fantasyRank != null ? `#${escapeHtml(driver.fantasyRank)}` : '—'}</strong></div>
           <div><span>Tier</span><strong>${escapeHtml(driver.tier || '—')}</strong></div>

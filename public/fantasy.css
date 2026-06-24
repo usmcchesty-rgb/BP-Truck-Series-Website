@@ -814,18 +814,6 @@ body.fantasy-page main.fantasy-app-page{
   margin:0 auto;
 }
 
-.fantasy-driver-detail-grid .fantasy-driver-detail-value{
-  display:block;
-  margin-top:4px;
-  line-height:1;
-}
-
-.fantasy-driver-detail-grid .fantasy-driver-detail-value .fantasy-value-grade-badge{
-  margin:0;
-  transform:none;
-  vertical-align:top;
-}
-
 .fantasy-driver-quick-stat .fantasy-value-grade-badge{
   margin-top:4px;
 }
@@ -1065,7 +1053,7 @@ body.fantasy-page main.fantasy-app-page{
   gap:12px;
 }
 
-.fantasy-driver-detail-grid span{
+.fantasy-driver-detail-grid span:not(.fantasy-value-grade-badge){
   display:block;
   color:#999;
   font-size:10px;
