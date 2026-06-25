@@ -1,5 +1,15 @@
 const $ = (s) => document.querySelector(s);
 
+const SORT_DEFAULT = "active-first";
+
+const pageState = {
+  drivers: [],
+  standingsLookup: null,
+  activityLookup: null,
+  sort: SORT_DEFAULT,
+  searchQuery: "",
+};
+
 function driverImage(name) {
   const slug = String(name || "")
     .toLowerCase()
@@ -89,6 +99,93 @@ function isRecentlyInactive(activity) {
   return activity?.status === "Inactive";
 }
 
+function isDriverInactive(driver, activityLookup) {
+  const activity = activityLookup?.get(String(driver.driver_id));
+  return isRecentlyInactive(activity);
+}
+
+function driverDisplayName(driver) {
+  return String(driver.display_name || driver.iracing_name || "").trim();
+}
+
+function parseCarNumber(driver) {
+  const raw = String(driver.car_number ?? "").replace(/[^\d.]/g, "");
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : null;
+}
+
+function compareDriverName(a, b) {
+  return driverDisplayName(a).localeCompare(driverDisplayName(b));
+}
+
+function sortDrivers(drivers, sortKey, activityLookup) {
+  const list = [...drivers];
+
+  switch (sortKey) {
+    case "inactive-first":
+      return list.sort((a, b) => {
+        const aInactive = isDriverInactive(a, activityLookup) ? 0 : 1;
+        const bInactive = isDriverInactive(b, activityLookup) ? 0 : 1;
+        if (aInactive !== bInactive) return aInactive - bInactive;
+        return compareDriverName(a, b);
+      });
+    case "name-az":
+      return list.sort(compareDriverName);
+    case "name-za":
+      return list.sort((a, b) => compareDriverName(b, a));
+    case "car-asc":
+      return list.sort((a, b) => {
+        const aNum = parseCarNumber(a);
+        const bNum = parseCarNumber(b);
+        if (aNum == null && bNum == null) return compareDriverName(a, b);
+        if (aNum == null) return 1;
+        if (bNum == null) return -1;
+        if (aNum !== bNum) return aNum - bNum;
+        return compareDriverName(a, b);
+      });
+    case "car-desc":
+      return list.sort((a, b) => {
+        const aNum = parseCarNumber(a);
+        const bNum = parseCarNumber(b);
+        if (aNum == null && bNum == null) return compareDriverName(a, b);
+        if (aNum == null) return 1;
+        if (bNum == null) return -1;
+        if (aNum !== bNum) return bNum - aNum;
+        return compareDriverName(a, b);
+      });
+    case "active-first":
+    default:
+      return list.sort((a, b) => {
+        const aInactive = isDriverInactive(a, activityLookup) ? 1 : 0;
+        const bInactive = isDriverInactive(b, activityLookup) ? 1 : 0;
+        if (aInactive !== bInactive) return aInactive - bInactive;
+        return compareDriverName(a, b);
+      });
+  }
+}
+
+function buildDriverCards(rawDrivers, standingsLookup) {
+  return rawDrivers
+    .map((driver) => {
+      const driverId = resolveDriverCardId(driver, standingsLookup);
+      if (!driverId) return null;
+      return { ...driver, driver_id: driverId };
+    })
+    .filter(Boolean);
+}
+
+function getVisibleDrivers() {
+  const query = pageState.searchQuery.trim().toLowerCase();
+  if (!query) return pageState.drivers;
+
+  return pageState.drivers.filter((driver) => {
+    const name = driverDisplayName(driver).toLowerCase();
+    const iracing = String(driver.iracing_name || "").toLowerCase();
+    const carNumber = String(driver.car_number || "").toLowerCase();
+    return name.includes(query) || iracing.includes(query) || carNumber.includes(query);
+  });
+}
+
 function isMarkedStreamer(driver) {
   return driver?.is_streamer === true;
 }
@@ -107,29 +204,16 @@ function driverProfileUrl(driverId) {
   return `/drivers/${encodeURIComponent(id)}`;
 }
 
-function renderDrivers(drivers, standingsLookup, activityLookup) {
+function renderDriverGrid(drivers) {
   const grid = $("#driversGrid");
   if (!grid) return;
 
-  const cards = drivers
-    .map((driver) => {
-      const driverId = resolveDriverCardId(driver, standingsLookup);
-      if (!driverId) return null;
-      return { ...driver, driver_id: driverId };
-    })
-    .filter(Boolean)
-    .sort((a, b) =>
-      String(a.display_name || a.iracing_name || "").localeCompare(
-        b.display_name || b.iracing_name || ""
-      )
-    );
-
-  if (!cards.length) {
+  if (!drivers.length) {
     grid.innerHTML = `<p class="muted">No driver profiles available yet.</p>`;
     return;
   }
 
-  grid.innerHTML = cards
+  grid.innerHTML = drivers
     .map((d) => {
       const name = d.display_name || d.iracing_name || "Unknown";
       const photo = d.photoUrl || d.photo_url || driverImage(name);
@@ -138,7 +222,7 @@ function renderDrivers(drivers, standingsLookup, activityLookup) {
         : "";
       const showStreamerBadge = isMarkedStreamer(d);
       const badge = showStreamerBadge ? streamerBadgeHtml(d.stream_url) : "";
-      const activity = activityLookup?.get(String(d.driver_id)) || null;
+      const activity = pageState.activityLookup?.get(String(d.driver_id)) || null;
       const inactive = isRecentlyInactive(activity);
       const inactiveBadge = inactiveBadgeHtml(activity);
       const profileUrl = driverProfileUrl(d.driver_id);
@@ -160,6 +244,23 @@ function renderDrivers(drivers, standingsLookup, activityLookup) {
     .join("");
 }
 
+function refreshDriversView() {
+  const visible = getVisibleDrivers();
+  const sorted = sortDrivers(visible, pageState.sort, pageState.activityLookup);
+  renderDriverGrid(sorted);
+}
+
+function bindDriversToolbar() {
+  const sortSelect = $("#driversSortSelect");
+  if (!sortSelect) return;
+
+  sortSelect.value = pageState.sort;
+  sortSelect.addEventListener("change", () => {
+    pageState.sort = sortSelect.value || SORT_DEFAULT;
+    refreshDriversView();
+  });
+}
+
 async function loadDrivers() {
   const grid = $("#driversGrid");
   if (!grid) return;
@@ -178,10 +279,14 @@ async function loadDrivers() {
     const list = Array.isArray(data) ? data.filter((d) => d.active !== false) : [];
     const standingsData = standingsRes.ok ? await standingsRes.json() : { rows: [] };
     const standingsRows = Array.isArray(standingsData.rows) ? standingsData.rows : [];
-    const standingsLookup = buildStandingsIdLookup(standingsRows);
-    const activityLookup = buildActivityLookup(standingsRows);
 
-    renderDrivers(list, standingsLookup, activityLookup);
+    pageState.standingsLookup = buildStandingsIdLookup(standingsRows);
+    pageState.activityLookup = buildActivityLookup(standingsRows);
+    pageState.drivers = buildDriverCards(list, pageState.standingsLookup);
+    pageState.sort = SORT_DEFAULT;
+
+    bindDriversToolbar();
+    refreshDriversView();
   } catch (e) {
     console.error("Failed to load drivers:", e);
     grid.innerHTML = `<p class="muted">Failed to load drivers.</p>`;

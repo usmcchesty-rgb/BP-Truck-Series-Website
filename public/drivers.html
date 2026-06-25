@@ -16,6 +16,19 @@
         <p class="page-intro">
           Meet the drivers competing in the Blazing Pedals Truck Series. Profiles include car numbers and photos where available.
         </p>
+        <div class="drivers-toolbar" id="driversToolbar">
+          <label class="drivers-sort-control" for="driversSortSelect">
+            <span class="drivers-sort-label">Sort Drivers</span>
+            <select id="driversSortSelect" class="drivers-sort-select" aria-label="Sort drivers">
+              <option value="active-first" selected>Active First</option>
+              <option value="name-az">Name A–Z</option>
+              <option value="name-za">Name Z–A</option>
+              <option value="car-asc">Car Number Low–High</option>
+              <option value="car-desc">Car Number High–Low</option>
+              <option value="inactive-first">Inactive First</option>
+            </select>
+          </label>
+        </div>
         <div id="driversGrid" class="driver-grid"></div>
       </section>
     </main>
