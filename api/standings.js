@@ -1,5 +1,7 @@
 import { getSettings, getDriverProfiles, slugify, withPhotoCacheBust, photoCacheVersion } from './_lib.js';
-import { computeSeasonCautionStatsFromScheduleHtml } from './_caution-stats.js';
+import { computeSeasonCautionStatsFromScheduleHtml, parseScheduleRacesFromHtml } from './_caution-stats.js';
+import { enrichScheduleRaces } from './_schedule-points-races.js';
+import { buildDriverActivityMap } from './_driver-activity.js';
 import * as cheerio from "cheerio";
 
 
@@ -96,6 +98,16 @@ export default async function handler(req, res) {
     const profiles = await getDriverProfiles();
     const byDriverId = Object.fromEntries(profiles.map(p => [String(p.driver_id), p]));
 
+    const scheduleRaces = scheduleHtml
+      ? enrichScheduleRaces(parseScheduleRacesFromHtml(scheduleHtml))
+      : [];
+    const activityMap = buildDriverActivityMap({
+      scheduleRaces,
+      srhSchedules: data.schedules || {},
+      settings,
+      now: new Date(),
+    });
+
     const rows = Object.values(data.rps || {})
       .map(r => {
         const driver = data.drivers?.[r.drid] || {};
@@ -153,7 +165,8 @@ const avgFinish =
                 photoCacheVersion(profile.updated_at)
               )
             : `/assets/drivers/${slug}.png`,
-          active: profile?.active ?? true
+          active: profile?.active ?? true,
+          recentActivity: activityMap.getForDriverId(r.drid),
         };
       })
       .filter(r => r.position >= 1)

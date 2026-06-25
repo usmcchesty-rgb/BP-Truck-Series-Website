@@ -1,4 +1,5 @@
 import { MIN_BEST_VALUE_SALARY } from './_fantasy-admin-analytics.js';
+import { deriveDriverActivityStatus as deriveActivityFromCounts } from './_driver-activity.js';
 
 const VALUE_GRADE_WEIGHT = {
   'A+': 28,
@@ -517,10 +518,11 @@ export function deriveDriverActivityStatus(driver = {}) {
       ? parsedLastStart
       : null;
 
-  const status =
-    last5WindowSize > 0 && last5Starts === 0 ? 'Inactive' : 'Active';
-
-  return { status, lastStartRaceNumber };
+  return deriveActivityFromCounts({
+    last5Starts,
+    last5WindowSize,
+    lastStartRaceNumber,
+  });
 }
 
 export function enrichPublicDriver(driver, analysis = {}) {
