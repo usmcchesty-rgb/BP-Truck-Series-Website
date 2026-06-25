@@ -514,6 +514,7 @@ export function enrichPublicDriver(driver, analysis = {}) {
           : '—',
     status: driver.trackHistoryLimitedSample ? 'Limited sample' : 'Active',
     fantasyRank: rank,
+    fantasyTierScore: num(driver.fantasyTierScore),
     projectedOwnershipPct: ownership.projectedOwnershipPct ?? null,
     ownershipLabel: ownership.ownershipLabel ?? null,
   };

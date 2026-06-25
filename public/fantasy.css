@@ -1557,3 +1557,272 @@ body.fantasy-page main.fantasy-app-page{
     grid-template-columns:repeat(2, minmax(0, 1fr));
   }
 }
+
+/* Phase 6 — compare, lineup, preview, dashboard */
+.fantasy-compare-form,
+.fantasy-lineup-form{
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px 16px;
+  align-items:flex-end;
+}
+
+.fantasy-compare-form label,
+.fantasy-lineup-form label{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  color:#bbb;
+  font-size:11px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:.06em;
+}
+
+.fantasy-compare-select,
+.fantasy-lineup-form input,
+.fantasy-lineup-form select{
+  min-width:160px;
+  padding:8px 10px;
+  border:1px solid rgba(255,255,255,.14);
+  border-radius:6px;
+  background:rgba(0,0,0,.35);
+  color:#fff;
+  font-size:13px;
+}
+
+.fantasy-compare-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:20px;
+}
+
+.fantasy-compare-card{
+  padding:16px 18px;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:8px;
+  background:rgba(0,0,0,.24);
+}
+
+.fantasy-compare-card__photo img{
+  width:88px;
+  height:88px;
+  object-fit:contain;
+}
+
+.fantasy-compare-card__name{
+  margin:10px 0 12px;
+  color:#fff;
+  font-size:18px;
+  font-weight:900;
+}
+
+.fantasy-compare-stat{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  padding:6px 0;
+  border-bottom:1px solid rgba(255,255,255,.06);
+  font-size:12px;
+}
+
+.fantasy-compare-stat span{
+  color:#999;
+  text-transform:uppercase;
+  letter-spacing:.06em;
+  font-weight:700;
+}
+
+.fantasy-compare-stat strong{
+  color:#fff;
+  text-align:right;
+}
+
+.fantasy-compare-link{
+  margin-left:8px;
+  color:#aaa;
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  text-decoration:none;
+}
+
+.fantasy-compare-link:hover{
+  color:var(--gold);
+}
+
+.fantasy-lineup-result{
+  padding:16px 18px;
+  margin-bottom:12px;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:8px;
+  background:rgba(0,0,0,.24);
+}
+
+.fantasy-lineup-result__title{
+  margin:0 0 10px;
+  color:#fff;
+  font-size:14px;
+  font-weight:900;
+}
+
+.fantasy-lineup-result__drivers{
+  margin:0 0 12px;
+  padding-left:18px;
+  color:#ddd;
+  font-size:13px;
+  line-height:1.5;
+}
+
+.fantasy-lineup-result__meta{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:8px 12px;
+  font-size:12px;
+}
+
+.fantasy-lineup-result__meta span{
+  display:block;
+  color:#999;
+  font-size:10px;
+  text-transform:uppercase;
+}
+
+.fantasy-lineup-alt-grid{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:12px;
+}
+
+.fantasy-lineup-strategy-note{
+  margin:0 0 12px;
+  color:#bbb;
+  font-size:13px;
+  line-height:1.45;
+}
+
+.fantasy-preview-article{
+  display:grid;
+  gap:18px;
+}
+
+.fantasy-preview-section{
+  padding:16px 18px;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:8px;
+  background:rgba(0,0,0,.24);
+}
+
+.fantasy-preview-section__title{
+  margin:0 0 10px;
+  color:#fff;
+  font-size:13px;
+  font-weight:900;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+}
+
+.fantasy-preview-section__body{
+  color:#ccc;
+  font-size:14px;
+  line-height:1.55;
+}
+
+.fantasy-preview-list{
+  margin:0;
+  padding-left:18px;
+}
+
+.fantasy-dashboard-stat-grid,
+.fantasy-dashboard-link-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:12px;
+}
+
+.fantasy-dashboard-stat-card,
+.fantasy-dashboard-link-card{
+  padding:14px 16px;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:8px;
+  background:rgba(0,0,0,.24);
+}
+
+.fantasy-dashboard-stat-card__label{
+  color:var(--red);
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+}
+
+.fantasy-dashboard-stat-card__body{
+  margin-top:8px;
+  color:#ddd;
+  font-size:13px;
+  line-height:1.45;
+}
+
+.fantasy-dashboard-rank-list{
+  margin:0;
+  padding-left:18px;
+}
+
+.fantasy-dashboard-link-card{
+  display:block;
+  text-decoration:none;
+  transition:border-color .15s ease;
+}
+
+.fantasy-dashboard-link-card:hover{
+  border-color:rgba(229,9,20,.45);
+}
+
+.fantasy-dashboard-link-card__label{
+  display:block;
+  color:#fff;
+  font-size:14px;
+  font-weight:900;
+}
+
+.fantasy-dashboard-link-card__copy{
+  display:block;
+  margin-top:4px;
+  color:#aaa;
+  font-size:12px;
+}
+
+.fantasy-outlook-panel{
+  padding:16px 18px;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:8px;
+  background:rgba(0,0,0,.24);
+}
+
+.fantasy-outlook-copy{
+  margin:0;
+  color:#ccc;
+  font-size:14px;
+  line-height:1.6;
+}
+
+.fantasy-driver-hero-actions,
+.fantasy-slate-hero-actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-top:10px;
+}
+
+@media (max-width: 1024px){
+  .fantasy-compare-grid,
+  .fantasy-lineup-alt-grid{
+    grid-template-columns:1fr;
+  }
+
+  .fantasy-dashboard-stat-grid,
+  .fantasy-dashboard-link-grid{
+    grid-template-columns:1fr;
+  }
+}

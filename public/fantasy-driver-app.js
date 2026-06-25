@@ -1,11 +1,14 @@
 (function () {
-  const { escapeHtml } = window.BPFantasyDriverLinks || {
+  const { escapeHtml, compareUrl } = window.BPFantasyDriverLinks || {
     escapeHtml: (v) => String(v ?? ''),
+    compareUrl: () => '/fantasy/compare.html',
   };
 
   const Pills = window.BPFantasyPills || {};
   const renderFantasyGradePill = (grade) =>
     Pills.renderFantasyGradePill ? Pills.renderFantasyGradePill(grade) : escapeHtml(grade || '—');
+
+  const Outlook = window.BPFantasyOutlook || {};
 
   const PLACEHOLDER_PHOTO = '/assets/drivers/placeholder.png';
 
@@ -179,6 +182,10 @@
             <h1 class="fantasy-app-page-title">${escapeHtml(name)}${driver.carNumber ? ` <span class="muted">#${escapeHtml(driver.carNumber)}</span>` : ''}</h1>
             ${renderHeroBadges(driver)}
             <p class="fantasy-app-readonly-note">Race ${escapeHtml(slate.raceNumber ?? '—')} · ${escapeHtml(slate.track || 'TBD')} · Read-only preview</p>
+            <p class="fantasy-driver-hero-actions">
+              <a class="fantasy-btn fantasy-btn--secondary" href="${escapeHtml(compareUrl(driver))}">Compare Driver</a>
+              <a class="fantasy-btn fantasy-btn--secondary" href="/fantasy/slate.html">Back to Race Slate</a>
+            </p>
           </div>
           ${renderHeroPhoto(profile, name)}
           ${renderHeroQuickStats(driver)}
@@ -223,7 +230,19 @@
         ? `<p class="fantasy-recent-form-summary">${escapeHtml(driver.recentFormSummary)}</p>`
         : '';
 
-    return `${body}${summaryLine}${scoreLine}`;
+    return `${body}${summaryLine}${scoreLine}    `;
+  }
+
+  function renderWeekOutlook(driver = {}, slate = {}) {
+    const text = Outlook.buildWeekOutlook
+      ? Outlook.buildWeekOutlook(driver, slate)
+      : 'Outlook unavailable for this driver.';
+    return `
+      <section class="fantasy-app-section fantasy-outlook-panel">
+        <h2 class="fantasy-app-section-title">This Week Outlook</h2>
+        <p class="fantasy-outlook-copy">${escapeHtml(text)}</p>
+      </section>
+    `;
   }
 
   function renderDriverAnalysisCard(driver = {}) {
@@ -455,6 +474,7 @@
 
     root.innerHTML = `
       ${renderHero(driver, slate, profile)}
+      ${renderWeekOutlook(driver, slate)}
       ${renderDriverAnalysisCard(driver)}
 
       <section class="fantasy-app-section">

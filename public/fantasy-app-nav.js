@@ -2,9 +2,9 @@
   const NAV_ITEMS = [
     { id: 'dashboard', label: 'Dashboard', href: '/fantasy/dashboard.html' },
     { id: 'slate', label: 'Race Slate', href: '/fantasy/slate.html' },
-    { id: 'history', label: 'Salary History', href: '/fantasy/history.html' },
     { id: 'lineup', label: 'Lineup Builder', href: '/fantasy/lineup.html' },
-    { id: 'standings', label: 'Standings', href: '/fantasy/standings.html' },
+    { id: 'compare', label: 'Compare', href: '/fantasy/compare.html' },
+    { id: 'history', label: 'Salary History', href: '/fantasy/history.html' },
     { id: 'rules', label: 'Rules', href: '/fantasy/rules.html' },
   ];
 

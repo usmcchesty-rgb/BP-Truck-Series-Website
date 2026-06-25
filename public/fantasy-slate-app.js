@@ -1,7 +1,8 @@
 (function () {
-  const { link: driverLink, escapeHtml } = window.BPFantasyDriverLinks || {
+  const { link: driverLink, escapeHtml, compareUrl } = window.BPFantasyDriverLinks || {
     link: (d, l) => escapeHtml(l ?? d?.driverName),
     escapeHtml: (v) => String(v ?? ''),
+    compareUrl: () => '/fantasy/compare.html',
   };
 
   const Pills = window.BPFantasyPills || {};
@@ -231,7 +232,7 @@
                 .map(
                   (driver) => `<tr>
                   <td>${driver.fantasyRank != null ? `<span class="fantasy-rank-badge">#${escapeHtml(driver.fantasyRank)}</span>` : '—'}</td>
-                  <td>${driverLink(driver, driver.driverName)}</td>
+                  <td>${driverLink(driver, driver.driverName)} <a class="fantasy-compare-link" href="${escapeHtml(compareUrl(driver))}">Compare</a></td>
                   <td>${driver.carNumber ? `#${escapeHtml(driver.carNumber)}` : '—'}</td>
                   <td><span class="fantasy-tier-pill">${escapeHtml(driver.tier || '—')}</span></td>
                   <td class="salary">${formatMoney(driver.salary)}</td>
@@ -262,6 +263,9 @@
           <div><span>Status</span><strong>${escapeHtml(slate.status || 'draft')}</strong></div>
         </div>
         <p class="fantasy-app-readonly-note">Read-only demo slate preview. Lineup submission opens in a later phase.</p>
+        <p class="fantasy-slate-hero-actions">
+          <a class="fantasy-btn fantasy-btn--secondary" href="/fantasy/preview.html">Race Preview</a>
+        </p>
       </section>
     `;
   }
