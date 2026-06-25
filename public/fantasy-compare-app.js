@@ -9,7 +9,7 @@
   const renderFantasyGradePill = (grade) =>
     Pills.renderFantasyGradePill ? Pills.renderFantasyGradePill(grade) : escapeHtml(grade || '—');
 
-  const PLACEHOLDER = '/assets/drivers/placeholder.png';
+  const Photos = window.BPFantasyDriverPhotos || {};
   let slateDrivers = [];
 
   function $(sel) {
@@ -20,14 +20,6 @@
     const n = Number(value);
     if (!Number.isFinite(n)) return '—';
     return `$${n.toLocaleString('en-US')}`;
-  }
-
-  function driverImage(name) {
-    const slug = String(name || '')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '');
-    return `/assets/drivers/${slug}.png`;
   }
 
   function queryParams() {
@@ -127,15 +119,23 @@
     return `<div class="fantasy-compare-stat"><span>${escapeHtml(label)}</span><strong>${value}</strong></div>`;
   }
 
-  function renderDriverCard(driver, detail) {
+  function renderDriverCard(driver, detail, profile) {
     const d = { ...driver, ...(detail?.driver || {}) };
     const historyCount = Array.isArray(detail?.salaryHistory) ? detail.salaryHistory.length : 0;
     const name = d.driverName || 'Driver';
+    const photoHtml = Photos.renderDriverPhotoImg
+      ? Photos.renderDriverPhotoImg({
+          profile,
+          name,
+          className: 'fantasy-compare-card__photo-img',
+          alt: name,
+        })
+      : `<img class="fantasy-compare-card__photo-img" src="/assets/drivers/placeholder.png" alt="" />`;
 
     return `
       <article class="fantasy-compare-card">
         <div class="fantasy-compare-card__photo">
-          <img src="${escapeHtml(driverImage(name))}" alt="" onerror="this.onerror=null;this.src='${PLACEHOLDER}'" />
+          ${photoHtml}
         </div>
         <h2 class="fantasy-compare-card__name">${driverLink(d, name)}${d.carNumber ? ` <span class="muted">#${escapeHtml(d.carNumber)}</span>` : ''}</h2>
         <div class="fantasy-compare-card__stats">
@@ -157,7 +157,7 @@
     `;
   }
 
-  function renderComparison(a, b, detailA, detailB) {
+  function renderComparison(a, b, detailA, detailB, profileA, profileB) {
     const rows = buildAdvantageRows(
       { ...a, ...(detailA?.driver || {}) },
       { ...b, ...(detailB?.driver || {}) }
@@ -165,8 +165,8 @@
 
     return `
       <div class="fantasy-compare-grid">
-        ${renderDriverCard(a, detailA)}
-        ${renderDriverCard(b, detailB)}
+        ${renderDriverCard(a, detailA, profileA)}
+        ${renderDriverCard(b, detailB, profileB)}
       </div>
       <section class="fantasy-app-section">
         <h2 class="fantasy-app-section-title">Advantage Summary</h2>
@@ -251,12 +251,17 @@
 
     root.innerHTML = `<section class="fantasy-app-empty"><p>Loading comparison…</p></section>`;
 
-    const [detailA, detailB] = await Promise.all([fetchDriverDetail(a), fetchDriverDetail(b)]);
+    const [detailA, detailB, profileA, profileB] = await Promise.all([
+      fetchDriverDetail(a),
+      fetchDriverDetail(b),
+      Photos.resolveDriverProfile ? Photos.resolveDriverProfile(a) : null,
+      Photos.resolveDriverProfile ? Photos.resolveDriverProfile(b) : null,
+    ]);
 
     root.innerHTML = `
       ${renderCompareHeader()}
       ${renderSelectors(driver1Name, driver2Name)}
-      ${renderComparison(a, b, detailA, detailB)}
+      ${renderComparison(a, b, detailA, detailB, profileA, profileB)}
     `;
 
     const form = $('#fantasyCompareForm');

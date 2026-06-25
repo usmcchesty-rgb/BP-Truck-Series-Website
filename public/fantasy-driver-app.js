@@ -10,7 +10,7 @@
 
   const Outlook = window.BPFantasyOutlook || {};
 
-  const PLACEHOLDER_PHOTO = '/assets/drivers/placeholder.png';
+  const Photos = window.BPFantasyDriverPhotos || {};
 
   function $(selector) {
     return document.querySelector(selector);
@@ -39,86 +39,23 @@
     return null;
   }
 
-  function driverImage(name) {
-    const slug = String(name || '')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '');
-    return `/assets/drivers/${slug}.png`;
-  }
-
-  function normalizeLookupName(value) {
-    return String(value || '')
-      .toLowerCase()
-      .replace(/[^a-z0-9\s]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-  }
-
-  function findProfileByName(profiles, name, driverId) {
-    if (!Array.isArray(profiles) || !profiles.length) return null;
-
-    if (driverId) {
-      const match = profiles.find((row) => String(row.driver_id) === String(driverId));
-      if (match) return match;
-    }
-
-    const lookupName = normalizeLookupName(name);
-    if (!lookupName) return null;
-
-    return (
-      profiles.find((row) => {
-        const names = [row.display_name, row.iracing_name, row.driver_name].map(normalizeLookupName);
-        return names.includes(lookupName);
-      }) || null
-    );
-  }
-
   async function resolveDriverProfile(fantasyDriver = {}, queryId = '', queryName = '') {
-    const name = fantasyDriver.driverName || queryName || '';
-    const id = fantasyDriver.driverId || queryId || '';
-
-    if (id) {
-      try {
-        const res = await fetch(`/api/drivers?driver_id=${encodeURIComponent(id)}`);
-        if (res.ok) {
-          const profile = await res.json();
-          if (profile?.driver_id) return profile;
-        }
-      } catch {
-        /* fall through */
-      }
+    if (Photos.resolveDriverProfile) {
+      return Photos.resolveDriverProfile(fantasyDriver, queryId, queryName);
     }
-
-    if (name || id) {
-      try {
-        const res = await fetch('/api/drivers');
-        if (res.ok) {
-          const profiles = await res.json();
-          return findProfileByName(Array.isArray(profiles) ? profiles : [], name, id);
-        }
-      } catch {
-        return null;
-      }
-    }
-
     return null;
   }
 
-  function resolveDriverPhoto(profile, name) {
-    return profile?.photoUrl || profile?.photo_url || driverImage(name);
-  }
-
   function renderHeroPhoto(profile, name) {
-    const photo = resolveDriverPhoto(profile, name);
-    return `<div class="fantasy-driver-hero-media">
-      <img
-        class="fantasy-driver-hero-photo"
-        src="${escapeHtml(photo)}"
-        alt="${escapeHtml(name)}"
-        onerror="this.onerror=null;this.src='${PLACEHOLDER_PHOTO}'"
-      />
-    </div>`;
+    const body = Photos.renderDriverPhotoImg
+      ? Photos.renderDriverPhotoImg({
+          profile,
+          name,
+          className: 'fantasy-driver-hero-photo',
+          alt: name,
+        })
+      : `<img class="fantasy-driver-hero-photo" src="/assets/drivers/placeholder.png" alt="${escapeHtml(name)}" />`;
+    return `<div class="fantasy-driver-hero-media">${body}</div>`;
   }
 
   function renderHeroBadges(driver = {}) {

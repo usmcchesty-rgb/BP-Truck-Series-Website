@@ -1604,10 +1604,13 @@ body.fantasy-page main.fantasy-app-page{
   background:rgba(0,0,0,.24);
 }
 
-.fantasy-compare-card__photo img{
+.fantasy-compare-card__photo img,
+.fantasy-compare-card__photo-img{
   width:88px;
   height:88px;
   object-fit:contain;
+  object-position:bottom center;
+  display:block;
 }
 
 .fantasy-compare-card__name{
