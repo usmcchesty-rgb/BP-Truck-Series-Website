@@ -372,6 +372,13 @@ export function buildFantasyAttendanceContext({
     ).toFixed(2)
   );
 
+  const startedRaceNumbers = (driverRaceRows || [])
+    .map((row) => Number(row.pointsRaceNumber))
+    .filter(Number.isFinite);
+  const lastStartRaceNumber = startedRaceNumbers.length
+    ? Math.max(...startedRaceNumbers)
+    : null;
+
   return {
     completedRacesBeforeSlate,
     seasonStarts,
@@ -415,6 +422,7 @@ export function buildFantasyAttendanceContext({
       return excluded;
     })(),
     missedRecentRaceNames: grounding?.missedRecentRaceNames || [],
+    lastStartRaceNumber,
   };
 }
 
@@ -1252,6 +1260,7 @@ export function buildFantasyRawComponents({
             recentDataSparse: attendanceContext.recentDataSparse,
             attendanceCapsEnabled: attendanceContext.attendanceCapsEnabled,
             missedLatestRace: attendanceContext.missedLatestRace,
+            lastStartRaceNumber: attendanceContext.lastStartRaceNumber ?? null,
             reliabilityBlend: '70% recent / 30% season',
           }
         : {},

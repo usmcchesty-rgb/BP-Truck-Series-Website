@@ -29,6 +29,19 @@
     return String(status || 'Active').trim().toLowerCase() === 'inactive' ? 'inactive' : 'active';
   }
 
+  function renderActivityBadgeContent(status, lastStartRaceNumber, options = {}) {
+    const modifier = activityModifier(status);
+    const isInactive = modifier === 'inactive';
+    const uppercase = options.uppercase !== false;
+    const display = uppercase ? String(status).toUpperCase() : status;
+
+    if (options.inlineLastStart && isInactive && lastStartRaceNumber != null) {
+      return `${escapeHtml(display)} • LAST START RACE ${escapeHtml(lastStartRaceNumber)}`;
+    }
+
+    return escapeHtml(display);
+  }
+
   function renderActivityStatus(input = {}, options = {}) {
     const status =
       typeof input === 'object' && input != null
@@ -38,23 +51,22 @@
       typeof input === 'object' && input != null ? input.lastStartRaceNumber : null;
     const modifier = activityModifier(status);
     const isInactive = modifier === 'inactive';
-    const display = options.uppercase ? String(status).toUpperCase() : status;
     const tooltip = isInactive ? ' title="No starts in the last 5 races"' : '';
-    const statusHtml = `<span class="fantasy-activity-status fantasy-activity-status--${modifier}"${tooltip}>${escapeHtml(display)}</span>`;
+    const badgeHtml = `<span class="fantasy-activity-badge fantasy-activity-badge--${modifier}"${tooltip}>${renderActivityBadgeContent(status, lastStartRaceNumber, options)}</span>`;
 
     if (options.layout === 'block') {
       const lastStartHtml =
-        options.showLastStart && isInactive && lastStartRaceNumber != null
+        options.showLastStart && isInactive && lastStartRaceNumber != null && !options.inlineLastStart
           ? `<span class="fantasy-activity-last-start">Last Start: Race ${escapeHtml(lastStartRaceNumber)}</span>`
           : '';
-      return `<span class="fantasy-activity-status-block">${statusHtml}${lastStartHtml}</span>`;
+      return `<span class="fantasy-activity-status-block">${badgeHtml}${lastStartHtml}</span>`;
     }
 
-    if (options.showLastStart && isInactive && lastStartRaceNumber != null) {
-      return `${statusHtml}<span class="fantasy-activity-last-start">Last Start: Race ${escapeHtml(lastStartRaceNumber)}</span>`;
+    if (options.showLastStart && isInactive && lastStartRaceNumber != null && !options.inlineLastStart) {
+      return `${badgeHtml}<span class="fantasy-activity-last-start">Last Start: Race ${escapeHtml(lastStartRaceNumber)}</span>`;
     }
 
-    return statusHtml;
+    return badgeHtml;
   }
 
   window.BPFantasyPills = {

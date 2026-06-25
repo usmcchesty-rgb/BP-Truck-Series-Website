@@ -1559,24 +1559,44 @@ body.fantasy-page main.fantasy-app-page{
 }
 
 /* Phase 6 — compare, lineup, preview, dashboard */
-.fantasy-activity-status{
-  font-weight:800;
-  letter-spacing:.04em;
+.fantasy-activity-badge{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  box-sizing:border-box;
+  max-width:100%;
+  padding:4px 10px;
+  border-radius:4px;
+  border:1px solid rgba(255,255,255,.12);
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:.08em;
+  line-height:1.2;
+  text-transform:uppercase;
+  white-space:normal;
+  text-align:center;
 }
 
-.fantasy-activity-status--active{
-  color:#5fd68a;
+.fantasy-activity-badge--active{
+  color:#fff;
+  background:linear-gradient(180deg, rgba(76,175,80,.32) 0%, rgba(24,70,28,.68) 100%);
+  border-color:rgba(76,175,80,.4);
+  box-shadow:0 0 4px rgba(76,175,80,.1);
 }
 
-.fantasy-activity-status--inactive{
-  color:#9aa3b2;
+.fantasy-activity-badge--inactive{
+  color:#b8bfc9;
+  background:linear-gradient(180deg, rgba(120,128,140,.22) 0%, rgba(45,50,58,.55) 100%);
+  border-color:rgba(140,148,160,.28);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.03);
   cursor:help;
 }
 
 .fantasy-activity-status-block{
   display:flex;
   flex-direction:column;
-  gap:4px;
+  align-items:flex-start;
+  gap:6px;
   margin:8px 0 12px;
 }
 
@@ -1586,8 +1606,8 @@ body.fantasy-page main.fantasy-app-page{
   font-weight:600;
 }
 
-.fantasy-driver-activity-header .fantasy-activity-status{
-  font-size:13px;
+.fantasy-driver-activity-header .fantasy-activity-badge{
+  font-size:10px;
 }
 
 .fantasy-compare-form,
@@ -1645,10 +1665,14 @@ body.fantasy-page main.fantasy-app-page{
 }
 
 .fantasy-compare-card__name{
-  margin:10px 0 12px;
+  margin:10px 0 8px;
   color:#fff;
   font-size:18px;
   font-weight:900;
+}
+
+.fantasy-compare-card__activity{
+  margin:0 0 14px;
 }
 
 .fantasy-compare-stat{
@@ -1669,6 +1693,13 @@ body.fantasy-page main.fantasy-app-page{
 
 .fantasy-compare-stat strong{
   color:#fff;
+  text-align:right;
+}
+
+.fantasy-compare-stat__value{
+  display:flex;
+  justify-content:flex-end;
+  align-items:center;
   text-align:right;
 }
 

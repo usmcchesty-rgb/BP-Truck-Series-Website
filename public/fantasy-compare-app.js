@@ -130,8 +130,11 @@
       .join('');
   }
 
-  function statRow(label, value) {
-    return `<div class="fantasy-compare-stat"><span>${escapeHtml(label)}</span><strong>${value}</strong></div>`;
+  function statRow(label, value, { badge = false } = {}) {
+    const valueCell = badge
+      ? `<div class="fantasy-compare-stat__value">${value}</div>`
+      : `<strong>${value}</strong>`;
+    return `<div class="fantasy-compare-stat"><span>${escapeHtml(label)}</span>${valueCell}</div>`;
   }
 
   function renderDriverCard(driver, detail, profile) {
@@ -153,12 +156,13 @@
           ${photoHtml}
         </div>
         <h2 class="fantasy-compare-card__name">${driverLink(d, name)}${d.carNumber ? ` <span class="muted">#${escapeHtml(d.carNumber)}</span>` : ''}</h2>
+        <div class="fantasy-compare-card__activity">${renderActivityStatus(d, { uppercase: true, showLastStart: true, inlineLastStart: true })}</div>
         <div class="fantasy-compare-card__stats">
           ${statRow('Tier', escapeHtml(d.tier || '—'))}
           ${statRow('Salary', `<span class="salary">${formatMoney(d.salary)}</span>`)}
           ${statRow('Salary Change', escapeHtml(d.salaryChangeLabel || '—'))}
           ${statRow('Fantasy Rank', d.fantasyRank != null ? `#${escapeHtml(d.fantasyRank)}` : '—')}
-          ${statRow('Status', renderActivityStatus(d))}
+          ${statRow('Status', renderActivityStatus(d, { uppercase: true }), { badge: true })}
           ${statRow('Value Grade', renderFantasyGradePill(d.valueGrade))}
           ${statRow('Value Score', d.valueScore != null ? Number(d.valueScore).toFixed(2) : '—')}
           ${statRow('Projected Ownership', d.projectedOwnershipPct != null ? `${d.projectedOwnershipPct}% (${escapeHtml(d.ownershipLabel || '')})` : '—')}
