@@ -4,6 +4,10 @@
     escapeHtml: (v) => String(v ?? ''),
   };
 
+  const Pills = window.BPFantasyPills || {};
+  const renderActivityStatus = (driver) =>
+    Pills.renderActivityStatus ? Pills.renderActivityStatus(driver) : escapeHtml(driver.status || 'Active');
+
   const Optimizer = window.BPFantasyLineupOptimizer || {};
 
   function $(sel) {
@@ -89,6 +93,44 @@
     `;
   }
 
+  function renderPlayerPool(drivers = []) {
+    const sorted = [...drivers].sort(
+      (a, b) => Number(a.fantasyRank ?? 999) - Number(b.fantasyRank ?? 999)
+    );
+
+    return `
+      <section class="fantasy-app-section">
+        <h2 class="fantasy-app-section-title">Player Pool</h2>
+        <div class="fantasy-table-wrap">
+          <table class="fantasy-slate-table fantasy-lineup-pool-table">
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Driver</th>
+                <th>Tier</th>
+                <th>Salary</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${sorted
+                .map(
+                  (driver) => `<tr>
+                  <td>${driver.fantasyRank != null ? `#${escapeHtml(driver.fantasyRank)}` : '—'}</td>
+                  <td>${driverLink(driver, driver.driverName)}</td>
+                  <td><span class="fantasy-tier-pill">${escapeHtml(driver.tier || '—')}</span></td>
+                  <td class="salary">${formatMoney(driver.salary)}</td>
+                  <td>${renderActivityStatus(driver)}</td>
+                </tr>`
+                )
+                .join('')}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    `;
+  }
+
   let cachedDrivers = [];
 
   function runOptimizer(form) {
@@ -124,6 +166,7 @@
         <p class="fantasy-app-readonly-note">Explore optimal 5-driver combinations under the salary cap. Demo only — no account required.</p>
       </section>
       ${renderControls()}
+      <div id="fantasyLineupPool"></div>
       <div id="fantasyLineupResults"></div>
     `;
 
@@ -132,6 +175,8 @@
       if (!res.ok) throw new Error('slate');
       const data = await res.json();
       cachedDrivers = data.drivers || [];
+      const poolEl = $('#fantasyLineupPool');
+      if (poolEl) poolEl.innerHTML = renderPlayerPool(cachedDrivers);
 
       const form = $('#fantasyLineupForm');
       form?.addEventListener('submit', (e) => {

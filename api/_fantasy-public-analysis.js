@@ -488,9 +488,45 @@ export function buildPublicAnalysis(drivers = [], slate = {}) {
   };
 }
 
+export function deriveDriverActivityStatus(driver = {}) {
+  const attendance = driver.attendanceContext || {};
+  const reliability = driver.scoreBreakdown?.reliability?.details || {};
+
+  const last5Starts =
+    Number(
+      reliability.last5Starts ??
+        reliability.validLast5Starts ??
+        attendance.validLast5Starts ??
+        attendance.last5Starts
+    ) || 0;
+  const last5WindowSize =
+    Number(
+      reliability.last5WindowSize ??
+        reliability.validLast5WindowSize ??
+        attendance.validLast5WindowSize ??
+        attendance.last5WindowSize
+    ) || 0;
+
+  const lastStartRaw =
+    reliability.lastStartRaceNumber ??
+    attendance.lastStartRaceNumber ??
+    null;
+  const parsedLastStart = Number(lastStartRaw);
+  const lastStartRaceNumber =
+    lastStartRaw != null && Number.isFinite(parsedLastStart) && parsedLastStart > 0
+      ? parsedLastStart
+      : null;
+
+  const status =
+    last5WindowSize > 0 && last5Starts === 0 ? 'Inactive' : 'Active';
+
+  return { status, lastStartRaceNumber };
+}
+
 export function enrichPublicDriver(driver, analysis = {}) {
   const ownership = analysis.ownershipByDriver?.get(String(driver.driverId)) || {};
   const rank = analysis.rankByDriver?.get(String(driver.driverId)) ?? null;
+  const activity = deriveDriverActivityStatus(driver);
 
   return {
     driverId: driver.driverId,
@@ -512,7 +548,8 @@ export function enrichPublicDriver(driver, analysis = {}) {
         : driver.trackHistoryRank != null
           ? `#${driver.trackHistoryRank}`
           : '—',
-    status: driver.trackHistoryLimitedSample ? 'Limited sample' : 'Active',
+    status: activity.status,
+    lastStartRaceNumber: activity.lastStartRaceNumber,
     fantasyRank: rank,
     fantasyTierScore: num(driver.fantasyTierScore),
     projectedOwnershipPct: ownership.projectedOwnershipPct ?? null,

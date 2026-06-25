@@ -7,6 +7,10 @@
   const Pills = window.BPFantasyPills || {};
   const renderFantasyGradePill = (grade) =>
     Pills.renderFantasyGradePill ? Pills.renderFantasyGradePill(grade) : escapeHtml(grade || '—');
+  const renderActivityStatus = (driver, options = {}) =>
+    Pills.renderActivityStatus
+      ? Pills.renderActivityStatus(driver, options)
+      : escapeHtml(driver.status || 'Active');
 
   const Outlook = window.BPFantasyOutlook || {};
 
@@ -117,6 +121,7 @@
           <div class="fantasy-driver-hero__content">
             <p class="fantasy-app-eyebrow">Driver Detail</p>
             <h1 class="fantasy-app-page-title">${escapeHtml(name)}${driver.carNumber ? ` <span class="muted">#${escapeHtml(driver.carNumber)}</span>` : ''}</h1>
+            <div class="fantasy-driver-activity-header">${renderActivityStatus(driver, { uppercase: true, showLastStart: true, layout: 'block' })}</div>
             ${renderHeroBadges(driver)}
             <p class="fantasy-app-readonly-note">Race ${escapeHtml(slate.raceNumber ?? '—')} · ${escapeHtml(slate.track || 'TBD')} · Read-only preview</p>
             <p class="fantasy-driver-hero-actions">
@@ -275,7 +280,7 @@
       risks.push(`Track history outside top 5 (${driver.trackRankLabel})`);
     }
 
-    if (driver.trackHistoryLimitedSample || driver.status === 'Limited sample') {
+    if (driver.trackHistoryLimitedSample) {
       risks.push('Limited track-history sample size');
     }
 

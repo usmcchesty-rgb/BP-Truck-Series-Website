@@ -1559,6 +1559,37 @@ body.fantasy-page main.fantasy-app-page{
 }
 
 /* Phase 6 — compare, lineup, preview, dashboard */
+.fantasy-activity-status{
+  font-weight:800;
+  letter-spacing:.04em;
+}
+
+.fantasy-activity-status--active{
+  color:#5fd68a;
+}
+
+.fantasy-activity-status--inactive{
+  color:#9aa3b2;
+  cursor:help;
+}
+
+.fantasy-activity-status-block{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  margin:8px 0 12px;
+}
+
+.fantasy-activity-last-start{
+  color:#9aa3b2;
+  font-size:13px;
+  font-weight:600;
+}
+
+.fantasy-driver-activity-header .fantasy-activity-status{
+  font-size:13px;
+}
+
 .fantasy-compare-form,
 .fantasy-lineup-form{
   display:flex;

@@ -8,6 +8,8 @@
   const Pills = window.BPFantasyPills || {};
   const renderFantasyGradePill = (grade) =>
     Pills.renderFantasyGradePill ? Pills.renderFantasyGradePill(grade) : escapeHtml(grade || '—');
+  const renderActivityStatus = (driver) =>
+    Pills.renderActivityStatus ? Pills.renderActivityStatus(driver) : escapeHtml(driver.status || 'Active');
 
   const Photos = window.BPFantasyDriverPhotos || {};
   let slateDrivers = [];
@@ -78,6 +80,19 @@
         verdict: compareAdvantage(a.recentFormScore, b.recentFormScore, a.driverName, b.driverName),
       },
       {
+        label: 'Status',
+        ...(() => {
+          const aActive = String(a.status || 'Active').toLowerCase() !== 'inactive';
+          const bActive = String(b.status || 'Active').toLowerCase() !== 'inactive';
+          if (aActive === bActive) return { verdict: 'Even' };
+          return {
+            verdict: aActive
+              ? `Advantage: ${firstName(a.driverName)}`
+              : `Advantage: ${firstName(b.driverName)}`,
+          };
+        })(),
+      },
+      {
         label: 'Ownership Leverage',
         verdict: compareAdvantage(
           a.projectedOwnershipPct,
@@ -143,6 +158,7 @@
           ${statRow('Salary', `<span class="salary">${formatMoney(d.salary)}</span>`)}
           ${statRow('Salary Change', escapeHtml(d.salaryChangeLabel || '—'))}
           ${statRow('Fantasy Rank', d.fantasyRank != null ? `#${escapeHtml(d.fantasyRank)}` : '—')}
+          ${statRow('Status', renderActivityStatus(d))}
           ${statRow('Value Grade', renderFantasyGradePill(d.valueGrade))}
           ${statRow('Value Score', d.valueScore != null ? Number(d.valueScore).toFixed(2) : '—')}
           ${statRow('Projected Ownership', d.projectedOwnershipPct != null ? `${d.projectedOwnershipPct}% (${escapeHtml(d.ownershipLabel || '')})` : '—')}

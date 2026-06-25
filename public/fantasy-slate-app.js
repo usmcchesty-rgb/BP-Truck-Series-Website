@@ -8,6 +8,8 @@
   const Pills = window.BPFantasyPills || {};
   const renderFantasyGradePill = (grade) =>
     Pills.renderFantasyGradePill ? Pills.renderFantasyGradePill(grade) : escapeHtml(grade || '—');
+  const renderActivityStatus = (driver) =>
+    Pills.renderActivityStatus ? Pills.renderActivityStatus(driver) : escapeHtml(driver.status || 'Active');
 
   function $(selector) {
     return document.querySelector(selector);
@@ -240,7 +242,7 @@
                   <td class="fantasy-value-grade-cell">${renderFantasyGradePill(driver.valueGrade)}</td>
                   <td>${driver.projectedOwnershipPct != null ? `${driver.projectedOwnershipPct}%` : '—'}</td>
                   <td>${escapeHtml(driver.trackRankLabel || '—')}</td>
-                  <td>${escapeHtml(driver.status || 'Active')}</td>
+                  <td>${renderActivityStatus(driver)}</td>
                 </tr>`
                 )
                 .join('')}
