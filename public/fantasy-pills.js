@@ -29,14 +29,43 @@
     return String(status || 'Active').trim().toLowerCase() === 'inactive' ? 'inactive' : 'active';
   }
 
+  function isDriverInactive(input = {}) {
+    const status = typeof input === 'object' && input != null ? input.status : input;
+    return activityModifier(status || 'Active') === 'inactive';
+  }
+
+  function parseLastStartRaceNumber(value) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  }
+
+  function activityTooltip(status, lastStartRaceNumber) {
+    if (activityModifier(status) !== 'inactive') return '';
+    const raceNumber = parseLastStartRaceNumber(lastStartRaceNumber);
+    if (raceNumber != null) return `Last start: Race ${raceNumber}`;
+    return 'No starts in the last 5 races';
+  }
+
+  function formatLastStartDisplay(driver = {}) {
+    if (!isDriverInactive(driver)) return 'Active in last 5';
+    const raceNumber = parseLastStartRaceNumber(driver.lastStartRaceNumber);
+    if (raceNumber != null) return `Race ${raceNumber}`;
+    return '—';
+  }
+
+  function driverInactiveRowClass(driver = {}, className = 'fantasy-driver-row--inactive') {
+    return isDriverInactive(driver) ? className : '';
+  }
+
   function renderActivityBadgeContent(status, lastStartRaceNumber, options = {}) {
     const modifier = activityModifier(status);
     const isInactive = modifier === 'inactive';
     const uppercase = options.uppercase !== false;
     const display = uppercase ? String(status).toUpperCase() : status;
+    const raceNumber = parseLastStartRaceNumber(lastStartRaceNumber);
 
-    if (options.inlineLastStart && isInactive && lastStartRaceNumber != null) {
-      return `${escapeHtml(display)} • LAST START RACE ${escapeHtml(lastStartRaceNumber)}`;
+    if (options.inlineLastStart && isInactive && raceNumber != null) {
+      return `${escapeHtml(display)} • LAST START RACE ${escapeHtml(raceNumber)}`;
     }
 
     return escapeHtml(display);
@@ -51,19 +80,25 @@
       typeof input === 'object' && input != null ? input.lastStartRaceNumber : null;
     const modifier = activityModifier(status);
     const isInactive = modifier === 'inactive';
-    const tooltip = isInactive ? ' title="No starts in the last 5 races"' : '';
+    const tooltipText = activityTooltip(status, lastStartRaceNumber);
+    const tooltip = tooltipText ? ` title="${escapeHtml(tooltipText)}"` : '';
     const badgeHtml = `<span class="fantasy-activity-badge fantasy-activity-badge--${modifier}"${tooltip}>${renderActivityBadgeContent(status, lastStartRaceNumber, options)}</span>`;
 
     if (options.layout === 'block') {
       const lastStartHtml =
-        options.showLastStart && isInactive && lastStartRaceNumber != null && !options.inlineLastStart
-          ? `<span class="fantasy-activity-last-start">Last Start: Race ${escapeHtml(lastStartRaceNumber)}</span>`
+        options.showLastStart && isInactive && parseLastStartRaceNumber(lastStartRaceNumber) != null && !options.inlineLastStart
+          ? `<span class="fantasy-activity-last-start">Last Start: Race ${escapeHtml(parseLastStartRaceNumber(lastStartRaceNumber))}</span>`
           : '';
       return `<span class="fantasy-activity-status-block">${badgeHtml}${lastStartHtml}</span>`;
     }
 
-    if (options.showLastStart && isInactive && lastStartRaceNumber != null && !options.inlineLastStart) {
-      return `${badgeHtml}<span class="fantasy-activity-last-start">Last Start: Race ${escapeHtml(lastStartRaceNumber)}</span>`;
+    if (
+      options.showLastStart &&
+      isInactive &&
+      parseLastStartRaceNumber(lastStartRaceNumber) != null &&
+      !options.inlineLastStart
+    ) {
+      return `${badgeHtml}<span class="fantasy-activity-last-start">Last Start: Race ${escapeHtml(parseLastStartRaceNumber(lastStartRaceNumber))}</span>`;
     }
 
     return badgeHtml;
@@ -74,6 +109,10 @@
     valueGradeModifier,
     renderFantasyGradePill,
     activityModifier,
+    isDriverInactive,
+    activityTooltip,
+    formatLastStartDisplay,
+    driverInactiveRowClass,
     renderActivityStatus,
   };
 })();

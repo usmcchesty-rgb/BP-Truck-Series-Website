@@ -5,8 +5,12 @@
   };
 
   const Pills = window.BPFantasyPills || {};
-  const renderActivityStatus = (driver) =>
-    Pills.renderActivityStatus ? Pills.renderActivityStatus(driver) : escapeHtml(driver.status || 'Active');
+  const renderActivityStatus = (driver, options) =>
+    Pills.renderActivityStatus
+      ? Pills.renderActivityStatus(driver, options)
+      : escapeHtml(driver.status || 'Active');
+  const driverInactiveRowClass = (driver) =>
+    Pills.driverInactiveRowClass ? Pills.driverInactiveRowClass(driver) : '';
 
   const Optimizer = window.BPFantasyLineupOptimizer || {};
 
@@ -115,13 +119,16 @@
             <tbody>
               ${sorted
                 .map(
-                  (driver) => `<tr>
+                  (driver) => {
+                  const inactiveClass = driverInactiveRowClass(driver);
+                  return `<tr${inactiveClass ? ` class="${inactiveClass}"` : ''}>
                   <td>${driver.fantasyRank != null ? `#${escapeHtml(driver.fantasyRank)}` : '—'}</td>
                   <td>${driverLink(driver, driver.driverName)}</td>
                   <td><span class="fantasy-tier-pill">${escapeHtml(driver.tier || '—')}</span></td>
                   <td class="salary">${formatMoney(driver.salary)}</td>
-                  <td>${renderActivityStatus(driver)}</td>
-                </tr>`
+                  <td>${renderActivityStatus(driver, { uppercase: true })}</td>
+                </tr>`;
+                }
                 )
                 .join('')}
             </tbody>

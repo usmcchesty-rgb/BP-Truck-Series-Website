@@ -1610,6 +1610,36 @@ body.fantasy-page main.fantasy-app-page{
   font-size:10px;
 }
 
+.fantasy-driver-row--inactive{
+  opacity:.8;
+}
+
+.fantasy-driver-row--inactive:hover{
+  opacity:.92;
+}
+
+.fantasy-driver-row--inactive .fantasy-activity-badge,
+.fantasy-driver-row--inactive .fantasy-value-grade-badge,
+.fantasy-driver-row--inactive .fantasy-tier-pill,
+.fantasy-driver-row--inactive .fantasy-rank-badge{
+  opacity:1;
+}
+
+.fantasy-compare-card--inactive{
+  opacity:.8;
+}
+
+.fantasy-compare-card--inactive:hover{
+  opacity:.92;
+}
+
+.fantasy-compare-card--inactive .fantasy-activity-badge,
+.fantasy-compare-card--inactive .fantasy-value-grade-badge,
+.fantasy-compare-card--inactive .fantasy-tier-pill,
+.fantasy-compare-card--inactive .salary{
+  opacity:1;
+}
+
 .fantasy-compare-form,
 .fantasy-lineup-form{
   display:flex;

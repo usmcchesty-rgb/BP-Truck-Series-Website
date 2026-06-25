@@ -8,8 +8,14 @@
   const Pills = window.BPFantasyPills || {};
   const renderFantasyGradePill = (grade) =>
     Pills.renderFantasyGradePill ? Pills.renderFantasyGradePill(grade) : escapeHtml(grade || '—');
-  const renderActivityStatus = (driver) =>
-    Pills.renderActivityStatus ? Pills.renderActivityStatus(driver) : escapeHtml(driver.status || 'Active');
+  const renderActivityStatus = (driver, options) =>
+    Pills.renderActivityStatus
+      ? Pills.renderActivityStatus(driver, options)
+      : escapeHtml(driver.status || 'Active');
+  const formatLastStartDisplay = (driver) =>
+    Pills.formatLastStartDisplay ? Pills.formatLastStartDisplay(driver) : '—';
+  const isDriverInactive = (driver) =>
+    Pills.isDriverInactive ? Pills.isDriverInactive(driver) : false;
 
   const Photos = window.BPFantasyDriverPhotos || {};
   let slateDrivers = [];
@@ -49,6 +55,29 @@
     return diff > 0 ? `Advantage: ${firstName(nameA)}` : `Advantage: ${firstName(nameB)}`;
   }
 
+  function activityAdvantage(a, b) {
+    const aActive = !isDriverInactive(a);
+    const bActive = !isDriverInactive(b);
+
+    if (aActive && !bActive) return `Advantage: ${firstName(a.driverName)}`;
+    if (bActive && !aActive) return `Advantage: ${firstName(b.driverName)}`;
+    if (aActive && bActive) return 'Even';
+
+    const aLast = Number(a.lastStartRaceNumber);
+    const bLast = Number(b.lastStartRaceNumber);
+    const aOk = Number.isFinite(aLast) && aLast > 0;
+    const bOk = Number.isFinite(bLast) && bLast > 0;
+
+    if (aOk && bOk) {
+      if (aLast === bLast) return 'Even';
+      return aLast > bLast
+        ? `Advantage: ${firstName(a.driverName)}`
+        : `Advantage: ${firstName(b.driverName)}`;
+    }
+
+    return 'Even';
+  }
+
   function buildAdvantageRows(a, b) {
     return [
       {
@@ -80,17 +109,8 @@
         verdict: compareAdvantage(a.recentFormScore, b.recentFormScore, a.driverName, b.driverName),
       },
       {
-        label: 'Status',
-        ...(() => {
-          const aActive = String(a.status || 'Active').toLowerCase() !== 'inactive';
-          const bActive = String(b.status || 'Active').toLowerCase() !== 'inactive';
-          if (aActive === bActive) return { verdict: 'Even' };
-          return {
-            verdict: aActive
-              ? `Advantage: ${firstName(a.driverName)}`
-              : `Advantage: ${firstName(b.driverName)}`,
-          };
-        })(),
+        label: 'Activity',
+        verdict: activityAdvantage(a, b),
       },
       {
         label: 'Ownership Leverage',
@@ -150,8 +170,10 @@
         })
       : `<img class="fantasy-compare-card__photo-img" src="/assets/drivers/placeholder.png" alt="" />`;
 
+    const inactiveClass = isDriverInactive(d) ? ' fantasy-compare-card--inactive' : '';
+
     return `
-      <article class="fantasy-compare-card">
+      <article class="fantasy-compare-card${inactiveClass}">
         <div class="fantasy-compare-card__photo">
           ${photoHtml}
         </div>
@@ -162,7 +184,8 @@
           ${statRow('Salary', `<span class="salary">${formatMoney(d.salary)}</span>`)}
           ${statRow('Salary Change', escapeHtml(d.salaryChangeLabel || '—'))}
           ${statRow('Fantasy Rank', d.fantasyRank != null ? `#${escapeHtml(d.fantasyRank)}` : '—')}
-          ${statRow('Status', renderActivityStatus(d, { uppercase: true }), { badge: true })}
+          ${statRow('Activity', renderActivityStatus(d, { uppercase: true }), { badge: true })}
+          ${statRow('Last Start', escapeHtml(formatLastStartDisplay(d)))}
           ${statRow('Value Grade', renderFantasyGradePill(d.valueGrade))}
           ${statRow('Value Score', d.valueScore != null ? Number(d.valueScore).toFixed(2) : '—')}
           ${statRow('Projected Ownership', d.projectedOwnershipPct != null ? `${d.projectedOwnershipPct}% (${escapeHtml(d.ownershipLabel || '')})` : '—')}

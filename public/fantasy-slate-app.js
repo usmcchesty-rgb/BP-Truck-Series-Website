@@ -8,8 +8,12 @@
   const Pills = window.BPFantasyPills || {};
   const renderFantasyGradePill = (grade) =>
     Pills.renderFantasyGradePill ? Pills.renderFantasyGradePill(grade) : escapeHtml(grade || '—');
-  const renderActivityStatus = (driver) =>
-    Pills.renderActivityStatus ? Pills.renderActivityStatus(driver) : escapeHtml(driver.status || 'Active');
+  const renderActivityStatus = (driver, options) =>
+    Pills.renderActivityStatus
+      ? Pills.renderActivityStatus(driver, options)
+      : escapeHtml(driver.status || 'Active');
+  const driverInactiveRowClass = (driver) =>
+    Pills.driverInactiveRowClass ? Pills.driverInactiveRowClass(driver) : '';
 
   function $(selector) {
     return document.querySelector(selector);
@@ -232,7 +236,9 @@
             <tbody>
               ${sorted
                 .map(
-                  (driver) => `<tr>
+                  (driver) => {
+                  const inactiveClass = driverInactiveRowClass(driver);
+                  return `<tr${inactiveClass ? ` class="${inactiveClass}"` : ''}>
                   <td>${driver.fantasyRank != null ? `<span class="fantasy-rank-badge">#${escapeHtml(driver.fantasyRank)}</span>` : '—'}</td>
                   <td>${driverLink(driver, driver.driverName)} <a class="fantasy-compare-link" href="${escapeHtml(compareUrl(driver))}">Compare</a></td>
                   <td>${driver.carNumber ? `#${escapeHtml(driver.carNumber)}` : '—'}</td>
@@ -242,8 +248,9 @@
                   <td class="fantasy-value-grade-cell">${renderFantasyGradePill(driver.valueGrade)}</td>
                   <td>${driver.projectedOwnershipPct != null ? `${driver.projectedOwnershipPct}%` : '—'}</td>
                   <td>${escapeHtml(driver.trackRankLabel || '—')}</td>
-                  <td>${renderActivityStatus(driver)}</td>
-                </tr>`
+                  <td>${renderActivityStatus(driver, { uppercase: false })}</td>
+                </tr>`;
+                }
                 )
                 .join('')}
             </tbody>
