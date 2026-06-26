@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Social Sharing Settings</title>
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/admin/admin-layout.css">
+  <link rel="stylesheet" href="/share.css">
+  <style>
+    .sub { color: var(--bp-text-secondary); font-size: 12px; margin-bottom: 16px; line-height: 1.45; }
+    .panel { padding: 14px; margin-bottom: 14px; }
+    .panel h2 { margin: 0 0 12px; font-size: 18px; color: #ff3030; }
+    .field-label { display: block; font-size: 11px; color: #999; font-weight: 900; text-transform: uppercase; margin: 10px 0 4px; }
+    .field-help { display: block; margin: -2px 0 10px; color: var(--bp-text-secondary); font-size: 11px; line-height: 1.45; }
+    .input { width: 100%; max-width: 160px; margin-bottom: 8px; padding: 8px; background: #090909; color: #fff; border: 1px solid #555; border-radius: 4px; font-size: 12px; }
+    .btn-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; align-items: center; }
+    .btn-secondary { background: linear-gradient(#1c1c1c, #080808); }
+    .btn-small { padding: 4px 10px; font-size: 9px; }
+    #adminMsg, #loginMsg { margin-top: 10px; font-size: 12px; color: #ccc; white-space: pre-wrap; }
+    #adminMsg.error, #loginMsg.error { color: #ff6060; }
+    .pw-row { max-width: 320px; margin-bottom: 14px; }
+    .size-grid { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 12px; }
+    .platform-list { display: grid; gap: 12px; }
+    .platform-row {
+      display: grid;
+      grid-template-columns: minmax(140px, 180px) 1fr auto;
+      gap: 14px;
+      align-items: center;
+      padding: 12px;
+      border: 1px solid #333;
+      background: rgba(0,0,0,.22);
+    }
+    .platform-row__head { display: flex; flex-direction: column; gap: 8px; }
+    .platform-row__head label { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 800; color: #eee; cursor: pointer; }
+    .platform-row__head input[type="checkbox"] { width: 16px; height: 16px; }
+    .platform-row__order { display: flex; gap: 6px; }
+    .platform-row__preview {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .platform-row__preview .share-icon-box {
+      --bp-share-box-size: 48px;
+      --bp-share-icon-max: 40px;
+    }
+    .platform-row__path { font-size: 10px; color: #888; word-break: break-all; max-width: 280px; }
+    .platform-row__upload input[type="file"] { font-size: 11px; color: #ccc; max-width: 100%; }
+    .live-preview {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px;
+      border: 1px dashed #444;
+      background: rgba(255,255,255,.02);
+    }
+    @media (max-width: 760px) {
+      .platform-row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div id="admin-nav-root"></div>
+  <script src="/admin/admin-nav.js"></script>
+
+  <main id="loginView" class="wrap" hidden>
+    <h1>Social Sharing Admin</h1>
+    <p class="sub">Enter the admin password to manage social share icons.</p>
+    <div class="pw-row">
+      <input id="loginPw" class="input" type="password" placeholder="Admin password" autocomplete="current-password" style="max-width:100%">
+      <button class="btn" type="button" onclick="login()">Unlock</button>
+      <pre id="loginMsg"></pre>
+    </div>
+  </main>
+
+  <main id="adminView" class="wrap" hidden>
+    <h1>Social Sharing Settings</h1>
+    <p class="sub">Enable platforms, upload icons (PNG or SVG), reorder buttons, and adjust icon size. Share URLs and Open Graph behavior are unchanged.</p>
+
+    <div class="panel">
+      <h2>Icon Size</h2>
+      <div class="size-grid">
+        <div>
+          <label class="field-label" for="boxSizePx">Containment box (px)</label>
+          <input id="boxSizePx" class="input" type="number" min="36" max="64" step="1" value="48">
+        </div>
+        <div>
+          <label class="field-label" for="iconMaxPx">Max icon size (px)</label>
+          <input id="iconMaxPx" class="input" type="number" min="24" max="56" step="1" value="40">
+        </div>
+      </div>
+      <span class="field-help">Icons scale down inside the invisible box. Default: 48px box, 40px max icon.</span>
+    </div>
+
+    <div class="panel">
+      <h2>Platforms</h2>
+      <div id="platformList" class="platform-list"></div>
+      <div class="btn-row">
+        <button class="btn" type="button" onclick="saveSettings()">Save Settings</button>
+      </div>
+      <pre id="adminMsg"></pre>
+    </div>
+
+    <div class="panel">
+      <h2>Live Preview</h2>
+      <div id="livePreview" class="live-preview"></div>
+    </div>
+  </main>
+
+  <script>
+    const $ = (s) => document.querySelector(s);
+    const SESSION_KEY = 'bp_admin_pw';
+
+    const PLATFORMS = [
+      { id: 'facebook', label: 'Facebook', enabledKey: 'facebookEnabled', iconKey: 'facebookIcon', updatedKey: 'facebookIconUpdatedAt', defaultIcon: '/assets/social/facebook.svg', defaultEnabled: true },
+      { id: 'x', label: 'X', enabledKey: 'xEnabled', iconKey: 'xIcon', updatedKey: 'xIconUpdatedAt', defaultIcon: '/assets/social/x.svg', defaultEnabled: true },
+      { id: 'instagram', label: 'Instagram', enabledKey: 'instagramEnabled', iconKey: 'instagramIcon', updatedKey: 'instagramIconUpdatedAt', defaultIcon: '/assets/social/instagram.svg', defaultEnabled: true },
+      { id: 'link', label: 'Copy Link', enabledKey: 'linkEnabled', iconKey: 'linkIcon', updatedKey: 'linkIconUpdatedAt', defaultIcon: '/assets/social/link.svg', defaultEnabled: true },
+      { id: 'native', label: 'Native Share', enabledKey: 'shareEnabled', iconKey: 'shareIcon', updatedKey: 'shareIconUpdatedAt', defaultIcon: '', defaultEnabled: true, textFallback: 'Share' },
+      { id: 'tiktok', label: 'TikTok', enabledKey: 'tiktokEnabled', iconKey: 'tiktokIcon', updatedKey: 'tiktokIconUpdatedAt', defaultIcon: '', defaultEnabled: false, textFallback: 'TikTok' },
+    ];
+
+    let pageState = { order: PLATFORMS.map((p) => p.id), settings: {} };
+
+    function getSessionPw() { return sessionStorage.getItem(SESSION_KEY) || ''; }
+
+    async function verifyPassword(pw) {
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pw, verifyOnly: true })
+      });
+      return res.ok;
+    }
+
+    function showLogin() {
+      $('#loginView').hidden = false;
+      $('#adminView').hidden = true;
+      if (window.AdminNav) AdminNav.setLoggedIn(false);
+    }
+
+    async function showAdmin() {
+      $('#loginView').hidden = true;
+      $('#adminView').hidden = false;
+      if (window.AdminNav) AdminNav.setLoggedIn(true);
+      await loadSettings();
+    }
+
+    async function login() {
+      const msg = $('#loginMsg');
+      const pw = $('#loginPw').value;
+      if (!pw) { msg.textContent = 'Enter the admin password.'; msg.classList.add('error'); return; }
+      msg.textContent = 'Checking...';
+      msg.classList.remove('error');
+      try {
+        if (!(await verifyPassword(pw))) throw new Error('Bad password');
+        sessionStorage.setItem(SESSION_KEY, pw);
+        $('#loginPw').value = '';
+        msg.textContent = '';
+        showAdmin();
+      } catch (e) {
+        msg.textContent = e.message;
+        msg.classList.add('error');
+      }
+    }
+
+    function logout() {
+      sessionStorage.removeItem(SESSION_KEY);
+      showLogin();
+    }
+    window.logout = logout;
+
+    function parseOrder(raw) {
+      if (Array.isArray(raw)) return normalizeOrder(raw);
+      try {
+        const parsed = JSON.parse(String(raw || '[]'));
+        if (Array.isArray(parsed)) return normalizeOrder(parsed);
+      } catch { /* ignore */ }
+      return PLATFORMS.map((p) => p.id);
+    }
+
+    function normalizeOrder(order) {
+      const valid = new Set(PLATFORMS.map((p) => p.id));
+      const seen = new Set();
+      const result = [];
+      for (const id of order) {
+        if (!valid.has(id) || seen.has(id)) continue;
+        seen.add(id);
+        result.push(id);
+      }
+      for (const p of PLATFORMS) {
+        if (!seen.has(p.id)) result.push(p.id);
+      }
+      return result;
+    }
+
+    function stripUrlQuery(url) {
+      const value = String(url || '').trim();
+      if (!value) return '';
+      return value.split('?')[0].split('#')[0];
+    }
+
+    function iconDisplayUrl(settings, platform) {
+      const stored = stripUrlQuery(settings[platform.iconKey] || '');
+      const raw = stored || platform.defaultIcon || '';
+      if (!raw) return '';
+      const version = settings[platform.updatedKey];
+      if (!stored || !version) return raw;
+      const ms = new Date(version).getTime();
+      if (!Number.isFinite(ms)) return raw;
+      return `${raw}?v=${encodeURIComponent(ms)}`;
+    }
+
+    function readEnabled(platform) {
+      const el = document.querySelector(`[data-enabled="${platform.id}"]`);
+      return el ? el.checked : platform.defaultEnabled;
+    }
+
+    function movePlatform(id, delta) {
+      const order = [...pageState.order];
+      const idx = order.indexOf(id);
+      const next = idx + delta;
+      if (idx < 0 || next < 0 || next >= order.length) return;
+      order.splice(idx, 1);
+      order.splice(next, 0, id);
+      pageState.order = order;
+      renderPlatformList();
+      renderLivePreview();
+    }
+
+    function platformById(id) {
+      return PLATFORMS.find((p) => p.id === id);
+    }
+
+    function renderPlatformRow(platform) {
+      const iconUrl = iconDisplayUrl(pageState.settings, platform);
+      const enabled = pageState.settings[platform.enabledKey];
+      const checked = enabled === undefined ? platform.defaultEnabled : Boolean(enabled);
+      const path = stripUrlQuery(pageState.settings[platform.iconKey] || '') || platform.defaultIcon || '(text fallback)';
+
+      return `<article class="platform-row" data-platform="${platform.id}">
+        <div class="platform-row__head">
+          <label><input type="checkbox" data-enabled="${platform.id}" ${checked ? 'checked' : ''} onchange="renderLivePreview()"> ${platform.label}</label>
+          <div class="platform-row__order">
+            <button type="button" class="btn btn-secondary btn-small" onclick="movePlatform('${platform.id}', -1)">↑</button>
+            <button type="button" class="btn btn-secondary btn-small" onclick="movePlatform('${platform.id}', 1)">↓</button>
+          </div>
+        </div>
+        <div class="platform-row__preview">
+          ${iconUrl
+            ? `<span class="share-icon-box"><img src="${iconUrl}" alt=""></span>`
+            : `<span class="share-icon-box share-icon-box--text"><span class="share-icon-box__label">${platform.textFallback || platform.label}</span></span>`}
+          <span class="platform-row__path">${path}</span>
+        </div>
+        <div class="platform-row__upload">
+          <input type="file" accept="image/png,image/svg+xml,.svg,.png" data-upload="${platform.id}">
+          <button type="button" class="btn btn-secondary btn-small" onclick="uploadIcon('${platform.id}')">Upload Icon</button>
+        </div>
+      </article>`;
+    }
+
+    function renderPlatformList() {
+      const list = $('#platformList');
+      if (!list) return;
+      list.innerHTML = pageState.order.map((id) => renderPlatformRow(platformById(id))).join('');
+    }
+
+    function renderLivePreview() {
+      const host = $('#livePreview');
+      if (!host) return;
+      const box = Number($('#boxSizePx')?.value) || 48;
+      const max = Number($('#iconMaxPx')?.value) || 40;
+      host.style.setProperty('--bp-share-box-size', `${box}px`);
+      host.style.setProperty('--bp-share-icon-max', `${max}px`);
+
+      const html = pageState.order
+        .filter((id) => {
+          const p = platformById(id);
+          return p && readEnabled(p);
+        })
+        .map((id) => {
+          const p = platformById(id);
+          const iconUrl = iconDisplayUrl(pageState.settings, p);
+          if (iconUrl) {
+            return `<span class="bp-share__action" title="${p.label}"><span class="share-icon-box"><img src="${iconUrl}" alt=""></span></span>`;
+          }
+          return `<span class="bp-share__action" title="${p.label}"><span class="share-icon-box share-icon-box--text"><span class="share-icon-box__label">${p.textFallback || p.label}</span></span></span>`;
+        })
+        .join('');
+
+      host.innerHTML = html || '<span class="field-help">No platforms enabled.</span>';
+    }
+
+    function readFileAsDataUrl(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(new Error('Could not read file.'));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function uploadIcon(platformId) {
+      const msg = $('#adminMsg');
+      const input = document.querySelector(`input[data-upload="${platformId}"]`);
+      const file = input?.files?.[0];
+      if (!file) {
+        msg.textContent = 'Choose a PNG or SVG file first.';
+        msg.classList.add('error');
+        return;
+      }
+      const okType = /png|svg/i.test(file.type) || /\.(png|svg)$/i.test(file.name);
+      if (!okType) {
+        msg.textContent = 'Only PNG or SVG files are supported.';
+        msg.classList.add('error');
+        return;
+      }
+
+      msg.textContent = 'Uploading icon...';
+      msg.classList.remove('error');
+      try {
+        const imageBase64 = await readFileAsDataUrl(file);
+        const res = await fetch('/api/uploads', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'social-share-icon',
+            password: getSessionPw(),
+            platform: platformId,
+            imageBase64,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Upload failed');
+
+        const platform = platformById(platformId);
+        pageState.settings[platform.iconKey] = stripUrlQuery(data.iconUrlStored || data.iconUrl || '');
+        pageState.settings[platform.updatedKey] = data.iconUpdatedAt || new Date().toISOString();
+        if (input) input.value = '';
+        renderPlatformList();
+        renderLivePreview();
+        msg.textContent = `Uploaded ${platform.label} icon.`;
+      } catch (e) {
+        msg.textContent = e.message;
+        msg.classList.add('error');
+      }
+    }
+
+    async function loadSettings() {
+      const msg = $('#adminMsg');
+      try {
+        const res = await fetch('/api/settings');
+        const data = await res.json();
+        pageState.settings = data;
+        pageState.order = parseOrder(data.socialShareOrder);
+        $('#boxSizePx').value = data.socialShareBoxSizePx ?? 48;
+        $('#iconMaxPx').value = data.socialShareIconMaxPx ?? 40;
+        renderPlatformList();
+        renderLivePreview();
+        msg.textContent = '';
+      } catch (e) {
+        msg.textContent = 'Failed to load settings: ' + e.message;
+        msg.classList.add('error');
+      }
+    }
+
+    async function saveSettings() {
+      const msg = $('#adminMsg');
+      msg.textContent = 'Saving...';
+      msg.classList.remove('error');
+      try {
+        const body = {
+          password: getSessionPw(),
+          socialShareOrder: pageState.order,
+          socialShareBoxSizePx: Number($('#boxSizePx').value) || 48,
+          socialShareIconMaxPx: Number($('#iconMaxPx').value) || 40,
+        };
+        for (const platform of PLATFORMS) {
+          body[platform.enabledKey] = readEnabled(platform);
+        }
+        const res = await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Save failed');
+        pageState.settings = { ...pageState.settings, ...data };
+        pageState.order = parseOrder(data.socialShareOrder);
+        if (window.BPShare?.loadShareConfig) window.BPShare.loadShareConfig(true);
+        renderPlatformList();
+        renderLivePreview();
+        msg.textContent = 'Social sharing settings saved.';
+      } catch (e) {
+        msg.textContent = e.message;
+        msg.classList.add('error');
+      }
+    }
+
+    async function initSession() {
+      const pw = getSessionPw();
+      if (!pw) return showLogin();
+      try {
+        if (!(await verifyPassword(pw))) throw new Error('Session expired');
+        showAdmin();
+      } catch {
+        sessionStorage.removeItem(SESSION_KEY);
+        showLogin();
+      }
+    }
+
+    $('#boxSizePx')?.addEventListener('input', renderLivePreview);
+    $('#iconMaxPx')?.addEventListener('input', renderLivePreview);
+    initSession();
+  </script>
+</body>
+</html>
