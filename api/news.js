@@ -14,6 +14,7 @@ import {
   DEFAULT_SHARE_IMAGE,
   getSiteOrigin,
 } from './_share-html.js';
+import { resolveOgImageMeta } from './_share-image-meta.js';
 
 function parseBody(req) {
   if (!req.body) return {};
@@ -155,7 +156,7 @@ function sendShareHtml(res, status, html, cacheSeconds = 120) {
   return res.status(status).send(html);
 }
 
-function buildArticleShareHtml(req, article) {
+async function buildArticleShareHtml(req, article) {
   const origin = getSiteOrigin(req);
   const image =
     article.featuredImageUrl ||
@@ -166,11 +167,17 @@ function buildArticleShareHtml(req, article) {
     article.subheadline ||
     `${article.headline} — Blazing Pedals Truck Series News`;
   const path = newsArticlePath(article.slug);
+  const imageMeta = await resolveOgImageMeta({
+    image,
+    origin,
+    alt: article.headline,
+  });
 
   return buildSharePreviewHtml({
     title: `${article.headline} — Blazing Pedals Truck Series News`,
     description,
-    image,
+    image: imageMeta.url,
+    imageMeta,
     url: path,
     redirectUrl: path,
     type: 'article',
@@ -207,7 +214,7 @@ async function respondWithArticleShareHtml(req, res, slug, includeUnpublished) {
     }
 
     const enriched = await enrichArticleForShare(article);
-    const html = buildArticleShareHtml(req, enriched);
+    const html = await buildArticleShareHtml(req, enriched);
     return sendShareHtml(res, 200, html);
   } catch (error) {
     console.error('News share HTML preview failed:', error);

@@ -9,6 +9,7 @@ import {
   DEFAULT_SHARE_IMAGE,
   getSiteOrigin,
 } from './_share-html.js';
+import { resolveOgImageMeta } from './_share-image-meta.js';
 
 function parseBody(req) {
   if (!req.body) return {};
@@ -355,10 +356,17 @@ export default async function handler(req, res) {
           : `${name} driver profile — Blazing Pedals Truck Series Season 11.`;
         const image = profile.photoUrl || profile.photo_url || DEFAULT_SHARE_IMAGE;
         const pagePath = `/drivers/${encodeURIComponent(profile.driver_id)}`;
-        const html = buildSharePreviewHtml({
-          title: `${number}${name} — Blazing Pedals Truck Series`,
-          description,
+        const title = `${number}${name} — Blazing Pedals Truck Series`;
+        const imageMeta = await resolveOgImageMeta({
           image,
+          origin,
+          alt: title,
+        });
+        const html = buildSharePreviewHtml({
+          title,
+          description,
+          image: imageMeta.url,
+          imageMeta,
           url: pagePath,
           redirectUrl: pagePath,
           type: 'profile',

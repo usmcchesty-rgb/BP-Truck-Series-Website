@@ -23,10 +23,38 @@ export function absoluteShareUrl(origin, pathOrUrl) {
   return `${origin}${encodeURI(path)}`;
 }
 
+function buildOgImageTags(imageUrl, imageMeta = {}) {
+  const safeImageUrl = escapeHtml(imageUrl);
+  const width = Number(imageMeta.width) || 0;
+  const height = Number(imageMeta.height) || 0;
+  const type = String(imageMeta.type || '').trim();
+  const alt = String(imageMeta.alt || '').trim();
+  const secureUrl = String(imageMeta.secureUrl || '').trim() || (imageUrl.startsWith('https://') ? imageUrl : '');
+
+  let tags = `  <meta property="og:image" content="${safeImageUrl}" />\n`;
+  if (secureUrl) {
+    tags += `  <meta property="og:image:secure_url" content="${escapeHtml(secureUrl)}" />\n`;
+  }
+  if (type) {
+    tags += `  <meta property="og:image:type" content="${escapeHtml(type)}" />\n`;
+  }
+  if (width > 0) {
+    tags += `  <meta property="og:image:width" content="${width}" />\n`;
+  }
+  if (height > 0) {
+    tags += `  <meta property="og:image:height" content="${height}" />\n`;
+  }
+  if (alt) {
+    tags += `  <meta property="og:image:alt" content="${escapeHtml(alt)}" />\n`;
+  }
+  return tags;
+}
+
 export function buildSharePreviewHtml({
   title,
   description,
   image,
+  imageMeta = null,
   url,
   redirectUrl,
   type = 'article',
@@ -36,10 +64,17 @@ export function buildSharePreviewHtml({
   const safeTitle = escapeHtml(title || SITE_NAME);
   const safeDescription = escapeHtml(description || '');
   const pageUrl = absoluteShareUrl(origin, url);
-  const imageUrl = absoluteShareUrl(origin, image || DEFAULT_SHARE_IMAGE);
+  const imageUrl = absoluteShareUrl(origin, imageMeta?.url || image || DEFAULT_SHARE_IMAGE);
   const canonical = absoluteShareUrl(origin, redirectUrl || url);
   const ogType = escapeHtml(type || 'website');
   const safeLinkLabel = escapeHtml(linkLabel || 'View Article');
+  const resolvedImageMeta = {
+    ...(imageMeta || {}),
+    url: imageUrl,
+    secureUrl: imageMeta?.secureUrl || (imageUrl.startsWith('https://') ? imageUrl : ''),
+    alt: imageMeta?.alt || title || SITE_NAME,
+  };
+  const ogImageTags = buildOgImageTags(imageUrl, resolvedImageMeta);
 
   return `<!doctype html>
 <html lang="en">
@@ -51,8 +86,7 @@ export function buildSharePreviewHtml({
   <meta property="og:site_name" content="${escapeHtml(SITE_NAME)}" />
   <meta property="og:title" content="${safeTitle}" />
   <meta property="og:description" content="${safeDescription}" />
-  <meta property="og:image" content="${escapeHtml(imageUrl)}" />
-  <meta property="og:url" content="${escapeHtml(pageUrl)}" />
+${ogImageTags}  <meta property="og:url" content="${escapeHtml(pageUrl)}" />
   <meta property="og:type" content="${ogType}" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="${safeTitle}" />
@@ -73,6 +107,16 @@ export function buildShareNotFoundHtml({ title, description, url, redirectUrl, o
     title: title || `Article Not Found — ${SITE_NAME}`,
     description: description || 'The requested news article could not be found.',
     image: DEFAULT_SHARE_IMAGE,
+    imageMeta: {
+      url: absoluteShareUrl(origin, DEFAULT_SHARE_IMAGE),
+      secureUrl: absoluteShareUrl(origin, DEFAULT_SHARE_IMAGE).startsWith('https://')
+        ? absoluteShareUrl(origin, DEFAULT_SHARE_IMAGE)
+        : '',
+      width: 1265,
+      height: 230,
+      type: 'image/png',
+      alt: title || `Article Not Found — ${SITE_NAME}`,
+    },
     url: url || '/news',
     redirectUrl: redirectUrl || '/news',
     type: 'website',
