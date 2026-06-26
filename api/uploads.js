@@ -20,6 +20,7 @@ import {
   uploadFantasyHeaderLogoImage,
   removeFantasyHeaderLogoImage,
 } from "./_upload-fantasy-branding.js";
+import { uploadSocialShareIcon } from "./_upload-social-share-icon.js";
 
 function json(res, status, body) {
   res.status(status);
@@ -59,7 +60,7 @@ export default async function handler(req, res) {
 
     const action = resolveAction(body);
     if (!action) {
-      json(res, 400, { error: 'Missing action. Use "driver-photo", "remove-driver-photo", "standing-driver-photo", "remove-standing-driver-photo", "header-logo", "reporter-image", "news-article-image", "power-rankings-formula-image", "remove-power-rankings-formula-image", "spotlight-image", "remove-spotlight-image", "fantasy-hero-background-image", "remove-fantasy-hero-background-image", "fantasy-header-logo-image", or "remove-fantasy-header-logo-image".' });
+      json(res, 400, { error: 'Missing action. Use "driver-photo", "remove-driver-photo", "standing-driver-photo", "remove-standing-driver-photo", "header-logo", "reporter-image", "news-article-image", "power-rankings-formula-image", "remove-power-rankings-formula-image", "spotlight-image", "remove-spotlight-image", "fantasy-hero-background-image", "remove-fantasy-hero-background-image", "fantasy-header-logo-image", "remove-fantasy-header-logo-image", or "social-share-icon".' });
       return;
     }
 
@@ -94,6 +95,8 @@ export default async function handler(req, res) {
       result = await uploadFantasyHeaderLogoImage(body);
     } else if (action === "remove-fantasy-header-logo-image") {
       result = await removeFantasyHeaderLogoImage(body);
+    } else if (action === "social-share-icon") {
+      result = await uploadSocialShareIcon(body);
     } else {
       json(res, 400, { error: `Unknown action: ${action}` });
       return;

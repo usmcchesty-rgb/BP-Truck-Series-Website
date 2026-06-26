@@ -39,6 +39,29 @@ alter table site_settings add column if not exists "fantasyHeaderLogoTopPercent"
 alter table site_settings add column if not exists "fantasyHeaderLogoWidthVw" numeric;
 alter table site_settings add column if not exists "fantasyHeaderLogoMaxWidthPx" numeric;
 
+-- Social sharing settings (admin-managed icons)
+alter table site_settings add column if not exists "facebookEnabled" boolean default true;
+alter table site_settings add column if not exists "facebookIcon" text;
+alter table site_settings add column if not exists "facebookIconUpdatedAt" timestamptz;
+alter table site_settings add column if not exists "xEnabled" boolean default true;
+alter table site_settings add column if not exists "xIcon" text;
+alter table site_settings add column if not exists "xIconUpdatedAt" timestamptz;
+alter table site_settings add column if not exists "instagramEnabled" boolean default true;
+alter table site_settings add column if not exists "instagramIcon" text;
+alter table site_settings add column if not exists "instagramIconUpdatedAt" timestamptz;
+alter table site_settings add column if not exists "linkEnabled" boolean default true;
+alter table site_settings add column if not exists "linkIcon" text;
+alter table site_settings add column if not exists "linkIconUpdatedAt" timestamptz;
+alter table site_settings add column if not exists "shareEnabled" boolean default false;
+alter table site_settings add column if not exists "shareIcon" text;
+alter table site_settings add column if not exists "shareIconUpdatedAt" timestamptz;
+alter table site_settings add column if not exists "tiktokEnabled" boolean default false;
+alter table site_settings add column if not exists "tiktokIcon" text;
+alter table site_settings add column if not exists "tiktokIconUpdatedAt" timestamptz;
+alter table site_settings add column if not exists "socialShareOrder" text;
+alter table site_settings add column if not exists "socialShareBoxSizePx" int default 48;
+alter table site_settings add column if not exists "socialShareIconMaxPx" int default 40;
+
 insert into site_settings (id, "seriesName", "seasonName", "standingsUrl", "scheduleUrl", "playoffCut", "refreshSeconds")
 values (1, 'Blazing Pedals Truck Series', 'Season 11', 'https://www.simracerhub.com/scoring/season_standings.php?season_id=27987', 'https://www.simracerhub.com/scoring/season_schedule.php?season_id=27987', 16, 60)
 on conflict (id) do nothing;
