@@ -10,6 +10,7 @@
     { id: "power-rankings", label: "Power Rankings", href: "/admin/power-rankings" },
     { id: "fantasy", label: "Fantasy", href: "/admin/fantasy.html" },
     { id: "news", label: "News", href: "/admin/news" },
+    { id: "social-sharing", label: "Social Sharing", href: "/admin/social-sharing" },
     { id: "transcripts", label: "Transcripts", href: "/admin/transcripts" },
   ];
 
@@ -182,6 +183,7 @@
     if (path.endsWith("/power-rankings")) return "power-rankings";
     if (path.endsWith("/fantasy.html")) return "fantasy";
     if (path.endsWith("/news")) return "news";
+    if (path.endsWith("/social-sharing")) return "social-sharing";
     if (path.endsWith("/transcripts")) return "transcripts";
     if (path.endsWith("/track-images")) return "track-images";
     return "";
