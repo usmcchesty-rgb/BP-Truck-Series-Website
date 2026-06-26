@@ -10,7 +10,7 @@ export const SHARE_PLATFORM_DEFS = [
   {
     id: 'facebook',
     label: 'Facebook',
-    tooltip: 'Share to Facebook',
+    tooltip: 'Share / Copy for Facebook',
     enabledKey: 'facebookEnabled',
     iconKey: 'facebookIcon',
     updatedKey: 'facebookIconUpdatedAt',

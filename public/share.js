@@ -6,7 +6,7 @@
     boxSizePx: 48,
     iconMaxPx: 40,
     platforms: [
-      { id: 'facebook', tooltip: 'Share to Facebook', icon: '/assets/social/facebook.svg', render: 'external' },
+      { id: 'facebook', tooltip: 'Share / Copy for Facebook', icon: '/assets/social/facebook.svg', action: 'facebook' },
       { id: 'x', tooltip: 'Share to X', icon: '/assets/social/x.svg', render: 'external' },
       { id: 'instagram', tooltip: 'Copy for Instagram', icon: '/assets/social/instagram.svg', action: 'copy-instagram' },
       { id: 'link', tooltip: 'Copy Link', icon: '/assets/social/link.svg', action: 'copy' },
@@ -25,6 +25,46 @@
     return `${origin}${encodeURI(path)}`;
   }
 
+  function canonicalShareUrl(options = {}) {
+    const raw = String(options.url || window.location.href).trim();
+    try {
+      const loc = new URL(raw, window.location.origin);
+      const parts = loc.pathname.split('/').filter(Boolean);
+
+      if (parts[0] === 'news' && parts[1] && !parts[1].endsWith('.html')) {
+        return absoluteUrl(`/news/${decodeURIComponent(parts[1])}`);
+      }
+
+      if (loc.pathname.endsWith('/news-article.html') || parts[0] === 'news-article.html') {
+        const slug = new URLSearchParams(loc.search).get('slug');
+        if (slug) return absoluteUrl(`/news/${slug}`);
+      }
+
+      if (parts[0] === 'drivers' && parts[1] && !parts[1].endsWith('.html')) {
+        return absoluteUrl(`/drivers/${decodeURIComponent(parts[1])}`);
+      }
+
+      if (loc.pathname.endsWith('/driver-profile.html') || parts[0] === 'driver-profile.html') {
+        const driverId =
+          new URLSearchParams(loc.search).get('driverId') ||
+          new URLSearchParams(loc.search).get('driver');
+        if (driverId) return absoluteUrl(`/drivers/${encodeURIComponent(driverId)}`);
+      }
+
+      return absoluteUrl(`${loc.origin}${loc.pathname}`);
+    } catch {
+      return absoluteUrl(window.location.pathname);
+    }
+  }
+
+  function isTouchDevice() {
+    if (typeof window.matchMedia === 'function') {
+      if (window.matchMedia('(pointer: coarse)').matches) return true;
+      if (window.matchMedia('(hover: none)').matches) return true;
+    }
+    return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  }
+
   function escapeAttr(value) {
     return String(value ?? '')
       .replace(/&/g, '&amp;')
@@ -36,7 +76,7 @@
   let toastEl = null;
   let toastTimer = null;
 
-  function showToast(message) {
+  function showToast(message, durationMs = 2200) {
     if (!toastEl) {
       toastEl = document.createElement('div');
       toastEl.className = 'bp-share__toast';
@@ -49,15 +89,20 @@
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => {
       toastEl.classList.remove('is-visible');
-    }, 2200);
+    }, durationMs);
   }
 
-  function copyLink(url) {
+  function copyToClipboard(url, options = {}) {
     const text = absoluteUrl(url);
+    const toastMessage = options.toastMessage;
+    const silent = options.silent === true;
+
+    const finish = () => {
+      if (!silent && toastMessage) showToast(toastMessage);
+    };
+
     if (navigator.clipboard?.writeText) {
-      return navigator.clipboard.writeText(text).then(() => {
-        showToast('Link copied.');
-      });
+      return navigator.clipboard.writeText(text).then(finish);
     }
 
     return new Promise((resolve, reject) => {
@@ -72,12 +117,16 @@
         const ok = document.execCommand('copy');
         document.body.removeChild(input);
         if (!ok) throw new Error('copy failed');
-        showToast('Link copied.');
+        finish();
         resolve();
       } catch (error) {
         reject(error);
       }
     });
+  }
+
+  function copyLink(url) {
+    return copyToClipboard(url, { toastMessage: 'Link copied.' });
   }
 
   function nativeShare({ title, text, url }) {
@@ -89,6 +138,39 @@
       text: text || '',
       url: absoluteUrl(url),
     });
+  }
+
+  async function shareFacebook(payload) {
+    const url = payload.url;
+    const mobileToast = 'Link copied. Share it to Facebook or paste it into your post.';
+    const desktopToast = 'Link copied. If Facebook does not finish loading, paste the link manually.';
+
+    try {
+      await copyToClipboard(url, { silent: true });
+    } catch {
+      showToast('Could not copy link.');
+      return;
+    }
+
+    if (isTouchDevice()) {
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: payload.title || document.title,
+            text: payload.text || '',
+            url,
+          });
+        } catch (error) {
+          if (error?.name === 'AbortError') return;
+        }
+      }
+      showToast(mobileToast, 3200);
+      return;
+    }
+
+    showToast(desktopToast, 3200);
+    const href = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`;
+    window.open(href, '_blank', 'noopener,noreferrer');
   }
 
   function loadShareConfig(forceRefresh) {
@@ -130,11 +212,14 @@
 
   function renderPlatformControl(platform, shareOptions) {
     const title = shareOptions.title || document.title;
-    const url = absoluteUrl(shareOptions.url || window.location.href);
+    const url = canonicalShareUrl(shareOptions);
 
     if (platform.id === 'facebook') {
-      const href = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`;
-      return renderExternalLink(platform, href);
+      return renderActionButton({
+        ...platform,
+        action: 'facebook',
+        tooltip: platform.tooltip || 'Share / Copy for Facebook',
+      });
     }
     if (platform.id === 'x') {
       const href = `https://twitter.com/intent/tweet?text=${encodeURIComponent(title)}&url=${encodeURIComponent(url)}`;
@@ -176,12 +261,16 @@
     const payload = {
       title: options.title || document.title,
       text: options.text || '',
-      url: absoluteUrl(options.url || window.location.href),
+      url: canonicalShareUrl(options),
     };
 
     container.querySelectorAll('[data-share-action]').forEach((button) => {
       button.addEventListener('click', () => {
         const action = button.getAttribute('data-share-action');
+        if (action === 'facebook') {
+          shareFacebook(payload);
+          return;
+        }
         if (action === 'copy' || action === 'copy-instagram' || action === 'copy-tiktok') {
           copyLink(payload.url).catch(() => showToast('Could not copy link.'));
           return;
@@ -235,6 +324,7 @@
   window.BPShare = {
     DEFAULT_IMAGE,
     absoluteUrl,
+    canonicalShareUrl,
     loadShareConfig,
     renderShareButtons,
     mountShareButtons,
