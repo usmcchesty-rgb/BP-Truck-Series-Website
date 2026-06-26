@@ -1187,38 +1187,40 @@ function renderProfile(profile, stats, seasonLabel, carImageUrl = "") {
 
   panel.innerHTML = `
     <a class="driver-profile-back" href="/drivers.html">← Back to Drivers</a>
-    <div id="driverProfileShareHost"></div>
 
     <section class="driver-profile-hero">
       ${renderHeroPhoto(profile, name)}
       <div class="driver-profile-hero-info${carImageUrl ? " driver-profile-hero-info--with-car" : ""}">
-        <div class="driver-profile-identity">
-          <div class="driver-profile-identity-namestack">
-            <div class="driver-profile-identity-titlerow">
-              ${
-                number
-                  ? `<div class="driver-profile-number" aria-hidden="true">${escapeHtml(number)}</div>`
-                  : ""
-              }
-              <div class="driver-profile-identity-namecol">
+        <div class="driver-profile-hero-share-row">
+          <div class="driver-profile-identity">
+            <div class="driver-profile-identity-namestack">
+              <div class="driver-profile-identity-titlerow">
                 ${
-                  carImageUrl
-                    ? `<div class="${escapeAttr(nameStackClasses)}">
-                        ${renderCarImageHeroSection(carImageUrl, name)}
-                        <h1 class="${escapeAttr(nameClasses)}">${escapeHtml(name)}</h1>
-                      </div>`
-                    : `<div class="driver-profile-identity-text">
-                        <h1 class="${escapeAttr(nameClasses)}">${escapeHtml(name)}</h1>
-                      </div>`
-                }
-                ${
-                  profile.iracing_name && profile.iracing_name !== name
-                    ? `<p class="driver-profile-alias">${escapeHtml(profile.iracing_name)}</p>`
+                  number
+                    ? `<div class="driver-profile-number" aria-hidden="true">${escapeHtml(number)}</div>`
                     : ""
                 }
+                <div class="driver-profile-identity-namecol">
+                  ${
+                    carImageUrl
+                      ? `<div class="${escapeAttr(nameStackClasses)}">
+                          ${renderCarImageHeroSection(carImageUrl, name)}
+                          <h1 class="${escapeAttr(nameClasses)}">${escapeHtml(name)}</h1>
+                        </div>`
+                      : `<div class="driver-profile-identity-text">
+                          <h1 class="${escapeAttr(nameClasses)}">${escapeHtml(name)}</h1>
+                        </div>`
+                  }
+                  ${
+                    profile.iracing_name && profile.iracing_name !== name
+                      ? `<p class="driver-profile-alias">${escapeHtml(profile.iracing_name)}</p>`
+                      : ""
+                  }
+                </div>
               </div>
             </div>
           </div>
+          <div id="driverProfileShareHost"></div>
         </div>
         ${
           profile.is_streamer === true

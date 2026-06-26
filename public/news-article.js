@@ -38,18 +38,19 @@ function renderArticle(article, settings) {
 
   const readMinutes = MilesApexAvatar.articleReadMinutes(article);
   const author = article.author || "Miles Apex";
+  const date = article.publishedAt ? MilesApexAvatar.formatShortDate?.(article.publishedAt) || "" : "";
+  const readTime = readMinutes ? MilesApexAvatar.formatReadTime?.(readMinutes) || "" : "";
+  const compactMeta = [author, date, readTime].filter(Boolean).join(" · ");
 
   panel.innerHTML = `
     <a class="news-back-link" href="/news.html">← Back to News</a>
     <span class="news-type-badge">${escapeHtml(article.articleTypeLabel || article.articleType)}</span>
     <h1 class="news-article-headline">${escapeHtml(article.headline)}</h1>
-    <div id="articleShareHost"></div>
+    <div class="news-article-meta-share">
+      <p class="news-article-compact-meta">${escapeHtml(compactMeta)}</p>
+      <div id="articleShareHost"></div>
+    </div>
     ${article.subheadline ? `<p class="news-article-subheadline">${escapeHtml(article.subheadline)}</p>` : ""}
-    ${MilesApexAvatar.renderAuthorRow(settings, {
-      author,
-      date: article.publishedAt,
-      readMinutes,
-    })}
     ${NewsArticleImage.renderArticleHero(article)}
     <div class="news-article-body">${renderBody(article.body)}</div>
     <aside class="news-author-card">

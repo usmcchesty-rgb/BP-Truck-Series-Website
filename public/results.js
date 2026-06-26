@@ -69,10 +69,12 @@ function renderFeaturedHeader(raceResults) {
         ${date ? `<span>${escapeHtml(date)}</span>` : ""}
         <span class="results-featured-winner">Winner: <strong>${escapeHtml(winner)}</strong></span>
       </div>
-      <div id="resultsShareHost"></div>
     </div>
-    <div class="results-selector-wrap">
-      ${renderRaceSelector(raceResults.completedRaces, raceResults.selectedRaceNumber)}
+    <div class="results-featured-tools">
+      <div class="results-selector-wrap">
+        ${renderRaceSelector(raceResults.completedRaces, raceResults.selectedRaceNumber)}
+      </div>
+      <div id="resultsShareHost"></div>
     </div>
   </section>`;
 }

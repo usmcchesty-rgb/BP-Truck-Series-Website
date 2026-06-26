@@ -153,10 +153,14 @@
 
       root.innerHTML = `
         <section class="fantasy-app-hero-panel fantasy-glass-panel">
-          <p class="fantasy-app-eyebrow">Race Preview</p>
-          <h1 class="fantasy-app-page-title">Race ${escapeHtml(slate.raceNumber ?? '—')} Preview — ${escapeHtml(slate.track || 'TBD')}</h1>
+          <div class="fantasy-hero-header-row">
+            <div>
+              <p class="fantasy-app-eyebrow">Race Preview</p>
+              <h1 class="fantasy-app-page-title">Race ${escapeHtml(slate.raceNumber ?? '—')} Preview — ${escapeHtml(slate.track || 'TBD')}</h1>
+            </div>
+            <div id="fantasyPreviewShareHost"></div>
+          </div>
           <p class="fantasy-app-readonly-note">Auto-generated preview from the current fantasy slate. Read-only demo.</p>
-          <div id="fantasyPreviewShareHost"></div>
         </section>
         ${buildPreviewArticle(data)}
       `;

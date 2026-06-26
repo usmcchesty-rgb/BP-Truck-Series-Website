@@ -263,8 +263,13 @@
   function renderSlateHeader(slate = {}) {
     return `
       <section class="fantasy-app-hero-panel fantasy-glass-panel">
-        <p class="fantasy-app-eyebrow">Race Slate</p>
-        <h1 class="fantasy-app-page-title">Race ${escapeHtml(slate.raceNumber ?? '—')} — ${escapeHtml(slate.track || 'TBD')}</h1>
+        <div class="fantasy-hero-header-row">
+          <div>
+            <p class="fantasy-app-eyebrow">Race Slate</p>
+            <h1 class="fantasy-app-page-title">Race ${escapeHtml(slate.raceNumber ?? '—')} — ${escapeHtml(slate.track || 'TBD')}</h1>
+          </div>
+          <div id="fantasySlateShareHost"></div>
+        </div>
         <div class="fantasy-slate-meta-grid">
           <div><span>Lock</span><strong>${escapeHtml(slate.lockTime || 'TBD')}</strong></div>
           <div><span>Salary Cap</span><strong>${formatMoney(slate.salaryCap ?? 50000)}</strong></div>
@@ -275,7 +280,6 @@
         <p class="fantasy-slate-hero-actions">
           <a class="fantasy-btn fantasy-btn--secondary" href="/fantasy/preview.html">Race Preview</a>
         </p>
-        <div id="fantasySlateShareHost"></div>
       </section>
     `;
   }

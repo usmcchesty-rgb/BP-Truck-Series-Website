@@ -77,24 +77,45 @@
     });
   }
 
+  const SOCIAL_ICONS = {
+    facebook: '/assets/social/facebook.svg',
+    x: '/assets/social/X.svg',
+    link: '/assets/social/Link.svg',
+    instagram: '/assets/social/instagram.svg',
+    // Set when assets are added: /assets/social/share.svg, /assets/social/tiktok.svg
+    share: null,
+    tiktok: null,
+  };
+
+  function shareIconMarkup(iconPath, label) {
+    return `<img class="bp-share__icon" src="${escapeAttr(iconPath)}" alt="" width="18" height="18" decoding="async" />`;
+  }
+
+  function iconActionButton(action, iconPath, textFallback, tooltip) {
+    const safeTip = escapeAttr(tooltip);
+    if (iconPath) {
+      return `<button type="button" class="bp-share__btn bp-share__btn--icon" data-share-action="${escapeAttr(action)}" data-share-icon="${escapeAttr(iconPath)}" title="${safeTip}" aria-label="${safeTip}">${shareIconMarkup(iconPath, tooltip)}</button>`;
+    }
+    return `<button type="button" class="bp-share__btn bp-share__btn--text" data-share-action="${escapeAttr(action)}" title="${safeTip}" aria-label="${safeTip}"><span class="bp-share__text-label">${escapeAttr(textFallback)}</span></button>`;
+  }
+
   function renderShareButtons(options = {}) {
     const title = options.title || document.title;
-    const text = options.text || '';
     const url = absoluteUrl(options.url || window.location.href);
     const compact = options.compact === true;
-    const showLabel = options.showLabel !== false;
+    const showLabel = options.showLabel === true;
 
     const facebookUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`;
     const xUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(title)}&url=${encodeURIComponent(url)}`;
 
     return `<div class="bp-share${compact ? ' bp-share--compact' : ''}" data-bp-share>
       ${showLabel ? '<p class="bp-share__label">Share</p>' : ''}
-      <a class="bp-share__btn bp-share__btn--facebook" href="${escapeAttr(facebookUrl)}" target="_blank" rel="noopener noreferrer" aria-label="Share to Facebook">Facebook</a>
-      <a class="bp-share__btn bp-share__btn--x" href="${escapeAttr(xUrl)}" target="_blank" rel="noopener noreferrer" aria-label="Share to X">X</a>
-      <button type="button" class="bp-share__btn" data-share-action="copy" aria-label="Copy Link">Copy Link</button>
-      <button type="button" class="bp-share__btn" data-share-action="native" aria-label="Share">Share</button>
-      <button type="button" class="bp-share__btn" data-share-action="copy-instagram" aria-label="Copy for Instagram">Copy for Instagram</button>
-      <button type="button" class="bp-share__btn" data-share-action="copy-tiktok" aria-label="Copy for TikTok">Copy for TikTok</button>
+      <a class="bp-share__btn bp-share__btn--icon" href="${escapeAttr(facebookUrl)}" target="_blank" rel="noopener noreferrer" title="Share to Facebook" aria-label="Share to Facebook">${shareIconMarkup(SOCIAL_ICONS.facebook, 'Share to Facebook')}</a>
+      <a class="bp-share__btn bp-share__btn--icon" href="${escapeAttr(xUrl)}" target="_blank" rel="noopener noreferrer" title="Share to X" aria-label="Share to X">${shareIconMarkup(SOCIAL_ICONS.x, 'Share to X')}</a>
+      <button type="button" class="bp-share__btn bp-share__btn--icon" data-share-action="copy" title="Copy Link" aria-label="Copy Link">${shareIconMarkup(SOCIAL_ICONS.link, 'Copy Link')}</button>
+      ${iconActionButton('native', SOCIAL_ICONS.share, 'Share', 'Share')}
+      <button type="button" class="bp-share__btn bp-share__btn--icon" data-share-action="copy-instagram" title="Copy for Instagram" aria-label="Copy for Instagram">${shareIconMarkup(SOCIAL_ICONS.instagram, 'Copy for Instagram')}</button>
+      ${iconActionButton('copy-tiktok', SOCIAL_ICONS.tiktok, 'TikTok', 'Copy for TikTok')}
     </div>`;
   }
 

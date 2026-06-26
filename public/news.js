@@ -97,17 +97,6 @@ async function loadNews() {
     }
 
     grid.innerHTML = rest.map((article) => renderCard(article, settings)).join("");
-    if (window.BPShare?.initPageShare) {
-      window.BPShare.initPageShare("#newsShareHost", {
-        title: "Blazing Pedals Truck Series — News",
-        text: "Latest news, race recaps, and driver spotlights from the Blazing Pedals Truck Series.",
-        description: "Latest news, race recaps, and driver spotlights from the Blazing Pedals Truck Series.",
-        url: window.location.href,
-        image: window.BPShare.DEFAULT_IMAGE,
-        type: "website",
-        compact: true,
-      });
-    }
   } catch (e) {
     console.error("Failed to load news:", e);
     grid.innerHTML = `<p class="muted">Failed to load news.</p>`;
