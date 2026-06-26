@@ -65,4 +65,16 @@ export function buildSharePreviewHtml({
 </html>`;
 }
 
+export function buildShareNotFoundHtml({ title, description, url, redirectUrl, origin }) {
+  return buildSharePreviewHtml({
+    title: title || `Article Not Found — ${SITE_NAME}`,
+    description: description || 'The requested news article could not be found.',
+    image: DEFAULT_SHARE_IMAGE,
+    url: url || '/news',
+    redirectUrl: redirectUrl || '/news',
+    type: 'website',
+    origin,
+  });
+}
+
 export { DEFAULT_SHARE_IMAGE, SITE_NAME };

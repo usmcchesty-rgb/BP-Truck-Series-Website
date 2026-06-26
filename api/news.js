@@ -10,6 +10,7 @@ import {
 import { enrichSpotlightArticles } from './_spotlight-image.js';
 import {
   buildSharePreviewHtml,
+  buildShareNotFoundHtml,
   DEFAULT_SHARE_IMAGE,
   getSiteOrigin,
 } from './_share-html.js';
@@ -140,16 +141,97 @@ async function loadArticles(includeUnpublished = false) {
   return data.map(normalizeArticle);
 }
 
+function newsArticlePath(slug) {
+  const safe = String(slug || '').trim();
+  return safe ? `/news/${safe}` : '/news';
+}
+
+function sendShareHtml(res, status, html, cacheSeconds = 120) {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader(
+    'Cache-Control',
+    `s-maxage=${cacheSeconds}, stale-while-revalidate=${Math.max(cacheSeconds * 2, 300)}`
+  );
+  return res.status(status).send(html);
+}
+
+function buildArticleShareHtml(req, article) {
+  const origin = getSiteOrigin(req);
+  const image =
+    article.featuredImageUrl ||
+    article.spotlightImageUrl ||
+    DEFAULT_SHARE_IMAGE;
+  const description =
+    article.summary ||
+    article.subheadline ||
+    `${article.headline} — Blazing Pedals Truck Series News`;
+  const path = newsArticlePath(article.slug);
+
+  return buildSharePreviewHtml({
+    title: `${article.headline} — Blazing Pedals Truck Series News`,
+    description,
+    image,
+    url: path,
+    redirectUrl: path,
+    type: 'article',
+    origin,
+  });
+}
+
+function buildArticleNotFoundShareHtml(req, slug) {
+  const origin = getSiteOrigin(req);
+  const path = newsArticlePath(slug);
+  return buildShareNotFoundHtml({
+    title: 'Article Not Found — Blazing Pedals Truck Series News',
+    description: 'The requested news article could not be found.',
+    url: path,
+    redirectUrl: '/news',
+    origin,
+  });
+}
+
+async function enrichArticleForShare(article) {
+  try {
+    const [enriched] = await enrichSpotlightArticles([article]);
+    return enriched || article;
+  } catch {
+    return article;
+  }
+}
+
+async function respondWithArticleShareHtml(req, res, slug, includeUnpublished) {
+  try {
+    const article = await loadArticleBySlug(slug, includeUnpublished);
+    if (!article) {
+      return sendShareHtml(res, 404, buildArticleNotFoundShareHtml(req, slug), 60);
+    }
+
+    const enriched = await enrichArticleForShare(article);
+    const html = buildArticleShareHtml(req, enriched);
+    return sendShareHtml(res, 200, html);
+  } catch (error) {
+    console.error('News share HTML preview failed:', error);
+    return sendShareHtml(res, 200, buildArticleNotFoundShareHtml(req, slug));
+  }
+}
+
 async function handleGet(req, res) {
   const sb = supabase();
-  if (!sb) {
-    return res.status(200).json({ configured: false, featured: null, articles: [] });
-  }
-
   const action = resolveAction(req);
   const includeUnpublished = req.query?.admin === '1';
   const slug = String(req.query?.slug || '').trim();
   const id = req.query?.id ? Number(req.query.id) : null;
+  const format = String(req.query?.format || '').trim().toLowerCase();
+
+  if (!sb) {
+    if (slug && format === 'html') {
+      return sendShareHtml(res, 404, buildArticleNotFoundShareHtml(req, slug), 60);
+    }
+    if (slug) {
+      return res.status(404).json({ error: 'Article not found.' });
+    }
+    return res.status(200).json({ configured: false, featured: null, articles: [] });
+  }
 
   const isGet = action === 'get' || Boolean(slug || id);
   const isList = action === 'list' || (!action && !slug && !id);
@@ -170,35 +252,13 @@ async function handleGet(req, res) {
 
   if (isGet) {
     if (slug) {
-      const format = String(req.query?.format || '').trim().toLowerCase();
+      if (format === 'html') {
+        return respondWithArticleShareHtml(req, res, slug, includeUnpublished);
+      }
+
       const article = await loadArticleBySlug(slug, includeUnpublished);
       if (!article) return res.status(404).json({ error: 'Article not found.' });
       const [enriched] = await enrichSpotlightArticles([article]);
-
-      if (format === 'html') {
-        const origin = getSiteOrigin(req);
-        const image =
-          enriched.featuredImageUrl ||
-          enriched.spotlightImageUrl ||
-          DEFAULT_SHARE_IMAGE;
-        const description =
-          enriched.summary ||
-          enriched.subheadline ||
-          `${enriched.headline} — Blazing Pedals Truck Series News`;
-        const html = buildSharePreviewHtml({
-          title: `${enriched.headline} — Blazing Pedals Truck Series News`,
-          description,
-          image,
-          url: `/news/${encodeURIComponent(enriched.slug)}`,
-          redirectUrl: `/news/${encodeURIComponent(enriched.slug)}`,
-          type: 'article',
-          origin,
-        });
-        res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        res.setHeader('Cache-Control', 's-maxage=120, stale-while-revalidate=300');
-        return res.status(200).send(html);
-      }
-
       return res.status(200).json({ configured: true, article: enriched });
     }
 
