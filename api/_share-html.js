@@ -31,6 +31,7 @@ export function buildSharePreviewHtml({
   redirectUrl,
   type = 'article',
   origin,
+  linkLabel = 'View Article',
 }) {
   const safeTitle = escapeHtml(title || SITE_NAME);
   const safeDescription = escapeHtml(description || '');
@@ -38,6 +39,7 @@ export function buildSharePreviewHtml({
   const imageUrl = absoluteShareUrl(origin, image || DEFAULT_SHARE_IMAGE);
   const canonical = absoluteShareUrl(origin, redirectUrl || url);
   const ogType = escapeHtml(type || 'website');
+  const safeLinkLabel = escapeHtml(linkLabel || 'View Article');
 
   return `<!doctype html>
 <html lang="en">
@@ -57,15 +59,16 @@ export function buildSharePreviewHtml({
   <meta name="twitter:description" content="${safeDescription}" />
   <meta name="twitter:image" content="${escapeHtml(imageUrl)}" />
   <link rel="canonical" href="${escapeHtml(canonical)}" />
-  <meta http-equiv="refresh" content="0;url=${escapeHtml(canonical)}" />
 </head>
 <body>
-  <p><a href="${escapeHtml(canonical)}">${safeTitle}</a></p>
+  <h1>${safeTitle}</h1>
+  <p>${safeDescription}</p>
+  <p><a href="${escapeHtml(canonical)}">${safeLinkLabel}</a></p>
 </body>
 </html>`;
 }
 
-export function buildShareNotFoundHtml({ title, description, url, redirectUrl, origin }) {
+export function buildShareNotFoundHtml({ title, description, url, redirectUrl, origin, linkLabel = 'View News' }) {
   return buildSharePreviewHtml({
     title: title || `Article Not Found — ${SITE_NAME}`,
     description: description || 'The requested news article could not be found.',
@@ -74,6 +77,7 @@ export function buildShareNotFoundHtml({ title, description, url, redirectUrl, o
     redirectUrl: redirectUrl || '/news',
     type: 'website',
     origin,
+    linkLabel,
   });
 }
 

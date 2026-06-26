@@ -363,6 +363,7 @@ export default async function handler(req, res) {
           redirectUrl: pagePath,
           type: 'profile',
           origin,
+          linkLabel: 'View Profile',
         });
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.setHeader('Cache-Control', 's-maxage=120, stale-while-revalidate=300');
