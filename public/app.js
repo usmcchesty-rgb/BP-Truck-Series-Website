@@ -435,6 +435,17 @@ if ($("#overviewBody")) {
   initStandingsTableTabs();
   ensureSidebarMarkup();
   renderSponsorCards();
+  if (window.BPShare?.initPageShare) {
+    window.BPShare.initPageShare("#standingsShareHost", {
+      title: "Blazing Pedals Truck Series Standings",
+      text: "Season 11 championship standings for the Blazing Pedals Truck Series.",
+      description: "Season 11 championship standings for the Blazing Pedals Truck Series.",
+      url: window.location.href,
+      image: window.BPShare.DEFAULT_IMAGE,
+      type: "website",
+      compact: true,
+    });
+  }
   load();
   setInterval(() => load(), 60000);
 }

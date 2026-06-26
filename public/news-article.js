@@ -43,6 +43,7 @@ function renderArticle(article, settings) {
     <a class="news-back-link" href="/news.html">← Back to News</a>
     <span class="news-type-badge">${escapeHtml(article.articleTypeLabel || article.articleType)}</span>
     <h1 class="news-article-headline">${escapeHtml(article.headline)}</h1>
+    <div id="articleShareHost"></div>
     ${article.subheadline ? `<p class="news-article-subheadline">${escapeHtml(article.subheadline)}</p>` : ""}
     ${MilesApexAvatar.renderAuthorRow(settings, {
       author,
@@ -60,6 +61,30 @@ function renderArticle(article, settings) {
       </div>
     </aside>
   `;
+
+  const shareTitle = `${article.headline} — Blazing Pedals Truck Series News`;
+  const shareText = article.summary || article.subheadline || article.headline;
+  const normalized = window.NewsArticleImage?.normalize
+    ? window.NewsArticleImage.normalize(article)
+    : article;
+  const shareImage =
+    (window.NewsArticleImage?.displayUrl &&
+      window.NewsArticleImage.displayUrl(normalized)) ||
+    article.featuredImageUrl ||
+    article.spotlightImageUrl ||
+    window.BPShare?.DEFAULT_IMAGE;
+
+  if (window.BPShare?.initPageShare) {
+    window.BPShare.initPageShare("#articleShareHost", {
+      title: article.headline,
+      text: shareText,
+      description: shareText,
+      url: window.location.href,
+      image: shareImage,
+      type: "article",
+    });
+    document.title = shareTitle;
+  }
 }
 
 async function loadArticle() {

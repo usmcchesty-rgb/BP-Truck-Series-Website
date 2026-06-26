@@ -8,6 +8,11 @@ import {
   saveRaceTranscript,
 } from './_race-transcripts.js';
 import { enrichSpotlightArticles } from './_spotlight-image.js';
+import {
+  buildSharePreviewHtml,
+  DEFAULT_SHARE_IMAGE,
+  getSiteOrigin,
+} from './_share-html.js';
 
 function parseBody(req) {
   if (!req.body) return {};
@@ -165,9 +170,35 @@ async function handleGet(req, res) {
 
   if (isGet) {
     if (slug) {
+      const format = String(req.query?.format || '').trim().toLowerCase();
       const article = await loadArticleBySlug(slug, includeUnpublished);
       if (!article) return res.status(404).json({ error: 'Article not found.' });
       const [enriched] = await enrichSpotlightArticles([article]);
+
+      if (format === 'html') {
+        const origin = getSiteOrigin(req);
+        const image =
+          enriched.featuredImageUrl ||
+          enriched.spotlightImageUrl ||
+          DEFAULT_SHARE_IMAGE;
+        const description =
+          enriched.summary ||
+          enriched.subheadline ||
+          `${enriched.headline} — Blazing Pedals Truck Series News`;
+        const html = buildSharePreviewHtml({
+          title: `${enriched.headline} — Blazing Pedals Truck Series News`,
+          description,
+          image,
+          url: `/news/${encodeURIComponent(enriched.slug)}`,
+          redirectUrl: `/news/${encodeURIComponent(enriched.slug)}`,
+          type: 'article',
+          origin,
+        });
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.setHeader('Cache-Control', 's-maxage=120, stale-while-revalidate=300');
+        return res.status(200).send(html);
+      }
+
       return res.status(200).json({ configured: true, article: enriched });
     }
 

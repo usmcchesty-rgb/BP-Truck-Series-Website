@@ -156,9 +156,23 @@
           <p class="fantasy-app-eyebrow">Race Preview</p>
           <h1 class="fantasy-app-page-title">Race ${escapeHtml(slate.raceNumber ?? '—')} Preview — ${escapeHtml(slate.track || 'TBD')}</h1>
           <p class="fantasy-app-readonly-note">Auto-generated preview from the current fantasy slate. Read-only demo.</p>
+          <div id="fantasyPreviewShareHost"></div>
         </section>
         ${buildPreviewArticle(data)}
       `;
+
+      const title = `BP Fantasy Race ${slate.raceNumber ?? '—'} Preview — ${slate.track || 'TBD'}`;
+      const text = `Race preview for BP Fantasy Race ${slate.raceNumber ?? '—'} at ${slate.track || 'TBD'}.`;
+      if (window.BPShare?.initPageShare) {
+        window.BPShare.initPageShare('#fantasyPreviewShareHost', {
+          title,
+          text,
+          description: text,
+          url: window.location.href,
+          image: '/assets/fantasy/fantasy-logo.png',
+          type: 'website',
+        });
+      }
     } catch {
       root.innerHTML = `<section class="fantasy-app-empty"><p>Fantasy preview coming soon.</p></section>`;
     }

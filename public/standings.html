@@ -4,7 +4,19 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Blazing Pedals Truck Series Standings</title>
+    <meta name="description" content="Season 11 championship standings for the Blazing Pedals Truck Series." />
+    <meta property="og:site_name" content="Blazing Pedals Truck Series" />
+    <meta property="og:title" content="Blazing Pedals Truck Series Standings" />
+    <meta property="og:description" content="Season 11 championship standings for the Blazing Pedals Truck Series." />
+    <meta property="og:image" content="/assets/logos/New Clean Logo.png" />
+    <meta property="og:url" content="/standings.html" />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Blazing Pedals Truck Series Standings" />
+    <meta name="twitter:description" content="Season 11 championship standings for the Blazing Pedals Truck Series." />
+    <meta name="twitter:image" content="/assets/logos/New Clean Logo.png" />
     <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="/share.css" />
   </head>
   <body>
     <div class="page-bg"></div>
@@ -14,6 +26,9 @@
       <section id="overview">
         <div class="overview-layout">
           <div class="main-col">
+            <div class="standings-page-toolbar">
+              <div id="standingsShareHost"></div>
+            </div>
             <section id="podium" class="podium"></section>
             <section class="panel wide">
               <div class="standings-table-tabs" role="tablist" aria-label="Standings table view">
@@ -114,6 +129,8 @@
       });
     </script>
     <script src="/season-summary.js"></script>
+    <script src="/share-meta.js"></script>
+    <script src="/share.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

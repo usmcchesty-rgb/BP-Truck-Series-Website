@@ -4,6 +4,11 @@ import {
   buildFormSyncPreview,
   applyFormSyncUpdates,
 } from './_driver-bio-sync.js';
+import {
+  buildSharePreviewHtml,
+  DEFAULT_SHARE_IMAGE,
+  getSiteOrigin,
+} from './_share-html.js';
 
 function parseBody(req) {
   if (!req.body) return {};
@@ -334,11 +339,36 @@ export default async function handler(req, res) {
       .sort((a, b) => a.iracing_name.localeCompare(b.iracing_name));
 
     const driverId = String(req.query?.driver_id ?? req.query?.id ?? '').trim();
+    const format = String(req.query?.format || '').trim().toLowerCase();
     if (driverId) {
       const profile = findDriverProfile(normalized, driverId);
       if (!profile) {
         return res.status(404).json({ error: 'Driver not found.' });
       }
+
+      if (format === 'html') {
+        const origin = getSiteOrigin(req);
+        const name = profile.display_name || profile.iracing_name || 'Driver';
+        const number = profile.car_number ? `#${profile.car_number} ` : '';
+        const description = profile.bio
+          ? String(profile.bio).trim().slice(0, 200)
+          : `${name} driver profile — Blazing Pedals Truck Series Season 11.`;
+        const image = profile.photoUrl || profile.photo_url || DEFAULT_SHARE_IMAGE;
+        const pagePath = `/drivers/${encodeURIComponent(profile.driver_id)}`;
+        const html = buildSharePreviewHtml({
+          title: `${number}${name} — Blazing Pedals Truck Series`,
+          description,
+          image,
+          url: pagePath,
+          redirectUrl: pagePath,
+          type: 'profile',
+          origin,
+        });
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.setHeader('Cache-Control', 's-maxage=120, stale-while-revalidate=300');
+        return res.status(200).send(html);
+      }
+
       return res.status(200).json(profile);
     }
 

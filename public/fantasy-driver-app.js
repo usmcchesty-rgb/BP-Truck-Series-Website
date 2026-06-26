@@ -122,6 +122,7 @@
             <p class="fantasy-app-eyebrow">Driver Detail</p>
             <h1 class="fantasy-app-page-title">${escapeHtml(name)}${driver.carNumber ? ` <span class="muted">#${escapeHtml(driver.carNumber)}</span>` : ''}</h1>
             <div class="fantasy-driver-activity-header">${renderActivityStatus(driver, { uppercase: true, showLastStart: true, inlineLastStart: true })}</div>
+            <div id="fantasyDriverShareHost"></div>
             ${renderHeroBadges(driver)}
             <p class="fantasy-app-readonly-note">Race ${escapeHtml(slate.raceNumber ?? '—')} · ${escapeHtml(slate.track || 'TBD')} · Read-only preview</p>
             <p class="fantasy-driver-hero-actions">
@@ -451,6 +452,19 @@
 
       <p><a class="fantasy-btn fantasy-btn--secondary" href="/fantasy/slate.html">Back to Race Slate</a></p>
     `;
+
+    const shareTitle = `${driver.driverName || 'Driver'} — BP Fantasy`;
+    const shareText = `BP Fantasy profile for ${driver.driverName || 'driver'} — salary ${driver.salary != null ? `$${Number(driver.salary).toLocaleString('en-US')}` : 'TBD'}, tier ${driver.tier || '—'}.`;
+    if (window.BPShare?.initPageShare) {
+      window.BPShare.initPageShare('#fantasyDriverShareHost', {
+        title: shareTitle,
+        text: shareText,
+        description: shareText,
+        url: window.location.href,
+        image: '/assets/fantasy/fantasy-logo.png',
+        type: 'website',
+      });
+    }
   }
 
   async function loadDriverDetail() {

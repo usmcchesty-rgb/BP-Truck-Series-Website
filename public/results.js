@@ -69,6 +69,7 @@ function renderFeaturedHeader(raceResults) {
         ${date ? `<span>${escapeHtml(date)}</span>` : ""}
         <span class="results-featured-winner">Winner: <strong>${escapeHtml(winner)}</strong></span>
       </div>
+      <div id="resultsShareHost"></div>
     </div>
     <div class="results-selector-wrap">
       ${renderRaceSelector(raceResults.completedRaces, raceResults.selectedRaceNumber)}
@@ -152,6 +153,27 @@ function renderPage(raceResults) {
   $("#raceSelector")?.addEventListener("change", (event) => {
     const raceNumber = event.target.value;
     loadResults(raceNumber);
+  });
+
+  mountResultsShare(raceResults);
+}
+
+function mountResultsShare(raceResults) {
+  if (!window.BPShare?.initPageShare || !raceResults?.selectedRaceNumber) return;
+  const raceNumber = raceResults.selectedRaceNumber;
+  const track = raceResults.selectedRaceName || "TBD";
+  const winner = raceResults.selectedRaceWinner || "";
+  const title = `Race ${raceNumber} Results — ${track}`;
+  const text = winner
+    ? `Race ${raceNumber} at ${track}. Winner: ${winner}.`
+    : `Race ${raceNumber} results at ${track}.`;
+  window.BPShare.initPageShare("#resultsShareHost", {
+    title,
+    text,
+    description: text,
+    url: `${window.location.origin}/results.html?race=${encodeURIComponent(raceNumber)}`,
+    image: window.BPShare.DEFAULT_IMAGE,
+    type: "website",
   });
 }
 

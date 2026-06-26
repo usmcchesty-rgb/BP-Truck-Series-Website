@@ -275,8 +275,25 @@
         <p class="fantasy-slate-hero-actions">
           <a class="fantasy-btn fantasy-btn--secondary" href="/fantasy/preview.html">Race Preview</a>
         </p>
+        <div id="fantasySlateShareHost"></div>
       </section>
     `;
+  }
+
+  function mountSlateShare(slate = {}) {
+    if (!window.BPShare?.initPageShare) return;
+    const raceNumber = slate.raceNumber ?? '—';
+    const track = slate.track || 'TBD';
+    const title = `BP Fantasy Race ${raceNumber} — ${track}`;
+    const text = `BP Fantasy slate for Race ${raceNumber} at ${track}. Salaries, tiers, and driver rankings.`;
+    window.BPShare.initPageShare('#fantasySlateShareHost', {
+      title,
+      text,
+      description: text,
+      url: window.location.href,
+      image: '/assets/fantasy/fantasy-logo.png',
+      type: 'website',
+    });
   }
 
   function renderSlatePage(data) {
@@ -291,6 +308,7 @@
       ${renderWeeklyBreakdown(data.weeklyBreakdown || {})}
       ${renderDriverTable(data.drivers || [])}
     `;
+    mountSlateShare(data.slate || {});
   }
 
   async function loadPublicSlate() {

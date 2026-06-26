@@ -151,6 +151,7 @@ function renderWeek(week, archive) {
     renderProphetTake(null);
     renderHeader(null);
     renderArchive(archive, null);
+    mountPowerRankingsShare(null);
     return;
   }
 
@@ -172,6 +173,25 @@ function renderWeek(week, archive) {
   }
 
   renderArchive(archive, week.id);
+  mountPowerRankingsShare(week);
+}
+
+function mountPowerRankingsShare(week) {
+  if (!window.BPShare?.initPageShare) return;
+  const title = week?.label
+    ? `${week.label} — The Pedal Prophet Power Rankings`
+    : "The Pedal Prophet Power Rankings — Blazing Pedals Truck Series";
+  const text =
+    week?.prophetTake?.slice?.(0, 200) ||
+    "Weekly power rankings, race analysis, and championship insight from The Pedal Prophet.";
+  window.BPShare.initPageShare("#prShareHost", {
+    title,
+    text,
+    description: text,
+    url: window.location.href,
+    image: "/assets/logos/pedal-prophet-logo.png",
+    type: "website",
+  });
 }
 
 function setActiveTab(tabName) {
@@ -273,3 +293,4 @@ async function loadPowerRankings() {
 
 initTabs();
 loadPowerRankings();
+mountPowerRankingsShare(null);

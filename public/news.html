@@ -4,7 +4,19 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Blazing Pedals Truck Series — News</title>
+    <meta name="description" content="Latest news, race recaps, and driver spotlights from the Blazing Pedals Truck Series." />
+    <meta property="og:site_name" content="Blazing Pedals Truck Series" />
+    <meta property="og:title" content="Blazing Pedals Truck Series — News" />
+    <meta property="og:description" content="Latest news, race recaps, and driver spotlights from the Blazing Pedals Truck Series." />
+    <meta property="og:image" content="/assets/logos/New Clean Logo.png" />
+    <meta property="og:url" content="/news.html" />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Blazing Pedals Truck Series — News" />
+    <meta name="twitter:description" content="Latest news, race recaps, and driver spotlights from the Blazing Pedals Truck Series." />
+    <meta name="twitter:image" content="/assets/logos/New Clean Logo.png" />
     <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/share.css" />
   </head>
   <body>
     <div class="page-bg"></div>
@@ -16,7 +28,10 @@
       </section>
 
       <section class="panel home-section home-news">
-        <h2>LATEST NEWS</h2>
+        <div class="news-page-head">
+          <h2>LATEST NEWS</h2>
+          <div id="newsShareHost"></div>
+        </div>
         <div id="newsGrid" class="news-grid">
           <p class="muted">Loading news...</p>
         </div>
@@ -36,6 +51,8 @@
     </script>
     <script src="/miles-apex-avatar.js"></script>
     <script src="/news-article-image.js"></script>
+    <script src="/share-meta.js"></script>
+    <script src="/share.js"></script>
     <script src="/news.js"></script>
   </body>
 </html>

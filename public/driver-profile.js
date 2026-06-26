@@ -1187,6 +1187,7 @@ function renderProfile(profile, stats, seasonLabel, carImageUrl = "") {
 
   panel.innerHTML = `
     <a class="driver-profile-back" href="/drivers.html">← Back to Drivers</a>
+    <div id="driverProfileShareHost"></div>
 
     <section class="driver-profile-hero">
       ${renderHeroPhoto(profile, name)}
@@ -1238,6 +1239,22 @@ function renderProfile(profile, stats, seasonLabel, carImageUrl = "") {
 
   if (carImageUrl) {
     scheduleDriverProfileCarAlignment(name);
+  }
+
+  const shareTitle = `${number ? `#${number} ` : ""}${name} — Blazing Pedals Truck Series`;
+  const shareText = profile.bio
+    ? String(profile.bio).trim().slice(0, 200)
+    : `${name} driver profile — Blazing Pedals Truck Series.`;
+  const shareImage = profile.photoUrl || profile.photo_url || window.BPShare?.DEFAULT_IMAGE;
+  if (window.BPShare?.initPageShare) {
+    window.BPShare.initPageShare("#driverProfileShareHost", {
+      title: shareTitle,
+      text: shareText,
+      description: shareText,
+      url: window.location.href,
+      image: shareImage,
+      type: "profile",
+    });
   }
 }
 
