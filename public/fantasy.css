@@ -1920,4 +1920,267 @@ body.fantasy-page main.fantasy-app-page{
   .fantasy-dashboard-link-grid{
     grid-template-columns:1fr;
   }
+
+  .fantasy-lineup-strategy-grid{
+    grid-template-columns:1fr;
+  }
+}
+
+/* ── Phase 7: Rules page ── */
+.fantasy-app-main--rules{
+  max-width:920px;
+}
+
+.fantasy-rules-section{
+  margin-bottom:8px;
+}
+
+.fantasy-rules-copy{
+  margin:0 0 12px;
+  color:var(--bp-text-body);
+  font-size:14px;
+  line-height:1.65;
+}
+
+.fantasy-rules-copy strong{
+  color:#fff;
+}
+
+.fantasy-rules-disclaimer{
+  border:1px solid rgba(229,9,20,.25);
+  border-radius:8px;
+  padding:16px 18px;
+  background:rgba(229,9,20,.06);
+}
+
+.fantasy-rules-example-lineup{
+  padding:14px 16px;
+  margin:12px 0;
+}
+
+.fantasy-rules-example-row{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  padding:8px 0;
+  border-bottom:1px solid rgba(255,255,255,.06);
+  font-size:13px;
+}
+
+.fantasy-rules-example-row--total{
+  border-bottom:0;
+  padding-top:12px;
+  font-weight:900;
+  color:#fff;
+}
+
+/* ── Phase 7: Lineup builder polish ── */
+.fantasy-lineup-strategy-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+  gap:10px;
+  margin-bottom:16px;
+}
+
+.fantasy-lineup-strategy-card{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  padding:12px 14px;
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:8px;
+  background:rgba(0,0,0,.28);
+  color:#fff;
+  text-align:left;
+  cursor:pointer;
+  transition:border-color .15s ease, background .15s ease;
+}
+
+.fantasy-lineup-strategy-card:hover,
+.fantasy-lineup-strategy-card.is-active{
+  border-color:rgba(229,9,20,.55);
+  background:rgba(229,9,20,.08);
+}
+
+.fantasy-lineup-strategy-card__label{
+  font-size:12px;
+  font-weight:900;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+}
+
+.fantasy-lineup-strategy-card__copy{
+  font-size:11px;
+  color:#aaa;
+  line-height:1.4;
+}
+
+.fantasy-lineup-salary-meter{
+  margin:12px 0 14px;
+}
+
+.fantasy-lineup-salary-meter__track{
+  height:10px;
+  border-radius:999px;
+  background:rgba(255,255,255,.08);
+  overflow:hidden;
+  margin-bottom:6px;
+}
+
+.fantasy-lineup-salary-meter__fill{
+  height:100%;
+  border-radius:999px;
+  background:linear-gradient(90deg,#8a6d1f,var(--gold));
+}
+
+.fantasy-lineup-salary-meter__label{
+  font-size:13px;
+  color:#ccc;
+}
+
+.fantasy-lineup-salary-meter__label strong{
+  color:var(--gold);
+}
+
+.fantasy-lineup-warning{
+  margin:0 0 12px;
+  padding:10px 12px;
+  border:1px solid rgba(255,180,0,.35);
+  border-radius:6px;
+  background:rgba(255,180,0,.08);
+  color:#ffd966;
+  font-size:12px;
+  font-weight:700;
+  line-height:1.45;
+}
+
+.fantasy-lineup-driver-list{
+  list-style:none;
+  margin:0;
+  padding:0;
+}
+
+.fantasy-lineup-driver-row{
+  display:flex;
+  gap:12px;
+  align-items:flex-start;
+  padding:10px 0;
+  border-bottom:1px solid rgba(255,255,255,.06);
+}
+
+.fantasy-lineup-driver-row:last-child{
+  border-bottom:0;
+}
+
+.fantasy-lineup-driver-photo{
+  width:52px;
+  height:52px;
+  object-fit:contain;
+  object-position:bottom center;
+  flex-shrink:0;
+}
+
+.fantasy-lineup-driver-row__main{
+  flex:1;
+  min-width:0;
+}
+
+.fantasy-lineup-driver-row__name{
+  font-size:14px;
+  font-weight:900;
+  margin-bottom:4px;
+}
+
+.fantasy-lineup-driver-row__meta{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px 10px;
+  align-items:center;
+  font-size:11px;
+}
+
+.fantasy-lineup-driver-row__sub{
+  margin-top:4px;
+  font-size:11px;
+}
+
+.fantasy-lineup-result__actions{
+  margin:14px 0 0;
+}
+
+/* ── Phase 7: Salary chart ── */
+.fantasy-salary-chart{
+  display:flex;
+  align-items:flex-end;
+  gap:8px;
+  min-height:160px;
+  margin:0 0 12px;
+  padding:12px 8px 4px;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:8px;
+  background:rgba(0,0,0,.18);
+  overflow-x:auto;
+}
+
+.fantasy-salary-chart-bar{
+  flex:1 1 56px;
+  min-width:52px;
+  max-width:88px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:flex-end;
+  gap:4px;
+  height:140px;
+}
+
+.fantasy-salary-chart-bar__col{
+  width:100%;
+  max-width:36px;
+  min-height:8px;
+  border-radius:4px 4px 0 0;
+  background:linear-gradient(180deg,var(--gold),#6b5418);
+}
+
+.fantasy-salary-chart-bar__value{
+  font-size:10px;
+  font-weight:900;
+  text-align:center;
+  line-height:1.2;
+}
+
+.fantasy-salary-chart-bar__race{
+  font-size:10px;
+  font-weight:900;
+  color:#fff;
+  letter-spacing:.04em;
+}
+
+.fantasy-salary-chart-bar__change{
+  font-size:9px;
+  font-weight:800;
+  text-align:center;
+  line-height:1.2;
+}
+
+.fantasy-salary-chart-legend{
+  margin:0 0 14px;
+  font-size:11px;
+  line-height:1.45;
+}
+
+/* ── Phase 7: Dashboard polish ── */
+.fantasy-dashboard-hero .fantasy-app-page-title{
+  margin-bottom:10px;
+}
+
+.fantasy-dashboard-alert{
+  margin:0 0 16px;
+  padding:12px 14px;
+  border:1px solid rgba(255,180,0,.35);
+  border-radius:8px;
+  background:rgba(255,180,0,.08);
+  color:#ffd966;
+  font-size:13px;
+  font-weight:700;
 }

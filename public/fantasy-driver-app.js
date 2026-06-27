@@ -324,12 +324,66 @@
     `;
   }
 
+  function renderSalaryChart(history = []) {
+    if (!history.length) return '';
+
+    const chronological = [...history].sort(
+      (a, b) => Number(a.raceNumber) - Number(b.raceNumber)
+    );
+    const salaries = chronological.map((row) => Number(row.salary)).filter(Number.isFinite);
+    if (!salaries.length) return '';
+
+    const maxSalary = Math.max(...salaries);
+    const minSalary = Math.min(...salaries);
+
+    const bars = chronological
+      .map((row, index) => {
+        const salary = Number(row.salary);
+        const prev = index > 0 ? Number(chronological[index - 1].salary) : null;
+        let changeLabel = '—';
+        let changeClass = 'is-same';
+        if (prev != null && Number.isFinite(prev)) {
+          const delta = salary - prev;
+          if (delta > 0) {
+            changeLabel = `+$${delta.toLocaleString('en-US')}`;
+            changeClass = 'is-up';
+          } else if (delta < 0) {
+            changeLabel = `-$${Math.abs(delta).toLocaleString('en-US')}`;
+            changeClass = 'is-down';
+          } else {
+            changeLabel = 'No change';
+          }
+        } else if (index === 0) {
+          changeLabel = 'First tracked';
+        }
+
+        const heightPct = maxSalary > 0 ? Math.max(8, (salary / maxSalary) * 100) : 8;
+
+        return `
+          <div class="fantasy-salary-chart-bar">
+            <div class="fantasy-salary-chart-bar__value salary">${formatMoney(salary)}</div>
+            <div class="fantasy-salary-chart-bar__col" style="height:${heightPct.toFixed(1)}%"></div>
+            <div class="fantasy-salary-chart-bar__race">R${escapeHtml(row.raceNumber)}</div>
+            <div class="fantasy-salary-chart-bar__change fantasy-change ${changeClass}">${escapeHtml(changeLabel)}</div>
+          </div>
+        `;
+      })
+      .join('');
+
+    return `
+      <div class="fantasy-salary-chart" aria-label="Salary history chart">
+        ${bars}
+      </div>
+      <div class="fantasy-salary-chart-legend muted">Bar height = salary relative to highest tracked race (${formatMoney(maxSalary)}). Lowest tracked: ${formatMoney(minSalary)}.</div>
+    `;
+  }
+
   function renderSalaryTrendCard(history = [], driver = {}) {
     const salaries = history
       .map((row) => Number(row.salary))
       .filter((value) => Number.isFinite(value));
 
-    if (salaries.length <= 1) {
+    if (salaries.length < 2) {
       return `
         <section class="fantasy-app-section fantasy-salary-trend-card">
           <h2 class="fantasy-app-section-title">Salary Trend</h2>
@@ -349,12 +403,12 @@
     return `
       <section class="fantasy-app-section fantasy-salary-trend-card">
         <h2 class="fantasy-app-section-title">Salary Trend</h2>
+        ${renderSalaryChart(history)}
         <div class="fantasy-salary-trend-grid">
           <div><span>Current</span><strong class="salary">${formatMoney(driver.salary)}</strong></div>
-          <div><span>Previous</span><strong>${formatMoney(driver.previousSalary)}</strong></div>
           <div><span>Change</span><strong><span class="fantasy-change ${changeClass(driver.salaryChangeDirection)}">${escapeHtml(driver.salaryChangeLabel || '—')}</span></strong></div>
-          <div><span>High</span><strong class="salary">${formatMoney(highest)}</strong></div>
-          <div><span>Low</span><strong class="salary">${formatMoney(lowest)}</strong></div>
+          <div><span>Highest</span><strong class="salary">${formatMoney(highest)}</strong></div>
+          <div><span>Lowest</span><strong class="salary">${formatMoney(lowest)}</strong></div>
           <div><span>Races Tracked</span><strong>${salaries.length}</strong></div>
         </div>
       </section>

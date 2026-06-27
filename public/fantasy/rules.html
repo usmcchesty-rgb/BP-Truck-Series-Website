@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>BP Fantasy — Full Rules</title>
+    <title>BP Fantasy — How It Works</title>
     <link rel="stylesheet" href="/styles.css" />
     <link rel="stylesheet" href="/fantasy.css" />
   </head>
@@ -14,16 +14,107 @@
     <main class="fantasy-app-page">
       <div class="fantasy-app-shell">
         <div id="fantasyAppNav"></div>
-        <div class="fantasy-app-main fantasy-app-main--centered">
-          <section class="fantasy-app-placeholder-card" aria-labelledby="fantasyRulesFullTitle">
+        <div class="fantasy-app-main fantasy-app-main--rules">
+          <section class="fantasy-app-hero-panel fantasy-glass-panel">
             <p class="fantasy-app-eyebrow">BP Fantasy</p>
-            <h1 id="fantasyRulesFullTitle">Full Rules</h1>
-            <p class="fantasy-app-lead">Fantasy access coming soon.</p>
-            <p class="fantasy-app-copy">
-              Complete contest rules, scoring tables, and eligibility details will be published here before the first playable slate.
-            </p>
+            <h1 class="fantasy-app-page-title">How BP Fantasy Works</h1>
+            <p class="fantasy-app-lead">Plain-language guide for Blazing Pedals league members. No fantasy sports experience required.</p>
+            <p class="fantasy-app-readonly-note">Demo / read-only until accounts open — explore slates, build sample lineups, and compare drivers now.</p>
+          </section>
+
+          <section class="fantasy-app-section fantasy-rules-section">
+            <h2 class="fantasy-app-section-title">What is BP Fantasy?</h2>
+            <p class="fantasy-rules-copy">BP Fantasy is a salary-cap game for the Blazing Pedals Truck Series. Each race week you pick <strong>5 drivers</strong> whose real-world results would score fantasy points. Every driver has a <strong>salary</strong> — you must stay under the <strong>$50,000 cap</strong>.</p>
+            <p class="fantasy-rules-copy">Right now the site is a <strong>read-only demo</strong>: you can study salaries, grades, ownership projections, and try the lineup builder. Saving lineups, live scoring, and standings will arrive when accounts launch.</p>
             <div class="fantasy-cta-actions">
-              <a class="fantasy-btn fantasy-btn--secondary" href="/fantasy/slate.html">View Demo Slate</a>
+              <a class="fantasy-btn fantasy-btn--secondary" href="/fantasy/slate.html">View Race Slate</a>
+              <a class="fantasy-btn fantasy-btn--secondary" href="/fantasy/dashboard.html">Fantasy Central</a>
+            </div>
+          </section>
+
+          <section class="fantasy-app-section fantasy-rules-section">
+            <h2 class="fantasy-app-section-title">How the Salary Cap Works</h2>
+            <p class="fantasy-rules-copy">You have <strong>$50,000</strong> to spend on exactly <strong>5 drivers</strong>. Top performers cost more; lower-ranked drivers cost less. A strong lineup uses most of the cap without going over.</p>
+            <ul class="fantasy-rules-list">
+              <li><strong>Salary</strong> — the price of a driver this race week. Shown on the Race Slate and driver pages.</li>
+              <li><strong>Salary change</strong> — how much a driver’s price moved since the last slate (up, down, or new).</li>
+              <li><strong>Remaining salary</strong> — cap minus what your lineup spends. In the demo optimizer, aim to use most of the budget.</li>
+            </ul>
+            <p class="fantasy-rules-copy muted">Example: five drivers at $12,000 + $11,000 + $10,000 + $8,500 + $6,300 = $47,800 used — $2,200 left under cap.</p>
+          </section>
+
+          <section class="fantasy-app-section fantasy-rules-section">
+            <h2 class="fantasy-app-section-title">How to Read Value Grades</h2>
+            <p class="fantasy-rules-copy">Each driver gets a <strong>Value Grade</strong> (A+ through D) based on how much fantasy production you get for the salary you pay. Higher grades mean better “bang for your buck” at that price.</p>
+            <ul class="fantasy-rules-list">
+              <li><strong>A+ / A</strong> — elite value; strong picks if you can fit the salary.</li>
+              <li><strong>B+ / B</strong> — solid value; common building blocks for balanced lineups.</li>
+              <li><strong>C+ / C</strong> — average or thin value; fine in small doses.</li>
+              <li><strong>D</strong> — poor value at current salary; usually avoid unless you need the spend.</li>
+            </ul>
+            <p class="fantasy-rules-copy">Grades are recalculated each slate. A driver can be an A one week and a B the next if salary rises faster than expected performance.</p>
+          </section>
+
+          <section class="fantasy-app-section fantasy-rules-section">
+            <h2 class="fantasy-app-section-title">What Ownership % Means</h2>
+            <p class="fantasy-rules-copy"><strong>Projected Ownership</strong> estimates what share of players might pick each driver. It is not a guarantee — it helps you see who is popular vs. overlooked.</p>
+            <ul class="fantasy-rules-list">
+              <li><strong>Favorite (40%+)</strong> — many players will roster this driver; safe but crowded.</li>
+              <li><strong>Popular (28–39%)</strong> — strong chalk pick; still widely owned.</li>
+              <li><strong>Moderate (18–27%)</strong> — reasonable pick without being overwhelming.</li>
+              <li><strong>Sleeper (10–17%)</strong> — lower-owned upside; good for differentiation.</li>
+              <li><strong>Dark Horse (&lt;10%)</strong> — rarely picked; high risk, high differentiation reward.</li>
+            </ul>
+            <p class="fantasy-rules-copy">“Chalk” means picking the obvious favorites everyone else picks. Contrarian lineups lean toward sleepers and dark horses.</p>
+          </section>
+
+          <section class="fantasy-app-section fantasy-rules-section">
+            <h2 class="fantasy-app-section-title">Active vs. Inactive</h2>
+            <p class="fantasy-rules-copy">Drivers who have <strong>not started a race recently</strong> may be marked <strong>Inactive</strong>. They can still appear on the slate with a salary, but they carry extra risk — they may not race this week.</p>
+            <ul class="fantasy-rules-list">
+              <li><strong>Active</strong> — recent starts in the league; normal availability.</li>
+              <li><strong>Inactive</strong> — no starts in the recent window; shown dimmed on tables. Last start race is listed when known.</li>
+            </ul>
+            <p class="fantasy-rules-copy">The lineup builder warns you if an inactive driver appears in a suggested lineup.</p>
+          </section>
+
+          <section class="fantasy-app-section fantasy-rules-section">
+            <h2 class="fantasy-app-section-title">How to Use the Lineup Builder</h2>
+            <p class="fantasy-rules-copy">The <a class="fantasy-driver-link" href="/fantasy/lineup.html">Lineup Builder</a> is a demo tool — it suggests 5-driver combinations under the cap. Nothing is saved or submitted.</p>
+            <ul class="fantasy-rules-list">
+              <li><strong>Best Overall</strong> — highest combined fantasy tier scores.</li>
+              <li><strong>Best Value</strong> — prioritizes value grades over raw rank.</li>
+              <li><strong>Balanced</strong> — mix of score and value; tries to spend most of the cap.</li>
+              <li><strong>Dark Horse</strong> — favors strong drivers with lower projected ownership.</li>
+              <li><strong>Stars and Sleepers</strong> — at least one expensive star plus a value-tier pick when available.</li>
+            </ul>
+            <p class="fantasy-rules-copy">Tap a strategy card, review the suggested lineup, then tweak your own picks mentally using the Race Slate.</p>
+          </section>
+
+          <section class="fantasy-app-section fantasy-rules-section">
+            <h2 class="fantasy-app-section-title">How to Compare Drivers</h2>
+            <p class="fantasy-rules-copy">Use <a class="fantasy-driver-link" href="/fantasy/compare.html">Compare Drivers</a> to put two drivers side by side: salary, tier, value grade, ownership, activity status, and recent form. Helpful when deciding between two similar salaries.</p>
+          </section>
+
+          <section class="fantasy-app-section fantasy-rules-section">
+            <h2 class="fantasy-app-section-title">Example Lineup</h2>
+            <p class="fantasy-rules-copy">Hypothetical $50,000 cap lineup for one race week:</p>
+            <div class="fantasy-rules-example-lineup fantasy-glass-panel">
+              <div class="fantasy-rules-example-row"><span>Elite star</span><strong>$13,500</strong></div>
+              <div class="fantasy-rules-example-row"><span>Top-tier regular</span><strong>$11,200</strong></div>
+              <div class="fantasy-rules-example-row"><span>Balanced mid salary</span><strong>$9,800</strong></div>
+              <div class="fantasy-rules-example-row"><span>Value play (B+ grade)</span><strong>$8,100</strong></div>
+              <div class="fantasy-rules-example-row"><span>Sleeper / lower salary</span><strong>$6,400</strong></div>
+              <div class="fantasy-rules-example-row fantasy-rules-example-row--total"><span>Total used</span><strong>$49,000 · $1,000 remaining</strong></div>
+            </div>
+            <p class="fantasy-rules-copy muted">Your actual picks should come from the current Race Slate — salaries and grades change every week.</p>
+          </section>
+
+          <section class="fantasy-app-section fantasy-rules-section fantasy-rules-disclaimer">
+            <h2 class="fantasy-app-section-title">Disclaimer</h2>
+            <p class="fantasy-rules-copy">BP Fantasy is in <strong>demo / read-only</strong> mode. Salaries, grades, and ownership are for research and fun. No real money, no saved entries, and no official standings until accounts open. Scoring rules for live play will be published before the first contest.</p>
+            <div class="fantasy-cta-actions">
+              <a class="fantasy-btn fantasy-btn--primary" href="/fantasy/lineup.html">Try Lineup Builder</a>
               <a class="fantasy-btn fantasy-btn--secondary" href="/fantasy.html">Back to Fantasy Home</a>
             </div>
           </section>
@@ -36,7 +127,7 @@
     <script src="/public-nav.js"></script>
     <script src="/fantasy-app-nav.js"></script>
     <script>
-      BPPublicNav.init({ active: "fantasy", title: "BP FANTASY", subtitle: "COMING SOON", right: "tagline" });
+      BPPublicNav.init({ active: "fantasy", title: "BP FANTASY", subtitle: "RULES", right: "tagline" });
       BPFantasyAppNav.init("rules");
     </script>
   </body>
