@@ -225,8 +225,7 @@ export async function buildFantasySalaryHistoryResponse(seasonId) {
     .from('fantasy_slates')
     .select('id, race_number, track, status, model_version, generated_at')
     .eq('season_id', String(seasonId))
-    .order('race_number', { ascending: false })
-    .limit(12);
+    .order('race_number', { ascending: true });
 
   const slates = [];
   for (const row of slateRows || []) {
