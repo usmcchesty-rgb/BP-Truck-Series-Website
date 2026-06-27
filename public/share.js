@@ -5,8 +5,9 @@
   const FALLBACK_CONFIG = {
     boxSizePx: 48,
     iconMaxPx: 40,
+    facebookShareMode: 'sharer',
     platforms: [
-      { id: 'facebook', tooltip: 'Copy for Facebook', icon: '/assets/social/facebook.svg', action: 'facebook' },
+      { id: 'facebook', tooltip: 'Share to Facebook', icon: '/assets/social/facebook.svg', action: 'facebook' },
       { id: 'x', tooltip: 'Share to X', icon: '/assets/social/x.svg', render: 'external' },
       { id: 'instagram', tooltip: 'Copy for Instagram', icon: '/assets/social/instagram.svg', action: 'copy-instagram' },
       { id: 'link', tooltip: 'Copy Link', icon: '/assets/social/link.svg', action: 'copy' },
@@ -57,22 +58,79 @@
     }
   }
 
-  async function shareFacebook(payload, event) {
-    const url = payload.url;
-    const toast = 'Link copied. Paste it into Facebook to share with the preview image.';
+  function normalizeFacebookShareMode(mode) {
+    const value = String(mode || 'auto').trim().toLowerCase();
+    if (value === 'copy' || value === 'native' || value === 'sharer') return value;
+    return 'auto';
+  }
 
-    try {
-      await copyToClipboard(url, { silent: true });
-      showToast(toast, 3500);
-    } catch {
-      showToast('Could not copy link.');
+  function resolveFacebookShareMode(config) {
+    const setting = normalizeFacebookShareMode(config?.facebookShareMode);
+    if (setting !== 'auto') return setting;
+    return 'sharer';
+  }
+
+  function isCanonicalShareUrl(url) {
+    const raw = absoluteUrl(url);
+    return !/facebook\.com/i.test(raw);
+  }
+
+  function buildFacebookSharerUrl(canonicalUrl) {
+    const url = absoluteUrl(canonicalUrl);
+    if (!isCanonicalShareUrl(url)) {
+      throw new Error('Refusing to share non-canonical URL.');
+    }
+    return `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`;
+  }
+
+  async function shareFacebook(payload, config) {
+    const canonicalUrl = absoluteUrl(payload.url);
+    if (!isCanonicalShareUrl(canonicalUrl)) {
+      showToast('Could not share link.');
       return;
     }
 
-    const openSharer = event?.shiftKey || event?.ctrlKey || event?.metaKey;
-    if (openSharer) {
-      const href = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`;
-      window.open(href, '_blank', 'noopener,noreferrer');
+    const mode = resolveFacebookShareMode(config);
+
+    if (mode === 'copy') {
+      try {
+        await copyToClipboard(canonicalUrl, {
+          toastMessage: 'Article link copied. Paste it into Facebook to share.',
+        });
+      } catch {
+        showToast('Could not copy link.');
+      }
+      return;
+    }
+
+    if (mode === 'native') {
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: payload.title || document.title,
+            text: payload.text || '',
+            url: canonicalUrl,
+          });
+          return;
+        } catch (error) {
+          if (error?.name === 'AbortError') return;
+        }
+      }
+      try {
+        await copyToClipboard(canonicalUrl, {
+          toastMessage: 'Article link copied. Paste it into Facebook to share.',
+        });
+      } catch {
+        showToast('Could not copy link.');
+      }
+      return;
+    }
+
+    try {
+      const sharerUrl = buildFacebookSharerUrl(canonicalUrl);
+      window.open(sharerUrl, '_blank', 'noopener,noreferrer');
+    } catch {
+      showToast('Could not open Facebook share.');
     }
   }
 
@@ -105,6 +163,9 @@
 
   function copyToClipboard(url, options = {}) {
     const text = absoluteUrl(url);
+    if (!isCanonicalShareUrl(text)) {
+      return Promise.reject(new Error('Refusing to copy non-canonical URL.'));
+    }
     const toastMessage = options.toastMessage;
     const silent = options.silent === true;
 
@@ -196,7 +257,7 @@
       return renderActionButton({
         ...platform,
         action: 'facebook',
-        tooltip: platform.tooltip || 'Copy for Facebook',
+        tooltip: platform.tooltip || 'Share to Facebook',
       });
     }
     if (platform.id === 'x') {
@@ -233,7 +294,7 @@
     </div>`;
   }
 
-  function bindShareContainer(container, options = {}) {
+  function bindShareContainer(container, options = {}, config = shareConfigCache || FALLBACK_CONFIG) {
     if (!container) return;
 
     const payload = {
@@ -243,10 +304,10 @@
     };
 
     container.querySelectorAll('[data-share-action]').forEach((button) => {
-      button.addEventListener('click', (event) => {
+      button.addEventListener('click', () => {
         const action = button.getAttribute('data-share-action');
         if (action === 'facebook') {
-          shareFacebook(payload, event);
+          shareFacebook(payload, config);
           return;
         }
         if (action === 'copy' || action === 'copy-instagram' || action === 'copy-tiktok') {
@@ -276,7 +337,7 @@
         return null;
       }
       applyShareSizing(shareRoot, cfg);
-      bindShareContainer(shareRoot, options);
+      bindShareContainer(shareRoot, options, cfg);
       return shareRoot;
     };
 

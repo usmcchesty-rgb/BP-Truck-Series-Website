@@ -10,7 +10,7 @@ export const SHARE_PLATFORM_DEFS = [
   {
     id: 'facebook',
     label: 'Facebook',
-    tooltip: 'Copy for Facebook',
+    tooltip: 'Share to Facebook',
     enabledKey: 'facebookEnabled',
     iconKey: 'facebookIcon',
     updatedKey: 'facebookIconUpdatedAt',
@@ -79,10 +79,13 @@ export const SHARE_PLATFORM_DEFS = [
 
 export const DEFAULT_SHARE_ORDER = SHARE_PLATFORM_DEFS.map((p) => p.id);
 
+export const FACEBOOK_SHARE_MODES = new Set(['auto', 'copy', 'native', 'sharer']);
+
 export const SOCIAL_SHARE_DEFAULTS = {
   facebookEnabled: true,
   facebookIcon: '/assets/social/facebook.svg',
   facebookIconUpdatedAt: null,
+  facebookShareMode: 'sharer',
   xEnabled: true,
   xIcon: '/assets/social/x.svg',
   xIconUpdatedAt: null,
@@ -193,6 +196,7 @@ export function buildPublicSocialShareConfig(settings = {}) {
     order,
     boxSizePx,
     iconMaxPx,
+    facebookShareMode: normalizeFacebookShareMode(merged.facebookShareMode),
     platforms,
   };
 }
@@ -201,6 +205,18 @@ function clampNumber(value, min, max, fallback) {
   const n = Number(value);
   if (!Number.isFinite(n)) return fallback;
   return Math.min(max, Math.max(min, Math.round(n)));
+}
+
+export function normalizeFacebookShareMode(value) {
+  const mode = String(value || 'auto').trim().toLowerCase();
+  return FACEBOOK_SHARE_MODES.has(mode) ? mode : 'auto';
+}
+
+/** @param {'mobile'|'desktop'} device */
+export function resolveFacebookShareModeForDevice(mode, device = 'desktop') {
+  const normalized = normalizeFacebookShareMode(mode);
+  if (normalized !== 'auto') return normalized;
+  return 'sharer';
 }
 
 export function buildSocialShareSettingsPatch(body = {}) {
@@ -224,6 +240,9 @@ export function buildSocialShareSettingsPatch(body = {}) {
   }
   if (body.socialShareIconMaxPx !== undefined) {
     patch.socialShareIconMaxPx = clampNumber(body.socialShareIconMaxPx, 24, 56, 40);
+  }
+  if (body.facebookShareMode !== undefined) {
+    patch.facebookShareMode = normalizeFacebookShareMode(body.facebookShareMode);
   }
   return patch;
 }
