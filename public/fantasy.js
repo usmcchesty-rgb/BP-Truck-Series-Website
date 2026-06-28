@@ -43,6 +43,96 @@ const SCORING_CATEGORIES = [
   { key: 'Laps Led', value: 'Extra points for leading laps during the race.' },
 ];
 
+function renderCtaButtons(actionsEl, buttons) {
+  if (!actionsEl) return;
+  actionsEl.innerHTML = buttons
+    .map(
+      (btn) =>
+        `<a class="fantasy-btn fantasy-btn--${btn.variant || 'secondary'}" href="${escapeHtml(btn.href)}">${escapeHtml(btn.label)}</a>`,
+    )
+    .join('');
+}
+
+async function renderLandingCta() {
+  const titleEl = document.getElementById('fantasyCtaTitle');
+  const copyEl = document.getElementById('fantasyCtaCopy');
+  const actionsEl = document.getElementById('fantasyCtaActions');
+  if (!titleEl || !copyEl || !actionsEl) return;
+
+  let slatePublished = false;
+  try {
+    const slateRes = await fetch('/api/settings?action=getFantasyPublicSlate');
+    if (slateRes.ok) {
+      const slateData = await slateRes.json();
+      slatePublished = slateData?.slate?.status === 'published';
+    }
+  } catch {
+    // Default to logged-out CTA when slate cannot be loaded.
+  }
+
+  if (!slatePublished) {
+    titleEl.textContent = 'Next BP Fantasy Slate Coming Soon';
+    copyEl.textContent =
+      'The next BP Fantasy slate has not been published yet. Check back soon for driver salaries and lineup building.';
+    renderCtaButtons(actionsEl, [
+      { label: 'View Rules', href: '/fantasy/rules.html', variant: 'primary' },
+      { label: 'Driver Outlook', href: '/fantasy/slate.html', variant: 'secondary' },
+    ]);
+    return;
+  }
+
+  let loggedIn = false;
+  let profile = null;
+  let hasLineup = false;
+
+  try {
+    const Auth = window.BPFantasyAuth;
+    if (Auth) {
+      await Auth.init();
+      const session = await Auth.getSession();
+      loggedIn = Boolean(session);
+      if (loggedIn) {
+        const dashRes = await Auth.authFetch('/api/settings?action=getDashboard');
+        if (dashRes.ok) {
+          const dashboard = await dashRes.json();
+          profile = dashboard.profile || null;
+          hasLineup = Boolean(dashboard.lineup?.drivers?.length);
+        }
+      }
+    }
+  } catch {
+    loggedIn = false;
+  }
+
+  if (!loggedIn) {
+    titleEl.textContent = 'Ready to Play BP Fantasy?';
+    copyEl.textContent =
+      'Create your free BP Fantasy account and compete against other Blazing Pedals drivers every race week.';
+    renderCtaButtons(actionsEl, [
+      { label: 'Create Account', href: '/fantasy/signup.html', variant: 'primary' },
+      { label: 'Login', href: '/fantasy/login.html', variant: 'secondary' },
+    ]);
+    return;
+  }
+
+  const displayName =
+    String(profile?.displayName || profile?.email?.split('@')[0] || 'Player').trim() || 'Player';
+  titleEl.textContent = `Welcome Back, ${displayName}`;
+  copyEl.textContent = "Build or manage your lineup for this week's BP Fantasy slate.";
+  renderCtaButtons(
+    actionsEl,
+    hasLineup
+      ? [
+          { label: 'View My Lineup', href: '/fantasy/lineup.html', variant: 'primary' },
+          { label: 'Fantasy Dashboard', href: '/fantasy/dashboard.html', variant: 'secondary' },
+        ]
+      : [
+          { label: 'Build My Lineup', href: '/fantasy/lineup.html', variant: 'primary' },
+          { label: 'Fantasy Dashboard', href: '/fantasy/dashboard.html', variant: 'secondary' },
+        ],
+  );
+}
+
 window.BPFantasyLanding = {
   init() {
     if (!isFantasyPublicLandingPage()) return;
@@ -53,6 +143,9 @@ window.BPFantasyLanding = {
     this.renderScoringPreview(root);
     this.loadPageSettings(root);
     applyLandingAssets();
+    renderLandingCta().catch((err) => {
+      console.warn('BP Fantasy landing CTA failed:', err);
+    });
   },
 
   async loadPageSettings(root) {

@@ -97,13 +97,12 @@
 
         <!-- BOTTOM CTA -->
         <section class="fantasy-section fantasy-cta-band" aria-label="Join BP Fantasy">
-          <h2 class="fantasy-cta-band-title">Ready to Play BP Fantasy?</h2>
-          <p class="fantasy-cta-band-copy">
-            Create your account and build lineups when BP Fantasy account access opens.
+          <h2 class="fantasy-cta-band-title" id="fantasyCtaTitle">Ready to Play BP Fantasy?</h2>
+          <p class="fantasy-cta-band-copy" id="fantasyCtaCopy">
+            Create your free BP Fantasy account and compete against other Blazing Pedals drivers every race week.
           </p>
-          <div class="fantasy-cta-actions">
-            <a class="fantasy-btn fantasy-btn--primary" href="/fantasy/slate.html">View Demo Slate</a>
-            <a class="fantasy-btn fantasy-btn--secondary" href="/fantasy/signup.html">Sign Up</a>
+          <div class="fantasy-cta-actions" id="fantasyCtaActions">
+            <a class="fantasy-btn fantasy-btn--primary" href="/fantasy/signup.html">Create Account</a>
             <a class="fantasy-btn fantasy-btn--secondary" href="/fantasy/login.html">Login</a>
           </div>
         </section>
@@ -113,6 +112,7 @@
 
     <footer>FAST DRIVERS. CLOSE RACING. <span>BIG FUN.</span></footer>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
     <script src="public-nav.js"></script>
     <script>
       BPPublicNav.init({
@@ -124,6 +124,7 @@
       });
     </script>
     <script src="fantasy-branding-assets.js"></script>
+    <script src="fantasy-auth.js"></script>
     <script src="fantasy.js"></script>
   </body>
 </html>
