@@ -11,47 +11,73 @@
       .replace(/"/g, '&quot;');
   }
 
-  function showError(el, message) {
+  function showMessage(el, message, { hiddenWhenEmpty = true } = {}) {
     if (!el) return;
     el.textContent = message || '';
-    el.hidden = !message;
+    if (hiddenWhenEmpty) {
+      el.hidden = !message;
+    }
   }
 
-  async function handleLogin(form) {
+  function formatAuthError(error) {
+    if (!error) return 'Something went wrong.';
+    return error.message || String(error);
+  }
+
+  async function handleLogin(form, submitBtn) {
     const email = String(form.email.value || '').trim();
     const password = String(form.password.value || '');
     const errorEl = $('#fantasyAuthError');
-    showError(errorEl, '');
+    const successEl = $('#fantasyAuthSuccess');
+    showMessage(errorEl, '');
+    showMessage(successEl, '');
 
     if (!email || !password) {
-      showError(errorEl, 'Enter your email and password.');
+      showMessage(errorEl, 'Enter your email and password.');
       return;
+    }
+
+    const originalLabel = submitBtn?.textContent || 'Log In';
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Logging in…';
     }
 
     try {
       await window.BPFantasyAuth.signIn(email, password);
       window.location.href = '/fantasy/dashboard.html';
     } catch (error) {
-      showError(errorEl, error.message || 'Login failed.');
+      showMessage(errorEl, formatAuthError(error));
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalLabel;
+      }
     }
   }
 
-  async function handleSignup(form) {
+  async function handleSignup(form, submitBtn) {
     const displayName = String(form.displayName.value || '').trim();
     const email = String(form.email.value || '').trim();
     const password = String(form.password.value || '');
     const errorEl = $('#fantasyAuthError');
     const successEl = $('#fantasyAuthSuccess');
-    showError(errorEl, '');
-    showError(successEl, '');
+    showMessage(errorEl, '');
+    showMessage(successEl, '');
 
     if (!email || !password) {
-      showError(errorEl, 'Enter your email and password.');
+      showMessage(errorEl, 'Enter your email and password.');
       return;
     }
     if (password.length < 6) {
-      showError(errorEl, 'Password must be at least 6 characters.');
+      showMessage(errorEl, 'Password must be at least 6 characters.');
       return;
+    }
+
+    const originalLabel = submitBtn?.textContent || 'Create Account';
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Creating account…';
     }
 
     try {
@@ -60,29 +86,20 @@
         window.location.href = '/fantasy/dashboard.html';
         return;
       }
-      successEl.hidden = false;
-      successEl.textContent =
-        'Account created. Check your email to confirm, then log in.';
+      showMessage(successEl, 'Check your email to confirm your BP Fantasy account.');
     } catch (error) {
-      showError(errorEl, error.message || 'Sign up failed.');
+      showMessage(errorEl, formatAuthError(error));
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalLabel;
+      }
     }
   }
 
-  async function initLogin() {
+  function renderLoginForm(confirmedMessage = '') {
     const root = $('#fantasyAuthRoot');
     if (!root) return;
-
-    try {
-      await window.BPFantasyAuth.init();
-      const session = await window.BPFantasyAuth.getSession();
-      if (session) {
-        window.location.href = '/fantasy/dashboard.html';
-        return;
-      }
-    } catch (error) {
-      root.innerHTML = `<section class="fantasy-app-empty"><p>${escapeHtml(error.message)}</p></section>`;
-      return;
-    }
 
     root.innerHTML = `
       <section class="fantasy-auth-card fantasy-glass-panel">
@@ -92,6 +109,7 @@
         <form id="fantasyLoginForm" class="fantasy-auth-form">
           <label>Email<input class="input" type="email" name="email" autocomplete="email" required /></label>
           <label>Password<input class="input" type="password" name="password" autocomplete="current-password" required /></label>
+          <p id="fantasyAuthSuccess" class="fantasy-auth-message is-success"${confirmedMessage ? '' : ' hidden'}>${escapeHtml(confirmedMessage)}</p>
           <p id="fantasyAuthError" class="fantasy-auth-message is-error" hidden></p>
           <button type="submit" class="fantasy-btn fantasy-btn--primary">Log In</button>
         </form>
@@ -100,8 +118,36 @@
 
     $('#fantasyLoginForm')?.addEventListener('submit', (e) => {
       e.preventDefault();
-      handleLogin(e.target);
+      handleLogin(e.target, e.submitter || e.target.querySelector('button[type="submit"]'));
     });
+  }
+
+  async function initLogin() {
+    const root = $('#fantasyAuthRoot');
+    if (!root) return;
+
+    try {
+      await window.BPFantasyAuth.init();
+      const callback = await window.BPFantasyAuth.processAuthCallback();
+
+      if (callback?.session) {
+        window.location.href = '/fantasy/dashboard.html';
+        return;
+      }
+
+      const session = await window.BPFantasyAuth.getSession();
+      if (session) {
+        window.location.href = '/fantasy/dashboard.html';
+        return;
+      }
+
+      const confirmedMessage = callback?.confirmedOnly
+        ? 'Email confirmed. You can log in.'
+        : '';
+      renderLoginForm(confirmedMessage);
+    } catch (error) {
+      root.innerHTML = `<section class="fantasy-app-empty"><p class="fantasy-auth-message is-error">${escapeHtml(formatAuthError(error))}</p></section>`;
+    }
   }
 
   async function initSignup() {
@@ -110,13 +156,20 @@
 
     try {
       await window.BPFantasyAuth.init();
+      const callback = await window.BPFantasyAuth.processAuthCallback();
+
+      if (callback?.session) {
+        window.location.href = '/fantasy/dashboard.html';
+        return;
+      }
+
       const session = await window.BPFantasyAuth.getSession();
       if (session) {
         window.location.href = '/fantasy/dashboard.html';
         return;
       }
     } catch (error) {
-      root.innerHTML = `<section class="fantasy-app-empty"><p>${escapeHtml(error.message)}</p></section>`;
+      root.innerHTML = `<section class="fantasy-app-empty"><p class="fantasy-auth-message is-error">${escapeHtml(formatAuthError(error))}</p></section>`;
       return;
     }
 
@@ -138,7 +191,7 @@
 
     $('#fantasySignupForm')?.addEventListener('submit', (e) => {
       e.preventDefault();
-      handleSignup(e.target);
+      handleSignup(e.target, e.submitter || e.target.querySelector('button[type="submit"]'));
     });
   }
 

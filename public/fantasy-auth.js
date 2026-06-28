@@ -2,6 +2,44 @@
   let client = null;
   let configured = false;
 
+  function getEmailRedirectUrl() {
+    return `${window.location.origin}/fantasy/login.html`;
+  }
+
+  function hasAuthParamsInUrl() {
+    const hash = window.location.hash || '';
+    const search = window.location.search || '';
+    return (
+      hash.includes('access_token=') ||
+      hash.includes('refresh_token=') ||
+      hash.includes('type=') ||
+      search.includes('code=') ||
+      search.includes('token_hash=') ||
+      search.includes('type=') ||
+      search.includes('error=') ||
+      search.includes('error_description=')
+    );
+  }
+
+  function readAuthCallbackFlags() {
+    const hashParams = new URLSearchParams((window.location.hash || '').replace(/^#/, ''));
+    const searchParams = new URLSearchParams(window.location.search || '');
+    const type = hashParams.get('type') || searchParams.get('type') || '';
+    const errorDescription = searchParams.get('error_description');
+    return {
+      type,
+      confirmedOnly: type === 'signup' || type === 'email' || type === 'magiclink',
+      errorDescription: errorDescription
+        ? decodeURIComponent(errorDescription.replace(/\+/g, ' '))
+        : null,
+    };
+  }
+
+  function clearAuthParamsFromUrl() {
+    if (!hasAuthParamsInUrl()) return;
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }
+
   async function init() {
     if (client) return client;
     const res = await fetch('/api/settings?action=getAuthConfig');
@@ -25,6 +63,36 @@
     return client;
   }
 
+  async function processAuthCallback() {
+    const sb = await init();
+    const hadAuthParams = hasAuthParamsInUrl();
+    const flags = readAuthCallbackFlags();
+
+    if (flags.errorDescription) {
+      clearAuthParamsFromUrl();
+      throw new Error(flags.errorDescription);
+    }
+
+    const code = new URLSearchParams(window.location.search || '').get('code');
+    let { data, error } = await sb.auth.getSession();
+
+    if (!data?.session && code) {
+      const exchanged = await sb.auth.exchangeCodeForSession(code);
+      data = exchanged.data;
+      error = exchanged.error;
+    }
+
+    if (hadAuthParams) clearAuthParamsFromUrl();
+
+    if (error) throw error;
+
+    return {
+      session: data?.session || null,
+      fromCallback: hadAuthParams,
+      confirmedOnly: Boolean(hadAuthParams && !data?.session && flags.confirmedOnly),
+    };
+  }
+
   async function getSession() {
     const sb = await init();
     const { data, error } = await sb.auth.getSession();
@@ -44,6 +112,7 @@
       password,
       options: {
         data: { display_name: displayName || '' },
+        emailRedirectTo: getEmailRedirectUrl(),
       },
     });
     if (error) throw error;
@@ -86,6 +155,9 @@
   window.BPFantasyAuth = {
     init,
     isConfigured: () => configured,
+    getEmailRedirectUrl,
+    hasAuthParamsInUrl,
+    processAuthCallback,
     getSession,
     getAccessToken,
     signUp,
