@@ -561,7 +561,7 @@ body.fantasy-page .topbar{
   gap:10px;
   margin-bottom:10px;
 }
-.fantasy-lineup-summary__grades span{
+.fantasy-lineup-summary__grades > div > span:first-child{
   display:block;
   font-size:9px;
   text-transform:uppercase;
@@ -899,7 +899,7 @@ body.fantasy-page main.fantasy-app-page{
   gap:10px;
 }
 
-.fantasy-slate-meta-grid span{
+.fantasy-slate-meta-grid > div > span:first-child{
   display:block;
   color:#999;
   font-size:10px;
@@ -1018,38 +1018,38 @@ body.fantasy-page main.fantasy-app-page{
   display:inline-flex !important;
   align-items:center !important;
   justify-content:center !important;
-  box-sizing:border-box;
-  width:32px;
-  min-width:32px;
-  max-width:32px;
-  height:18px;
-  margin:0;
-  padding:0;
+  box-sizing:border-box !important;
+  width:32px !important;
+  min-width:32px !important;
+  height:18px !important;
+  margin:0 !important;
+  padding:0 !important;
   border-radius:4px;
   border:1px solid rgba(255,255,255,.12);
   font-size:9px !important;
   font-weight:900 !important;
-  letter-spacing:0;
+  letter-spacing:0 !important;
   line-height:1 !important;
   text-align:center;
   text-transform:none !important;
   white-space:nowrap;
-  vertical-align:middle;
   flex:0 0 auto;
-  color:#fff;
+  position:static !important;
+  transform:none !important;
 }
 
 .fantasy-value-grade-badge__letter{
-  display:block !important;
+  display:inline-block !important;
   line-height:1 !important;
+  margin:0 !important;
+  padding:0 !important;
+  transform:none !important;
+  position:static !important;
+  top:auto !important;
   font-size:inherit !important;
   font-weight:inherit !important;
   letter-spacing:inherit !important;
   text-transform:none !important;
-  color:inherit !important;
-  margin:0 !important;
-  padding:0 !important;
-  transform:translateY(0.5px);
 }
 
 .fantasy-value-grade-badge--a-plus{
@@ -1099,16 +1099,6 @@ body.fantasy-page main.fantasy-app-page{
 .fantasy-value-grade-cell{
   vertical-align:middle;
   text-align:center;
-}
-
-.fantasy-value-grade-cell .fantasy-value-grade-badge{
-  margin:0 auto;
-}
-
-strong:has(> .fantasy-value-grade-badge){
-  display:inline-flex;
-  align-items:center;
-  line-height:1;
 }
 
 .fantasy-change.is-up{ color:var(--green); font-weight:900; }
@@ -1312,7 +1302,7 @@ strong:has(> .fantasy-value-grade-badge){
   gap:12px;
 }
 
-.fantasy-breakdown-grid span{
+.fantasy-breakdown-grid > div > span:first-child{
   display:block;
   color:#999;
   font-size:10px;
@@ -1352,7 +1342,7 @@ strong:has(> .fantasy-value-grade-badge){
   gap:12px;
 }
 
-.fantasy-driver-detail-grid span:not(.fantasy-value-grade-badge):not(.fantasy-value-grade-badge__letter):not(.fantasy-driver-quick-stat__label){
+.fantasy-driver-detail-grid > div > span:first-child{
   display:block;
   color:#999;
   font-size:10px;
@@ -1660,7 +1650,7 @@ strong:has(> .fantasy-value-grade-badge){
   gap:10px 12px;
 }
 
-.fantasy-salary-trend-grid span{
+.fantasy-salary-trend-grid > div > span:first-child{
   display:block;
   color:#999;
   font-size:10px;
@@ -2013,7 +2003,7 @@ strong:has(> .fantasy-value-grade-badge){
   font-size:12px;
 }
 
-.fantasy-compare-stat span{
+.fantasy-compare-stat > span:first-child{
   color:#999;
   text-transform:uppercase;
   letter-spacing:.06em;
@@ -2076,7 +2066,7 @@ strong:has(> .fantasy-value-grade-badge){
   font-size:12px;
 }
 
-.fantasy-lineup-result__meta span{
+.fantasy-lineup-result__meta > div > span:first-child{
   display:block;
   color:#999;
   font-size:10px;
