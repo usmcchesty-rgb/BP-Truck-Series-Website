@@ -17,8 +17,14 @@ import {
   buildPublicSocialShareConfig,
   buildSocialShareSettingsPatch,
 } from './_social-share-settings.js';
-import { countLineupsForSlate } from './_fantasy-lineups.js';
+import {
+  countLineupsForSlate,
+  getFantasyLaunchDashboard,
+  getUserLineupForCurrentSlate,
+  submitFantasyLineup,
+} from './_fantasy-lineups.js';
 import { loadLatestFantasySlate } from './_fantasy-public-slate.js';
+import { getFantasyAuthConfig, getUserFromBearerToken } from './_fantasy-auth.js';
 
 async function handleGetFantasyDraftSlate(req, res) {
   try {
@@ -94,16 +100,65 @@ export default async function handler(req, res) {
         return res.status(500).json({ error: error.message || 'Failed to load driver detail.' });
       }
     }
+    if (queryAction === 'getAuthConfig') {
+      const config = getFantasyAuthConfig();
+      return res.status(200).json({
+        configured: config.configured,
+        url: config.url,
+        anonKey: config.anonKey,
+      });
+    }
+    if (queryAction === 'getSession') {
+      const user = await getUserFromBearerToken(req);
+      if (!user) return res.status(200).json({ user: null, profile: null });
+      const dashboard = await getFantasyLaunchDashboard(user);
+      return res.status(200).json({
+        user: { id: user.id, email: user.email },
+        profile: dashboard.profile,
+      });
+    }
+    if (queryAction === 'getLineup') {
+      const user = await getUserFromBearerToken(req);
+      if (!user) return res.status(401).json({ error: 'Login required.' });
+      try {
+        const settings = await getSettings();
+        const seasonId = req.query?.seasonId || settings.seasonId || '27987';
+        const result = await getUserLineupForCurrentSlate(user.id, seasonId);
+        return res.status(200).json(result);
+      } catch (error) {
+        return res.status(500).json({ error: error.message || 'Failed to load lineup.' });
+      }
+    }
+    if (queryAction === 'getDashboard') {
+      const user = await getUserFromBearerToken(req);
+      try {
+        const dashboard = await getFantasyLaunchDashboard(user);
+        return res.status(200).json(dashboard);
+      } catch (error) {
+        return res.status(500).json({ error: error.message || 'Failed to load dashboard.' });
+      }
+    }
     return res.status(200).json(await getSettings());
   }
 
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const body = req.body || {};
+  const action = String(body.action || req.query?.action || '').trim();
+
+  if (action === 'submitLineup') {
+    const user = await getUserFromBearerToken(req);
+    if (!user) return res.status(401).json({ error: 'Login required to submit a lineup.' });
+    try {
+      const result = await submitFantasyLineup(user, body);
+      return res.status(200).json(result);
+    } catch (error) {
+      return res.status(400).json({ error: error.message || 'Lineup submission failed.' });
+    }
+  }
+
   if (body.password !== process.env.ADMIN_PASSWORD) return res.status(401).json({ error: 'Bad password' });
   if (body.verifyOnly) return res.status(200).json({ ok: true });
-
-  const action = String(body.action || '').trim();
 
   if (action === 'generateFantasySlate') {
     try {

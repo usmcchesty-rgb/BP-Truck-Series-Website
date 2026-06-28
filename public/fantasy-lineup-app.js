@@ -280,7 +280,7 @@
     }
 
     try {
-      const res = await Auth.authFetch('/api/fantasy?action=submitLineup', {
+      const res = await Auth.authFetch('/api/settings?action=submitLineup', {
         method: 'POST',
         body: JSON.stringify({
           drivers: drivers.map((d) => ({ driverId: d.driverId })),
@@ -302,7 +302,7 @@
   async function loadSavedLineup() {
     if (!isLoggedIn) return;
     try {
-      const res = await Auth.authFetch('/api/fantasy?action=getLineup');
+      const res = await Auth.authFetch('/api/settings?action=getLineup');
       if (!res.ok) return;
       const data = await res.json();
       if (data.lock) lockState = { ...lockState, ...data.lock };

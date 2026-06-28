@@ -4,7 +4,7 @@
 
   async function init() {
     if (client) return client;
-    const res = await fetch('/api/fantasy?action=getAuthConfig');
+    const res = await fetch('/api/settings?action=getAuthConfig');
     if (!res.ok) throw new Error('Auth config unavailable.');
     const config = await res.json();
     if (!config?.configured || !config.url || !config.anonKey) {
@@ -78,7 +78,7 @@
   }
 
   async function getProfile() {
-    const res = await authFetch('/api/fantasy?action=getSession');
+    const res = await authFetch('/api/settings?action=getSession');
     if (!res.ok) return null;
     return res.json();
   }

@@ -140,9 +140,9 @@
         (async () => {
           try {
             await Auth.init();
-            return Auth.authFetch('/api/fantasy?action=getDashboard');
+            return Auth.authFetch('/api/settings?action=getDashboard');
           } catch {
-            return fetch('/api/fantasy?action=getDashboard');
+            return fetch('/api/settings?action=getDashboard');
           }
         })(),
       ]);

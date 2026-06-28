@@ -1,0 +1,238 @@
+---
+description: Blazing Pedals website — project-wide development standards (architecture, design, fantasy, APIs, deployment)
+alwaysApply: true
+---
+
+# Blazing Pedals Website Project Rules
+
+Permanent development standards for this repository. Extend existing systems; do not repeat one-off conventions in chat.
+
+---
+
+## General
+
+- Extend existing systems instead of replacing them whenever possible.
+- Reuse existing components, utilities, APIs, and helpers before creating new ones.
+- Do not duplicate business logic.
+- Preserve backwards compatibility.
+- Do not remove existing functionality unless explicitly instructed.
+- Modify existing files rather than creating unnecessary new ones.
+- Search the project before implementing new functionality.
+
+---
+
+## Vercel Architecture
+
+This project is deployed on the **Vercel Hobby plan**.
+
+**Never exceed the Hobby plan serverless function limit.**
+
+Before creating a new API route:
+
+- Count existing deployable API functions.
+- If another API would exceed the limit, extend an existing endpoint using `action` parameters.
+- Prefer helper modules beginning with `_` (e.g. `api/_fantasy-lineups.js`).
+- Never recommend upgrading Vercel simply to solve an architectural problem.
+
+Business logic belongs in helper modules. API routes should remain lightweight dispatchers.
+
+---
+
+## API Design
+
+Prefer existing APIs using `?action=` instead of creating new endpoints:
+
+- `api/settings.js` (site settings, fantasy slate, auth, lineups)
+- `api/news.js`
+- `api/drivers.js`
+
+Add new behavior via `action` handlers and `_` helper modules when possible.
+
+---
+
+## Site Consistency
+
+The **Power Rankings page** is the visual reference for the website.
+
+Maintain consistent:
+
+- widths
+- spacing
+- typography
+- cards
+- headers
+- buttons
+- borders
+- shadows
+
+Standard content width is **1500px** unless a page intentionally uses a narrower reading column.
+
+Whenever modifying layouts, compare against the rest of the website.
+
+---
+
+## Design
+
+Maintain the existing Blazing Pedals visual identity: professional NASCAR broadcast styling.
+
+**Not:** esports, gaming, flashy, or cartoon aesthetics.
+
+Color palette: **red**, **black**, **white**.
+
+---
+
+## Motorsports Terminology
+
+Avoid generic fantasy sports terminology.
+
+**Never use:** Chalk, GPP, Cash Game, DFS terminology, Tournament Pivot, Fade.
+
+**Prefer:** Favorite, Popular Pick, Sleeper, Dark Horse, Value Play, Fantasy Outlook, Fantasy Projection, Fantasy Edge, Strong Fantasy Option.
+
+Everything should sound like motorsports rather than DraftKings.
+
+---
+
+## Fantasy Branding
+
+Fantasy pages should always make it obvious they are discussing fantasy.
+
+**Prefer wording such as:**
+
+- BP Fantasy
+- BP Fantasy Driver Outlook
+- BP Fantasy Projection
+- BP Fantasy Notes
+- Fantasy Pick Outlook
+- Fantasy Edge
+- Fantasy Value
+- Fantasy Risk
+
+Always clarify that projections are fantasy-related. Never present fantasy recommendations as race predictions.
+
+---
+
+## Social Sharing
+
+News articles should always share **`/news/{slug}`**.
+
+**Never share:** `news-article.html?slug=`
+
+Preserve OG tags, Twitter tags, canonical URLs, and article previews. Never break existing social sharing.
+
+---
+
+## Driver Images
+
+Never regenerate driver images unless explicitly requested.
+
+Preserve dimensions, crop, transparency, proportions, and positioning.
+
+Background removal should only remove background pixels.
+
+**Never:** resize, crop, sharpen, recolor, or relight driver images unless explicitly instructed.
+
+---
+
+## Images (General)
+
+Unless specifically instructed, never crop, resize, redesign, reposition, or zoom images. Maintain original artwork.
+
+---
+
+## Driver Profile Page
+
+Match the rest of the website width.
+
+Desktop stats should remain on one row whenever practical. Only wrap naturally on smaller screens.
+
+---
+
+## Fantasy Logic
+
+**Never modify without explicit instruction:**
+
+- scoring
+- ownership formulas
+- optimizer calculations
+- salary calculations
+- projections
+
+Presentation improvements are encouraged. Algorithm changes require approval.
+
+---
+
+## Shared Components
+
+Whenever functionality appears on multiple pages, reuse shared components.
+
+Examples: Fantasy pills, driver cards, social sharing, Prophet notes, stat cards.
+
+Avoid page-specific implementations when a shared module already exists.
+
+---
+
+## Code Quality
+
+Before finishing work:
+
+- Remove duplicated code.
+- Avoid duplicated CSS and JavaScript.
+- Reuse shared utilities.
+- Eliminate dead code when safe.
+- Do not introduce unnecessary dependencies.
+
+---
+
+## Data Safety
+
+Never delete Supabase data, existing settings, migrations, or records unless explicitly instructed.
+
+---
+
+## Deployment
+
+Before marking work complete, verify:
+
+- Vercel compatibility
+- Build compatibility
+- Existing pages still function
+- Existing APIs still function
+- Desktop layout
+- Mobile layout
+
+---
+
+## Implementation Reports
+
+Whenever completing work, include:
+
+- Root cause (if fixing a bug)
+- Files modified
+- Files created
+- Files intentionally unchanged
+- Testing performed
+- Deployment requirements
+- Manual steps required
+
+---
+
+## Implementation Honesty
+
+Never report work as complete unless it has actually been implemented.
+
+Clearly distinguish between: code changed, locally tested, and production verified.
+
+If something cannot be verified, explicitly state that it is unverified.
+
+---
+
+## Default Principle
+
+When multiple approaches are possible, choose the solution that:
+
+- reuses existing architecture
+- creates the fewest new files
+- minimizes maintenance
+- maintains consistency across the website
+- preserves backwards compatibility
