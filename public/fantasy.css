@@ -1030,11 +1030,15 @@ body.fantasy-page main.fantasy-app-page{
   font-size:9px;
   font-weight:900;
   letter-spacing:0;
-  line-height:1;
+  line-height:0;
   text-align:center;
   white-space:nowrap;
-  vertical-align:middle;
   flex:0 0 auto;
+}
+
+.fantasy-value-grade-badge__letter{
+  display:block;
+  line-height:1;
 }
 
 .fantasy-value-grade-badge--a-plus{
@@ -1083,6 +1087,7 @@ body.fantasy-page main.fantasy-app-page{
 
 .fantasy-value-grade-cell{
   vertical-align:middle;
+  text-align:center;
 }
 
 .fantasy-value-grade-cell .fantasy-value-grade-badge{
@@ -1090,7 +1095,7 @@ body.fantasy-page main.fantasy-app-page{
 }
 
 .fantasy-driver-quick-stat .fantasy-value-grade-badge{
-  margin-top:4px;
+  margin-top:2px;
 }
 
 .fantasy-change.is-up{ color:var(--green); font-weight:900; }

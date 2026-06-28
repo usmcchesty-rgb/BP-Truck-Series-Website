@@ -22,7 +22,7 @@
   function renderFantasyGradePill(grade) {
     if (!grade) return '—';
     const modifier = valueGradeModifier(grade);
-    return `<span class="fantasy-value-grade-badge fantasy-value-grade-badge--${modifier}">${escapeHtml(grade)}</span>`;
+    return `<span class="fantasy-value-grade-badge fantasy-value-grade-badge--${modifier}"><span class="fantasy-value-grade-badge__letter">${escapeHtml(grade)}</span></span>`;
   }
 
   function activityModifier(status) {

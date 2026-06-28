@@ -211,29 +211,27 @@
     const b = Number(bVal);
     const aOk = Number.isFinite(a);
     const bOk = Number.isFinite(b);
-    if (!aOk && !bOk) return { winner: 'even', label: 'Even' };
-    if (!aOk) return { winner: 'b', label: firstName(nameB) };
-    if (!bOk) return { winner: 'a', label: firstName(nameA) };
+    if (!aOk && !bOk) return { winner: 'even' };
+    if (!aOk) return { winner: 'b' };
+    if (!bOk) return { winner: 'a' };
     const diff = lowerWins ? b - a : a - b;
-    if (Math.abs(diff) <= epsilon) return { winner: 'even', label: 'Even' };
-    return diff > 0
-      ? { winner: 'a', label: firstName(nameA) }
-      : { winner: 'b', label: firstName(nameB) };
+    if (Math.abs(diff) <= epsilon) return { winner: 'even' };
+    return diff > 0 ? { winner: 'a' } : { winner: 'b' };
   }
 
   function activityEdge(a, b) {
     const aActive = !isDriverInactive(a);
     const bActive = !isDriverInactive(b);
-    if (aActive && !bActive) return { winner: 'a', label: firstName(a.driverName) };
-    if (bActive && !aActive) return { winner: 'b', label: firstName(b.driverName) };
-    return { winner: 'even', label: 'Even' };
+    if (aActive && !bActive) return { winner: 'a' };
+    if (bActive && !aActive) return { winner: 'b' };
+    return { winner: 'even' };
   }
 
   function buildCompareEdges(a, b) {
     return [
       {
         key: 'fantasy',
-        label: 'Fantasy Edge',
+        category: 'Fantasy Edge',
         ...compareEdge(a.fantasyRank, b.fantasyRank, a.driverName, b.driverName, {
           lowerWins: true,
           epsilon: 0,
@@ -241,12 +239,12 @@
       },
       {
         key: 'value',
-        label: 'Value Edge',
+        category: 'Value Edge',
         ...compareEdge(a.valueScore, b.valueScore, a.driverName, b.driverName),
       },
       {
         key: 'track',
-        label: 'Track History Edge',
+        category: 'Track History Edge',
         ...compareEdge(
           a.provenTrackHistoryRank ?? a.trackRank,
           b.provenTrackHistoryRank ?? b.trackRank,
@@ -257,12 +255,12 @@
       },
       {
         key: 'form',
-        label: 'Recent Form Edge',
+        category: 'Recent Form Edge',
         ...compareEdge(a.recentFormScore, b.recentFormScore, a.driverName, b.driverName),
       },
       {
         key: 'ownership',
-        label: 'Ownership Edge',
+        category: 'Ownership Edge',
         ...compareEdge(a.projectedOwnershipPct, b.projectedOwnershipPct, a.driverName, b.driverName, {
           lowerWins: true,
           epsilon: 0.5,
@@ -270,12 +268,12 @@
       },
       {
         key: 'activity',
-        label: 'Activity Edge',
+        category: 'Activity Edge',
         ...activityEdge(a, b),
       },
       {
         key: 'salary',
-        label: 'Salary Savings Edge',
+        category: 'Salary Savings Edge',
         ...compareEdge(a.salary, b.salary, a.driverName, b.driverName, {
           lowerWins: true,
           epsilon: 0,

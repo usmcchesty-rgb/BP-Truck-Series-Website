@@ -91,7 +91,7 @@
               edge.winner === 'even' ? 'Even' : edge.winner === 'a' ? nameA : nameB;
             return `
               <div class="fantasy-compare-edge-table__row${edge.winner === 'even' ? ' is-even' : ''}">
-                <div class="fantasy-compare-edge-table__cat">${escapeHtml(edge.label)}</div>
+                <div class="fantasy-compare-edge-table__cat">${escapeHtml(edge.category || edge.label || '')}</div>
                 <div class="fantasy-compare-edge-table__cell${aWin ? ' is-winner' : ''}">${aWin ? '◀ Edge' : '—'}</div>
                 <div class="fantasy-compare-edge-table__cell${bWin ? ' is-winner' : ''}">${bWin ? 'Edge ▶' : '—'}</div>
                 <div class="fantasy-compare-edge-table__winner">${escapeHtml(winnerLabel)}</div>
