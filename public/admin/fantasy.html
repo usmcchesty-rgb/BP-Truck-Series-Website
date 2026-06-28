@@ -710,6 +710,8 @@
 
       // --- Admin session (sessionStorage only; cleared when the tab/session closes) ---
       const SESSION_KEY = 'bp_admin_pw';
+      let currentFantasySlateId = null;
+      let fantasySlateLoaded = false;
 
       function safeNumber(value, fallback = null) {
         const n = Number(value);
@@ -779,15 +781,11 @@
         loadFantasySettings().catch((err) => {
           console.error('[Fantasy Admin] Settings load failed:', err);
         });
-        loadFantasySchedulePreview().catch((err) => {
-          console.error('[Fantasy Admin] Schedule preview load failed:', err);
-        });
-        loadFantasyDraftSlate().catch((err) => {
-          console.error('[Fantasy Admin] Draft slate load failed:', err);
-        });
-        loadFantasyAdminStats().catch((err) => {
-          console.error('[Fantasy Admin] Admin stats load failed:', err);
-        });
+        loadFantasyDraftSlate()
+          .then(() => Promise.all([loadFantasySchedulePreview(), loadFantasyAdminStats()]))
+          .catch((err) => {
+            console.error('[Fantasy Admin] Draft slate load failed:', err);
+          });
       }
 
       function escapeAdminHtml(value) {
@@ -1331,6 +1329,14 @@
         }
       }
 
+      function applyFantasySlatePayload(data = {}) {
+        currentFantasySlateId = data?.slate?.id ?? null;
+        fantasySlateLoaded = Boolean(data?.slate?.id);
+        renderFantasySalaryReview(data.drivers || [], data.analytics || null);
+        updateFantasyDraftHeader(data.slate || null);
+        renderFantasyModelSummary(data.slate?.meta || data.meta || null, data.drivers || []);
+      }
+
       function updateFantasyDraftHeader(slate = null, targetRace = null) {
         const statusEl = $('#fantasySlateStatus');
         const generatedEl = $('#fantasySlateGeneratedAt');
@@ -1360,7 +1366,12 @@
           statusEl.textContent = slate.status === 'published' ? 'Published' : 'Draft';
           statusEl.className = `fantasy-slate-status ${slate.status === 'published' ? '' : 'is-draft'}`;
         }
-        if (generatedEl) generatedEl.textContent = formatFantasyDate(slate.generated_at);
+        if (generatedEl) {
+          generatedEl.textContent =
+            slate.status === 'published' && slate.published_at
+              ? `Published ${formatFantasyDate(slate.published_at)}`
+              : formatFantasyDate(slate.generated_at);
+        }
         if (modelEl) modelEl.textContent = slate.model_version || 'fantasy-salary-v2';
         renderFantasyModelSummary(slate.meta || null);
         if (raceWeekEl && slate.race_number) {
@@ -1372,6 +1383,7 @@
       }
 
       async function loadFantasySchedulePreview() {
+        if (fantasySlateLoaded && currentFantasySlateId) return;
         const raceWeekEl = $('#fantasySlateRaceWeek');
         const trackEl = $('#fantasySlateTrack');
         try {
@@ -1396,16 +1408,18 @@
         try {
           const res = await fetch('/api/settings?action=getFantasyDraftSlate');
           if (!res.ok) {
+            currentFantasySlateId = null;
+            fantasySlateLoaded = false;
             renderFantasySalaryReview([], null);
             updateFantasyDraftHeader(null);
             renderFantasyModelSummary(null);
             return;
           }
           const data = await res.json();
-          renderFantasySalaryReview(data.drivers || [], data.analytics || null);
-          updateFantasyDraftHeader(data.slate || null);
-          renderFantasyModelSummary(data.slate?.meta || data.meta || null, data.drivers || []);
+          applyFantasySlatePayload(data);
         } catch {
+          currentFantasySlateId = null;
+          fantasySlateLoaded = false;
           renderFantasySalaryReview([], null);
         }
       }
@@ -1431,9 +1445,7 @@
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || 'Generation failed');
 
-          renderFantasySalaryReview(data.drivers || [], data.analytics || null);
-          updateFantasyDraftHeader(data.slate || null, data.targetRace || null);
-          renderFantasyModelSummary(data.meta || data.slate?.meta || null, data.drivers || []);
+          applyFantasySlatePayload(data);
           await loadFantasyAdminStats();
           if (statusEl) {
             statusEl.textContent = `Draft saved for race ${data.targetRace?.raceNumber ?? data.slate?.race_number ?? ''} (${(data.drivers || []).length} drivers).`;
@@ -1460,6 +1472,7 @@
             body: JSON.stringify({
               password: getSessionPw(),
               action: 'getFantasySlateAdminStats',
+              slateId: currentFantasySlateId,
             }),
           });
           const data = await res.json();
@@ -1475,6 +1488,7 @@
             lockAtInput.value = slate.lock_at ? String(slate.lock_at).slice(0, 16) : '';
           }
           if (slate) {
+            currentFantasySlateId = slate.id ?? currentFantasySlateId;
             updateFantasyDraftHeader(slate, { raceNumber: slate.race_number, track: slate.track });
           }
         } catch (error) {
@@ -1497,12 +1511,17 @@
         if (btn) btn.disabled = true;
 
         try {
+          if (!currentFantasySlateId) {
+            throw new Error('No draft slate loaded to publish.');
+          }
+
           const res = await fetch('/api/settings', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               password: getSessionPw(),
               action: 'publishFantasySlate',
+              slateId: currentFantasySlateId,
               lockTime,
               lockAt,
             }),
@@ -1510,11 +1529,13 @@
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || 'Publish failed');
 
-          updateFantasyDraftHeader(data.slate || null);
-          renderFantasySalaryReview(data.drivers || [], data.analytics || null);
+          applyFantasySlatePayload(data);
           await loadFantasyAdminStats();
+          const raceNum = data.slate?.race_number ?? '';
+          const track = data.slate?.track || 'TBD';
+          const publishedId = data.slate?.id ?? '';
           if (statusEl) {
-            statusEl.textContent = `Published race ${data.slate?.race_number ?? ''}. ${data.lineupCount ?? 0} lineup(s) submitted.`;
+            statusEl.textContent = `Published Race ${raceNum} — ${track}. ${data.lineupCount ?? 0} lineup(s) submitted.${publishedId ? ` Slate #${publishedId}.` : ''}`;
           }
         } catch (error) {
           if (statusEl) {
@@ -1546,6 +1567,7 @@
             body: JSON.stringify({
               password: getSessionPw(),
               action: 'updateFantasySlateLock',
+              slateId: currentFantasySlateId,
               lockTime,
               lockAt,
             }),

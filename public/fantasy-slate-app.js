@@ -294,8 +294,8 @@
           <div><span>Model</span><strong>${escapeHtml(slate.modelVersion || '—')}</strong></div>
           <div><span>Status</span><strong>${escapeHtml(slate.status || 'draft')}</strong></div>
         </div>
-        <p class="fantasy-app-readonly-note">Read-only demo slate preview. Lineup submission opens in a later phase.</p>
         <p class="fantasy-slate-hero-actions">
+          <a class="fantasy-btn fantasy-btn--primary" href="/fantasy/lineup.html">Build Lineup</a>
           <a class="fantasy-btn fantasy-btn--secondary" href="/fantasy/preview.html">Race Preview</a>
         </p>
       </section>
@@ -344,6 +344,12 @@
       }
       const data = await res.json();
       renderSlatePage(data);
+      const subtitleEl = document.querySelector('.page-season');
+      if (subtitleEl && data?.slate?.status === 'published') {
+        const raceNumber = data.slate.raceNumber ?? '—';
+        const track = data.slate.track || 'TBD';
+        subtitleEl.textContent = `RACE ${raceNumber} — ${String(track).toUpperCase()}`;
+      }
     } catch {
       renderEmpty('Fantasy slate coming soon.');
     }

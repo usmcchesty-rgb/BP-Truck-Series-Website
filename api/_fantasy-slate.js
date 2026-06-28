@@ -232,32 +232,111 @@ export function normalizeSlateDriver(row) {
   };
 }
 
+function isBackfilledSlate(row) {
+  const meta = row?.meta;
+  if (!meta) return false;
+  if (typeof meta === 'string') {
+    try {
+      return JSON.parse(meta)?.backfilled === true;
+    } catch {
+      return false;
+    }
+  }
+  return meta.backfilled === true;
+}
+
+function compareFantasySlateRows(a, b, { preferDraft = false } = {}) {
+  const raceDiff = Number(b.race_number) - Number(a.race_number);
+  if (raceDiff !== 0) return raceDiff;
+
+  if (preferDraft) {
+    const aDraft = a.status === 'draft' ? 1 : 0;
+    const bDraft = b.status === 'draft' ? 1 : 0;
+    if (bDraft !== aDraft) return bDraft - aDraft;
+  }
+
+  const aGenerated = new Date(a.generated_at || 0).getTime();
+  const bGenerated = new Date(b.generated_at || 0).getTime();
+  return bGenerated - aGenerated;
+}
+
+function pickFantasySlateRow(rows, options = {}) {
+  const eligible = (rows || []).filter((row) => !isBackfilledSlate(row));
+  if (!eligible.length) return null;
+
+  return [...eligible].sort((a, b) => compareFantasySlateRows(a, b, options))[0];
+}
+
+async function loadFantasySlateDrivers(sb, slateId) {
+  const { data: drivers } = await sb
+    .from('fantasy_slate_drivers')
+    .select('*')
+    .eq('slate_id', slateId)
+    .order('fantasy_tier_score', { ascending: false });
+
+  return (drivers || []).map(normalizeSlateDriver);
+}
+
+export async function loadFantasySlateById(slateId) {
+  const sb = supabase();
+  if (!sb || slateId == null) return null;
+
+  const { data: slate, error } = await sb
+    .from('fantasy_slates')
+    .select('*')
+    .eq('id', Number(slateId))
+    .maybeSingle();
+
+  if (error || !slate) return null;
+
+  const drivers = await loadFantasySlateDrivers(sb, slate.id);
+  return enrichFantasyDraftPayload({
+    slate,
+    drivers,
+  });
+}
+
 export async function loadFantasyDraftSlate(seasonId, raceNumber) {
   const sb = supabase();
   if (!sb) return null;
 
-  let query = sb
-    .from('fantasy_slates')
-    .select('*')
-    .eq('status', 'draft')
-    .order('generated_at', { ascending: false })
-    .limit(1);
+  let query = sb.from('fantasy_slates').select('*');
 
   if (seasonId) query = query.eq('season_id', String(seasonId));
   if (raceNumber != null) query = query.eq('race_number', Number(raceNumber));
 
-  const { data: slate, error } = await query.maybeSingle();
-  if (error || !slate) return null;
+  const { data: rows, error } = await query;
+  if (error || !rows?.length) return null;
 
-  const { data: drivers } = await sb
-    .from('fantasy_slate_drivers')
-    .select('*')
-    .eq('slate_id', slate.id)
-    .order('fantasy_tier_score', { ascending: false });
+  const slate = pickFantasySlateRow(rows, { preferDraft: true });
+  if (!slate) return null;
 
+  const drivers = await loadFantasySlateDrivers(sb, slate.id);
   return enrichFantasyDraftPayload({
     slate,
-    drivers: (drivers || []).map(normalizeSlateDriver),
+    drivers,
+  });
+}
+
+async function loadFantasyDraftSlateForPublish(seasonId, raceNumber) {
+  const sb = supabase();
+  if (!sb) return null;
+
+  let query = sb.from('fantasy_slates').select('*').eq('status', 'draft');
+
+  if (seasonId) query = query.eq('season_id', String(seasonId));
+  if (raceNumber != null) query = query.eq('race_number', Number(raceNumber));
+
+  const { data: rows, error } = await query;
+  if (error || !rows?.length) return null;
+
+  const slate = pickFantasySlateRow(rows);
+  if (!slate) return null;
+
+  const drivers = await loadFantasySlateDrivers(sb, slate.id);
+  return enrichFantasyDraftPayload({
+    slate,
+    drivers,
   });
 }
 
@@ -441,14 +520,47 @@ export async function publishFantasySlate(options = {}) {
   const settings = await getSettings();
   const seasonId = String(options.seasonId || settings.seasonId || '27987');
   const raceNumber = options.raceNumber != null ? Number(options.raceNumber) : null;
-
-  const draft = await loadFantasyDraftSlate(seasonId, raceNumber);
-  if (!draft?.slate?.id) {
-    throw new Error('No draft fantasy slate found to publish.');
-  }
+  const requestedSlateId =
+    options.slateId != null && Number.isFinite(Number(options.slateId))
+      ? Number(options.slateId)
+      : null;
 
   const sb = supabase();
   if (!sb) throw new Error('Supabase not configured.');
+
+  let draft = null;
+  let targetSlateId = requestedSlateId;
+
+  if (requestedSlateId != null) {
+    const { data: row, error: rowError } = await sb
+      .from('fantasy_slates')
+      .select('*')
+      .eq('id', requestedSlateId)
+      .maybeSingle();
+
+    if (rowError || !row) {
+      throw new Error(`Fantasy slate ${requestedSlateId} not found.`);
+    }
+    if (String(row.season_id) !== seasonId) {
+      throw new Error(`Fantasy slate ${requestedSlateId} does not belong to the current season.`);
+    }
+    if (isBackfilledSlate(row)) {
+      throw new Error('Historical backfill slates cannot be published from admin.');
+    }
+    if (row.status !== 'draft') {
+      throw new Error(`Fantasy slate ${requestedSlateId} is not a draft slate.`);
+    }
+
+    draft = await loadFantasySlateById(requestedSlateId);
+    targetSlateId = requestedSlateId;
+  } else {
+    draft = await loadFantasyDraftSlateForPublish(seasonId, raceNumber);
+    targetSlateId = draft?.slate?.id ?? null;
+  }
+
+  if (!draft?.slate?.id || targetSlateId == null) {
+    throw new Error('No draft fantasy slate found to publish.');
+  }
 
   const now = new Date().toISOString();
   const updates = {
@@ -467,13 +579,17 @@ export async function publishFantasySlate(options = {}) {
   const { data, error } = await sb
     .from('fantasy_slates')
     .update(updates)
-    .eq('id', draft.slate.id)
+    .eq('id', targetSlateId)
     .eq('status', 'draft')
     .select('*')
     .single();
 
   if (error) {
     throw new Error(error.message || 'Failed to publish fantasy slate.');
+  }
+
+  if (Number(data.id) !== targetSlateId) {
+    throw new Error('Published slate id mismatch.');
   }
 
   return enrichFantasyDraftPayload({
@@ -486,15 +602,34 @@ export async function updateFantasySlateLock(options = {}) {
   const settings = await getSettings();
   const seasonId = String(options.seasonId || settings.seasonId || '27987');
   const raceNumber = options.raceNumber != null ? Number(options.raceNumber) : null;
+  const slateId =
+    options.slateId != null && Number.isFinite(Number(options.slateId))
+      ? Number(options.slateId)
+      : null;
 
   const sb = supabase();
   if (!sb) throw new Error('Supabase not configured.');
 
-  let query = sb.from('fantasy_slates').select('*').eq('season_id', seasonId).order('race_number', { ascending: false }).limit(1);
-  if (raceNumber != null) query = query.eq('race_number', raceNumber);
+  let slate = null;
 
-  const { data: slate, error: slateError } = await query.maybeSingle();
-  if (slateError || !slate) throw new Error('No fantasy slate found to update lock time.');
+  if (slateId != null) {
+    const { data, error: slateError } = await sb
+      .from('fantasy_slates')
+      .select('*')
+      .eq('id', slateId)
+      .maybeSingle();
+
+    if (slateError || !data) throw new Error(`Fantasy slate ${slateId} not found.`);
+    if (String(data.season_id) !== seasonId) {
+      throw new Error(`Fantasy slate ${slateId} does not belong to the current season.`);
+    }
+    slate = data;
+  } else {
+    const payload = await loadFantasyDraftSlate(seasonId, raceNumber);
+    slate = payload?.slate || null;
+  }
+
+  if (!slate) throw new Error('No fantasy slate found to update lock time.');
 
   const updates = { updated_at: new Date().toISOString() };
   if (options.lockTime !== undefined) {

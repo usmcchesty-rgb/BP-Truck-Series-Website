@@ -2,6 +2,7 @@ import { DEFAULTS, getSettings, stripPhotoUrlQuery, supabase } from './_lib.js';
 import {
   generateFantasyDraftSlate,
   loadFantasyDraftSlate,
+  loadFantasySlateById,
   publishFantasySlate,
   updateFantasySlateLock,
 } from './_fantasy-slate.js';
@@ -23,7 +24,6 @@ import {
   getUserLineupForCurrentSlate,
   submitFantasyLineup,
 } from './_fantasy-lineups.js';
-import { loadLatestFantasySlate } from './_fantasy-public-slate.js';
 import { getFantasyAuthConfig, getUserFromBearerToken } from './_fantasy-auth.js';
 
 async function handleGetFantasyDraftSlate(req, res) {
@@ -229,6 +229,7 @@ export default async function handler(req, res) {
       const settings = await getSettings();
       const result = await publishFantasySlate({
         seasonId: body.seasonId || settings.seasonId || '27987',
+        slateId: body.slateId != null ? Number(body.slateId) : null,
         raceNumber: body.raceNumber != null ? Number(body.raceNumber) : null,
         lockTime: body.lockTime,
         lockAt: body.lockAt,
@@ -245,6 +246,7 @@ export default async function handler(req, res) {
       const settings = await getSettings();
       const result = await updateFantasySlateLock({
         seasonId: body.seasonId || settings.seasonId || '27987',
+        slateId: body.slateId != null ? Number(body.slateId) : null,
         raceNumber: body.raceNumber != null ? Number(body.raceNumber) : null,
         lockTime: body.lockTime,
         lockAt: body.lockAt,
@@ -260,7 +262,13 @@ export default async function handler(req, res) {
     try {
       const settings = await getSettings();
       const seasonId = body.seasonId || settings.seasonId || '27987';
-      const payload = await loadLatestFantasySlate(seasonId);
+      const requestedSlateId =
+        body.slateId != null && Number.isFinite(Number(body.slateId))
+          ? Number(body.slateId)
+          : null;
+      const payload = requestedSlateId
+        ? await loadFantasySlateById(requestedSlateId)
+        : await loadFantasyDraftSlate(seasonId);
       const slateId = payload?.slate?.id || null;
       const lineupCount = slateId ? await countLineupsForSlate(slateId) : 0;
       return res.status(200).json({

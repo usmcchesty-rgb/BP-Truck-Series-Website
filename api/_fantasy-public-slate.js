@@ -131,16 +131,13 @@ async function loadFallbackPublicSlateRow(seasonId) {
     .from('fantasy_slates')
     .select('*')
     .eq('season_id', String(seasonId))
+    .eq('status', 'published')
     .order('race_number', { ascending: false });
 
   if (error || !rows?.length) return null;
 
   const eligible = rows.filter((row) => !isBackfilledSlate(row));
-  const published = eligible.find((row) => row.status === 'published');
-  if (published) return published;
-
-  const draft = eligible.find((row) => row.status === 'draft');
-  return draft || null;
+  return eligible[0] || null;
 }
 
 async function loadPublicCurrentSlateRow(seasonId) {
@@ -149,9 +146,6 @@ async function loadPublicCurrentSlateRow(seasonId) {
   if (upcomingRaceNumber != null) {
     const published = await loadSlateForRace(seasonId, upcomingRaceNumber, 'published');
     if (published) return published;
-
-    const draft = await loadSlateForRace(seasonId, upcomingRaceNumber, 'draft');
-    if (draft) return draft;
   }
 
   return loadFallbackPublicSlateRow(seasonId);
@@ -176,7 +170,7 @@ export async function loadLatestFantasySlate(seasonId) {
 
 export async function buildFantasyPublicSlateResponse(seasonId) {
   const payload = await loadLatestFantasySlate(seasonId);
-  if (!payload?.slate) return null;
+  if (!payload?.slate || payload.slate.status !== 'published') return null;
 
   const rawDrivers = payload.drivers || [];
   const slateMeta = {
