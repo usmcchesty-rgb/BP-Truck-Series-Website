@@ -14,30 +14,23 @@
     <main class="fantasy-app-page">
       <div class="fantasy-app-shell">
         <div id="fantasyAppNav"></div>
-        <div class="fantasy-app-main fantasy-app-main--centered">
-          <section class="fantasy-app-placeholder-card" aria-labelledby="fantasyLoginTitle">
-            <p class="fantasy-app-eyebrow">BP Fantasy</p>
-            <h1 id="fantasyLoginTitle">Login</h1>
-            <p class="fantasy-app-lead">Player login coming soon.</p>
-            <p class="fantasy-app-copy">
-              Account login is not available yet. Explore the read-only demo slate while fantasy access is in development.
-            </p>
-            <div class="fantasy-cta-actions">
-              <a class="fantasy-btn fantasy-btn--primary" href="/fantasy/slate.html">View Demo Slate</a>
-              <a class="fantasy-btn fantasy-btn--secondary" href="/fantasy.html">Back to Fantasy Home</a>
-            </div>
-          </section>
+        <div class="fantasy-app-main fantasy-app-main--centered" id="fantasyAuthRoot">
+          <section class="fantasy-app-empty"><p>Loading…</p></section>
         </div>
       </div>
     </main>
 
     <footer>FAST DRIVERS. CLOSE RACING. <span>BIG FUN.</span></footer>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
     <script src="/public-nav.js"></script>
     <script src="/fantasy-app-nav.js"></script>
+    <script src="/fantasy-auth.js"></script>
+    <script src="/fantasy-auth-forms.js"></script>
     <script>
-      BPPublicNav.init({ active: "fantasy", title: "BP FANTASY", subtitle: "COMING SOON", right: "tagline" });
+      BPPublicNav.init({ active: "fantasy", title: "BP FANTASY", subtitle: "LOGIN", right: "tagline" });
       BPFantasyAppNav.init("");
+      BPFantasyAuthForms.initLogin();
     </script>
   </body>
 </html>

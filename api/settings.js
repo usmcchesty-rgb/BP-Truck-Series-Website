@@ -2,6 +2,8 @@ import { DEFAULTS, getSettings, stripPhotoUrlQuery, supabase } from './_lib.js';
 import {
   generateFantasyDraftSlate,
   loadFantasyDraftSlate,
+  publishFantasySlate,
+  updateFantasySlateLock,
 } from './_fantasy-slate.js';
 import { backfillFantasyHistoricalSlates } from './_fantasy-historical-backfill.js';
 import { runFantasySeasonBacktest } from './_fantasy-backtest.js';
@@ -11,6 +13,12 @@ import {
   buildFantasySalaryHistoryResponse,
   runFantasyLineupOptimizerForLatestSlate,
 } from './_fantasy-public-slate.js';
+import {
+  buildPublicSocialShareConfig,
+  buildSocialShareSettingsPatch,
+} from './_social-share-settings.js';
+import { countLineupsForSlate } from './_fantasy-lineups.js';
+import { loadLatestFantasySlate } from './_fantasy-public-slate.js';
 
 async function handleGetFantasyDraftSlate(req, res) {
   try {
@@ -60,6 +68,14 @@ export default async function handler(req, res) {
         return res.status(200).json(history);
       } catch (error) {
         return res.status(500).json({ error: error.message || 'Failed to load salary history.' });
+      }
+    }
+    if (queryAction === 'getSocialShareConfig') {
+      try {
+        const settings = await getSettings();
+        return res.status(200).json(buildPublicSocialShareConfig(settings));
+      } catch (error) {
+        return res.status(500).json({ error: error.message || 'Failed to load social share config.' });
       }
     }
     if (queryAction === 'getFantasyDriverDetail') {
@@ -153,6 +169,54 @@ export default async function handler(req, res) {
     }
   }
 
+  if (action === 'publishFantasySlate') {
+    try {
+      const settings = await getSettings();
+      const result = await publishFantasySlate({
+        seasonId: body.seasonId || settings.seasonId || '27987',
+        raceNumber: body.raceNumber != null ? Number(body.raceNumber) : null,
+        lockTime: body.lockTime,
+        lockAt: body.lockAt,
+      });
+      const lineupCount = await countLineupsForSlate(result?.slate?.id);
+      return res.status(200).json({ ...result, lineupCount });
+    } catch (error) {
+      return res.status(500).json({ error: error.message || 'Failed to publish fantasy slate.' });
+    }
+  }
+
+  if (action === 'updateFantasySlateLock') {
+    try {
+      const settings = await getSettings();
+      const result = await updateFantasySlateLock({
+        seasonId: body.seasonId || settings.seasonId || '27987',
+        raceNumber: body.raceNumber != null ? Number(body.raceNumber) : null,
+        lockTime: body.lockTime,
+        lockAt: body.lockAt,
+      });
+      const lineupCount = await countLineupsForSlate(result?.slate?.id);
+      return res.status(200).json({ ...result, lineupCount });
+    } catch (error) {
+      return res.status(500).json({ error: error.message || 'Failed to update lock time.' });
+    }
+  }
+
+  if (action === 'getFantasySlateAdminStats') {
+    try {
+      const settings = await getSettings();
+      const seasonId = body.seasonId || settings.seasonId || '27987';
+      const payload = await loadLatestFantasySlate(seasonId);
+      const slateId = payload?.slate?.id || null;
+      const lineupCount = slateId ? await countLineupsForSlate(slateId) : 0;
+      return res.status(200).json({
+        slate: payload?.slate || null,
+        lineupCount,
+      });
+    } catch (error) {
+      return res.status(500).json({ error: error.message || 'Failed to load slate stats.' });
+    }
+  }
+
   const sb = supabase();
   if (!sb) return res.status(400).json({ error: 'Supabase not configured yet. Add SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Vercel.' });
   const patch = { id: 1 };
@@ -207,6 +271,7 @@ export default async function handler(req, res) {
     const v = Number(body.fantasyHeaderLogoMaxWidthPx);
     patch.fantasyHeaderLogoMaxWidthPx = Number.isFinite(v) ? Math.min(900, Math.max(240, v)) : DEFAULTS.fantasyHeaderLogoMaxWidthPx;
   }
+  Object.assign(patch, buildSocialShareSettingsPatch(body));
   const { data, error } = await sb.from('site_settings').upsert(patch).select().single();
   if (error) return res.status(500).json({ error: error.message });
   res.status(200).json(data);

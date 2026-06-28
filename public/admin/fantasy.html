@@ -530,17 +530,17 @@
             <div class="admin-card-title">Fantasy Status</div>
             <div class="admin-kv">
               <div class="admin-k">Public status</div>
-              <div class="admin-v">Coming Soon</div>
+              <div class="admin-v">Lineups enabled</div>
             </div>
             <div class="admin-kv">
-              <div class="admin-k">Contest status</div>
-              <div class="admin-v">Disabled</div>
+              <div class="admin-k">Submitted lineups</div>
+              <div class="admin-v" id="fantasySubmittedLineupCount">—</div>
             </div>
             <div class="admin-kv">
               <div class="admin-k">Backend</div>
-              <div class="admin-v">Salary draft generator connected</div>
+              <div class="admin-v">Salary draft + player lineups</div>
             </div>
-            <div class="admin-note">Generate a draft slate below. Publishing, lineups, and scoring ship in later phases.</div>
+            <div class="admin-note">Generate a draft slate, publish it for players, and set a lock time before race week.</div>
           </div>
 
           <!-- Slate Setup -->
@@ -556,9 +556,14 @@
                 <input id="fantasySlateTrack" class="input" type="text" value="Loading..." disabled />
               </div>
               <div class="admin-field">
-                <label class="field-label" for="lineupLockTime">Lineup Lock: Server Open</label>
-                <span class="field-help">Uses the Server Open Time from Admin Settings.</span>
-                <input id="lineupLockTime" class="input" type="text" value="Loading..." disabled />
+                <label class="field-label" for="lineupLockTime">Lineup Lock (display)</label>
+                <span class="field-help">Shown to players on slate and lineup pages.</span>
+                <input id="lineupLockTime" class="input" type="text" placeholder="e.g. 8:30 PM EST" />
+              </div>
+              <div class="admin-field">
+                <label class="field-label" for="lineupLockAt">Lineup Lock (enforced)</label>
+                <span class="field-help">Optional ISO datetime — submissions blocked after this time.</span>
+                <input id="lineupLockAt" class="input" type="datetime-local" />
               </div>
               <div class="admin-field">
                 <label class="field-label">Salary cap</label>
@@ -595,6 +600,8 @@
             <div class="fantasy-generate-row">
               <button id="generateFantasySalariesBtn" class="btn" type="button">Generate Salaries</button>
               <button id="reloadFantasyDraftBtn" class="btn btn-secondary" type="button">Reload Draft</button>
+              <button id="publishFantasySlateBtn" class="btn btn-secondary" type="button">Publish Slate</button>
+              <button id="saveFantasyLockBtn" class="btn btn-secondary" type="button">Save Lock Time</button>
               <span id="fantasyGenerateStatus" class="fantasy-generate-status"></span>
             </div>
           </div>
@@ -777,6 +784,9 @@
         });
         loadFantasyDraftSlate().catch((err) => {
           console.error('[Fantasy Admin] Draft slate load failed:', err);
+        });
+        loadFantasyAdminStats().catch((err) => {
+          console.error('[Fantasy Admin] Admin stats load failed:', err);
         });
       }
 
@@ -1424,12 +1434,130 @@
           renderFantasySalaryReview(data.drivers || [], data.analytics || null);
           updateFantasyDraftHeader(data.slate || null, data.targetRace || null);
           renderFantasyModelSummary(data.meta || data.slate?.meta || null, data.drivers || []);
+          await loadFantasyAdminStats();
           if (statusEl) {
             statusEl.textContent = `Draft saved for race ${data.targetRace?.raceNumber ?? data.slate?.race_number ?? ''} (${(data.drivers || []).length} drivers).`;
           }
         } catch (error) {
           if (statusEl) {
             statusEl.textContent = error.message || 'Generation failed';
+            statusEl.classList.add('error');
+          }
+        } finally {
+          if (btn) btn.disabled = false;
+        }
+      }
+
+      async function loadFantasyAdminStats() {
+        const countEl = $('#fantasySubmittedLineupCount');
+        const lockInput = $('#lineupLockTime');
+        const lockAtInput = $('#lineupLockAt');
+
+        try {
+          const res = await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              password: getSessionPw(),
+              action: 'getFantasySlateAdminStats',
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Stats unavailable');
+
+          if (countEl) countEl.textContent = String(data.lineupCount ?? 0);
+
+          const slate = data.slate;
+          if (slate && lockInput && document.activeElement !== lockInput) {
+            lockInput.value = slate.lock_time || '';
+          }
+          if (slate && lockAtInput && document.activeElement !== lockAtInput) {
+            lockAtInput.value = slate.lock_at ? String(slate.lock_at).slice(0, 16) : '';
+          }
+          if (slate) {
+            updateFantasyDraftHeader(slate, { raceNumber: slate.race_number, track: slate.track });
+          }
+        } catch (error) {
+          if (countEl) countEl.textContent = '—';
+          console.error('[Fantasy Admin] Stats load failed:', error);
+        }
+      }
+
+      async function publishFantasySlate() {
+        const statusEl = $('#fantasyGenerateStatus');
+        const btn = $('#publishFantasySlateBtn');
+        const lockTime = String($('#lineupLockTime')?.value || '').trim();
+        const lockAtRaw = String($('#lineupLockAt')?.value || '').trim();
+        const lockAt = lockAtRaw ? new Date(lockAtRaw).toISOString() : null;
+
+        if (statusEl) {
+          statusEl.textContent = 'Publishing slate...';
+          statusEl.classList.remove('error');
+        }
+        if (btn) btn.disabled = true;
+
+        try {
+          const res = await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              password: getSessionPw(),
+              action: 'publishFantasySlate',
+              lockTime,
+              lockAt,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Publish failed');
+
+          updateFantasyDraftHeader(data.slate || null);
+          renderFantasySalaryReview(data.drivers || [], data.analytics || null);
+          await loadFantasyAdminStats();
+          if (statusEl) {
+            statusEl.textContent = `Published race ${data.slate?.race_number ?? ''}. ${data.lineupCount ?? 0} lineup(s) submitted.`;
+          }
+        } catch (error) {
+          if (statusEl) {
+            statusEl.textContent = error.message || 'Publish failed';
+            statusEl.classList.add('error');
+          }
+        } finally {
+          if (btn) btn.disabled = false;
+        }
+      }
+
+      async function saveFantasyLockTime() {
+        const statusEl = $('#fantasyGenerateStatus');
+        const btn = $('#saveFantasyLockBtn');
+        const lockTime = String($('#lineupLockTime')?.value || '').trim();
+        const lockAtRaw = String($('#lineupLockAt')?.value || '').trim();
+        const lockAt = lockAtRaw ? new Date(lockAtRaw).toISOString() : null;
+
+        if (statusEl) {
+          statusEl.textContent = 'Saving lock time...';
+          statusEl.classList.remove('error');
+        }
+        if (btn) btn.disabled = true;
+
+        try {
+          const res = await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              password: getSessionPw(),
+              action: 'updateFantasySlateLock',
+              lockTime,
+              lockAt,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Save failed');
+
+          await loadFantasyAdminStats();
+          if (statusEl) statusEl.textContent = 'Lock time saved.';
+        } catch (error) {
+          if (statusEl) {
+            statusEl.textContent = error.message || 'Save failed';
             statusEl.classList.add('error');
           }
         } finally {
@@ -1933,26 +2061,17 @@
       }
 
       async function loadFantasySettings() {
-        const lockInput = $('#lineupLockTime');
-        if (lockInput) lockInput.value = 'Loading...';
-
         try {
           const res = await fetch('/api/settings');
           if (!res.ok) throw new Error('Settings unavailable');
 
           const settings = await res.json();
-          const serverOpenTime = resolveServerOpenTime(settings);
-          if (lockInput) {
-            lockInput.value = serverOpenTime || 'Not set in Admin Settings';
-          }
-
           fantasyBrandingSettings = {
             fantasyHeroBackgroundUrl: stripUrlQuery(settings.fantasyHeroBackgroundUrl || ''),
             fantasyHeroBackgroundUpdatedAt: settings.fantasyHeroBackgroundUpdatedAt || null,
           };
           updateFantasyBrandingPreviews();
         } catch {
-          if (lockInput) lockInput.value = 'Not set in Admin Settings';
           setBrandingMsg('Could not load branding settings.', true);
         }
       }
@@ -2025,6 +2144,8 @@
       $('#saveFantasyHeroUrlBtn')?.addEventListener('click', saveFantasyHeroUrl);
       $('#generateFantasySalariesBtn')?.addEventListener('click', generateFantasySalaries);
       $('#reloadFantasyDraftBtn')?.addEventListener('click', loadFantasyDraftSlate);
+      $('#publishFantasySlateBtn')?.addEventListener('click', publishFantasySlate);
+      $('#saveFantasyLockBtn')?.addEventListener('click', saveFantasyLockTime);
       $('#runFantasyOptimizerBtn')?.addEventListener('click', runFantasyLineupOptimizer);
       $('#runFantasyBacktestBtn')?.addEventListener('click', runFantasySeasonBacktest);
       $('#backfillHistoricalSlatesBtn')?.addEventListener('click', backfillHistoricalSlates);

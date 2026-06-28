@@ -1,13 +1,13 @@
 (function () {
-  const { link: driverLink, compareUrl, escapeHtml } = window.BPFantasyDriverLinks || {
-    link: (d, l) => String(l ?? d?.driverName ?? ''),
-    compareUrl: () => '/fantasy/compare.html',
+  const { link: driverLink, escapeHtml } = window.BPFantasyDriverLinks || {
+    link: (d, l) => escapeHtml(l ?? d?.driverName ?? ''),
     escapeHtml: (v) => String(v ?? ''),
   };
 
   const Pills = window.BPFantasyPills || {};
-  const Photos = window.BPFantasyDriverPhotos || {};
   const Insights = window.BPFantasyInsights || {};
+  const Auth = window.BPFantasyAuth || {};
+  const Optimizer = window.BPFantasyLineupOptimizer || {};
 
   const renderFantasyGradePill = (grade) =>
     Pills.renderFantasyGradePill ? Pills.renderFantasyGradePill(grade) : escapeHtml(grade || '—');
@@ -17,22 +17,17 @@
       : escapeHtml(driver.status || 'Active');
   const driverInactiveRowClass = (driver) =>
     Pills.driverInactiveRowClass ? Pills.driverInactiveRowClass(driver) : '';
-  const isDriverInactive = (driver) =>
-    Pills.isDriverInactive ? Pills.isDriverInactive(driver) : driver?.status === 'Inactive';
 
-  const Optimizer = window.BPFantasyLineupOptimizer || {};
-
-  const STRATEGIES = [
-    { id: 'best-overall', label: 'Best Overall', copy: 'Highest combined tier scores' },
-    { id: 'best-value', label: 'Best Value', copy: 'Best grades for the salary' },
-    { id: 'balanced', label: 'Balanced', copy: 'Score + value, uses most of cap' },
-    { id: 'contrarian', label: 'Dark Horse', copy: 'Strong picks, lower ownership' },
-    { id: 'stars-sleepers', label: 'Stars and Sleepers', copy: 'One star plus a value-tier pick' },
-  ];
+  const LINEUP_SIZE = 5;
 
   let cachedDrivers = [];
-  let activeStrategy = 'best-overall';
+  let slateMeta = {};
   let salaryCap = 50000;
+  let selectedIds = [];
+  let lockState = {};
+  let savedLineup = null;
+  let isLoggedIn = false;
+  let submitMessage = '';
 
   function $(sel) {
     return document.querySelector(sel);
@@ -44,209 +39,127 @@
     return `$${n.toLocaleString('en-US')}`;
   }
 
-  function ownershipLabelClass(label) {
-    return Insights.ownershipLabelClass ? Insights.ownershipLabelClass(label) : '';
+  function driverById(id) {
+    return cachedDrivers.find((d) => String(d.driverId) === String(id));
   }
 
-  function renderDriverThumb(driver) {
-    if (Photos.renderDriverPhotoImg) {
-      return Photos.renderDriverPhotoImg({
-        name: driver.driverName,
-        className: 'fantasy-lineup-driver-photo',
-        alt: driver.driverName,
-      });
-    }
-    return `<img class="fantasy-lineup-driver-photo" src="/assets/drivers/placeholder.png" alt="" />`;
+  function selectedDrivers() {
+    return selectedIds.map((id) => driverById(id)).filter(Boolean);
   }
 
-  function lineupCompareHref(drivers = []) {
-    if (drivers.length >= 2) return compareUrl(drivers[0], drivers[1]);
-    if (drivers.length === 1) return compareUrl(drivers[0]);
-    return '/fantasy/compare.html';
+  function totalSalary(drivers = selectedDrivers()) {
+    return drivers.reduce((sum, d) => sum + Number(d.salary || 0), 0);
   }
 
-  function renderSalaryMeter(lineup, cap) {
-    const used = Number(lineup?.totalSalary) || 0;
-    const limit = Number(cap) || 50000;
-    const pct = limit > 0 ? Math.min(100, (used / limit) * 100) : 0;
+  function isLocked() {
+    return Boolean(lockState.isLocked || savedLineup?.status === 'locked');
+  }
+
+  function canEdit() {
+    return isLoggedIn && !isLocked();
+  }
+
+  function renderSalaryMeter() {
+    const used = totalSalary();
+    const remaining = salaryCap - used;
+    const pct = salaryCap > 0 ? Math.min(100, (used / salaryCap) * 100) : 0;
+    const overCap = used > salaryCap;
     return `
       <div class="fantasy-lineup-salary-meter">
         <div class="fantasy-lineup-salary-meter__track">
-          <div class="fantasy-lineup-salary-meter__fill" style="width:${pct.toFixed(1)}%"></div>
+          <div class="fantasy-lineup-salary-meter__fill${overCap ? ' is-over' : ''}" style="width:${pct.toFixed(1)}%"></div>
         </div>
         <div class="fantasy-lineup-salary-meter__label">
-          <strong>${formatMoney(used)}</strong> / ${formatMoney(limit)}
+          <strong>${formatMoney(used)}</strong> used · <span>${formatMoney(Math.max(0, remaining))} remaining</span> · cap ${formatMoney(salaryCap)}
         </div>
-      </div>
-    `;
+      </div>`;
   }
 
-  function renderInactiveWarning(drivers = []) {
-    const inactive = drivers.filter(isDriverInactive);
-    if (!inactive.length) return '';
-    const names = inactive.map((d) => escapeHtml(d.driverName)).join(', ');
-    return `<p class="fantasy-lineup-warning"><strong>Inactive Warning:</strong> ${names} — may not start this race.</p>`;
-  }
-
-  function renderLineupSummary(lineup, cap, strategyId) {
-    const grade = Insights.computeLineupGrade ? Insights.computeLineupGrade(lineup) : 'B';
-    const risk = Insights.computeRiskLevel ? Insights.computeRiskLevel(lineup, strategyId) : 'Balanced';
-    const eff = Insights.computeSalaryEfficiency ? Insights.computeSalaryEfficiency(lineup, cap) : null;
-    const explanation = Insights.buildLineupExplanation
-      ? Insights.buildLineupExplanation(lineup, strategyId, cap)
-      : '';
-
-    return `
-      <div class="fantasy-lineup-summary fantasy-glass-panel">
-        <div class="fantasy-lineup-summary__grades">
-          <div><span>Lineup Grade</span><strong class="fantasy-lineup-grade">${escapeHtml(grade)}</strong></div>
-          <div><span>Salary Efficiency</span><strong>${eff != null ? `${eff}%` : '—'}</strong></div>
-          <div><span>Average Ownership</span><strong>${lineup.averageOwnership != null ? `${lineup.averageOwnership}%` : '—'}</strong></div>
-          <div><span>Risk Level</span><strong class="fantasy-lineup-risk fantasy-lineup-risk--${risk.toLowerCase().replace(/\s+/g, '-')}">${escapeHtml(risk)}</strong></div>
-        </div>
-        <p class="fantasy-lineup-summary__copy">${escapeHtml(explanation)}</p>
-      </div>
-    `;
-  }
-
-  function renderLineupDriverRow(driver) {
-    const inactiveClass = driverInactiveRowClass(driver);
-    const ownership =
-      driver.projectedOwnershipPct != null
-        ? `${driver.projectedOwnershipPct}% ${driver.ownershipLabel || ''}`.trim()
-        : '—';
-    const outlook = Insights.buildFantasyPickOutlook
-      ? Insights.buildFantasyPickOutlook(driver)
-      : '';
-    const trend = Insights.renderSalaryTrend ? Insights.renderSalaryTrend(driver) : '';
-
-    return `
-      <li class="fantasy-lineup-driver-row${inactiveClass ? ` ${inactiveClass}` : ''}">
-        <div class="fantasy-lineup-driver-row__photo">${renderDriverThumb(driver)}</div>
-        <div class="fantasy-lineup-driver-row__main">
-          <div class="fantasy-lineup-driver-row__name">${driverLink(driver, driver.driverName)}${driver.carNumber ? ` <span class="muted">#${escapeHtml(driver.carNumber)}</span>` : ''}</div>
-          <div class="fantasy-lineup-driver-row__meta">
-            <span class="salary">${formatMoney(driver.salary)}</span>
-            <span>Fantasy Rank ${driver.fantasyRank != null ? `#${escapeHtml(driver.fantasyRank)}` : '—'}</span>
-            ${renderFantasyGradePill(driver.valueGrade)}
-            ${renderActivityStatus(driver, { uppercase: true })}
-          </div>
-          <div class="fantasy-lineup-driver-row__sub">
-            <span class="fantasy-ownership-tag ${ownershipLabelClass(driver.ownershipLabel)}">Ownership ${escapeHtml(ownership)}</span>
-            ${trend}
-          </div>
-          ${outlook ? `<p class="fantasy-lineup-driver-row__outlook">${escapeHtml(outlook)}</p>` : ''}
-        </div>
-      </li>
-    `;
-  }
-
-  function renderLineupCard(lineup, title, cap, strategyId) {
-    if (!lineup?.drivers?.length) return '';
-    return `
-      <article class="fantasy-lineup-result">
-        <h3 class="fantasy-lineup-result__title">${escapeHtml(title)}</h3>
-        ${renderLineupSummary(lineup, cap, strategyId)}
-        ${renderSalaryMeter(lineup, cap)}
-        ${renderInactiveWarning(lineup.drivers)}
-        <ul class="fantasy-lineup-result__drivers fantasy-lineup-driver-list">
-          ${lineup.drivers.map(renderLineupDriverRow).join('')}
-        </ul>
-        <div class="fantasy-lineup-result__meta">
-          <div><span>Remaining Salary</span><strong>${formatMoney(lineup.remainingSalary)}</strong></div>
-          <div><span>Avg Value Score</span><strong>${lineup.averageValueScore != null ? Number(lineup.averageValueScore).toFixed(2) : '—'}</strong></div>
-          <div><span>Projected Score</span><strong>${escapeHtml(String(lineup.projectedScore))}</strong></div>
-        </div>
-        <p class="fantasy-lineup-result__actions">
-          <a class="fantasy-btn fantasy-btn--secondary" href="${escapeHtml(lineupCompareHref(lineup.drivers))}">Compare Drivers from Lineup</a>
-        </p>
-      </article>
-    `;
-  }
-
-  function renderResults(result, cap, strategyId) {
-    if (!result.ok) {
-      return `<section class="fantasy-app-empty"><p>${escapeHtml(result.error || 'Could not build lineup.')}</p></section>`;
+  function renderSelectedLineup() {
+    const drivers = selectedDrivers();
+    if (!drivers.length) {
+      return `<p class="muted">Select ${LINEUP_SIZE} drivers from the pool below.</p>`;
     }
 
-    const optimal = result.optimalLineup;
-    const alts = result.alternativeLineups || [];
-
     return `
-      <section class="fantasy-app-section">
-        <p class="fantasy-lineup-strategy-note">${escapeHtml(optimal.strategyNote || '')}</p>
-        ${renderLineupCard(optimal, 'Suggested BP Fantasy Lineup', cap, strategyId)}
-        ${
-          alts.length
-            ? `<div class="fantasy-lineup-alt-grid">${alts
-                .map((alt, i) => renderLineupCard(alt, `Alternative ${i + 1}`, cap, strategyId))
-                .join('')}</div>`
-            : ''
-        }
-      </section>
-    `;
+      <ol class="fantasy-lineup-pick-list">
+        ${drivers
+          .map(
+            (driver, index) => `
+          <li class="fantasy-lineup-pick-row${driverInactiveRowClass(driver) ? ` ${driverInactiveRowClass(driver)}` : ''}">
+            <span class="fantasy-lineup-pick-row__slot">${index + 1}</span>
+            <span class="fantasy-lineup-pick-row__name">${driverLink(driver, driver.driverName)}</span>
+            <span class="fantasy-lineup-pick-row__salary salary">${formatMoney(driver.salary)}</span>
+            ${renderFantasyGradePill(driver.valueGrade)}
+            ${
+              canEdit()
+                ? `<button type="button" class="fantasy-lineup-pick-row__remove" data-remove-id="${escapeHtml(driver.driverId)}" aria-label="Remove ${escapeHtml(driver.driverName)}">×</button>`
+                : ''
+            }
+          </li>`
+          )
+          .join('')}
+      </ol>`;
   }
 
-  function renderStrategyCards(selected) {
-    return `
-      <div class="fantasy-lineup-strategy-grid" role="group" aria-label="Lineup strategy">
-        ${STRATEGIES.map(
-          (s) => `
-          <button type="button" class="fantasy-lineup-strategy-card${s.id === selected ? ' is-active' : ''}" data-strategy="${escapeHtml(s.id)}">
-            <span class="fantasy-lineup-strategy-card__label">${escapeHtml(s.label)}</span>
-            <span class="fantasy-lineup-strategy-card__copy">${escapeHtml(s.copy)}</span>
-          </button>`
-        ).join('')}
-      </div>
-    `;
+  function renderStatusBanner() {
+    if (lockState.lockMessage && !lockState.hasLockSchedule) {
+      return `<p class="fantasy-lineup-warning"><strong>Notice:</strong> ${escapeHtml(lockState.lockMessage)} — submissions stay open until an admin sets a lock time.</p>`;
+    }
+    if (isLocked()) {
+      return `<p class="fantasy-lineup-warning"><strong>Locked:</strong> Lineups are closed for this race.</p>`;
+    }
+    if (savedLineup?.submittedAt) {
+      return `<p class="fantasy-lineup-note">Your lineup is saved. You can edit until lock time.</p>`;
+    }
+    if (!isLoggedIn) {
+      return `<p class="fantasy-lineup-warning"><strong>Login required to submit.</strong> <a class="fantasy-driver-link" href="/fantasy/login.html">Log in</a> or <a class="fantasy-driver-link" href="/fantasy/signup.html">sign up</a>.</p>`;
+    }
+    return '';
   }
 
-  function renderControls() {
+  function renderBuilderPanel() {
+    const drivers = selectedDrivers();
+    const validCount = drivers.length === LINEUP_SIZE;
+    const overCap = totalSalary() > salaryCap;
+    const dupes = new Set(selectedIds).size !== selectedIds.length;
+
     return `
-      <section class="fantasy-app-section fantasy-lineup-controls">
-        <h2 class="fantasy-app-section-title">Pick a Strategy</h2>
-        ${renderStrategyCards(activeStrategy)}
-        <form id="fantasyLineupForm" class="fantasy-lineup-form">
-          <input type="hidden" name="strategy" value="${escapeHtml(activeStrategy)}" />
-          <label>Salary Cap
-            <input type="number" name="salaryCap" value="50000" min="10000" max="100000" step="500" />
-          </label>
-          <label>Drivers per Lineup
-            <input type="number" name="lineupSize" value="5" min="3" max="8" step="1" />
-          </label>
-          <button type="submit" class="fantasy-btn fantasy-btn--primary">Build Lineup</button>
-        </form>
-        <p class="fantasy-app-readonly-note">BP Fantasy Lineup Builder — read-only demo. No lineup is saved or submitted. <a class="fantasy-driver-link" href="/fantasy/rules.html">How it works →</a></p>
-      </section>
-    `;
+      <section class="fantasy-app-section fantasy-lineup-builder fantasy-glass-panel">
+        <h2 class="fantasy-app-section-title">Your Lineup</h2>
+        ${renderStatusBanner()}
+        ${renderSelectedLineup()}
+        ${renderSalaryMeter()}
+        <div class="fantasy-lineup-builder__actions">
+          ${
+            canEdit()
+              ? `<button type="button" id="fantasySuggestLineupBtn" class="fantasy-btn fantasy-btn--secondary">Suggest Lineup</button>
+                 <button type="button" id="fantasyClearLineupBtn" class="fantasy-btn fantasy-btn--secondary">Clear</button>
+                 <button type="button" id="fantasySubmitLineupBtn" class="fantasy-btn fantasy-btn--primary"${
+                   !validCount || overCap || dupes ? ' disabled' : ''
+                 }>${savedLineup ? 'Update Lineup' : 'Submit Lineup'}</button>`
+              : ''
+          }
+        </div>
+        <p id="fantasyLineupSubmitMessage" class="fantasy-auth-message${submitMessage.startsWith('Saved') ? ' is-success' : ' is-error'}"${submitMessage ? '' : ' hidden'}>${escapeHtml(submitMessage)}</p>
+      </section>`;
   }
 
-  function renderPlayerPool(drivers = []) {
-    const sorted = [...drivers].sort(
+  function renderPlayerPool() {
+    const sorted = [...cachedDrivers].sort(
       (a, b) => Number(a.fantasyRank ?? 999) - Number(b.fantasyRank ?? 999)
     );
 
-    if (Insights.renderDriverCard) {
-      return `
-        <section class="fantasy-app-section">
-          <h2 class="fantasy-app-section-title">BP Fantasy Player Pool</h2>
-          <div class="fantasy-driver-card-grid fantasy-driver-card-grid--compact">
-            ${sorted.map((driver) => Insights.renderDriverCard(driver, { compact: true })).join('')}
-          </div>
-        </section>
-      `;
-    }
-
     return `
       <section class="fantasy-app-section">
-        <h2 class="fantasy-app-section-title">Player Pool</h2>
+        <h2 class="fantasy-app-section-title">Driver Pool</h2>
         <div class="fantasy-table-wrap">
           <table class="fantasy-slate-table fantasy-lineup-pool-table">
             <thead>
               <tr>
+                <th></th>
                 <th>Rank</th>
                 <th>Driver</th>
-                <th>Tier</th>
                 <th>Salary</th>
                 <th>Grade</th>
                 <th>Status</th>
@@ -255,102 +168,183 @@
             <tbody>
               ${sorted
                 .map((driver) => {
+                  const id = String(driver.driverId);
+                  const selected = selectedIds.includes(id);
+                  const full = selectedIds.length >= LINEUP_SIZE && !selected;
                   const inactiveClass = driverInactiveRowClass(driver);
                   return `<tr${inactiveClass ? ` class="${inactiveClass}"` : ''}>
-                  <td>${driver.fantasyRank != null ? `#${escapeHtml(driver.fantasyRank)}` : '—'}</td>
-                  <td>${driverLink(driver, driver.driverName)}</td>
-                  <td><span class="fantasy-tier-pill">${escapeHtml(driver.tier || '—')}</span></td>
-                  <td class="salary">${formatMoney(driver.salary)}</td>
-                  <td>${renderFantasyGradePill(driver.valueGrade)}</td>
-                  <td>${renderActivityStatus(driver, { uppercase: true })}</td>
-                </tr>`;
+                    <td>
+                      ${
+                        canEdit()
+                          ? `<button type="button" class="fantasy-lineup-pick-btn${selected ? ' is-selected' : ''}" data-pick-id="${escapeHtml(id)}"${full && !selected ? ' disabled' : ''}>${selected ? 'Selected' : 'Add'}</button>`
+                          : '—'
+                      }
+                    </td>
+                    <td>${driver.fantasyRank != null ? `#${escapeHtml(driver.fantasyRank)}` : '—'}</td>
+                    <td>${driverLink(driver, driver.driverName)}</td>
+                    <td class="salary">${formatMoney(driver.salary)}</td>
+                    <td>${renderFantasyGradePill(driver.valueGrade)}</td>
+                    <td>${renderActivityStatus(driver, { uppercase: true })}</td>
+                  </tr>`;
                 })
                 .join('')}
             </tbody>
           </table>
         </div>
-      </section>
-    `;
+      </section>`;
   }
 
-  function syncStrategyCards() {
-    document.querySelectorAll('.fantasy-lineup-strategy-card').forEach((btn) => {
-      const id = btn.getAttribute('data-strategy');
-      btn.classList.toggle('is-active', id === activeStrategy);
-    });
-    const hidden = document.querySelector('#fantasyLineupForm input[name="strategy"]');
-    if (hidden) hidden.value = activeStrategy;
-  }
-
-  function runOptimizer(form) {
-    const fd = new FormData(form);
-    salaryCap = Number(fd.get('salaryCap')) || 50000;
-    const lineupSize = Number(fd.get('lineupSize')) || 5;
-    const strategy = String(fd.get('strategy') || activeStrategy);
-
-    if (!Optimizer.optimizePublicLineup) {
-      $('#fantasyLineupResults').innerHTML =
-        '<section class="fantasy-app-empty"><p>Optimizer unavailable.</p></section>';
-      return;
-    }
-
-    const result = Optimizer.optimizePublicLineup(cachedDrivers, {
-      salaryCap,
-      lineupSize,
-      strategy,
-      maxAlternatives: 3,
-    });
-
-    $('#fantasyLineupResults').innerHTML = renderResults(result, salaryCap, strategy);
-  }
-
-  function bindStrategyCards(form) {
-    document.querySelectorAll('.fantasy-lineup-strategy-card').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        activeStrategy = btn.getAttribute('data-strategy') || 'best-overall';
-        syncStrategyCards();
-        runOptimizer(form);
-      });
-    });
-  }
-
-  async function init() {
+  function renderPage() {
     const root = $('#fantasyLineupRoot');
     if (!root) return;
 
     root.innerHTML = `
       <section class="fantasy-app-hero-panel fantasy-glass-panel">
         <p class="fantasy-app-eyebrow">BP Fantasy Lineup Builder</p>
-        <h1 class="fantasy-app-page-title">Demo Lineup Optimizer</h1>
-        <p class="fantasy-app-readonly-note">Build a 5-driver BP Fantasy lineup under the $50,000 cap. Demo only — not official race predictions.</p>
+        <h1 class="fantasy-app-page-title">Race ${escapeHtml(slateMeta.raceNumber ?? '—')} — ${escapeHtml(slateMeta.track || 'TBD')}</h1>
+        <div class="fantasy-slate-meta-grid">
+          <div><span>Lock</span><strong>${escapeHtml(slateMeta.lockTime || lockState.lockMessage || 'TBD')}</strong></div>
+          <div><span>Salary Cap</span><strong>${formatMoney(salaryCap)}</strong></div>
+          <div><span>Lineup Size</span><strong>${LINEUP_SIZE} drivers</strong></div>
+          <div><span>Slate Status</span><strong>${escapeHtml(slateMeta.status || '—')}</strong></div>
+        </div>
       </section>
-      ${renderControls()}
-      <div id="fantasyLineupPool"></div>
-      <div id="fantasyLineupResults"></div>
-    `;
+      <div id="fantasyLineupBuilder">${renderBuilderPanel()}</div>
+      <div id="fantasyLineupPool">${renderPlayerPool()}</div>`;
+
+    bindBuilderEvents();
+  }
+
+  function toggleDriver(id) {
+    if (!canEdit()) return;
+    const sid = String(id);
+    if (selectedIds.includes(sid)) {
+      selectedIds = selectedIds.filter((x) => x !== sid);
+    } else if (selectedIds.length < LINEUP_SIZE) {
+      selectedIds = [...selectedIds, sid];
+    }
+    submitMessage = '';
+    refreshBuilder();
+  }
+
+  function refreshBuilder() {
+    const builder = $('#fantasyLineupBuilder');
+    const pool = $('#fantasyLineupPool');
+    if (builder) builder.innerHTML = renderBuilderPanel();
+    if (pool) pool.innerHTML = renderPlayerPool();
+    bindBuilderEvents();
+  }
+
+  function bindBuilderEvents() {
+    document.querySelectorAll('[data-pick-id]').forEach((btn) => {
+      btn.addEventListener('click', () => toggleDriver(btn.getAttribute('data-pick-id')));
+    });
+    document.querySelectorAll('[data-remove-id]').forEach((btn) => {
+      btn.addEventListener('click', () => toggleDriver(btn.getAttribute('data-remove-id')));
+    });
+    $('#fantasyClearLineupBtn')?.addEventListener('click', () => {
+      selectedIds = [];
+      submitMessage = '';
+      refreshBuilder();
+    });
+    $('#fantasySuggestLineupBtn')?.addEventListener('click', () => {
+      if (!Optimizer.optimizePublicLineup) return;
+      const result = Optimizer.optimizePublicLineup(cachedDrivers, {
+        salaryCap,
+        lineupSize: LINEUP_SIZE,
+        strategy: 'balanced',
+        maxAlternatives: 0,
+      });
+      if (result?.ok && result.optimalLineup?.drivers?.length) {
+        selectedIds = result.optimalLineup.drivers.map((d) => String(d.driverId));
+        submitMessage = '';
+        refreshBuilder();
+      }
+    });
+    $('#fantasySubmitLineupBtn')?.addEventListener('click', submitLineup);
+  }
+
+  async function submitLineup() {
+    if (!canEdit()) return;
+    submitMessage = '';
+    const drivers = selectedDrivers();
+    if (drivers.length !== LINEUP_SIZE) {
+      submitMessage = `Select exactly ${LINEUP_SIZE} drivers.`;
+      refreshBuilder();
+      return;
+    }
+    if (totalSalary() > salaryCap) {
+      submitMessage = 'Lineup is over the salary cap.';
+      refreshBuilder();
+      return;
+    }
 
     try {
-      const res = await fetch('/api/settings?action=getFantasyPublicSlate');
-      if (!res.ok) throw new Error('slate');
-      const data = await res.json();
-      cachedDrivers = data.drivers || [];
-      salaryCap = Number(data.slate?.salaryCap) || 50000;
-      const capInput = document.querySelector('#fantasyLineupForm input[name="salaryCap"]');
-      if (capInput) capInput.value = String(salaryCap);
-
-      const poolEl = $('#fantasyLineupPool');
-      if (poolEl) poolEl.innerHTML = renderPlayerPool(cachedDrivers);
-
-      const form = $('#fantasyLineupForm');
-      bindStrategyCards(form);
-      form?.addEventListener('submit', (e) => {
-        e.preventDefault();
-        runOptimizer(form);
+      const res = await Auth.authFetch('/api/fantasy?action=submitLineup', {
+        method: 'POST',
+        body: JSON.stringify({
+          drivers: drivers.map((d) => ({ driverId: d.driverId })),
+          salaryCap,
+          lineupSize: LINEUP_SIZE,
+        }),
       });
-      if (form) runOptimizer(form);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Submission failed.');
+      savedLineup = data.lineup;
+      submitMessage = 'Saved — your lineup is submitted for this race.';
+      refreshBuilder();
+    } catch (error) {
+      submitMessage = error.message || 'Could not submit lineup.';
+      refreshBuilder();
+    }
+  }
+
+  async function loadSavedLineup() {
+    if (!isLoggedIn) return;
+    try {
+      const res = await Auth.authFetch('/api/fantasy?action=getLineup');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.lock) lockState = { ...lockState, ...data.lock };
+      if (data.lineup?.drivers?.length) {
+        savedLineup = data.lineup;
+        selectedIds = data.lineup.drivers.map((d) => String(d.driverId));
+      }
     } catch {
-      $('#fantasyLineupResults').innerHTML =
-        '<section class="fantasy-app-empty"><p>Fantasy slate coming soon.</p></section>';
+      /* ignore */
+    }
+  }
+
+  async function init() {
+    const root = $('#fantasyLineupRoot');
+    if (!root) return;
+
+    try {
+      const slateRes = await fetch('/api/settings?action=getFantasyPublicSlate');
+      if (!slateRes.ok) throw new Error('slate');
+      const slateData = await slateRes.json();
+      cachedDrivers = slateData.drivers || [];
+      slateMeta = slateData.slate || {};
+      salaryCap = Number(slateMeta.salaryCap) || 50000;
+      lockState = {
+        lockTime: slateMeta.lockTime,
+        lockAt: slateMeta.lockAt,
+        lockMessage: !slateMeta.lockTime && !slateMeta.lockAt ? 'Lineup lock time not set' : null,
+        isLocked: slateMeta.lockAt ? Date.now() >= new Date(slateMeta.lockAt).getTime() : false,
+      };
+
+      try {
+        await Auth.init();
+        const session = await Auth.getSession();
+        isLoggedIn = Boolean(session);
+      } catch {
+        isLoggedIn = false;
+      }
+
+      await loadSavedLineup();
+      renderPage();
+    } catch {
+      root.innerHTML = '<section class="fantasy-app-empty"><p>Fantasy slate coming soon.</p></section>';
     }
   }
 

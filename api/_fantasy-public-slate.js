@@ -190,9 +190,12 @@ export async function buildFantasyPublicSlateResponse(seasonId) {
 
   return {
     slate: {
+      id: payload.slate.id,
+      seasonId: payload.slate.season_id,
       raceNumber: payload.slate.race_number,
       track: payload.slate.track || 'TBD',
       lockTime: payload.slate.lock_time || null,
+      lockAt: payload.slate.lock_at || null,
       status: payload.slate.status,
       modelVersion: payload.slate.model_version || null,
       generatedAt: payload.slate.generated_at || null,
@@ -210,7 +213,7 @@ export async function buildFantasyPublicSlateResponse(seasonId) {
       biggestFallers: cards.biggestFallers,
     },
     analytics: payload.analytics || null,
-    readOnly: true,
+    readOnly: false,
   };
 }
 

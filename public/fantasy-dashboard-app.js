@@ -6,10 +6,9 @@
 
   const Pills = window.BPFantasyPills || {};
   const Insights = window.BPFantasyInsights || {};
+  const Auth = window.BPFantasyAuth || {};
   const renderFantasyGradePill = (grade) =>
     Pills.renderFantasyGradePill ? Pills.renderFantasyGradePill(grade) : escapeHtml(grade || '—');
-  const isDriverInactive = (driver) =>
-    Pills.isDriverInactive ? Pills.isDriverInactive(driver) : driver?.status === 'Inactive';
 
   function $(sel) {
     return document.querySelector(sel);
@@ -35,40 +34,58 @@
     </article>`;
   }
 
-  function findDriver(drivers, nameOrPartial) {
-    if (!nameOrPartial) return null;
-    return drivers.find((d) => String(d.driverName).toLowerCase() === String(nameOrPartial).toLowerCase());
+  function lineupStatusCard(profile, slate, lineup, lock) {
+    if (!profile) {
+      return `
+        <section class="fantasy-app-section fantasy-dashboard-auth-panel fantasy-glass-panel">
+          <h2 class="fantasy-app-section-title">Your Account</h2>
+          <p class="fantasy-app-copy">Log in to submit your BP Fantasy lineup for the current race.</p>
+          <div class="fantasy-cta-actions">
+            <a class="fantasy-btn fantasy-btn--primary" href="/fantasy/login.html">Log In</a>
+            <a class="fantasy-btn fantasy-btn--secondary" href="/fantasy/signup.html">Sign Up</a>
+          </div>
+        </section>`;
+    }
+
+    const locked = Boolean(lock?.isLocked || lineup?.status === 'locked');
+    let statusText = 'Not submitted yet';
+    let statusDetail = `<a class="fantasy-driver-link" href="/fantasy/lineup.html">Build your lineup →</a>`;
+
+    if (lineup?.drivers?.length) {
+      statusText = locked ? 'Lineup locked' : 'Lineup submitted';
+      const names = lineup.drivers.map((d) => escapeHtml(d.driverName)).join(', ');
+      statusDetail = `${names}<br><span class="muted">${formatMoney(lineup.totalSalary)} · ${lineup.drivers.length} drivers</span>`;
+      if (!locked) {
+        statusDetail += `<br><a class="fantasy-driver-link" href="/fantasy/lineup.html">Edit lineup →</a>`;
+      }
+    }
+
+    return `
+      <section class="fantasy-app-section fantasy-dashboard-auth-panel fantasy-glass-panel">
+        <h2 class="fantasy-app-section-title">Welcome, ${escapeHtml(profile.displayName || profile.email || 'Player')}</h2>
+        <div class="fantasy-slate-meta-grid">
+          <div><span>Email</span><strong>${escapeHtml(profile.email || '—')}</strong></div>
+          <div><span>Lineup Status</span><strong>${escapeHtml(statusText)}</strong></div>
+          <div><span>Lock</span><strong>${escapeHtml(slate?.lockTime || lock?.lockMessage || 'TBD')}</strong></div>
+          <div><span>Salary Cap</span><strong>${formatMoney(slate?.salaryCap ?? 50000)}</strong></div>
+        </div>
+        <p class="fantasy-app-copy">${statusDetail}</p>
+        <div class="fantasy-cta-actions">
+          <a class="fantasy-btn fantasy-btn--primary" href="/fantasy/lineup.html">${lineup ? 'Open Lineup Builder' : 'Submit Lineup'}</a>
+          <button type="button" id="fantasyLogoutBtn" class="fantasy-btn fantasy-btn--secondary">Log Out</button>
+        </div>
+      </section>`;
   }
 
-  function renderDashboard(data) {
-    const slate = data.slate || {};
-    const drivers = data.drivers || [];
-    const power = data.fantasyPowerRankings || [];
+  async function renderDashboard(slateData, launchData) {
+    const slate = launchData?.slate || slateData?.slate || {};
+    const profile = launchData?.profile || null;
+    const lineup = launchData?.lineup || null;
+    const lock = launchData?.lock || {};
+    const drivers = slateData?.drivers || [];
+    const power = slateData?.fantasyPowerRankings || [];
     const topPick = power[0] || null;
-    const bestValue = data.spotlightCards?.bestValue || null;
-    const riser = (data.salaryMovers?.biggestRisers || data.cards?.biggestRisers || [])[0];
-    const topOwned = [...(data.ownershipProjection || [])].sort(
-      (a, b) => b.projectedOwnershipPct - a.projectedOwnershipPct
-    )[0];
-    const inactiveCount = drivers.filter(isDriverInactive).length;
-
-    const topPickDriver = topPick ? findDriver(drivers, topPick.driverName) || topPick : null;
-    const valueDriver = bestValue?.driverName ? findDriver(drivers, bestValue.driverName) || bestValue : null;
-
-    const featuredCards =
-      Insights.renderDriverCard && (topPickDriver || valueDriver)
-        ? `<section class="fantasy-app-section">
-            <h2 class="fantasy-app-section-title">Featured BP Fantasy Picks</h2>
-            <div class="fantasy-driver-card-grid fantasy-driver-card-grid--duo">
-              ${topPickDriver ? Insights.renderDriverCard(topPickDriver) : ''}
-              ${valueDriver && valueDriver.driverName !== topPickDriver?.driverName ? Insights.renderDriverCard(valueDriver) : ''}
-            </div>
-          </section>`
-        : '';
-
-    const prophetSection = Insights.renderProphetSection
-      ? Insights.renderProphetSection(Insights.buildProphetLines?.(drivers, slate) || [])
-      : '';
+    const bestValue = slateData?.spotlightCards?.bestValue || null;
 
     return `
       <section class="fantasy-app-hero-panel fantasy-glass-panel fantasy-dashboard-hero">
@@ -76,20 +93,13 @@
         <h1 class="fantasy-app-page-title">Race ${escapeHtml(slate.raceNumber ?? '—')} — ${escapeHtml(slate.track || 'TBD')}</h1>
         <div class="fantasy-slate-meta-grid">
           <div><span>Current Race</span><strong>Race ${escapeHtml(slate.raceNumber ?? '—')}</strong></div>
-          <div><span>Lock</span><strong>${escapeHtml(slate.lockTime || 'TBD')}</strong></div>
+          <div><span>Lock</span><strong>${escapeHtml(slate.lockTime || lock.lockMessage || 'TBD')}</strong></div>
           <div><span>Salary Cap</span><strong>${formatMoney(slate.salaryCap ?? 50000)}</strong></div>
           <div><span>Drivers on Slate</span><strong>${drivers.length}</strong></div>
         </div>
-        <p class="fantasy-app-readonly-note">Your hub for BP Fantasy salaries, lineups, and race-week research. Demo mode — fantasy projections only, not official race predictions.</p>
       </section>
 
-      ${
-        inactiveCount
-          ? `<section class="fantasy-dashboard-alert"><strong>${inactiveCount} inactive driver${inactiveCount === 1 ? '' : 's'}</strong> on this slate — check status before picking.</section>`
-          : ''
-      }
-
-      ${prophetSection}
+      ${lineupStatusCard(profile, slate, lineup, lock)}
 
       <section class="fantasy-app-section">
         <h2 class="fantasy-app-section-title">This Week at a Glance</h2>
@@ -97,44 +107,27 @@
           ${statCard(
             'Top BP Fantasy Pick',
             topPick
-              ? `${driverLink(topPick, topPick.driverName)} · ${formatMoney(topPick.salary)} · ${escapeHtml(topPick.tier || '')}`
+              ? `${driverLink(topPick, topPick.driverName)} · ${formatMoney(topPick.salary)}`
               : '<p class="muted">—</p>'
           )}
           ${statCard(
             'Best Fantasy Value',
             bestValue?.driverName
-              ? `${driverLink(bestValue, bestValue.driverName)} · ${renderFantasyGradePill(bestValue.valueGrade || bestValue.statLine?.match(/A\+?|B\+?|C\+?|D/)?.[0] || '')} ${escapeHtml(bestValue.statLine || '')}`
-              : '<p class="muted">—</p>'
-          )}
-          ${statCard(
-            'Highest Projected Ownership',
-            topOwned
-              ? `${driverLink(topOwned, topOwned.driverName)} · ${topOwned.projectedOwnershipPct}% ${escapeHtml(topOwned.ownershipLabel || '')}`
-              : '<p class="muted">—</p>'
-          )}
-          ${statCard(
-            'Biggest Salary Riser',
-            riser
-              ? `${driverLink(riser, riser.driverName)} · <span class="fantasy-change is-up">${escapeHtml(riser.salaryChangeLabel || '—')}</span>`
+              ? `${driverLink(bestValue, bestValue.driverName)} · ${renderFantasyGradePill(bestValue.valueGrade || '')}`
               : '<p class="muted">—</p>'
           )}
         </div>
       </section>
-
-      ${featuredCards}
 
       <section class="fantasy-app-section">
         <h2 class="fantasy-app-section-title">Explore BP Fantasy</h2>
         <div class="fantasy-dashboard-link-grid">
+          ${quickLink('/fantasy/lineup.html', 'Lineup Builder', 'Pick and submit your 5-driver lineup')}
           ${quickLink('/fantasy/slate.html', 'Race Slate', 'Salaries, rankings, ownership, and tiers')}
-          ${quickLink('/fantasy/lineup.html', 'Lineup Builder', 'Demo optimal lineups under the cap')}
           ${quickLink('/fantasy/compare.html', 'Compare Drivers', 'Side-by-side fantasy matchup')}
-          ${quickLink('/fantasy/history.html', 'Salary History', 'Multi-race salary movement')}
-          ${quickLink('/fantasy/preview.html', 'Race Preview', 'Weekly BP Fantasy preview')}
-          ${quickLink('/fantasy/rules.html', 'Rules & Guide', 'How BP Fantasy works — plain language')}
+          ${quickLink('/fantasy/rules.html', 'Rules & Guide', 'How BP Fantasy works')}
         </div>
-      </section>
-    `;
+      </section>`;
   }
 
   async function init() {
@@ -142,10 +135,31 @@
     if (!root) return;
 
     try {
-      const res = await fetch('/api/settings?action=getFantasyPublicSlate');
-      if (!res.ok) throw new Error('slate');
-      const data = await res.json();
-      root.innerHTML = renderDashboard(data);
+      const [slateRes, launchRes] = await Promise.all([
+        fetch('/api/settings?action=getFantasyPublicSlate'),
+        (async () => {
+          try {
+            await Auth.init();
+            return Auth.authFetch('/api/fantasy?action=getDashboard');
+          } catch {
+            return fetch('/api/fantasy?action=getDashboard');
+          }
+        })(),
+      ]);
+
+      if (!slateRes.ok) throw new Error('slate');
+      const slateData = await slateRes.json();
+      const launchData = launchRes.ok ? await launchRes.json() : {};
+      root.innerHTML = await renderDashboard(slateData, launchData);
+
+      $('#fantasyLogoutBtn')?.addEventListener('click', async () => {
+        try {
+          await Auth.signOut();
+          window.location.reload();
+        } catch {
+          window.location.reload();
+        }
+      });
     } catch {
       root.innerHTML = `<section class="fantasy-app-empty"><p>Fantasy dashboard coming soon.</p></section>`;
     }

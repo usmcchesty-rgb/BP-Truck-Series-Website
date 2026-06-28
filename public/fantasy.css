@@ -2488,3 +2488,123 @@ body.fantasy-page main.fantasy-app-page{
   font-size:13px;
   font-weight:700;
 }
+
+.fantasy-auth-card{
+  width:100%;
+  max-width:420px;
+  padding:24px 22px;
+}
+
+.fantasy-auth-form{
+  display:grid;
+  gap:12px;
+  margin-top:14px;
+}
+
+.fantasy-auth-form label{
+  display:grid;
+  gap:6px;
+  font-size:11px;
+  font-weight:900;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  color:#999;
+}
+
+.fantasy-auth-form .input{
+  width:100%;
+  box-sizing:border-box;
+}
+
+.fantasy-auth-message{
+  margin:0;
+  font-size:12px;
+  font-weight:700;
+}
+
+.fantasy-auth-message.is-error{ color:#ff6b6b; }
+.fantasy-auth-message.is-success{ color:#45d65a; }
+
+.fantasy-auth-switch{
+  margin:14px 0 0;
+  font-size:12px;
+  color:#aaa;
+}
+
+.fantasy-lineup-builder__actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-top:12px;
+}
+
+.fantasy-lineup-pick-list{
+  list-style:none;
+  margin:0 0 12px;
+  padding:0;
+  display:grid;
+  gap:8px;
+}
+
+.fantasy-lineup-pick-row{
+  display:grid;
+  grid-template-columns:auto 1fr auto auto auto;
+  gap:8px;
+  align-items:center;
+  padding:8px 10px;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:6px;
+  background:rgba(0,0,0,.22);
+}
+
+.fantasy-lineup-pick-row__slot{
+  color:var(--gold);
+  font-weight:900;
+  min-width:1.25rem;
+}
+
+.fantasy-lineup-pick-row__remove{
+  border:0;
+  background:transparent;
+  color:#aaa;
+  font-size:18px;
+  line-height:1;
+  cursor:pointer;
+}
+
+.fantasy-lineup-pick-btn{
+  padding:4px 10px;
+  border-radius:4px;
+  border:1px solid rgba(255,255,255,.16);
+  background:rgba(255,255,255,.06);
+  color:#fff;
+  font-size:10px;
+  font-weight:900;
+  text-transform:uppercase;
+  cursor:pointer;
+}
+
+.fantasy-lineup-pick-btn.is-selected{
+  border-color:rgba(76,175,80,.45);
+  background:rgba(76,175,80,.18);
+}
+
+.fantasy-lineup-pick-btn:disabled{
+  opacity:.45;
+  cursor:not-allowed;
+}
+
+.fantasy-lineup-salary-meter__fill.is-over{
+  background:linear-gradient(90deg, #ff5555, #c62828);
+}
+
+.fantasy-lineup-note{
+  margin:0 0 10px;
+  color:#9fd89f;
+  font-size:12px;
+  font-weight:700;
+}
+
+.fantasy-dashboard-auth-panel .fantasy-cta-actions{
+  margin-top:12px;
+}

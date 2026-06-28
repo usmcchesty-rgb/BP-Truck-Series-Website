@@ -436,3 +436,76 @@ export async function generateFantasyDraftSlate(options = {}) {
     },
   });
 }
+
+export async function publishFantasySlate(options = {}) {
+  const settings = await getSettings();
+  const seasonId = String(options.seasonId || settings.seasonId || '27987');
+  const raceNumber = options.raceNumber != null ? Number(options.raceNumber) : null;
+
+  const draft = await loadFantasyDraftSlate(seasonId, raceNumber);
+  if (!draft?.slate?.id) {
+    throw new Error('No draft fantasy slate found to publish.');
+  }
+
+  const sb = supabase();
+  if (!sb) throw new Error('Supabase not configured.');
+
+  const now = new Date().toISOString();
+  const updates = {
+    status: 'published',
+    published_at: now,
+    updated_at: now,
+  };
+
+  if (options.lockTime !== undefined) {
+    updates.lock_time = String(options.lockTime || '').trim() || null;
+  }
+  if (options.lockAt !== undefined) {
+    updates.lock_at = options.lockAt ? new Date(options.lockAt).toISOString() : null;
+  }
+
+  const { data, error } = await sb
+    .from('fantasy_slates')
+    .update(updates)
+    .eq('id', draft.slate.id)
+    .eq('status', 'draft')
+    .select('*')
+    .single();
+
+  if (error) {
+    throw new Error(error.message || 'Failed to publish fantasy slate.');
+  }
+
+  return enrichFantasyDraftPayload({
+    slate: data,
+    drivers: draft.drivers || [],
+  });
+}
+
+export async function updateFantasySlateLock(options = {}) {
+  const settings = await getSettings();
+  const seasonId = String(options.seasonId || settings.seasonId || '27987');
+  const raceNumber = options.raceNumber != null ? Number(options.raceNumber) : null;
+
+  const sb = supabase();
+  if (!sb) throw new Error('Supabase not configured.');
+
+  let query = sb.from('fantasy_slates').select('*').eq('season_id', seasonId).order('race_number', { ascending: false }).limit(1);
+  if (raceNumber != null) query = query.eq('race_number', raceNumber);
+
+  const { data: slate, error: slateError } = await query.maybeSingle();
+  if (slateError || !slate) throw new Error('No fantasy slate found to update lock time.');
+
+  const updates = { updated_at: new Date().toISOString() };
+  if (options.lockTime !== undefined) {
+    updates.lock_time = String(options.lockTime || '').trim() || null;
+  }
+  if (options.lockAt !== undefined) {
+    updates.lock_at = options.lockAt ? new Date(options.lockAt).toISOString() : null;
+  }
+
+  const { data, error } = await sb.from('fantasy_slates').update(updates).eq('id', slate.id).select('*').single();
+  if (error) throw new Error(error.message || 'Failed to update lock time.');
+
+  return { slate: data };
+}
