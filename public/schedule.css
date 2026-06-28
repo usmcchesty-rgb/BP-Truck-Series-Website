@@ -2,13 +2,13 @@
 
 /* Widened layout like standings */
 main > .tab.active{
-  max-width:1500px;
+  max-width:var(--bp-page-max-width,1500px);
   margin:0 auto;
 }
 
 /* schedule table wrapper should not remain the old narrow width */
 .full-panel{
-  max-width:1500px;
+  max-width:var(--bp-page-max-width,1500px);
 }
 
 /* keep base spacing tidy */

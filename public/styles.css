@@ -2,6 +2,7 @@
   --red:#e50914;--dark:#050505;--panel:#111;--line:#2b2b2b;
   --gold:#ffd23f;--silver:#cfd2d6;--bronze:#c77632;
   --green:#45d65a;
+  --bp-page-max-width:1500px;
   --bp-text-primary:#ffffff;
   --bp-text-body:#d6d6d6;
   --bp-text-secondary:#a8a8a8;
@@ -181,7 +182,7 @@ button.active,nav button.active,.page-tabs button.active,.page-tabs button:hover
 
 main{padding:12px 18px 8px}
 .tab{display:none}.tab.active{display:block}
-#overview{max-width:1500px;margin:0 auto}
+#overview{max-width:var(--bp-page-max-width);margin:0 auto}
 
 .overview-layout{
   display:grid;
@@ -577,7 +578,7 @@ tr:hover{background:#1d1d1d}
 .logo-card b{display:block;font-size:13px}
 .logo-card small{display:block;color:#ddd;letter-spacing:1.5px;font-size:8px;margin-top:4px}
 
-.full-panel{padding:9px;max-width:1500px;margin:0 auto}
+.full-panel{padding:9px;max-width:var(--bp-page-max-width);margin:0 auto}
 .full-panel h2{margin:0 0 6px;font-size:18px}
 #search{width:100%;margin-bottom:6px;padding:6px;background:#090909;color:#fff;border:1px solid #555;border-radius:4px;font-size:11px}
 footer{
@@ -616,7 +617,7 @@ footer{
 }
 .home-main{
   width:100%;
-  max-width:1450px;
+  max-width:var(--bp-page-max-width);
   margin:0 auto;
 }
 .home-magazine-grid{
@@ -1757,7 +1758,7 @@ a.home-news-item:hover h4{color:#fff}
 
 .driver-profile-main{
   padding:0 24px 48px;
-  max-width:1180px;
+  max-width:var(--bp-page-max-width);
   margin:0 auto;
   width:100%;
 }
@@ -2007,6 +2008,16 @@ a.home-news-item:hover h4{color:#fff}
   gap:0;
   width:100%;
 }
+@media (min-width:1100px){
+  .driver-profile-stats-bar{
+    display:flex;
+    flex-wrap:nowrap;
+  }
+  .driver-profile-stat{
+    flex:1 1 0;
+    min-width:0;
+  }
+}
 .driver-profile-stat{
   min-width:0;
   padding:12px 10px;
@@ -2210,7 +2221,7 @@ a.home-news-item:hover h4{color:#fff}
 
 .results-main{
   padding:0 24px 48px;
-  max-width:1180px;
+  max-width:var(--bp-page-max-width);
   margin:0 auto;
   width:100%;
 }
@@ -2887,7 +2898,7 @@ a.home-news-item:hover h4{color:#fff}
 }
 
 /* News — Miles Apex */
-.news-main,.news-article-main{padding:0 18px 24px;max-width:1180px;margin:0 auto;width:100%}
+.news-main,.news-article-main{padding:0 18px 24px;max-width:var(--bp-page-max-width);margin:0 auto;width:100%}
 .news-featured-panel{padding:0;margin-bottom:18px;border:0;background:transparent;box-shadow:none}
 .news-featured-card{display:grid;grid-template-columns:1.15fr 1fr;gap:0;border:1px solid #2a2a2a;background:linear-gradient(180deg,#101010 0%,#060606 100%);overflow:hidden;color:inherit;text-decoration:none;box-shadow:0 10px 28px rgba(0,0,0,.35)}
 .news-featured-card:hover .news-featured-headline{color:var(--bp-text-primary)}
