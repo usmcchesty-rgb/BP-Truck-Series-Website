@@ -306,12 +306,287 @@ body.fantasy-page .topbar{
 .fantasy-driver-card{
   display:flex;
   flex-direction:column;
-  gap:4px;
+  gap:10px;
   padding:14px 16px;
   border:1px solid #2b2b2b;
   border-left:3px solid var(--red);
-  border-radius:6px;
+  border-radius:8px;
   background:rgba(10,10,10,.92);
+  min-width:0;
+}
+.fantasy-driver-card--inactive{
+  opacity:.72;
+  border-left-color:#666;
+}
+.fantasy-driver-card--compact{
+  padding:12px 14px;
+}
+.fantasy-driver-card--compact .fantasy-driver-card__outlook{
+  display:none;
+}
+.fantasy-driver-card__top{
+  display:flex;
+  gap:12px;
+  align-items:flex-start;
+}
+.fantasy-driver-card__photo-wrap{
+  flex-shrink:0;
+}
+.fantasy-driver-card__photo{
+  width:56px;
+  height:56px;
+  object-fit:contain;
+  object-position:bottom center;
+  display:block;
+}
+.fantasy-driver-card__head{
+  flex:1;
+  min-width:0;
+}
+.fantasy-driver-card__name{
+  margin:0 0 6px;
+  font-size:15px;
+  font-weight:900;
+  line-height:1.2;
+}
+.fantasy-driver-card__number{
+  color:var(--bp-text-secondary);
+  font-size:11px;
+  font-weight:900;
+}
+.fantasy-driver-card__stats{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:8px 10px;
+}
+.fantasy-driver-card__stat span{
+  display:block;
+  font-size:9px;
+  font-weight:700;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  color:#888;
+  margin-bottom:2px;
+}
+.fantasy-driver-card__stat strong{
+  font-size:12px;
+  color:#fff;
+}
+.fantasy-driver-card__trend{
+  font-size:11px;
+}
+.fantasy-driver-card__outlook{
+  margin:0;
+  font-size:11px;
+  line-height:1.45;
+  color:#ccc;
+}
+.fantasy-driver-card-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(260px,1fr));
+  gap:14px;
+}
+.fantasy-driver-card-grid--duo{
+  grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+}
+.fantasy-driver-card-grid--compact{
+  grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
+}
+.fantasy-section-lead{
+  margin:-6px 0 14px;
+  font-size:13px;
+}
+.fantasy-salary-trend{
+  font-size:11px;
+  font-weight:700;
+}
+.fantasy-salary-trend--is-up{ color:#45d65a; }
+.fantasy-salary-trend--is-down{ color:#ff5555; }
+.fantasy-salary-trend--is-new{ color:var(--gold); }
+.fantasy-salary-trend--is-same{ color:#888; }
+.fantasy-ownership-tag.is-favorite{ color:#ff6b6b; }
+.fantasy-ownership-tag.is-popular{ color:#f59e0b; }
+.fantasy-ownership-tag.is-moderate{ color:#aaa; }
+.fantasy-ownership-tag.is-sleeper{ color:#34d399; }
+.fantasy-ownership-tag.is-dark-horse{ color:#818cf8; }
+.fantasy-prophet-panel{
+  border:1px solid rgba(229,9,20,.22);
+  border-radius:8px;
+  padding:16px 18px;
+  background:rgba(229,9,20,.05);
+}
+.fantasy-prophet-disclaimer{
+  margin:-4px 0 12px;
+  font-size:12px;
+}
+.fantasy-prophet-lines{
+  list-style:none;
+  margin:0;
+  padding:0;
+  display:grid;
+  gap:10px;
+}
+.fantasy-prophet-line{
+  margin:0;
+  padding:10px 12px;
+  border-left:3px solid var(--red);
+  background:rgba(0,0,0,.24);
+  font-size:13px;
+  line-height:1.5;
+  color:#ddd;
+}
+.fantasy-compare-tale-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+}
+.fantasy-compare-tale{
+  padding:16px;
+  border:1px solid rgba(255,255,255,.1);
+  border-radius:8px;
+  background:rgba(0,0,0,.28);
+}
+.fantasy-compare-tale--inactive{ opacity:.75; }
+.fantasy-compare-tale__photo-wrap{
+  display:flex;
+  justify-content:center;
+  margin-bottom:10px;
+}
+.fantasy-compare-tale__photo{
+  width:88px;
+  height:88px;
+  object-fit:contain;
+  object-position:bottom center;
+}
+.fantasy-compare-tale__name{
+  margin:0 0 8px;
+  font-size:18px;
+  text-align:center;
+}
+.fantasy-compare-tale__activity{
+  text-align:center;
+  margin-bottom:12px;
+}
+.fantasy-compare-tale__facts{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+  margin-bottom:10px;
+}
+.fantasy-compare-tale__facts span{
+  display:block;
+  font-size:9px;
+  text-transform:uppercase;
+  color:#888;
+}
+.fantasy-compare-tale__outlook{
+  margin:10px 0 0;
+  font-size:11px;
+  line-height:1.45;
+  color:#ccc;
+}
+.fantasy-compare-overall-edge{
+  margin:16px 0;
+  padding:16px 18px;
+}
+.fantasy-compare-overall-edge__eyebrow{
+  margin:0 0 6px;
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+  color:var(--red);
+}
+.fantasy-compare-overall-edge__title{
+  margin:0 0 8px;
+  font-size:20px;
+  color:#fff;
+}
+.fantasy-compare-overall-edge__copy{
+  margin:0;
+  color:#ccc;
+  font-size:13px;
+  line-height:1.5;
+}
+.fantasy-compare-edge-table{
+  display:grid;
+  gap:0;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:8px;
+  overflow:hidden;
+}
+.fantasy-compare-edge-table__head,
+.fantasy-compare-edge-table__row{
+  display:grid;
+  grid-template-columns:1.2fr .7fr .7fr 1fr;
+  gap:8px;
+  padding:10px 12px;
+  align-items:center;
+}
+.fantasy-compare-edge-table__head{
+  background:rgba(229,9,20,.12);
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:#fff;
+}
+.fantasy-compare-edge-table__row{
+  border-top:1px solid rgba(255,255,255,.06);
+  font-size:12px;
+}
+.fantasy-compare-edge-table__cell.is-winner{
+  color:var(--gold);
+  font-weight:900;
+}
+.fantasy-compare-verdict-panel{
+  border:1px solid rgba(255,210,63,.25);
+  border-radius:8px;
+  padding:16px 18px;
+  background:rgba(255,210,63,.06);
+}
+.fantasy-compare-verdict{
+  margin:0;
+  font-size:14px;
+  line-height:1.55;
+  color:#ececec;
+}
+.fantasy-lineup-summary{
+  padding:14px 16px;
+  margin-bottom:14px;
+}
+.fantasy-lineup-summary__grades{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:10px;
+  margin-bottom:10px;
+}
+.fantasy-lineup-summary__grades span{
+  display:block;
+  font-size:9px;
+  text-transform:uppercase;
+  color:#888;
+  margin-bottom:4px;
+}
+.fantasy-lineup-summary__copy{
+  margin:0;
+  font-size:12px;
+  line-height:1.5;
+  color:#ccc;
+}
+.fantasy-lineup-grade{
+  color:var(--gold);
+  font-size:22px;
+}
+.fantasy-lineup-risk--safe{ color:#45d65a; }
+.fantasy-lineup-risk--balanced{ color:#ccc; }
+.fantasy-lineup-risk--aggressive{ color:#f59e0b; }
+.fantasy-lineup-risk--dark-horse{ color:#818cf8; }
+.fantasy-lineup-driver-row__outlook{
+  margin:6px 0 0;
+  font-size:10px;
+  line-height:1.4;
+  color:#aaa;
 }
 
 .fantasy-driver-name{
@@ -963,7 +1238,13 @@ body.fantasy-page main.fantasy-app-page{
   background:linear-gradient(90deg, rgba(229,9,20,.85), rgba(255,60,60,.55));
 }
 
-.fantasy-ownership-bar__fill.is-chalk{ background:linear-gradient(90deg, #d40000, #ff5555); }
+.fantasy-ownership-bar__fill.is-favorite{ background:linear-gradient(90deg, #d40000, #ff5555); }
+.fantasy-ownership-bar__fill.is-popular{ background:linear-gradient(90deg, #b45309, #f59e0b); }
+.fantasy-ownership-bar__fill.is-moderate,
+.fantasy-ownership-bar__fill.is-balanced{ background:linear-gradient(90deg, #4b5563, #9ca3af); }
+.fantasy-ownership-bar__fill.is-sleeper{ background:linear-gradient(90deg, #065f46, #34d399); }
+.fantasy-ownership-bar__fill.is-dark-horse,
+.fantasy-ownership-bar__fill.is-longshot{ background:linear-gradient(90deg, #312e81, #818cf8); }
 .fantasy-ownership-bar__fill.is-popular{ background:linear-gradient(90deg, #c87800, #f0c040); }
 .fantasy-ownership-bar__fill.is-balanced{ background:linear-gradient(90deg, #2a6a2a, #4caf50); }
 .fantasy-ownership-bar__fill.is-sleeper{ background:linear-gradient(90deg, #1a4a7a, #4a90e2); }
@@ -1923,6 +2204,21 @@ body.fantasy-page main.fantasy-app-page{
 
   .fantasy-lineup-strategy-grid{
     grid-template-columns:1fr;
+  }
+
+  .fantasy-compare-tale-grid,
+  .fantasy-driver-card-grid{
+    grid-template-columns:1fr;
+  }
+
+  .fantasy-lineup-summary__grades{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+
+  .fantasy-compare-edge-table__head,
+  .fantasy-compare-edge-table__row{
+    grid-template-columns:1fr;
+    gap:4px;
   }
 }
 

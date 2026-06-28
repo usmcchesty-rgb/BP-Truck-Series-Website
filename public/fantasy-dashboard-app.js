@@ -5,6 +5,7 @@
   };
 
   const Pills = window.BPFantasyPills || {};
+  const Insights = window.BPFantasyInsights || {};
   const renderFantasyGradePill = (grade) =>
     Pills.renderFantasyGradePill ? Pills.renderFantasyGradePill(grade) : escapeHtml(grade || '—');
   const isDriverInactive = (driver) =>
@@ -34,6 +35,11 @@
     </article>`;
   }
 
+  function findDriver(drivers, nameOrPartial) {
+    if (!nameOrPartial) return null;
+    return drivers.find((d) => String(d.driverName).toLowerCase() === String(nameOrPartial).toLowerCase());
+  }
+
   function renderDashboard(data) {
     const slate = data.slate || {};
     const drivers = data.drivers || [];
@@ -46,9 +52,27 @@
     )[0];
     const inactiveCount = drivers.filter(isDriverInactive).length;
 
+    const topPickDriver = topPick ? findDriver(drivers, topPick.driverName) || topPick : null;
+    const valueDriver = bestValue?.driverName ? findDriver(drivers, bestValue.driverName) || bestValue : null;
+
+    const featuredCards =
+      Insights.renderDriverCard && (topPickDriver || valueDriver)
+        ? `<section class="fantasy-app-section">
+            <h2 class="fantasy-app-section-title">Featured BP Fantasy Picks</h2>
+            <div class="fantasy-driver-card-grid fantasy-driver-card-grid--duo">
+              ${topPickDriver ? Insights.renderDriverCard(topPickDriver) : ''}
+              ${valueDriver && valueDriver.driverName !== topPickDriver?.driverName ? Insights.renderDriverCard(valueDriver) : ''}
+            </div>
+          </section>`
+        : '';
+
+    const prophetSection = Insights.renderProphetSection
+      ? Insights.renderProphetSection(Insights.buildProphetLines?.(drivers, slate) || [])
+      : '';
+
     return `
       <section class="fantasy-app-hero-panel fantasy-glass-panel fantasy-dashboard-hero">
-        <p class="fantasy-app-eyebrow">Fantasy Central</p>
+        <p class="fantasy-app-eyebrow">BP Fantasy Central</p>
         <h1 class="fantasy-app-page-title">Race ${escapeHtml(slate.raceNumber ?? '—')} — ${escapeHtml(slate.track || 'TBD')}</h1>
         <div class="fantasy-slate-meta-grid">
           <div><span>Current Race</span><strong>Race ${escapeHtml(slate.raceNumber ?? '—')}</strong></div>
@@ -56,7 +80,7 @@
           <div><span>Salary Cap</span><strong>${formatMoney(slate.salaryCap ?? 50000)}</strong></div>
           <div><span>Drivers on Slate</span><strong>${drivers.length}</strong></div>
         </div>
-        <p class="fantasy-app-readonly-note">Your hub for salaries, lineups, and race-week research. Demo mode — no account required.</p>
+        <p class="fantasy-app-readonly-note">Your hub for BP Fantasy salaries, lineups, and race-week research. Demo mode — fantasy projections only, not official race predictions.</p>
       </section>
 
       ${
@@ -65,17 +89,19 @@
           : ''
       }
 
+      ${prophetSection}
+
       <section class="fantasy-app-section">
         <h2 class="fantasy-app-section-title">This Week at a Glance</h2>
         <div class="fantasy-dashboard-stat-grid">
           ${statCard(
-            'Top Fantasy Pick',
+            'Top BP Fantasy Pick',
             topPick
               ? `${driverLink(topPick, topPick.driverName)} · ${formatMoney(topPick.salary)} · ${escapeHtml(topPick.tier || '')}`
               : '<p class="muted">—</p>'
           )}
           ${statCard(
-            'Best Value',
+            'Best Fantasy Value',
             bestValue?.driverName
               ? `${driverLink(bestValue, bestValue.driverName)} · ${renderFantasyGradePill(bestValue.valueGrade || bestValue.statLine?.match(/A\+?|B\+?|C\+?|D/)?.[0] || '')} ${escapeHtml(bestValue.statLine || '')}`
               : '<p class="muted">—</p>'
@@ -95,14 +121,16 @@
         </div>
       </section>
 
+      ${featuredCards}
+
       <section class="fantasy-app-section">
         <h2 class="fantasy-app-section-title">Explore BP Fantasy</h2>
         <div class="fantasy-dashboard-link-grid">
           ${quickLink('/fantasy/slate.html', 'Race Slate', 'Salaries, rankings, ownership, and tiers')}
           ${quickLink('/fantasy/lineup.html', 'Lineup Builder', 'Demo optimal lineups under the cap')}
-          ${quickLink('/fantasy/compare.html', 'Compare Drivers', 'Side-by-side driver matchup')}
+          ${quickLink('/fantasy/compare.html', 'Compare Drivers', 'Side-by-side fantasy matchup')}
           ${quickLink('/fantasy/history.html', 'Salary History', 'Multi-race salary movement')}
-          ${quickLink('/fantasy/preview.html', 'Race Preview', 'Weekly fantasy preview article')}
+          ${quickLink('/fantasy/preview.html', 'Race Preview', 'Weekly BP Fantasy preview')}
           ${quickLink('/fantasy/rules.html', 'Rules & Guide', 'How BP Fantasy works — plain language')}
         </div>
       </section>

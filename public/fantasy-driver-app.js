@@ -119,7 +119,7 @@
       <section class="fantasy-driver-hero fantasy-app-hero-panel fantasy-glass-panel">
         <div class="fantasy-driver-hero-inner">
           <div class="fantasy-driver-hero__content">
-            <p class="fantasy-app-eyebrow">Driver Detail</p>
+            <p class="fantasy-app-eyebrow">BP Fantasy Driver Detail</p>
             <h1 class="fantasy-app-page-title">${escapeHtml(name)}${driver.carNumber ? ` <span class="muted">#${escapeHtml(driver.carNumber)}</span>` : ''}</h1>
             <div class="fantasy-driver-hero-share-row">
               <div class="fantasy-driver-activity-header">${renderActivityStatus(driver, { uppercase: true, showLastStart: true, inlineLastStart: true })}</div>
@@ -181,13 +181,20 @@
   function renderWeekOutlook(driver = {}, slate = {}) {
     const text = Outlook.buildWeekOutlook
       ? Outlook.buildWeekOutlook(driver, slate)
-      : 'Outlook unavailable for this driver.';
+      : 'BP Fantasy outlook unavailable for this driver.';
     return `
       <section class="fantasy-app-section fantasy-outlook-panel">
-        <h2 class="fantasy-app-section-title">This Week Outlook</h2>
+        <h2 class="fantasy-app-section-title">BP Fantasy Driver Outlook</h2>
         <p class="fantasy-outlook-copy">${escapeHtml(text)}</p>
       </section>
     `;
+  }
+
+  function renderProphetNote(driver = {}) {
+    const Insights = window.BPFantasyInsights || {};
+    if (!Insights.buildProphetLineForDriver || !Insights.renderProphetSection) return '';
+    const line = Insights.buildProphetLineForDriver(driver);
+    return Insights.renderProphetSection([line], { title: 'The Pedal Prophet — BP Fantasy Notes' });
   }
 
   function renderDriverAnalysisCard(driver = {}) {
@@ -473,6 +480,7 @@
 
     root.innerHTML = `
       ${renderHero(driver, slate, profile)}
+      ${renderProphetNote(driver)}
       ${renderWeekOutlook(driver, slate)}
       ${renderDriverAnalysisCard(driver)}
 
@@ -509,8 +517,8 @@
       <p><a class="fantasy-btn fantasy-btn--secondary" href="/fantasy/slate.html">Back to Race Slate</a></p>
     `;
 
-    const shareTitle = `${driver.driverName || 'Driver'} — BP Fantasy`;
-    const shareText = `BP Fantasy profile for ${driver.driverName || 'driver'} — salary ${driver.salary != null ? `$${Number(driver.salary).toLocaleString('en-US')}` : 'TBD'}, tier ${driver.tier || '—'}.`;
+    const shareTitle = `BP Fantasy Driver Outlook — ${driver.driverName || 'Driver'}`;
+    const shareText = `BP Fantasy profile for ${driver.driverName || 'driver'} — salary ${driver.salary != null ? `$${Number(driver.salary).toLocaleString('en-US')}` : 'TBD'}, tier ${driver.tier || '—'}. Fantasy projection only.`;
     if (window.BPShare?.initPageShare) {
       window.BPShare.initPageShare('#fantasyDriverShareHost', {
         title: shareTitle,

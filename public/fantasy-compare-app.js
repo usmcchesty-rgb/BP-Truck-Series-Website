@@ -6,18 +6,18 @@
   };
 
   const Pills = window.BPFantasyPills || {};
+  const Insights = window.BPFantasyInsights || {};
+  const Photos = window.BPFantasyDriverPhotos || {};
+
   const renderFantasyGradePill = (grade) =>
     Pills.renderFantasyGradePill ? Pills.renderFantasyGradePill(grade) : escapeHtml(grade || '—');
   const renderActivityStatus = (driver, options) =>
     Pills.renderActivityStatus
       ? Pills.renderActivityStatus(driver, options)
       : escapeHtml(driver.status || 'Active');
-  const formatLastStartDisplay = (driver) =>
-    Pills.formatLastStartDisplay ? Pills.formatLastStartDisplay(driver) : '—';
   const isDriverInactive = (driver) =>
     Pills.isDriverInactive ? Pills.isDriverInactive(driver) : false;
 
-  const Photos = window.BPFantasyDriverPhotos || {};
   let slateDrivers = [];
 
   function $(sel) {
@@ -38,194 +38,119 @@
     };
   }
 
-  function firstName(name) {
-    return String(name || 'Driver').trim().split(/\s+/)[0] || 'Driver';
+  function mergeDriver(base, detail) {
+    return { ...base, ...(detail?.driver || {}) };
   }
 
-  function compareAdvantage(aVal, bVal, nameA, nameB, { lowerWins = false, epsilon = 0.05 } = {}) {
-    const a = Number(aVal);
-    const b = Number(bVal);
-    const aOk = Number.isFinite(a);
-    const bOk = Number.isFinite(b);
-    if (!aOk && !bOk) return 'Even';
-    if (!aOk) return `Advantage: ${firstName(nameB)}`;
-    if (!bOk) return `Advantage: ${firstName(nameA)}`;
-    const diff = lowerWins ? b - a : a - b;
-    if (Math.abs(diff) <= epsilon) return 'Even';
-    return diff > 0 ? `Advantage: ${firstName(nameA)}` : `Advantage: ${firstName(nameB)}`;
-  }
-
-  function activityAdvantage(a, b) {
-    const aActive = !isDriverInactive(a);
-    const bActive = !isDriverInactive(b);
-
-    if (aActive && !bActive) return `Advantage: ${firstName(a.driverName)}`;
-    if (bActive && !aActive) return `Advantage: ${firstName(b.driverName)}`;
-    if (aActive && bActive) return 'Even';
-
-    const aLast = Number(a.lastStartRaceNumber);
-    const bLast = Number(b.lastStartRaceNumber);
-    const aOk = Number.isFinite(aLast) && aLast > 0;
-    const bOk = Number.isFinite(bLast) && bLast > 0;
-
-    if (aOk && bOk) {
-      if (aLast === bLast) return 'Even';
-      return aLast > bLast
-        ? `Advantage: ${firstName(a.driverName)}`
-        : `Advantage: ${firstName(b.driverName)}`;
-    }
-
-    return 'Even';
-  }
-
-  function buildAdvantageRows(a, b) {
-    return [
-      {
-        label: 'Overall Fantasy Rank',
-        ...(() => {
-          const verdict = compareAdvantage(a.fantasyRank, b.fantasyRank, a.driverName, b.driverName, {
-            lowerWins: true,
-            epsilon: 0,
-          });
-          return { verdict };
-        })(),
-      },
-      {
-        label: 'Salary Efficiency',
-        verdict: compareAdvantage(a.valueScore, b.valueScore, a.driverName, b.driverName),
-      },
-      {
-        label: 'Track History',
-        verdict: compareAdvantage(
-          a.provenTrackHistoryRank ?? a.trackRank,
-          b.provenTrackHistoryRank ?? b.trackRank,
-          a.driverName,
-          b.driverName,
-          { lowerWins: true, epsilon: 0 }
-        ),
-      },
-      {
-        label: 'Recent Form',
-        verdict: compareAdvantage(a.recentFormScore, b.recentFormScore, a.driverName, b.driverName),
-      },
-      {
-        label: 'Activity',
-        verdict: activityAdvantage(a, b),
-      },
-      {
-        label: 'Ownership Leverage',
-        verdict: compareAdvantage(
-          a.projectedOwnershipPct,
-          b.projectedOwnershipPct,
-          a.driverName,
-          b.driverName,
-          { lowerWins: true, epsilon: 0.5 }
-        ),
-      },
-      {
-        label: 'Salary Savings',
-        verdict: compareAdvantage(a.salary, b.salary, a.driverName, b.driverName, {
-          lowerWins: true,
-          epsilon: 0,
-        }),
-      },
-    ];
-  }
-
-  function finishPillClass(finish) {
-    const n = Number(finish);
-    if (n === 1) return 'is-win';
-    if (n <= 5) return 'is-strong';
-    if (n <= 10) return 'is-mid';
-    return 'is-weak';
-  }
-
-  function renderFinishPills(finishes) {
-    if (!Array.isArray(finishes) || !finishes.length) return '<span class="muted">—</span>';
-    return finishes
-      .map(
-        (f) =>
-          `<span class="fantasy-finish-pill ${finishPillClass(f)}">P${escapeHtml(f)}</span>`
-      )
-      .join('');
-  }
-
-  function statRow(label, value, { badge = false } = {}) {
-    const valueCell = badge
-      ? `<div class="fantasy-compare-stat__value">${value}</div>`
-      : `<strong>${value}</strong>`;
-    return `<div class="fantasy-compare-stat"><span>${escapeHtml(label)}</span>${valueCell}</div>`;
-  }
-
-  function renderDriverCard(driver, detail, profile) {
-    const d = { ...driver, ...(detail?.driver || {}) };
-    const historyCount = Array.isArray(detail?.salaryHistory) ? detail.salaryHistory.length : 0;
-    const name = d.driverName || 'Driver';
+  function renderTaleDriverCard(driver, profile) {
+    const name = driver.driverName || 'Driver';
     const photoHtml = Photos.renderDriverPhotoImg
       ? Photos.renderDriverPhotoImg({
           profile,
           name,
-          className: 'fantasy-compare-card__photo-img',
+          className: 'fantasy-compare-tale__photo',
           alt: name,
         })
-      : `<img class="fantasy-compare-card__photo-img" src="/assets/drivers/placeholder.png" alt="" />`;
+      : `<img class="fantasy-compare-tale__photo" src="/assets/drivers/placeholder.png" alt="" />`;
 
-    const inactiveClass = isDriverInactive(d) ? ' fantasy-compare-card--inactive' : '';
+    const ownership =
+      driver.projectedOwnershipPct != null
+        ? `${driver.projectedOwnershipPct}% ${driver.ownershipLabel || ''}`.trim()
+        : '—';
 
     return `
-      <article class="fantasy-compare-card${inactiveClass}">
-        <div class="fantasy-compare-card__photo">
-          ${photoHtml}
+      <article class="fantasy-compare-tale${isDriverInactive(driver) ? ' fantasy-compare-tale--inactive' : ''}">
+        <div class="fantasy-compare-tale__photo-wrap">${photoHtml}</div>
+        <h2 class="fantasy-compare-tale__name">${driverLink(driver, name)}${driver.carNumber ? ` <span class="muted">#${escapeHtml(driver.carNumber)}</span>` : ''}</h2>
+        ${renderActivityStatus(driver, { uppercase: true, showLastStart: true, inlineLastStart: true })}
+        <div class="fantasy-compare-tale__facts">
+          <div><span>Salary</span><strong class="salary">${formatMoney(driver.salary)}</strong></div>
+          <div><span>Fantasy Rank</span><strong>${driver.fantasyRank != null ? `#${escapeHtml(driver.fantasyRank)}` : '—'}</strong></div>
+          <div><span>Value Grade</span><strong>${renderFantasyGradePill(driver.valueGrade)}</strong></div>
+          <div><span>Ownership</span><strong><span class="fantasy-ownership-tag ${Insights.ownershipLabelClass ? Insights.ownershipLabelClass(driver.ownershipLabel) : ''}">${escapeHtml(ownership)}</span></strong></div>
         </div>
-        <h2 class="fantasy-compare-card__name">${driverLink(d, name)}${d.carNumber ? ` <span class="muted">#${escapeHtml(d.carNumber)}</span>` : ''}</h2>
-        <div class="fantasy-compare-card__activity">${renderActivityStatus(d, { uppercase: true, showLastStart: true, inlineLastStart: true })}</div>
-        <div class="fantasy-compare-card__stats">
-          ${statRow('Tier', escapeHtml(d.tier || '—'))}
-          ${statRow('Salary', `<span class="salary">${formatMoney(d.salary)}</span>`)}
-          ${statRow('Salary Change', escapeHtml(d.salaryChangeLabel || '—'))}
-          ${statRow('Fantasy Rank', d.fantasyRank != null ? `#${escapeHtml(d.fantasyRank)}` : '—')}
-          ${statRow('Activity', renderActivityStatus(d, { uppercase: true }), { badge: true })}
-          ${statRow('Last Start', escapeHtml(formatLastStartDisplay(d)))}
-          ${statRow('Value Grade', renderFantasyGradePill(d.valueGrade))}
-          ${statRow('Value Score', d.valueScore != null ? Number(d.valueScore).toFixed(2) : '—')}
-          ${statRow('Projected Ownership', d.projectedOwnershipPct != null ? `${d.projectedOwnershipPct}% (${escapeHtml(d.ownershipLabel || '')})` : '—')}
-          ${statRow('Track Rank', escapeHtml(d.trackRankLabel || '—'))}
-          ${statRow('Proven Track Rank', d.provenTrackHistoryRank != null ? `#${escapeHtml(d.provenTrackHistoryRank)}` : '—')}
-          ${statRow('Recent Form', escapeHtml(d.recentFormSummary || '—'))}
-          ${statRow('Last Finishes', renderFinishPills(d.recentFormFinishes))}
-          ${statRow('Fantasy Tier Score', d.fantasyTierScore != null ? Number(d.fantasyTierScore).toFixed(1) : '—')}
-          ${statRow('Salary History Races', String(historyCount))}
+        ${Insights.renderSalaryTrend ? `<div class="fantasy-compare-tale__trend">${Insights.renderSalaryTrend(driver)}</div>` : ''}
+        ${Insights.buildFantasyPickOutlook ? `<p class="fantasy-compare-tale__outlook">${escapeHtml(Insights.buildFantasyPickOutlook(driver))}</p>` : ''}
+      </article>`;
+  }
+
+  function renderEdgeTable(edges, nameA, nameB) {
+    return `
+      <div class="fantasy-compare-edge-table">
+        <div class="fantasy-compare-edge-table__head">
+          <span>Category</span>
+          <span>${escapeHtml(nameA)}</span>
+          <span>${escapeHtml(nameB)}</span>
+          <span>Winner</span>
         </div>
-      </article>
-    `;
+        ${edges
+          .map((edge) => {
+            const aWin = edge.winner === 'a';
+            const bWin = edge.winner === 'b';
+            const winnerLabel =
+              edge.winner === 'even' ? 'Even' : edge.winner === 'a' ? nameA : nameB;
+            return `
+              <div class="fantasy-compare-edge-table__row${edge.winner === 'even' ? ' is-even' : ''}">
+                <div class="fantasy-compare-edge-table__cat">${escapeHtml(edge.label)}</div>
+                <div class="fantasy-compare-edge-table__cell${aWin ? ' is-winner' : ''}">${aWin ? '◀ Edge' : '—'}</div>
+                <div class="fantasy-compare-edge-table__cell${bWin ? ' is-winner' : ''}">${bWin ? 'Edge ▶' : '—'}</div>
+                <div class="fantasy-compare-edge-table__winner">${escapeHtml(winnerLabel)}</div>
+              </div>`;
+          })
+          .join('')}
+      </div>`;
+  }
+
+  function renderOverallEdgeCard(edges, a, b) {
+    const fantasyEdge = edges.find((e) => e.key === 'fantasy');
+    let headline = 'Even fantasy profile';
+    let detail = 'Both drivers profile similarly on this slate.';
+    if (fantasyEdge?.winner === 'a') {
+      headline = `${a.driverName} — Fantasy Edge`;
+      detail = `Better overall fantasy rank (#${a.fantasyRank ?? '—'}) on this BP Fantasy slate.`;
+    } else if (fantasyEdge?.winner === 'b') {
+      headline = `${b.driverName} — Fantasy Edge`;
+      detail = `Better overall fantasy rank (#${b.fantasyRank ?? '—'}) on this BP Fantasy slate.`;
+    }
+    return `
+      <article class="fantasy-compare-overall-edge fantasy-glass-panel">
+        <p class="fantasy-compare-overall-edge__eyebrow">Overall Fantasy Edge</p>
+        <h3 class="fantasy-compare-overall-edge__title">${escapeHtml(headline)}</h3>
+        <p class="fantasy-compare-overall-edge__copy">${escapeHtml(detail)}</p>
+      </article>`;
   }
 
   function renderComparison(a, b, detailA, detailB, profileA, profileB) {
-    const rows = buildAdvantageRows(
-      { ...a, ...(detailA?.driver || {}) },
-      { ...b, ...(detailB?.driver || {}) }
-    );
+    const da = mergeDriver(a, detailA);
+    const db = mergeDriver(b, detailB);
+    const edges = Insights.buildCompareEdges ? Insights.buildCompareEdges(da, db) : [];
+    const verdict = Insights.buildFantasyVerdict ? Insights.buildFantasyVerdict(da, db, edges) : '';
 
     return `
-      <div class="fantasy-compare-grid">
-        ${renderDriverCard(a, detailA, profileA)}
-        ${renderDriverCard(b, detailB, profileB)}
-      </div>
       <section class="fantasy-app-section">
-        <h2 class="fantasy-app-section-title">Advantage Summary</h2>
-        <div class="fantasy-table-wrap">
-          <table class="fantasy-slate-table">
-            <thead><tr><th>Category</th><th>Edge</th></tr></thead>
-            <tbody>
-              ${rows
-                .map(
-                  (row) => `<tr><td>${escapeHtml(row.label)}</td><td>${escapeHtml(row.verdict)}</td></tr>`
-                )
-                .join('')}
-            </tbody>
-          </table>
+        <h2 class="fantasy-app-section-title">Tale of the Tape</h2>
+        <p class="fantasy-section-lead muted">BP Fantasy side-by-side comparison — not official race predictions.</p>
+        <div class="fantasy-compare-tale-grid">
+          ${renderTaleDriverCard(da, profileA)}
+          ${renderTaleDriverCard(db, profileB)}
         </div>
       </section>
+
+      ${renderOverallEdgeCard(edges, da, db)}
+
+      <section class="fantasy-app-section">
+        <h2 class="fantasy-app-section-title">Fantasy Edge Breakdown</h2>
+        ${renderEdgeTable(edges, da.driverName, db.driverName)}
+      </section>
+
+      ${
+        verdict
+          ? `<section class="fantasy-app-section fantasy-compare-verdict-panel">
+              <h2 class="fantasy-app-section-title">BP Fantasy Verdict</h2>
+              <p class="fantasy-compare-verdict">${escapeHtml(verdict)}</p>
+            </section>`
+          : ''
+      }
     `;
   }
 
@@ -270,9 +195,9 @@
   function renderCompareHeader() {
     return `
       <section class="fantasy-app-hero-panel fantasy-glass-panel">
-        <p class="fantasy-app-eyebrow">Driver Compare</p>
-        <h1 class="fantasy-app-page-title">Side-by-Side Matchup</h1>
-        <p class="fantasy-app-readonly-note">Compare two drivers from the current fantasy slate. Read-only demo.</p>
+        <p class="fantasy-app-eyebrow">BP Fantasy Compare Drivers</p>
+        <h1 class="fantasy-app-page-title">Tale of the Tape</h1>
+        <p class="fantasy-app-readonly-note">Compare two drivers from the current BP Fantasy slate. Fantasy projections only — not official race predictions.</p>
       </section>
     `;
   }
@@ -315,9 +240,7 @@
     form?.addEventListener('submit', (e) => {
       e.preventDefault();
       const fd = new FormData(form);
-      const d1 = fd.get('driver1');
-      const d2 = fd.get('driver2');
-      window.location.href = compareUrl(d1, d2);
+      window.location.href = compareUrl(fd.get('driver1'), fd.get('driver2'));
     });
   }
 

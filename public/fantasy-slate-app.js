@@ -6,6 +6,8 @@
   };
 
   const Pills = window.BPFantasyPills || {};
+  const Insights = window.BPFantasyInsights || {};
+  const Photos = window.BPFantasyDriverPhotos || {};
   const renderFantasyGradePill = (grade) =>
     Pills.renderFantasyGradePill ? Pills.renderFantasyGradePill(grade) : escapeHtml(grade || '—');
   const renderActivityStatus = (driver, options) =>
@@ -33,15 +35,14 @@
   }
 
   function ownershipLabelClass(label) {
+    if (Insights.ownershipLabelClass) return Insights.ownershipLabelClass(label);
     const map = {
-      Favorite: 'is-chalk',
-      Chalk: 'is-chalk',
+      Favorite: 'is-favorite',
       Popular: 'is-popular',
-      Moderate: 'is-balanced',
-      Balanced: 'is-balanced',
+      Moderate: 'is-moderate',
+      Balanced: 'is-moderate',
       Sleeper: 'is-sleeper',
-      'Dark Horse': 'is-longshot',
-      'Long Shot': 'is-longshot',
+      'Dark Horse': 'is-dark-horse',
     };
     return map[label] || '';
   }
@@ -207,6 +208,23 @@
     `;
   }
 
+  function renderDriverCards(drivers = []) {
+    const top = [...drivers]
+      .sort((a, b) => Number(a.fantasyRank ?? 999) - Number(b.fantasyRank ?? 999))
+      .slice(0, 8);
+    if (!top.length || !Insights.renderDriverCard) return '';
+
+    return `
+      <section class="fantasy-app-section">
+        <h2 class="fantasy-app-section-title">BP Fantasy Driver Cards</h2>
+        <p class="fantasy-section-lead muted">Fantasy pick outlooks for the top-ranked drivers on this slate — not official race predictions.</p>
+        <div class="fantasy-driver-card-grid">
+          ${top.map((driver) => Insights.renderDriverCard(driver)).join('')}
+        </div>
+      </section>
+    `;
+  }
+
   function renderDriverTable(drivers = []) {
     const sorted = [...drivers].sort((a, b) => {
       const rankA = a.fantasyRank ?? 999;
@@ -246,7 +264,7 @@
                   <td class="salary">${formatMoney(driver.salary)}</td>
                   <td><span class="fantasy-change ${changeClass(driver.salaryChangeDirection)}">${escapeHtml(driver.salaryChangeLabel || '—')}</span></td>
                   <td class="fantasy-value-grade-cell">${renderFantasyGradePill(driver.valueGrade)}</td>
-                  <td>${driver.projectedOwnershipPct != null ? `${driver.projectedOwnershipPct}%` : '—'}</td>
+                  <td>${driver.projectedOwnershipPct != null ? `${driver.projectedOwnershipPct}% <span class="fantasy-ownership-tag ${ownershipLabelClass(driver.ownershipLabel)}">${escapeHtml(driver.ownershipLabel || '')}</span>` : '—'}</td>
                   <td>${escapeHtml(driver.trackRankLabel || '—')}</td>
                   <td>${renderActivityStatus(driver, { uppercase: false })}</td>
                 </tr>`;
@@ -288,8 +306,8 @@
     if (!window.BPShare?.initPageShare) return;
     const raceNumber = slate.raceNumber ?? '—';
     const track = slate.track || 'TBD';
-    const title = `BP Fantasy Race ${raceNumber} — ${track}`;
-    const text = `BP Fantasy slate for Race ${raceNumber} at ${track}. Salaries, tiers, and driver rankings.`;
+    const title = `BP Fantasy Race Slate — Race ${raceNumber} — ${track}`;
+    const text = `BP Fantasy slate for Race ${raceNumber} at ${track}. Salaries, tiers, and fantasy driver rankings.`;
     window.BPShare.initPageShare('#fantasySlateShareHost', {
       title,
       text,
@@ -305,6 +323,8 @@
     if (!root) return;
     root.innerHTML = `
       ${renderSlateHeader(data.slate || {})}
+      ${Insights.renderProphetSection ? Insights.renderProphetSection(Insights.buildProphetLines?.(data.drivers || [], data.slate || {}) || []) : ''}
+      ${renderDriverCards(data.drivers || [])}
       ${renderPowerRankings(data.fantasyPowerRankings || [])}
       ${renderSpotlightCards(data.spotlightCards || {})}
       ${renderOwnershipProjection(data.ownershipProjection || [])}

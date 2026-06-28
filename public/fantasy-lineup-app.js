@@ -7,6 +7,7 @@
 
   const Pills = window.BPFantasyPills || {};
   const Photos = window.BPFantasyDriverPhotos || {};
+  const Insights = window.BPFantasyInsights || {};
 
   const renderFantasyGradePill = (grade) =>
     Pills.renderFantasyGradePill ? Pills.renderFantasyGradePill(grade) : escapeHtml(grade || '—');
@@ -41,6 +42,10 @@
     const n = Number(value);
     if (!Number.isFinite(n)) return '—';
     return `$${n.toLocaleString('en-US')}`;
+  }
+
+  function ownershipLabelClass(label) {
+    return Insights.ownershipLabelClass ? Insights.ownershipLabelClass(label) : '';
   }
 
   function renderDriverThumb(driver) {
@@ -80,7 +85,28 @@
     const inactive = drivers.filter(isDriverInactive);
     if (!inactive.length) return '';
     const names = inactive.map((d) => escapeHtml(d.driverName)).join(', ');
-    return `<p class="fantasy-lineup-warning">Inactive driver${inactive.length > 1 ? 's' : ''} in this lineup: ${names}. They may not start this race.</p>`;
+    return `<p class="fantasy-lineup-warning"><strong>Inactive Warning:</strong> ${names} — may not start this race.</p>`;
+  }
+
+  function renderLineupSummary(lineup, cap, strategyId) {
+    const grade = Insights.computeLineupGrade ? Insights.computeLineupGrade(lineup) : 'B';
+    const risk = Insights.computeRiskLevel ? Insights.computeRiskLevel(lineup, strategyId) : 'Balanced';
+    const eff = Insights.computeSalaryEfficiency ? Insights.computeSalaryEfficiency(lineup, cap) : null;
+    const explanation = Insights.buildLineupExplanation
+      ? Insights.buildLineupExplanation(lineup, strategyId, cap)
+      : '';
+
+    return `
+      <div class="fantasy-lineup-summary fantasy-glass-panel">
+        <div class="fantasy-lineup-summary__grades">
+          <div><span>Lineup Grade</span><strong class="fantasy-lineup-grade">${escapeHtml(grade)}</strong></div>
+          <div><span>Salary Efficiency</span><strong>${eff != null ? `${eff}%` : '—'}</strong></div>
+          <div><span>Average Ownership</span><strong>${lineup.averageOwnership != null ? `${lineup.averageOwnership}%` : '—'}</strong></div>
+          <div><span>Risk Level</span><strong class="fantasy-lineup-risk fantasy-lineup-risk--${risk.toLowerCase().replace(/\s+/g, '-')}">${escapeHtml(risk)}</strong></div>
+        </div>
+        <p class="fantasy-lineup-summary__copy">${escapeHtml(explanation)}</p>
+      </div>
+    `;
   }
 
   function renderLineupDriverRow(driver) {
@@ -89,28 +115,38 @@
       driver.projectedOwnershipPct != null
         ? `${driver.projectedOwnershipPct}% ${driver.ownershipLabel || ''}`.trim()
         : '—';
+    const outlook = Insights.buildFantasyPickOutlook
+      ? Insights.buildFantasyPickOutlook(driver)
+      : '';
+    const trend = Insights.renderSalaryTrend ? Insights.renderSalaryTrend(driver) : '';
+
     return `
       <li class="fantasy-lineup-driver-row${inactiveClass ? ` ${inactiveClass}` : ''}">
         <div class="fantasy-lineup-driver-row__photo">${renderDriverThumb(driver)}</div>
         <div class="fantasy-lineup-driver-row__main">
-          <div class="fantasy-lineup-driver-row__name">${driverLink(driver, driver.driverName)}</div>
+          <div class="fantasy-lineup-driver-row__name">${driverLink(driver, driver.driverName)}${driver.carNumber ? ` <span class="muted">#${escapeHtml(driver.carNumber)}</span>` : ''}</div>
           <div class="fantasy-lineup-driver-row__meta">
             <span class="salary">${formatMoney(driver.salary)}</span>
-            <span class="fantasy-tier-pill">${escapeHtml(driver.tier || '—')}</span>
+            <span>Fantasy Rank ${driver.fantasyRank != null ? `#${escapeHtml(driver.fantasyRank)}` : '—'}</span>
             ${renderFantasyGradePill(driver.valueGrade)}
             ${renderActivityStatus(driver, { uppercase: true })}
           </div>
-          <div class="fantasy-lineup-driver-row__sub muted">Ownership ${escapeHtml(ownership)}</div>
+          <div class="fantasy-lineup-driver-row__sub">
+            <span class="fantasy-ownership-tag ${ownershipLabelClass(driver.ownershipLabel)}">Ownership ${escapeHtml(ownership)}</span>
+            ${trend}
+          </div>
+          ${outlook ? `<p class="fantasy-lineup-driver-row__outlook">${escapeHtml(outlook)}</p>` : ''}
         </div>
       </li>
     `;
   }
 
-  function renderLineupCard(lineup, title, cap) {
+  function renderLineupCard(lineup, title, cap, strategyId) {
     if (!lineup?.drivers?.length) return '';
     return `
       <article class="fantasy-lineup-result">
         <h3 class="fantasy-lineup-result__title">${escapeHtml(title)}</h3>
+        ${renderLineupSummary(lineup, cap, strategyId)}
         ${renderSalaryMeter(lineup, cap)}
         ${renderInactiveWarning(lineup.drivers)}
         <ul class="fantasy-lineup-result__drivers fantasy-lineup-driver-list">
@@ -118,7 +154,6 @@
         </ul>
         <div class="fantasy-lineup-result__meta">
           <div><span>Remaining Salary</span><strong>${formatMoney(lineup.remainingSalary)}</strong></div>
-          <div><span>Avg Ownership</span><strong>${lineup.averageOwnership != null ? `${lineup.averageOwnership}%` : '—'}</strong></div>
           <div><span>Avg Value Score</span><strong>${lineup.averageValueScore != null ? Number(lineup.averageValueScore).toFixed(2) : '—'}</strong></div>
           <div><span>Projected Score</span><strong>${escapeHtml(String(lineup.projectedScore))}</strong></div>
         </div>
@@ -129,7 +164,7 @@
     `;
   }
 
-  function renderResults(result, cap) {
+  function renderResults(result, cap, strategyId) {
     if (!result.ok) {
       return `<section class="fantasy-app-empty"><p>${escapeHtml(result.error || 'Could not build lineup.')}</p></section>`;
     }
@@ -140,11 +175,11 @@
     return `
       <section class="fantasy-app-section">
         <p class="fantasy-lineup-strategy-note">${escapeHtml(optimal.strategyNote || '')}</p>
-        ${renderLineupCard(optimal, 'Suggested Lineup', cap)}
+        ${renderLineupCard(optimal, 'Suggested BP Fantasy Lineup', cap, strategyId)}
         ${
           alts.length
             ? `<div class="fantasy-lineup-alt-grid">${alts
-                .map((alt, i) => renderLineupCard(alt, `Alternative ${i + 1}`, cap))
+                .map((alt, i) => renderLineupCard(alt, `Alternative ${i + 1}`, cap, strategyId))
                 .join('')}</div>`
             : ''
         }
@@ -181,7 +216,7 @@
           </label>
           <button type="submit" class="fantasy-btn fantasy-btn--primary">Build Lineup</button>
         </form>
-        <p class="fantasy-app-readonly-note">Read-only demo optimizer. No lineup is saved or submitted. <a class="fantasy-driver-link" href="/fantasy/rules.html">How it works →</a></p>
+        <p class="fantasy-app-readonly-note">BP Fantasy Lineup Builder — read-only demo. No lineup is saved or submitted. <a class="fantasy-driver-link" href="/fantasy/rules.html">How it works →</a></p>
       </section>
     `;
   }
@@ -190,6 +225,17 @@
     const sorted = [...drivers].sort(
       (a, b) => Number(a.fantasyRank ?? 999) - Number(b.fantasyRank ?? 999)
     );
+
+    if (Insights.renderDriverCard) {
+      return `
+        <section class="fantasy-app-section">
+          <h2 class="fantasy-app-section-title">BP Fantasy Player Pool</h2>
+          <div class="fantasy-driver-card-grid fantasy-driver-card-grid--compact">
+            ${sorted.map((driver) => Insights.renderDriverCard(driver, { compact: true })).join('')}
+          </div>
+        </section>
+      `;
+    }
 
     return `
       <section class="fantasy-app-section">
@@ -255,7 +301,7 @@
       maxAlternatives: 3,
     });
 
-    $('#fantasyLineupResults').innerHTML = renderResults(result, salaryCap);
+    $('#fantasyLineupResults').innerHTML = renderResults(result, salaryCap, strategy);
   }
 
   function bindStrategyCards(form) {
@@ -274,9 +320,9 @@
 
     root.innerHTML = `
       <section class="fantasy-app-hero-panel fantasy-glass-panel">
-        <p class="fantasy-app-eyebrow">Lineup Builder</p>
+        <p class="fantasy-app-eyebrow">BP Fantasy Lineup Builder</p>
         <h1 class="fantasy-app-page-title">Demo Lineup Optimizer</h1>
-        <p class="fantasy-app-readonly-note">Build a 5-driver lineup under the $50,000 cap. Demo only — nothing is saved.</p>
+        <p class="fantasy-app-readonly-note">Build a 5-driver BP Fantasy lineup under the $50,000 cap. Demo only — not official race predictions.</p>
       </section>
       ${renderControls()}
       <div id="fantasyLineupPool"></div>
