@@ -359,7 +359,7 @@ body.fantasy-page .topbar{
   grid-template-columns:repeat(2,minmax(0,1fr));
   gap:8px 10px;
 }
-.fantasy-driver-card__stat span{
+.fantasy-driver-card__stat > span:first-child{
   display:block;
   font-size:9px;
   font-weight:700;
@@ -473,7 +473,7 @@ body.fantasy-page .topbar{
   gap:8px;
   margin-bottom:10px;
 }
-.fantasy-compare-tale__facts span{
+.fantasy-compare-tale__facts > div > span:first-child{
   display:block;
   font-size:9px;
   text-transform:uppercase;
@@ -1015,9 +1015,9 @@ body.fantasy-page main.fantasy-app-page{
 }
 
 .fantasy-value-grade-badge{
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
   box-sizing:border-box;
   width:32px;
   min-width:32px;
@@ -1027,18 +1027,29 @@ body.fantasy-page main.fantasy-app-page{
   padding:0;
   border-radius:4px;
   border:1px solid rgba(255,255,255,.12);
-  font-size:9px;
-  font-weight:900;
+  font-size:9px !important;
+  font-weight:900 !important;
   letter-spacing:0;
-  line-height:0;
+  line-height:1 !important;
   text-align:center;
+  text-transform:none !important;
   white-space:nowrap;
+  vertical-align:middle;
   flex:0 0 auto;
+  color:#fff;
 }
 
 .fantasy-value-grade-badge__letter{
-  display:block;
-  line-height:1;
+  display:block !important;
+  line-height:1 !important;
+  font-size:inherit !important;
+  font-weight:inherit !important;
+  letter-spacing:inherit !important;
+  text-transform:none !important;
+  color:inherit !important;
+  margin:0 !important;
+  padding:0 !important;
+  transform:translateY(0.5px);
 }
 
 .fantasy-value-grade-badge--a-plus{
@@ -1094,8 +1105,10 @@ body.fantasy-page main.fantasy-app-page{
   margin:0 auto;
 }
 
-.fantasy-driver-quick-stat .fantasy-value-grade-badge{
-  margin-top:2px;
+strong:has(> .fantasy-value-grade-badge){
+  display:inline-flex;
+  align-items:center;
+  line-height:1;
 }
 
 .fantasy-change.is-up{ color:var(--green); font-weight:900; }
@@ -1339,7 +1352,7 @@ body.fantasy-page main.fantasy-app-page{
   gap:12px;
 }
 
-.fantasy-driver-detail-grid span:not(.fantasy-value-grade-badge){
+.fantasy-driver-detail-grid span:not(.fantasy-value-grade-badge):not(.fantasy-value-grade-badge__letter):not(.fantasy-driver-quick-stat__label){
   display:block;
   color:#999;
   font-size:10px;
