@@ -64,6 +64,137 @@ function buildSectionPreview(sectionText, charIndex, beforeChars = 120, afterCha
   return sectionText.slice(start, end).trim();
 }
 
+function isIntervalToken(token) {
+  const value = String(token || '');
+  return isTimeToken(value) || /^\d+\.\d+$/.test(value);
+}
+
+function normalizeOptionalGap(value) {
+  if (value == null || value === '-') return null;
+  return value;
+}
+
+const MIN_RESULT_TAIL_TOKENS = 10;
+
+function parseResultRowTail(tail) {
+  if (!Array.isArray(tail) || tail.length < MIN_RESULT_TAIL_TOKENS) return null;
+
+  let i = 0;
+  const licenseClass = tail[i++];
+  if (!LICENSE_CLASS_PATTERN.test(licenseClass)) return null;
+
+  const safetyRating = Number(tail[i++]);
+  const iRating = Number(tail[i++]);
+  const grid = Number(tail[i++]);
+  const incidents = Number(tail[i++]);
+  const laps = Number(tail[i++]);
+  if (
+    !Number.isFinite(safetyRating) ||
+    !Number.isFinite(iRating) ||
+    !Number.isFinite(grid) ||
+    !Number.isFinite(incidents) ||
+    !Number.isFinite(laps)
+  ) {
+    return null;
+  }
+
+  const finishTime = tail[i++];
+  if (!isTimeToken(finishTime) || finishTime === '-') return null;
+
+  const remaining = tail.slice(i);
+  let gap = null;
+  let interval = null;
+  let bestLap;
+  let bestLapOn;
+  let status;
+
+  if (remaining.length === 3) {
+    [bestLap, bestLapOn, status] = remaining;
+  } else if (remaining.length === 5) {
+    [gap, interval, bestLap, bestLapOn, status] = remaining;
+    gap = normalizeOptionalGap(gap);
+  } else if (remaining.length === 4) {
+    [gap, bestLap, bestLapOn, status] = remaining;
+    gap = normalizeOptionalGap(gap);
+  } else {
+    return null;
+  }
+
+  const bestLapOnNum = Number(bestLapOn);
+  if (
+    !STATUS_VALUES.has(status) ||
+    !isTimeToken(bestLap) ||
+    !Number.isFinite(bestLapOnNum)
+  ) {
+    return null;
+  }
+
+  if (interval != null && !isIntervalToken(interval)) return null;
+  if (gap != null && !isTimeToken(gap)) return null;
+
+  return {
+    licenseClass,
+    safetyRating,
+    iRating,
+    grid,
+    incidents,
+    laps,
+    finishTime,
+    gap,
+    interval,
+    bestLap,
+    bestLapOn: bestLapOnNum,
+    status,
+  };
+}
+
+function diagnoseResultRowTailFailure(tail) {
+  if (!Array.isArray(tail) || tail.length < MIN_RESULT_TAIL_TOKENS) {
+    return `Tail too short (${tail?.length ?? 0} tokens, need ${MIN_RESULT_TAIL_TOKENS}).`;
+  }
+
+  let i = 0;
+  const licenseClass = tail[i++];
+  if (!LICENSE_CLASS_PATTERN.test(licenseClass)) {
+    return `Invalid license class (${licenseClass}).`;
+  }
+
+  const safetyRating = Number(tail[i++]);
+  const iRating = Number(tail[i++]);
+  const grid = Number(tail[i++]);
+  const incidents = Number(tail[i++]);
+  const laps = Number(tail[i++]);
+  if (
+    !Number.isFinite(safetyRating) ||
+    !Number.isFinite(iRating) ||
+    !Number.isFinite(grid) ||
+    !Number.isFinite(incidents) ||
+    !Number.isFinite(laps)
+  ) {
+    return `Numeric tail invalid (SR=${tail[i - 5]}, iR=${tail[i - 4]}, grid=${tail[i - 3]}, inc=${tail[i - 2]}, laps=${tail[i - 1]}).`;
+  }
+
+  const finishTime = tail[i++];
+  if (!isTimeToken(finishTime) || finishTime === '-') {
+    return `Invalid finishTime (${finishTime}).`;
+  }
+
+  const remaining = tail.slice(i);
+  if (![3, 4, 5].includes(remaining.length)) {
+    return `Unexpected tokens after finishTime (${remaining.length} remaining: ${remaining.slice(0, 6).join(' ')}).`;
+  }
+
+  const parsed = parseResultRowTail(tail);
+  if (parsed) return null;
+
+  const status = remaining[remaining.length - 1];
+  if (!STATUS_VALUES.has(status)) {
+    return `Invalid status (${status}).`;
+  }
+
+  return `Tail suffix invalid (${remaining.join(' ')}).`;
+}
+
 function diagnoseParseOneResultRowFailure(tokens, startIdx) {
   if (startIdx + 14 >= tokens.length) {
     return `Insufficient tokens (${tokens.length}) for a result row starting at index ${startIdx}.`;
@@ -76,75 +207,38 @@ function diagnoseParseOneResultRowFailure(tokens, startIdx) {
     return `Row prefix is not position/classPosition/carNumber at token index ${startIdx} (${tokens.slice(startIdx, startIdx + 5).join(' ')}).`;
   }
 
-  const position = Number(tokens[startIdx]);
   const identityStart = startIdx + 3;
+  const maxIdentityLen = tokens.length - startIdx - 3 - MIN_RESULT_TAIL_TOKENS;
   const rejectionReasons = [];
 
-  for (
-    let endIdx = identityStart + 12;
-    endIdx <= Math.min(tokens.length - 1, identityStart + 60);
-    endIdx += 1
-  ) {
-    const status = tokens[endIdx];
-    if (!STATUS_VALUES.has(status)) continue;
+  if (maxIdentityLen < 1) {
+    return `Not enough tokens after car number for identity + tail (tokens=${tokens.length}).`;
+  }
 
-    let cursor = endIdx - 1;
-    const bestLapOn = Number(tokens[cursor--]);
-    if (!Number.isFinite(bestLapOn)) {
-      rejectionReasons.push(`status=${status}: bestLapOn not numeric (${tokens[cursor + 1]})`);
-      continue;
-    }
-
-    const bestLap = tokens[cursor--];
-    if (!isTimeToken(bestLap)) {
-      rejectionReasons.push(`status=${status}: bestLap invalid (${bestLap})`);
-      continue;
-    }
-
-    const trailingTimes = [];
-    while (cursor >= identityStart && isTimeToken(tokens[cursor])) {
-      trailingTimes.unshift(tokens[cursor--]);
-    }
-
-    const laps = Number(tokens[cursor--]);
-    const incidents = Number(tokens[cursor--]);
-    const grid = Number(tokens[cursor--]);
-    const iRating = Number(tokens[cursor--]);
-    const safetyRating = Number(tokens[cursor--]);
-    const licenseClass = tokens[cursor--];
-
-    if (
-      !Number.isFinite(laps) ||
-      !Number.isFinite(incidents) ||
-      !Number.isFinite(grid) ||
-      !Number.isFinite(iRating) ||
-      !Number.isFinite(safetyRating) ||
-      !licenseClass ||
-      !LICENSE_CLASS_PATTERN.test(licenseClass)
-    ) {
-      rejectionReasons.push(
-        `status=${status}: numeric/license tail invalid (laps=${tokens[cursor + 1]}, incidents=${tokens[cursor + 2]}, grid=${tokens[cursor + 3]}, iRating=${tokens[cursor + 4]}, SR=${tokens[cursor + 5]}, lic=${licenseClass})`
-      );
-      continue;
-    }
-
-    const identityTokens = tokens.slice(identityStart, cursor + 1);
+  for (let identityLen = 3; identityLen <= maxIdentityLen; identityLen += 1) {
+    const identityTokens = tokens.slice(identityStart, identityStart + identityLen);
     const identity = parseDriverIdentity(identityTokens);
     if (!identity) {
-      rejectionReasons.push(
-        `status=${status}: driver identity not resolved (${identityTokens.slice(0, 8).join(' ')}...)`
-      );
+      rejectionReasons.push(`identityLen=${identityLen}: driver identity not resolved`);
       continue;
     }
 
-    return null;
+    const tail = tokens.slice(identityStart + identityLen);
+    const tailReason = diagnoseResultRowTailFailure(tail);
+    if (tailReason) {
+      rejectionReasons.push(
+        `identityLen=${identityLen} (${identity.driverName}): ${tailReason}`
+      );
+    } else {
+      return null;
+    }
   }
 
   if (rejectionReasons.length) {
-    return `No valid status window matched. Attempts: ${rejectionReasons.slice(0, 3).join(' | ')}`;
+    return rejectionReasons.slice(-3).join(' | ');
   }
 
-  return `No Running/Disco/DQ/DNQ status token found within scan window after token index ${identityStart}.`;
+  return `Could not split driver identity from result tail after token index ${identityStart}.`;
 }
 
 function buildResultsParseInstrumentation(sectionText) {
@@ -716,55 +810,22 @@ function parseOneResultRow(tokens, startIdx) {
   const classPosition = Number(tokens[startIdx + 1]);
   const carNumber = Number(tokens[startIdx + 2]);
   const identityStart = startIdx + 3;
+  const maxIdentityLen = tokens.length - startIdx - 3 - MIN_RESULT_TAIL_TOKENS;
 
-  for (
-    let endIdx = identityStart + 12;
-    endIdx <= Math.min(tokens.length - 1, identityStart + 60);
-    endIdx += 1
-  ) {
-    const status = tokens[endIdx];
-    if (!STATUS_VALUES.has(status)) continue;
+  if (maxIdentityLen < 1) return null;
 
-    let cursor = endIdx - 1;
-    const bestLapOn = Number(tokens[cursor--]);
-    if (!Number.isFinite(bestLapOn)) continue;
+  let parsedRow = null;
 
-    const bestLap = tokens[cursor--];
-    if (!isTimeToken(bestLap)) continue;
-
-    const trailingTimes = [];
-    while (cursor >= identityStart && isTimeToken(tokens[cursor])) {
-      trailingTimes.unshift(tokens[cursor--]);
-    }
-
-    const laps = Number(tokens[cursor--]);
-    const incidents = Number(tokens[cursor--]);
-    const grid = Number(tokens[cursor--]);
-    const iRating = Number(tokens[cursor--]);
-    const safetyRating = Number(tokens[cursor--]);
-    const licenseClass = tokens[cursor--];
-
-    if (
-      !Number.isFinite(laps) ||
-      !Number.isFinite(incidents) ||
-      !Number.isFinite(grid) ||
-      !Number.isFinite(iRating) ||
-      !Number.isFinite(safetyRating) ||
-      !licenseClass ||
-      !LICENSE_CLASS_PATTERN.test(licenseClass)
-    ) {
-      continue;
-    }
-
-    const identityTokens = tokens.slice(identityStart, cursor + 1);
+  for (let identityLen = 3; identityLen <= maxIdentityLen; identityLen += 1) {
+    const identityTokens = tokens.slice(identityStart, identityStart + identityLen);
     const identity = parseDriverIdentity(identityTokens);
     if (!identity) continue;
 
-    const finishTime = trailingTimes[0] || null;
-    const gap = trailingTimes[1] || null;
-    const interval = trailingTimes[2] || null;
+    const tail = tokens.slice(identityStart + identityLen);
+    const tailParsed = parseResultRowTail(tail);
+    if (!tailParsed) continue;
 
-    return {
+    parsedRow = {
       result: {
         position,
         classPosition,
@@ -772,27 +833,27 @@ function parseOneResultRow(tokens, startIdx) {
         driverName: identity.driverName,
         nationality: identity.nationality,
         car: identity.car,
-        licenseClass,
-        safetyRating,
-        iRating,
-        grid,
-        incidents,
-        laps,
-        finishTime,
-        gap,
-        interval,
-        bestLap,
-        bestLapOn,
-        status,
-        startPosition: grid,
-        incidentCount: incidents,
-        lapsCompleted: laps,
+        licenseClass: tailParsed.licenseClass,
+        safetyRating: tailParsed.safetyRating,
+        iRating: tailParsed.iRating,
+        grid: tailParsed.grid,
+        incidents: tailParsed.incidents,
+        laps: tailParsed.laps,
+        finishTime: tailParsed.finishTime,
+        gap: tailParsed.gap,
+        interval: tailParsed.interval,
+        bestLap: tailParsed.bestLap,
+        bestLapOn: tailParsed.bestLapOn,
+        status: tailParsed.status,
+        startPosition: tailParsed.grid,
+        incidentCount: tailParsed.incidents,
+        lapsCompleted: tailParsed.laps,
       },
-      nextIdx: endIdx + 1,
+      nextIdx: identityStart + identityLen + tail.length,
     };
   }
 
-  return null;
+  return parsedRow;
 }
 
 export function parseResults(sectionText) {

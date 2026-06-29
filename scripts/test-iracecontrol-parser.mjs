@@ -40,15 +40,31 @@ function buildSampleRow({
   incidents = '8',
   laps = '101',
   finishTime = '1:55:20.209',
-  gap = '00:51.906',
-  interval = '-',
+  gap = null,
+  interval = null,
   bestLap = '00:51.906',
   bestLapOn = '55',
   status = 'Running',
 }) {
-  const gapPart = gap === '-' ? '-' : gap;
-  const intervalPart = interval === '-' ? '' : ` ${interval}`;
-  return `${position} ${classPosition} ${carNumber} ${driverName} ${nationality} ${car} ${licenseClass} ${safetyRating} ${iRating} ${grid} ${incidents} ${laps} ${finishTime} ${gapPart}${intervalPart} ${bestLap} ${bestLapOn} ${status}`;
+  const parts = [
+    position,
+    classPosition,
+    carNumber,
+    driverName,
+    nationality,
+    car,
+    licenseClass,
+    safetyRating,
+    iRating,
+    grid,
+    incidents,
+    laps,
+    finishTime,
+  ];
+  if (gap != null && gap !== '-') parts.push(gap);
+  if (interval != null && interval !== '-') parts.push(interval);
+  parts.push(bestLap, bestLapOn, status);
+  return parts.join(' ');
 }
 
 function resolveDriverName(position) {
@@ -77,21 +93,57 @@ function buildTalladegaSample() {
 
   const rows = [];
   for (let position = 1; position <= 35; position += 1) {
+    const rowDefaults = {
+      position,
+      classPosition: position,
+      carNumber: resolveCarNumber(position),
+      driverName: resolveDriverName(position),
+      car:
+        position % 3 === 0
+          ? 'Ford F150'
+          : position % 3 === 1
+            ? 'Toyota Tundra TRD Pro'
+            : 'Chevrolet Silverado',
+    };
+
+    if (position === 1) {
+      rows.push(
+        buildSampleRow({
+          ...rowDefaults,
+          car: 'Chevrolet Silverado',
+          finishTime: '1:55:20.209',
+          bestLap: '00:51.906',
+          bestLapOn: '55',
+        })
+      );
+      continue;
+    }
+
+    if (position === 2) {
+      rows.push(
+        buildSampleRow({
+          ...rowDefaults,
+          car: 'Ford F150',
+          safetyRating: '4.46',
+          iRating: '4825',
+          grid: '12',
+          incidents: '0',
+          finishTime: '1:55:20.212',
+          gap: '0:00.003',
+          interval: '0.003',
+          bestLap: '00:51.857',
+          bestLapOn: '92',
+        })
+      );
+      continue;
+    }
+
     rows.push(
       buildSampleRow({
-        position,
-        classPosition: position,
-        carNumber: resolveCarNumber(position),
-        driverName: resolveDriverName(position),
-        car:
-          position % 3 === 0
-            ? 'Ford F150'
-            : position % 3 === 1
-              ? 'Toyota Tundra TRD Pro'
-              : 'Chevrolet Silverado',
-        gap: position === 1 ? '-' : '00:51.906',
-        interval: position === 1 ? '-' : '00:02.100',
-        finishTime: position === 1 ? '1:55:20.209' : '1:56:12.115',
+        ...rowDefaults,
+        finishTime: '1:56:12.115',
+        gap: '00:51.906',
+        interval: '00:02.100',
       })
     );
   }
@@ -168,13 +220,21 @@ const pass =
   checks.cautionCount === 7 &&
   checks.resultsLength === 35 &&
   parsed.results[0]?.driverName === 'Chris Berg' &&
+  parsed.results[0]?.gap == null &&
+  parsed.results[0]?.interval == null &&
   parsed.results[1]?.driverName === 'Hunter Lagunes' &&
+  parsed.results[1]?.carNumber === 27 &&
+  parsed.results[1]?.grid === 12 &&
+  parsed.results[1]?.gap === '0:00.003' &&
+  parsed.results[1]?.interval === '0.003' &&
   checks.markArthurPosition === 18 &&
   checks.markArthurCar === '12' &&
   checks.aaronDriver === 'Aaron Bockover' &&
   checks.aaronCar === '44' &&
   checks.aaronPosition === 35 &&
   checks.parserDiagnostics?.resultsDetected === 35 &&
+  checks.parserDiagnostics?.resultParseConfidence === 'high' &&
+  parsed.parserDebug?.sequentialAnchorsAccepted === 35 &&
   !checks.hasFirstIterationWarning;
 
 console.log(pass ? '\nACCEPTANCE: PASS' : '\nACCEPTANCE: CHECK OUTPUT');
