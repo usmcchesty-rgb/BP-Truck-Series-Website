@@ -13,6 +13,7 @@
     { "source": "/news/:slug", "destination": "/news-article.html?slug=:slug" },
     { "source": "/drivers/:driverId", "destination": "/driver-profile.html?driverId=:driverId" },
     { "source": "/streamview", "destination": "/streamview.html" },
+    { "source": "/join", "destination": "/join.html" },
     { "source": "/fantasy/login", "destination": "/fantasy/login.html" },
     { "source": "/fantasy/signup", "destination": "/fantasy/signup.html" },
     { "source": "/fantasy/dashboard", "destination": "/fantasy/dashboard.html" },
