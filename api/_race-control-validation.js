@@ -7,6 +7,7 @@ import {
 } from './_schedule-points-races.js';
 import { fetchStandingsRows } from './power-rankings-generate.js';
 import {
+  countOfficialRaceStarters,
   extractOfficialRaceFinishes,
   findScheduleEntryByScheduleId,
 } from './_simracerhub-schedule-results.js';
@@ -46,8 +47,95 @@ function buildCheck({ id, label, passed, severity = 'error', message = null, det
 function deriveConfidence(checks, warnings) {
   const failedErrors = checks.filter((check) => !check.passed && check.severity === 'error');
   if (failedErrors.length) return 'low';
-  if (warnings.length || checks.some((check) => !check.passed)) return 'medium';
+  const failedWarnings = checks.filter(
+    (check) => !check.passed && check.severity !== 'info'
+  );
+  if (warnings.length || failedWarnings.length) return 'medium';
   return 'high';
+}
+
+function resolveExpectedFieldSize({
+  officialContext,
+  pdfDriverCount,
+  analysis,
+}) {
+  const parsedCount = pdfDriverCount;
+  const positionsComplete = analysis.positionsComplete;
+  const officialStarters = officialContext?.officialStarters ?? null;
+  const officialFinishers = officialContext?.officialFieldSize ?? null;
+
+  if (officialStarters != null && officialStarters === parsedCount) {
+    return {
+      expected: parsedCount,
+      source: 'official_race_bucket',
+      confident: true,
+      infoMessage: null,
+    };
+  }
+
+  if (officialFinishers != null && officialFinishers === parsedCount) {
+    return {
+      expected: parsedCount,
+      source: 'official_finish_count',
+      confident: true,
+      infoMessage: null,
+    };
+  }
+
+  if (positionsComplete && parsedCount > 0) {
+    const officialHint =
+      officialStarters != null && officialFinishers != null
+        ? `${officialFinishers} classified / ${officialStarters} in race bucket`
+        : officialFinishers != null
+          ? `${officialFinishers} classified`
+          : officialStarters != null
+            ? `${officialStarters} in race bucket`
+            : null;
+
+    return {
+      expected: parsedCount,
+      source: 'race_control_fallback',
+      confident: false,
+      infoMessage: officialHint
+        ? `Official starter count unavailable or incomplete (${officialHint} vs ${parsedCount} parsed). Using parsed Race Control report count.`
+        : 'Official starter count unavailable. Using parsed Race Control report count.',
+    };
+  }
+
+  if (officialStarters != null) {
+    return {
+      expected: officialStarters,
+      source: 'official_race_bucket',
+      confident: officialStarters === parsedCount,
+      infoMessage: null,
+    };
+  }
+
+  if (officialFinishers != null) {
+    return {
+      expected: officialFinishers,
+      source: 'official_finish_count',
+      confident: officialFinishers === parsedCount,
+      infoMessage: null,
+    };
+  }
+
+  if (parsedCount > 0) {
+    return {
+      expected: parsedCount,
+      source: 'race_control_only',
+      confident: false,
+      infoMessage:
+        'Official starter count unavailable. Using parsed Race Control report count.',
+    };
+  }
+
+  return {
+    expected: null,
+    source: 'none',
+    confident: false,
+    infoMessage: null,
+  };
 }
 
 function analyzeParsedResults(results = []) {
@@ -97,6 +185,7 @@ export async function loadOfficialRaceContext(settings, raceNumber) {
   });
 
   let officialFieldSize = null;
+  let officialStarters = null;
   let officialWinner = scheduleRace?.winner || null;
 
   if (raceDebug.standingsScheduleId) {
@@ -109,8 +198,14 @@ export async function loadOfficialRaceContext(settings, raceNumber) {
         standings.schedules,
         raceDebug.standingsScheduleId
       );
+      const starterCounts = countOfficialRaceStarters(entry);
+      officialStarters = starterCounts.starterCount ?? null;
+      officialFieldSize = starterCounts.finisherCount ?? null;
+
       const { finishes, meta } = extractOfficialRaceFinishes(entry);
-      officialFieldSize = meta?.driverCount ?? null;
+      if (officialFieldSize == null) {
+        officialFieldSize = meta?.driverCount ?? null;
+      }
 
       const winnerDriverId = meta?.winnerDriverId;
       if (winnerDriverId && finishes[String(winnerDriverId)]) {
@@ -132,7 +227,8 @@ export async function loadOfficialRaceContext(settings, raceNumber) {
     officialWinner,
     officialTrack: scheduleRace?.track || raceDebug.currentRaceName || null,
     officialFieldSize,
-    hasOfficialResults: Boolean(scheduleRace?.winner || officialFieldSize),
+    officialStarters,
+    hasOfficialResults: Boolean(scheduleRace?.winner || officialFieldSize || officialStarters),
     standingsScheduleId: raceDebug.standingsScheduleId || null,
   };
 }
@@ -160,6 +256,13 @@ export function validateRaceControlReport({
   const officialTrack = officialContext?.officialTrack || null;
   const officialFieldSize = officialContext?.officialFieldSize ?? null;
   const targetRaceNumber = Number(raceNumber);
+  const fieldSizeResolution = resolveExpectedFieldSize({
+    officialContext,
+    pdfDriverCount,
+    analysis,
+  });
+  const expectedFieldSize = fieldSizeResolution.expected;
+  const infoMessages = fieldSizeResolution.infoMessage ? [fieldSizeResolution.infoMessage] : [];
 
   const checks = [];
 
@@ -244,20 +347,25 @@ export function validateRaceControlReport({
     if (!passed) warnings.push(checks[checks.length - 1].message);
   }
 
-  if (officialFieldSize != null && pdfDriverCount > 0) {
-    const passed = pdfDriverCount === officialFieldSize;
+  if (expectedFieldSize != null && pdfDriverCount > 0) {
+    const passed = pdfDriverCount === expectedFieldSize;
+    const usingFallback = fieldSizeResolution.source.startsWith('race_control');
     checks.push(
       buildCheck({
         id: 'driver_count_match',
         label: 'Driver count matches official field size',
-        passed,
-        severity: 'error',
+        passed: passed || (usingFallback && analysis.positionsComplete),
+        severity: usingFallback ? 'info' : 'error',
         message: passed
-          ? null
-          : `PDF driver count (${pdfDriverCount}) differs from official field size (${officialFieldSize}).`,
+          ? fieldSizeResolution.infoMessage
+          : usingFallback
+            ? fieldSizeResolution.infoMessage
+            : `PDF driver count (${pdfDriverCount}) differs from expected field size (${expectedFieldSize}).`,
       })
     );
-    if (!passed) warnings.push(checks[checks.length - 1].message);
+    if (!passed && !usingFallback && checks[checks.length - 1].message) {
+      warnings.push(checks[checks.length - 1].message);
+    }
   } else {
     checks.push(
       buildCheck({
@@ -352,6 +460,7 @@ export function validateRaceControlReport({
   const passed = checks.filter((check) => check.passed).length;
   const failed = checks.filter((check) => !check.passed).length;
   const uniqueWarnings = [...new Set(warnings.filter(Boolean))];
+  const uniqueInfoMessages = [...new Set(infoMessages.filter(Boolean))];
   const confidence = deriveConfidence(checks, uniqueWarnings);
 
   return {
@@ -359,12 +468,16 @@ export function validateRaceControlReport({
     passed,
     failed,
     warnings: uniqueWarnings,
+    infoMessages: uniqueInfoMessages,
     checks,
     officialPrecedence: true,
     supplementalOnly: true,
     parsedDriverCount: pdfDriverCount,
     officialFieldSize,
-    rowsExpected: officialFieldSize ?? analysis.expectedSequentialCount ?? pdfDriverCount,
+    officialStarters: officialContext?.officialStarters ?? null,
+    fieldSizeSource: fieldSizeResolution.source,
+    fieldSizeConfident: fieldSizeResolution.confident,
+    rowsExpected: expectedFieldSize ?? analysis.expectedSequentialCount ?? pdfDriverCount,
     rowsParsed: pdfDriverCount,
     analysis,
   };
@@ -372,20 +485,22 @@ export function validateRaceControlReport({
 
 export function buildParserHealth(parsedJson, validation = null) {
   const diagnostics = parsedJson?.parserDiagnostics || {};
-  const parserDebug = parsedJson?.parserDebug || {};
+  const rowsParsed = validation?.rowsParsed ?? diagnostics.resultsDetected ?? 0;
+  const rowsExpected =
+    validation?.rowsExpected ??
+    (rowsParsed > 0 ? rowsParsed : null) ??
+    diagnostics.expectedResultRows ??
+    null;
 
   return {
     parserVersion: RACE_CONTROL_PARSER_VERSION,
     confidence: validation?.confidence || diagnostics.resultParseConfidence || 'unknown',
-    rowsParsed: validation?.rowsParsed ?? diagnostics.resultsDetected ?? 0,
-    rowsExpected:
-      validation?.rowsExpected ??
-      parserDebug.positions1Through35Count ??
-      diagnostics.expectedResultRows ??
-      null,
+    rowsParsed,
+    rowsExpected,
     parseTimeMs: parsedJson?.parseTimingMs ?? null,
     warnings: [
       ...(Array.isArray(parsedJson?.parseWarnings) ? parsedJson.parseWarnings : []),
+      ...(validation?.infoMessages || []),
       ...(validation?.warnings || []),
     ].filter((value, index, list) => list.indexOf(value) === index),
   };
@@ -428,6 +543,7 @@ export async function enrichRaceControlReport(report, options = {}) {
           winner: officialContext.officialWinner,
           track: officialContext.officialTrack,
           fieldSize: officialContext.officialFieldSize,
+          starters: officialContext.officialStarters,
           hasOfficialResults: officialContext.hasOfficialResults,
         }
       : null,

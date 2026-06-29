@@ -180,6 +180,7 @@
                     <th>Car</th>
                     <th>Incidents</th>
                     <th>Pit Stops</th>
+                    <th>Fastest Pit</th>
                     <th>Best Lap</th>
                   </tr>
                 </thead>
@@ -494,15 +495,25 @@
       }
 
       section.hidden = false;
-      body.innerHTML = drivers.map((row) => `
+      body.innerHTML = drivers.map((row) => {
+        const incidents =
+          row.resultIncidents != null && row.resultIncidents !== '-'
+            ? row.resultIncidents
+            : row.incidentCount ?? row.incidentEvents?.length ?? '—';
+        const pitStops = row.pitStopCount ?? row.pitStops?.length ?? '—';
+        const fastestPit =
+          row.fastestPitStop != null ? `${row.fastestPitStop}s` : '—';
+        return `
         <tr>
           <td>${escapeHtml(row.driverName ?? '—')}</td>
           <td>${escapeHtml(row.carNumber ?? '—')}</td>
-          <td>${escapeHtml(row.incidentEvents?.length ?? 0)}</td>
-          <td>${escapeHtml(row.pitStops ?? '—')}</td>
+          <td>${escapeHtml(incidents)}</td>
+          <td>${escapeHtml(pitStops)}</td>
+          <td>${escapeHtml(fastestPit)}</td>
           <td>${escapeHtml(row.bestLap ?? '—')}</td>
         </tr>
-      `).join('');
+      `;
+      }).join('');
     }
 
     function renderParserHealth(report) {

@@ -125,6 +125,25 @@ export function extractOfficialRaceFinishes(schedule) {
   };
 }
 
+export function countOfficialRaceStarters(schedule) {
+  const official = pickOfficialRaceBucket(schedule);
+  if (!official?.bucket) {
+    return {
+      starterCount: null,
+      finisherCount: null,
+      bucketKey: null,
+    };
+  }
+
+  const { meta } = extractOfficialRaceFinishes(schedule);
+
+  return {
+    starterCount: Object.keys(official.bucket).length,
+    finisherCount: meta?.driverCount ?? null,
+    bucketKey: official.bucketKey,
+  };
+}
+
 export function findScheduleEntryByScheduleId(schedules, scheduleId) {
   if (!scheduleId) return null;
   for (const schedule of Object.values(schedules || {})) {

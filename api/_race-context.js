@@ -119,9 +119,10 @@ function formatIncidentSummaries(incidents = []) {
       const driver = row.driverName || row.driver || 'Unknown';
       const car = row.carNumber ?? '—';
       const count = row.incidentCount ?? row.incidentEvents?.length ?? row.incidents ?? '—';
-      const pits = row.pitStops ?? row.pits ?? '—';
+      const pits = row.pitStopCount ?? row.pitStops?.length ?? row.pits ?? '—';
+      const fastestPit = row.fastestPitStop != null ? `${row.fastestPitStop}s` : '—';
       const bestLap = row.bestLap ?? '—';
-      return `${driver} #${car} | incidents ${count} | pits ${pits} | best lap ${bestLap}`;
+      return `${driver} #${car} | incidents ${count} | pits ${pits} | fastest pit ${fastestPit} | best lap ${bestLap}`;
     })
     .join('\n');
 }
