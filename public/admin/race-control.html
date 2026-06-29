@@ -482,12 +482,94 @@
         : '<div class="preview-list-item">No race events parsed.</div>';
     }
 
+    function normalizeDriverKey(value) {
+      return String(value || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+
+    function buildResultLookups(results = []) {
+      const byName = new Map();
+      const byCar = new Map();
+      const byCarAndName = new Map();
+
+      for (const row of results) {
+        const car = String(row.carNumber ?? '').trim();
+        const name = normalizeDriverKey(row.driverName);
+        if (car) {
+          if (!byCar.has(car)) byCar.set(car, row);
+          if (name) byCarAndName.set(`${car}|${name}`, row);
+        }
+        if (name && !byName.has(name)) byName.set(name, row);
+      }
+
+      return { byName, byCar, byCarAndName };
+    }
+
+    function matchResultRow(lookups, carNumber, driverName) {
+      const car = String(carNumber ?? '').trim();
+      const name = normalizeDriverKey(driverName);
+      if (car && name && lookups.byCarAndName.has(`${car}|${name}`)) {
+        return lookups.byCarAndName.get(`${car}|${name}`);
+      }
+      if (name && lookups.byName.has(name)) return lookups.byName.get(name);
+      if (car && lookups.byCar.has(car)) return lookups.byCar.get(car);
+      return null;
+    }
+
+    function mergeDriverPreviewRows(parsed) {
+      const drivers = Array.isArray(parsed?.drivers) ? parsed.drivers : [];
+      const results = Array.isArray(parsed?.results) ? parsed.results : [];
+      const lookups = buildResultLookups(results);
+
+      return drivers
+        .filter((row) => !/\(cont\.\)/i.test(row.driverName || ''))
+        .map((row) => {
+          const result = matchResultRow(lookups, row.carNumber, row.driverName);
+          const pitStopCount =
+            row.pitStopCount != null
+              ? row.pitStopCount
+              : Array.isArray(row.pitStops)
+                ? row.pitStops.length
+                : null;
+          const bestLap =
+            row.bestLap && row.bestLap !== '-'
+              ? row.bestLap
+              : result?.bestLap && result.bestLap !== '-'
+                ? result.bestLap
+                : null;
+          const incidentsRaw =
+            row.resultIncidents != null && row.resultIncidents !== '-'
+              ? row.resultIncidents
+              : row.incidentCount != null
+                ? row.incidentCount
+                : result?.incidents != null && result.incidents !== '-'
+                  ? result.incidents
+                  : row.incidentEvents?.length ?? null;
+
+          return {
+            ...row,
+            carNumber: result?.carNumber ?? row.carNumber,
+            pitStopCount,
+            fastestPitStop: row.fastestPitStop ?? null,
+            bestLap,
+            incidentsRaw,
+          };
+        });
+    }
+
+    function formatPreviewValue(value) {
+      return value === null || value === undefined ? '—' : String(value);
+    }
+
     function renderPreviewIncidents(parsed) {
       const section = $('#previewIncidentsSection');
       const body = $('#previewIncidentsBody');
       if (!section || !body) return;
 
-      const drivers = Array.isArray(parsed?.drivers) ? parsed.drivers : [];
+      const drivers = mergeDriverPreviewRows(parsed);
       if (!drivers.length) {
         section.hidden = true;
         body.innerHTML = '';
@@ -496,21 +578,16 @@
 
       section.hidden = false;
       body.innerHTML = drivers.map((row) => {
-        const incidents =
-          row.resultIncidents != null && row.resultIncidents !== '-'
-            ? row.resultIncidents
-            : row.incidentCount ?? row.incidentEvents?.length ?? '—';
-        const pitStops = row.pitStopCount ?? row.pitStops?.length ?? '—';
         const fastestPit =
           row.fastestPitStop != null ? `${row.fastestPitStop}s` : '—';
         return `
         <tr>
           <td>${escapeHtml(row.driverName ?? '—')}</td>
           <td>${escapeHtml(row.carNumber ?? '—')}</td>
-          <td>${escapeHtml(incidents)}</td>
-          <td>${escapeHtml(pitStops)}</td>
+          <td>${escapeHtml(formatPreviewValue(row.incidentsRaw))}</td>
+          <td>${escapeHtml(formatPreviewValue(row.pitStopCount))}</td>
           <td>${escapeHtml(fastestPit)}</td>
-          <td>${escapeHtml(row.bestLap ?? '—')}</td>
+          <td>${escapeHtml(formatPreviewValue(row.bestLap))}</td>
         </tr>
       `;
       }).join('');

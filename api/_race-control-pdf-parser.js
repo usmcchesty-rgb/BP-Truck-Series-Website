@@ -1290,6 +1290,9 @@ export function parseSessionReports(text) {
 
 const INCIDENT_EVENT_PATTERN =
   /\b(\d+x(?:->\d+x)?|Meatball flag|Black flag|INVESTIGATING|Cleared black flag)\b/i;
+const LAPS_SECTION_HEADER_PATTERN = /\bLAPS\b\s+(?:PRACTICE|QUALIFY|RACE)\b/i;
+const RACE_SESSION_START_PATTERN =
+  /\bRACE\b(?:\s+L(?:-?\d+|0\b)|\s+\d{2}:\d{2}:\d{2})/i;
 
 function normalizeDriverKey(value) {
   return String(value || '')
@@ -1299,29 +1302,74 @@ function normalizeDriverKey(value) {
     .trim();
 }
 
-function findMatchingResultRow(results = [], carNumber, driverName) {
-  const byCar = results.find((row) => String(row.carNumber) === String(carNumber));
-  if (byCar) return byCar;
+function buildResultLookups(results = []) {
+  const byCar = new Map();
+  const byName = new Map();
+  const byCarAndName = new Map();
 
-  const targetName = normalizeDriverKey(driverName);
-  return results.find((row) => normalizeDriverKey(row.driverName) === targetName) || null;
+  for (const row of results) {
+    const car = String(row.carNumber ?? '').trim();
+    const name = normalizeDriverKey(row.driverName);
+    if (car) {
+      if (!byCar.has(car)) byCar.set(car, row);
+      if (name) byCarAndName.set(`${car}|${name}`, row);
+    }
+    if (name && !byName.has(name)) byName.set(name, row);
+  }
+
+  return { byCar, byName, byCarAndName };
 }
 
-function extractEventsBlock(body) {
-  const match = body.match(/EVENTS\s+([\s\S]*?)\s+LAPS\s/i);
-  return match?.[1]?.trim() || '';
+function matchResultRow(lookups, carNumber, driverName) {
+  const car = String(carNumber ?? '').trim();
+  const name = normalizeDriverKey(driverName);
+
+  if (car && name && lookups.byCarAndName.has(`${car}|${name}`)) {
+    return lookups.byCarAndName.get(`${car}|${name}`);
+  }
+  if (name && lookups.byName.has(name)) {
+    return lookups.byName.get(name);
+  }
+  if (car && lookups.byCar.has(car)) {
+    return lookups.byCar.get(car);
+  }
+  return null;
 }
 
-function extractRaceSection(block, label) {
-  if (!block) return '';
-  const pattern = new RegExp(`\\b${label}\\b`, 'i');
-  const match = block.match(pattern);
-  if (!match) return '';
+function extractDriverRaceEventsSection(body) {
+  const eventsIdx = body.search(/\bEVENTS\b/i);
+  const searchFrom = eventsIdx >= 0 ? body.slice(eventsIdx) : body;
+  const raceMatch = searchFrom.match(RACE_SESSION_START_PATTERN);
+  if (!raceMatch || raceMatch.index == null) return '';
 
-  const start = match.index + match[0].length;
-  const remainder = block.slice(start);
-  const nextSection = remainder.search(/\b(PRACTICE|QUALIFY|RACE)\b/i);
-  return (nextSection >= 0 ? remainder.slice(0, nextSection) : remainder).trim();
+  const raceStart = (eventsIdx >= 0 ? eventsIdx : 0) + raceMatch.index;
+  const raceContentStart = raceStart + raceMatch[0].length;
+  const afterRaceContent = body.slice(raceContentStart);
+
+  const lapsHeader = afterRaceContent.search(LAPS_SECTION_HEADER_PATTERN);
+  const nextDriver = afterRaceContent.search(/\d+\s*-\s*[^:]+\s+CLASS:/i);
+
+  let end = afterRaceContent.length;
+  if (lapsHeader >= 0) end = Math.min(end, lapsHeader);
+  if (nextDriver >= 0) end = Math.min(end, nextDriver);
+
+  return afterRaceContent.slice(0, end).trim();
+}
+
+function extractDriverRaceLapTableSection(body) {
+  const lapsMatch = body.match(/\bLAPS\b[\s\S]*?\bRACE\b/i);
+  if (!lapsMatch || lapsMatch.index == null) return '';
+
+  const tableStart = lapsMatch.index + lapsMatch[0].length;
+  const remainder = body.slice(tableStart);
+  const nextDriver = remainder.search(/\d+\s*-\s*[^:]+\s+CLASS:/i);
+  const contBlock = remainder.search(/\d+\s*-\s*[^:]+\s+\(cont\.\)/i);
+
+  let end = remainder.length;
+  if (nextDriver >= 0) end = Math.min(end, nextDriver);
+  if (contBlock >= 0) end = Math.min(end, contBlock);
+
+  return remainder.slice(0, end).trim();
 }
 
 function parseRacePitStops(raceEventsText) {
@@ -1432,14 +1480,78 @@ function summarizePitStops(pitStops) {
   };
 }
 
+function mergeDriverWithResult(driver, resultRow) {
+  if (!resultRow) return driver;
+
+  const incidentsRaw = resultRow.incidents ?? resultRow.incidentCount ?? null;
+  const incidentCount =
+    incidentsRaw != null && incidentsRaw !== '-'
+      ? Number(incidentsRaw)
+      : driver.incidentCount;
+
+  const resultBestLap =
+    resultRow.bestLap && resultRow.bestLap !== '-' && isTimeToken(resultRow.bestLap)
+      ? resultRow.bestLap
+      : null;
+  const bestLap = resultBestLap || driver.bestLap || null;
+  const bestLapSource = resultBestLap ? 'results' : driver.bestLapSource || null;
+
+  return {
+    ...driver,
+    reportCarNumber: driver.reportCarNumber ?? driver.carNumber,
+    carNumber: resultRow.carNumber ?? driver.carNumber,
+    finishPosition: resultRow.position ?? driver.finishPosition ?? null,
+    status: resultRow.status ?? driver.status ?? null,
+    bestLapOn: resultRow.bestLapOn ?? driver.bestLapOn ?? null,
+    bestLap,
+    bestLapSource,
+    resultIncidents: incidentsRaw,
+    incidentCount: Number.isFinite(incidentCount) ? incidentCount : driver.incidentCount,
+    matchedResult: true,
+  };
+}
+
+export function enrichDriverReportsWithResults(drivers = [], results = []) {
+  const lookups = buildResultLookups(results);
+  const unmatchedDriverReports = [];
+  const enriched = [];
+
+  for (const driver of drivers) {
+    if (/\(cont\.\)/i.test(driver.driverName)) continue;
+
+    const resultRow = matchResultRow(lookups, driver.carNumber, driver.driverName);
+    if (!resultRow) {
+      unmatchedDriverReports.push({
+        carNumber: driver.carNumber,
+        driverName: driver.driverName,
+      });
+      enriched.push({ ...driver, matchedResult: false });
+      continue;
+    }
+
+    enriched.push(mergeDriverWithResult(driver, resultRow));
+  }
+
+  const diagnostics = {
+    driverReportsParsed: drivers.filter((driver) => !/\(cont\.\)/i.test(driver.driverName)).length,
+    driverReportsMatchedToResults: enriched.filter((driver) => driver.matchedResult).length,
+    driversWithPitStops: enriched.filter((driver) => (driver.pitStopCount ?? 0) > 0).length,
+    driversWithBestLap: enriched.filter((driver) => Boolean(driver.bestLap)).length,
+    unmatchedDriverReports,
+  };
+
+  return { drivers: enriched, diagnostics };
+}
+
 export function parseDriverReports(text, options = {}) {
   const warnings = [];
   const results = Array.isArray(options.results) ? options.results : [];
+  const lookups = buildResultLookups(results);
   const startIdx = text.indexOf('INCIDENT REPORTS');
 
   if (startIdx === -1) {
     warnings.push('INCIDENT REPORTS section not found.');
-    return { drivers: [], warnings };
+    return { drivers: [], warnings, diagnostics: null };
   }
 
   const section = text.slice(startIdx + 'INCIDENT REPORTS'.length);
@@ -1449,8 +1561,10 @@ export function parseDriverReports(text, options = {}) {
 
   let match;
   while ((match = blockPattern.exec(section)) !== null) {
-    const carNumber = match[1].trim();
+    const reportCarNumber = match[1].trim();
     const driverName = match[2].trim();
+    if (/\(cont\.\)/i.test(driverName)) continue;
+
     const body = match[3] || '';
 
     const carMatch = body.match(/CAR:\s*(.+?)(?=\s+DRIVERS|\s+EVENTS|\s+LAPS|\s+PIT|$)/i);
@@ -1470,30 +1584,29 @@ export function parseDriverReports(text, options = {}) {
       }
     }
 
-    const eventsBlock = extractEventsBlock(body);
-    const raceEventsText = extractRaceSection(eventsBlock, 'RACE');
+    const raceEventsText = extractDriverRaceEventsSection(body);
     const pitStops = parseRacePitStops(raceEventsText);
     const incidentEvents = parseRaceIncidentEvents(raceEventsText);
     const bestLapEvents = parseRaceBestLapEvents(raceEventsText);
-
-    const lapsBlock = body.match(/\bLAPS\b([\s\S]*)/i)?.[1] || '';
-    const lapTableText = extractRaceSection(lapsBlock, 'RACE');
+    const lapTableText = extractDriverRaceLapTableSection(body);
     const lapTableBest = parseLapTableBest(lapTableText);
 
-    const resultRow = findMatchingResultRow(results, carNumber, driverName);
+    const resultRow = matchResultRow(lookups, reportCarNumber, driverName);
     const { bestLap, bestLapSource } = selectDriverBestLap({
       resultRow,
       bestLapEvents,
       lapTableBest,
     });
     const pitSummary = summarizePitStops(pitStops);
+    const incidentsRaw = resultRow?.incidents ?? null;
     const incidentCount =
-      resultRow?.incidents != null && resultRow.incidents !== '-'
-        ? Number(resultRow.incidents)
+      incidentsRaw != null && incidentsRaw !== '-'
+        ? Number(incidentsRaw)
         : incidentEvents.length;
 
     drivers.push({
-      carNumber,
+      carNumber: reportCarNumber,
+      reportCarNumber,
       driverName,
       car,
       iRating,
@@ -1508,7 +1621,8 @@ export function parseDriverReports(text, options = {}) {
       incidentEvents,
       incidentCount: Number.isFinite(incidentCount) ? incidentCount : incidentEvents.length,
       raceEvents: incidentEvents.map((event) => event.text),
-      resultIncidents: resultRow?.incidents ?? null,
+      resultIncidents: incidentsRaw,
+      matchedResult: Boolean(resultRow),
     });
   }
 
@@ -1516,7 +1630,13 @@ export function parseDriverReports(text, options = {}) {
     warnings.push('No driver incident reports detected.');
   }
 
-  return { drivers, warnings };
+  const enrichment = enrichDriverReportsWithResults(drivers, results);
+
+  return {
+    drivers: enrichment.drivers,
+    warnings,
+    diagnostics: enrichment.diagnostics,
+  };
 }
 
 function buildSummary(parsed, extraMeta = {}) {
@@ -1760,6 +1880,7 @@ export function parseRaceControlPdfText(text, options = {}) {
     results,
     raceEvents: session.raceEvents,
     drivers: driverReports.drivers,
+    driverReportDiagnostics: driverReports.diagnostics,
     parseWarnings,
   };
 
@@ -1777,7 +1898,12 @@ export function parseRaceControlPdfText(text, options = {}) {
   }
 
   if (parserDebug) {
+    parserDebug.driverReportDiagnostics = driverReports.diagnostics;
     parsed.parserDebug = parserDebug;
+  } else if (driverReports.diagnostics) {
+    parsed.parserDebug = {
+      driverReportDiagnostics: driverReports.diagnostics,
+    };
   }
 
   return parsed;
