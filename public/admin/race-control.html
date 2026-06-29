@@ -80,9 +80,36 @@
     .summary-card dd { margin: 0; font-size: 18px; color: #eee; font-weight: 900; }
     .summary-card dd.small { font-size: 12px; font-weight: 400; color: #bbb; }
     .table-wrap { overflow: auto; border: 1px solid #333; max-width: 100%; }
-    .tests-table { width: 100%; border-collapse: collapse; font-size: 11px; min-width: 1100px; }
-    .tests-table th, .tests-table td { padding: 8px 10px; border-bottom: 1px solid #222; text-align: left; vertical-align: top; }
+    .tests-table { width: 100%; border-collapse: collapse; font-size: 11px; min-width: 1200px; table-layout: fixed; }
+    .tests-table th, .tests-table td { padding: 8px 10px; border-bottom: 1px solid #222; text-align: left; vertical-align: middle; line-height: 1.35; }
     .tests-table th { position: sticky; top: 0; background: #111; color: #aaa; font-size: 10px; text-transform: uppercase; z-index: 1; }
+    .tests-table .col-race { width: 56px; }
+    .tests-table .col-track { width: 140px; min-width: 140px; }
+    .tests-table .col-ref { width: 52px; text-align: center; }
+    .tests-table .col-num { text-align: right; font-variant-numeric: tabular-nums; }
+    .tests-table .col-fixes { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tests-table .col-actions { width: 280px; }
+    .tests-table tbody tr { height: 44px; }
+    .ref-yes { color: #5fd06a; font-weight: 900; }
+    .ref-no { color: #666; }
+    .regression-banner { margin: 0 0 14px; padding: 12px 14px; border: 1px solid #333; background: rgba(0,0,0,.3); max-width: 900px; }
+    .regression-banner.success { border-color: #3a6; background: rgba(40,80,40,.18); }
+    .regression-banner.warning { border-color: #864; background: rgba(80,60,0,.18); }
+    .regression-banner.error { border-color: #844; background: rgba(80,20,20,.18); }
+    .regression-banner h3 { margin: 0 0 8px; font-size: 13px; color: #ff3030; text-transform: uppercase; }
+    .regression-banner p { margin: 0 0 6px; font-size: 12px; color: #ddd; line-height: 1.45; }
+    .regression-banner .banner-stats { display: flex; flex-wrap: wrap; gap: 12px 18px; font-size: 11px; color: #bbb; margin-top: 8px; }
+    .empty-state-box { margin-top: 12px; padding: 14px; border: 1px solid #444; background: rgba(0,0,0,.25); max-width: 720px; font-size: 12px; line-height: 1.5; color: #ccc; }
+    .empty-state-box ul { margin: 8px 0 12px 18px; padding: 0; }
+    .empty-state-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .drawer-stat-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .drawer-stat-card { border: 1px solid #333; padding: 8px; background: #111; font-size: 11px; }
+    .drawer-stat-card dt { color: #888; font-size: 10px; text-transform: uppercase; margin: 0 0 4px; }
+    .drawer-stat-card dd { margin: 0; color: #eee; font-variant-numeric: tabular-nums; }
+    .learn-layout-drawer { width: min(580px, 100vw); }
+    .copy-block { margin-top: 10px; }
+    .copy-block textarea { width: 100%; min-height: 180px; background: #111; color: #ddd; border: 1px solid #444; padding: 10px; font-family: Consolas, Monaco, monospace; font-size: 10px; resize: vertical; }
+    details.raw-json { margin-top: 10px; font-size: 11px; color: #888; }
     .status-pill { display: inline-block; padding: 2px 8px; font-size: 10px; font-weight: 900; text-transform: uppercase; border: 1px solid #444; }
     .status-pill.pass { color: #5fd06a; border-color: #3a6; background: rgba(40,80,40,.25); }
     .status-pill.warn { color: #ffb347; border-color: #864; background: rgba(80,60,0,.25); }
@@ -260,12 +287,14 @@
 
       <div class="panel">
         <h2>Parser Regression</h2>
+        <div id="regressionBanner" class="regression-banner" hidden></div>
         <div id="summaryGrid" class="summary-grid"></div>
         <div class="btn-row">
           <button class="btn" type="button" onclick="runFullRegression()">Run Full Regression</button>
           <button class="btn btn-secondary" type="button" onclick="seedKnownFixtures()">Seed Known References</button>
           <button class="btn btn-secondary" type="button" onclick="loadBoard()">Refresh</button>
         </div>
+        <div id="parserTestsEmptyState" class="empty-state-box" hidden></div>
         <pre id="parserTestsMsg"></pre>
       </div>
 
@@ -275,24 +304,25 @@
           <table class="tests-table">
             <thead>
               <tr>
-                <th>Race</th>
-                <th>Track</th>
+                <th class="col-race">Race</th>
+                <th class="col-track">Track</th>
                 <th>Uploaded</th>
                 <th>Parser</th>
-                <th>Drivers</th>
-                <th>Expected</th>
+                <th class="col-ref">Ref</th>
+                <th class="col-num">Drivers</th>
+                <th class="col-num">Expected</th>
                 <th>Winner</th>
-                <th>SOF</th>
-                <th>Cautions</th>
+                <th class="col-num">SOF</th>
+                <th class="col-num">Cautions</th>
                 <th>Confidence</th>
                 <th>Fixes</th>
                 <th>Missing</th>
                 <th>Status</th>
-                <th>Actions</th>
+                <th class="col-actions">Actions</th>
               </tr>
             </thead>
             <tbody id="testsTableBody">
-              <tr><td colspan="14">Open this tab to load reports.</td></tr>
+              <tr><td colspan="15">Open this tab to load reports.</td></tr>
             </tbody>
           </table>
         </div>
@@ -300,11 +330,21 @@
     </div>
   </main>
 
-  <div id="drawerBackdrop" class="drawer-backdrop" onclick="closeDrawer()"></div>
+  <div id="drawerBackdrop" class="drawer-backdrop" onclick="closeAllDrawers()"></div>
   <aside id="diagnosticsDrawer" class="drawer" aria-hidden="true">
-    <button class="btn btn-secondary btn-small" type="button" onclick="closeDrawer()" style="margin-bottom:12px;">Close</button>
+    <button class="btn btn-secondary btn-small" type="button" onclick="closeAllDrawers()" style="margin-bottom:12px;">Close</button>
     <h3 id="drawerTitle">Diagnostics</h3>
     <div id="drawerContent"></div>
+  </aside>
+  <aside id="learnLayoutDrawer" class="drawer learn-layout-drawer" aria-hidden="true">
+    <button class="btn btn-secondary btn-small" type="button" onclick="closeAllDrawers()" style="margin-bottom:12px;">Close</button>
+    <h3 id="learnLayoutTitle">Learn Layout</h3>
+    <p class="sub">Informational summary for Cursor — does not modify parser code.</p>
+    <div id="learnLayoutContent"></div>
+    <div class="copy-block">
+      <button class="btn btn-secondary btn-small" type="button" onclick="copyLearnLayoutSummary()">Copy Summary for Cursor</button>
+      <textarea id="learnLayoutCopyText" readonly aria-label="Learn layout copy text"></textarea>
+    </div>
   </aside>
 
   <script>
@@ -1049,6 +1089,35 @@
         .replace(/"/g, '&quot;');
     }
 
+    const STARTER_FIXTURES = [
+      { raceNumber: 1, label: 'Race 1 Daytona' },
+      { raceNumber: 5, label: 'Race 5 Bristol' },
+      { raceNumber: 7, label: 'Race 7 Phoenix' },
+      { raceNumber: 14, label: 'Race 14 Talladega' },
+    ];
+
+    function getBoardRow(raceNumber) {
+      return boardData?.rows?.find((entry) => entry.raceNumber === raceNumber) || null;
+    }
+
+    function deriveSectionsSkipped(sectionsParsed) {
+      const expected = [
+        ['header', 'Header'],
+        ['results', 'Results'],
+        ['stages', 'Stages'],
+        ['sessionEvents', 'Session Events'],
+        ['driverReports', 'Driver Reports'],
+      ];
+      const parsed = sectionsParsed || {};
+      return expected.filter(([key]) => parsed[key] === false).map(([, label]) => label);
+    }
+
+    function truncateWithTooltip(text, maxLen = 28) {
+      const value = String(text || '');
+      if (value.length <= maxLen) return escapeHtml(value);
+      return `<span title="${escapeHtml(value)}">${escapeHtml(value.slice(0, maxLen - 1))}…</span>`;
+    }
+
     function renderSummary(summary) {
       const grid = $('#summaryGrid');
       if (!grid) return;
@@ -1057,40 +1126,104 @@
         return;
       }
       grid.innerHTML = `
-        <div class="summary-card"><dt>Reference Reports</dt><dd>${summary.totalReferenceReports ?? 0}</dd></div>
-        <div class="summary-card"><dt>Passed</dt><dd class="confidence-high">${summary.passed ?? 0}</dd></div>
-        <div class="summary-card"><dt>Warnings</dt><dd class="confidence-medium">${summary.warnings ?? 0}</dd></div>
-        <div class="summary-card"><dt>Failed</dt><dd class="confidence-low">${summary.failed ?? 0}</dd></div>
-        <div class="summary-card"><dt>Parser</dt><dd class="small">${summary.parserVersion || '—'}</dd></div>
-        <div class="summary-card"><dt>Last Run</dt><dd class="small">${formatTs(summary.lastRunAt)}</dd></div>
+        <div class="summary-card"><dt>Reference Fixtures</dt><dd>${summary.totalReferenceReports ?? 0}</dd></div>
+        <div class="summary-card"><dt>Uploaded Reports</dt><dd>${summary.totalUploadedReports ?? 0}</dd></div>
+        <div class="summary-card"><dt>PASS</dt><dd class="confidence-high">${summary.passed ?? 0}</dd></div>
+        <div class="summary-card"><dt>WARN</dt><dd class="confidence-medium">${summary.warnings ?? 0}</dd></div>
+        <div class="summary-card"><dt>FAIL</dt><dd class="confidence-low">${summary.failed ?? 0}</dd></div>
+        <div class="summary-card"><dt>Parser Version</dt><dd class="small">${escapeHtml(summary.parserVersion || '—')}</dd></div>
+        <div class="summary-card"><dt>Last Regression</dt><dd class="small">${formatTs(summary.lastRunAt)}</dd></div>
       `;
+    }
+
+    function renderParserTestsEmptyState(rows, summary) {
+      const box = $('#parserTestsEmptyState');
+      if (!box) return;
+      const refCount = summary?.totalReferenceReports ?? 0;
+      const uploadedCount = rows?.length ?? summary?.totalUploadedReports ?? 0;
+      if (refCount > 0) {
+        box.hidden = true;
+        box.innerHTML = '';
+        return;
+      }
+
+      const starterButtons = STARTER_FIXTURES.map((starter) => {
+        const row = rows?.find((entry) => entry.raceNumber === starter.raceNumber);
+        if (!row || row.isReference) return '';
+        return `<button class="btn btn-secondary btn-small" type="button" onclick="markReference(${starter.raceNumber})">Mark ${starter.label}</button>`;
+      }).filter(Boolean).join('');
+
+      box.hidden = false;
+      box.innerHTML = `
+        <strong>Race Control Reports Loaded: ${uploadedCount}</strong>
+        <p style="margin:8px 0 0;">No parser reference fixtures have been created.</p>
+        <p style="margin:6px 0 0;">Reference fixtures protect the parser from future regressions.</p>
+        <p style="margin:10px 0 4px; color:#999; font-size:11px; text-transform:uppercase; letter-spacing:0.35px;">Suggested starter fixtures</p>
+        <ul>
+          ${STARTER_FIXTURES.map((s) => `<li>${escapeHtml(s.label)}</li>`).join('')}
+        </ul>
+        ${starterButtons ? `<div class="empty-state-actions">${starterButtons}</div>` : '<p class="sub" style="margin:0;">Upload and parse the suggested races, then mark them as references.</p>'}
+      `;
+    }
+
+    function renderRegressionBanner(summary, options = {}) {
+      const banner = $('#regressionBanner');
+      if (!banner || !summary) return;
+
+      const failedRaces = (options.failedRaces || []).filter(Boolean);
+      const hasIssues = (summary.failed ?? 0) > 0 || (summary.warnings ?? 0) > 0 || failedRaces.length > 0;
+      banner.hidden = false;
+      banner.className = 'regression-banner';
+      if ((summary.failed ?? 0) > 0) banner.classList.add('error');
+      else if ((summary.warnings ?? 0) > 0) banner.classList.add('warning');
+      else banner.classList.add('success');
+
+      const failLine = failedRaces.length
+        ? `<p>Regression detected in ${failedRaces.map((n) => `Race ${n}`).join(', ')}. Click <strong>Diagnostics</strong> for details.</p>`
+        : '<p>No parser regressions detected.</p>';
+
+      banner.innerHTML = `
+        <h3>Regression Complete</h3>
+        <div class="banner-stats">
+          <span>Reference Fixtures: ${summary.totalReferenceReports ?? 0}</span>
+          <span>PASS: ${summary.passed ?? 0}</span>
+          <span>WARN: ${summary.warnings ?? 0}</span>
+          <span>FAIL: ${summary.failed ?? 0}</span>
+        </div>
+        ${failLine}
+      `;
+    }
+
+    function hideRegressionBanner() {
+      const banner = $('#regressionBanner');
+      if (banner) banner.hidden = true;
     }
 
     function renderTestsTable(rows) {
       const body = $('#testsTableBody');
       if (!body) return;
       if (!rows?.length) {
-        body.innerHTML = '<tr><td colspan="14">No Race Control reports uploaded yet.</td></tr>';
+        body.innerHTML = '<tr><td colspan="15">No Race Control reports uploaded yet.</td></tr>';
         return;
       }
 
       body.innerHTML = rows.map((row) => {
-        const missing = (row.missingFields || []).slice(0, 4);
-        const fixes = (row.compatibilityFixes || []).slice(0, 2);
-        const ref = row.isReference ? '<div class="ref-badge">Reference</div>' : '';
+        const missing = (row.missingFields || []).slice(0, 3);
+        const fixesText = (row.compatibilityFixes || []).join(', ');
         return `
           <tr data-race="${row.raceNumber}">
-            <td>R${row.raceNumber}${ref}</td>
-            <td>${escapeHtml(row.trackName || '—')}</td>
+            <td class="col-race">R${row.raceNumber}</td>
+            <td class="col-track" title="${escapeHtml(row.trackName || '')}">${escapeHtml(row.trackName || '—')}</td>
             <td>${formatTs(row.uploadedAt)}</td>
             <td>${escapeHtml(row.parserVersion || '—')}</td>
-            <td>${row.driversParsed ?? '—'}</td>
-            <td>${row.expectedDrivers ?? '—'}</td>
+            <td class="col-ref"><span class="${row.isReference ? 'ref-yes' : 'ref-no'}">${row.isReference ? 'YES' : 'NO'}</span></td>
+            <td class="col-num">${row.driversParsed ?? '—'}</td>
+            <td class="col-num">${row.expectedDrivers ?? '—'}</td>
             <td>${escapeHtml(row.winner || '—')}</td>
-            <td>${row.sof ?? '—'}</td>
-            <td>${row.cautions ?? '—'}</td>
+            <td class="col-num">${row.sof ?? '—'}</td>
+            <td class="col-num">${row.cautions ?? '—'}</td>
             <td class="confidence-${row.confidence || 'low'}">${row.confidence || '—'}</td>
-            <td>${fixes.length ? escapeHtml(fixes.join(', ')) : '—'}</td>
+            <td class="col-fixes">${fixesText ? truncateWithTooltip(fixesText, 24) : '—'}</td>
             <td>${missing.length ? `<ul class="missing-list">${missing.map((m) => `<li>${escapeHtml(m)}</li>`).join('')}</ul>` : '—'}</td>
             <td><span class="status-pill ${statusClass(row.status)}">${escapeHtml(row.statusLabel || row.status || '—')}</span></td>
             <td class="actions-cell">
@@ -1098,10 +1231,179 @@
               <button class="btn btn-secondary btn-small" type="button" onclick="markReference(${row.raceNumber})">${row.isReference ? 'Update Ref' : 'Mark Ref'}</button>
               ${row.isReference ? `<button class="btn btn-secondary btn-small" type="button" onclick="runRaceTest(${row.raceNumber})">Run Test</button>` : ''}
               <button class="btn btn-secondary btn-small" type="button" onclick="viewDiagnostics(${row.raceNumber})">Diagnostics</button>
+              <button class="btn btn-secondary btn-small" type="button" onclick="viewLearnLayout(${row.raceNumber})">Learn Layout</button>
             </td>
           </tr>
         `;
       }).join('');
+    }
+
+    function buildDerivedSuggestions(row) {
+      const diag = row.diagnostics || {};
+      const debug = row.parserDebug || {};
+      const pd = row.parserDiagnostics || {};
+      const existing = diag.suggestedCompatibilityRules || debug.suggestedCompatibilityRules || [];
+      if (existing.length) return existing;
+
+      const derived = [];
+      const snippets = debug.sofDebugSnippets || pd.sofNearbyText || [];
+      if ((diag.missingRequiredFields || []).includes('sof') && snippets[0]) {
+        derived.push({
+          field: 'sof',
+          issue: 'SOF not parsed from document text',
+          snippet: snippets[0],
+          suggestedRule: '/\\b(\\d{3,5})\\s+SOF\\b/i',
+        });
+      }
+      if ((pd.anchorsMissing || []).length) {
+        derived.push({
+          field: 'anchors',
+          issue: `Missing anchors: ${pd.anchorsMissing.join(', ')}`,
+          snippet: (pd.anchorPositions || []).slice(0, 2).map((a) => a.matchText).join(' | ') || 'No anchor positions recorded',
+          suggestedRule: 'Extend anchor registry in compatibility layer for missing section boundaries',
+        });
+      }
+      if ((diag.missingRequiredFields || []).includes('results')) {
+        derived.push({
+          field: 'results',
+          issue: 'Results section incomplete or missing',
+          snippet: debug.failureReason || 'Inspect failed row positions',
+          suggestedRule: 'Review result row end-boundary anchors (STAGE, LAP CHART, repeated headers)',
+        });
+      }
+      return derived;
+    }
+
+    function buildLearnLayoutCopyText(row) {
+      const diag = row.diagnostics || {};
+      const debug = row.parserDebug || {};
+      const pd = row.parserDiagnostics || {};
+      const sectionsSkipped = deriveSectionsSkipped(pd.sectionsParsed);
+      const suggestions = buildDerivedSuggestions(row);
+
+      const regexSuggestions = suggestions
+        .filter((s) => s.suggestedRule && s.suggestedRule.includes('/'))
+        .map((s) => `- ${s.field}: ${s.suggestedRule}\n  Snippet: ${s.snippet || ''}`)
+        .join('\n');
+
+      const boundarySuggestions = suggestions
+        .filter((s) => /anchor|boundary|section/i.test(String(s.issue || s.suggestedRule)))
+        .map((s) => `- ${s.issue}\n  Suggestion: ${s.suggestedRule || ''}`)
+        .join('\n');
+
+      const fixtureNotes = [
+        `Race ${row.raceNumber} — ${row.trackName || 'Unknown track'}`,
+        `Layout detected: ${pd.layoutDetected || 'unknown'}`,
+        `Parser: ${pd.parserVersion || row.parserVersion || 'unknown'}`,
+        `Drivers parsed: ${row.driversParsed ?? '—'}`,
+        row.isReference ? 'Already marked as reference fixture.' : 'Candidate for reference fixture after review.',
+      ].join('\n');
+
+      return `# iRaceControl Layout Learning Summary
+Race: ${row.raceNumber}
+Track: ${row.trackName || '—'}
+Parser Version: ${pd.parserVersion || row.parserVersion || '—'}
+Layout Detected: ${pd.layoutDetected || '—'}
+
+## Missing Required Fields
+${(diag.missingRequiredFields || []).join(', ') || 'None'}
+
+## Missing Anchors
+${(pd.anchorsMissing || []).join(', ') || 'None'}
+
+## Missing Sections
+${sectionsSkipped.join(', ') || 'None'}
+
+## Layout Notes
+${(debug.layoutNotes || []).join('\n') || 'None'}
+
+## Compatibility Fixes Already Applied
+${(debug.compatibilityFixesApplied || []).join('\n') || 'None'}
+
+## Suggested Compatibility Rules
+${suggestions.map((s) => `- [${s.field}] ${s.issue}\n  Rule: ${s.suggestedRule || ''}\n  Snippet: ${s.snippet || ''}`).join('\n') || 'None'}
+
+## Suggested Regex Improvements
+${regexSuggestions || 'None'}
+
+## Suggested Boundary Improvements
+${boundarySuggestions || 'None'}
+
+## Suggested Fixture Notes
+${fixtureNotes}
+`;
+    }
+
+    function viewLearnLayout(raceNumber) {
+      const row = getBoardRow(raceNumber);
+      if (!row) return;
+
+      const diag = row.diagnostics || {};
+      const debug = row.parserDebug || {};
+      const pd = row.parserDiagnostics || {};
+      const sectionsSkipped = deriveSectionsSkipped(pd.sectionsParsed);
+      const suggestions = buildDerivedSuggestions(row);
+      const copyText = buildLearnLayoutCopyText(row);
+
+      $('#learnLayoutTitle').textContent = `Learn Layout — Race ${raceNumber}`;
+      $('#learnLayoutCopyText').value = copyText;
+
+      const listSection = (title, items) => `
+        <div class="drawer-section">
+          <h4>${title}</h4>
+          ${items.length ? `<ul class="drawer-list">${items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>` : '<p class="sub">None</p>'}
+        </div>
+      `;
+
+      $('#learnLayoutContent').innerHTML = `
+        ${listSection('Missing Required Fields', diag.missingRequiredFields || [])}
+        ${listSection('Missing Anchors', pd.anchorsMissing || [])}
+        ${listSection('Missing Sections', sectionsSkipped)}
+        ${listSection('Layout Notes', debug.layoutNotes || [])}
+        ${listSection('Compatibility Fixes Already Applied', debug.compatibilityFixesApplied || [])}
+        <div class="drawer-section">
+          <h4>Suggested Compatibility Rules</h4>
+          ${suggestions.length ? suggestions.map((s) => `
+            <div class="suggestion">
+              <strong>${escapeHtml(s.field)}</strong>: ${escapeHtml(s.issue)}
+              <div class="snippet">${escapeHtml(s.snippet || '')}</div>
+              <div class="snippet">${escapeHtml(s.suggestedRule || '')}</div>
+            </div>
+          `).join('') : '<p class="sub">None derived from current diagnostics.</p>'}
+        </div>
+        <div class="drawer-section">
+          <h4>Suggested Regex Improvements</h4>
+          ${suggestions.filter((s) => s.suggestedRule && s.suggestedRule.includes('/')).length
+            ? `<ul class="drawer-list">${suggestions.filter((s) => s.suggestedRule && s.suggestedRule.includes('/')).map((s) => `<li><code>${escapeHtml(s.suggestedRule)}</code> — ${escapeHtml(s.field)}</li>`).join('')}</ul>`
+            : '<p class="sub">None</p>'}
+        </div>
+        <div class="drawer-section">
+          <h4>Suggested Boundary Improvements</h4>
+          ${suggestions.filter((s) => /anchor|boundary|section/i.test(String(s.issue || s.suggestedRule))).length
+            ? `<ul class="drawer-list">${suggestions.filter((s) => /anchor|boundary|section/i.test(String(s.issue || s.suggestedRule))).map((s) => `<li>${escapeHtml(s.issue)}</li>`).join('')}</ul>`
+            : '<p class="sub">None</p>'}
+        </div>
+        <div class="drawer-section">
+          <h4>Suggested Fixture Notes</h4>
+          <div class="snippet">${escapeHtml(`Race ${row.raceNumber} — ${row.trackName || 'Unknown'} | Layout: ${pd.layoutDetected || 'unknown'} | ${row.driversParsed ?? 0} drivers | ${row.isReference ? 'Reference fixture' : 'Mark as reference after review'}`)}</div>
+        </div>
+      `;
+
+      closeAllDrawers({ silent: true });
+      $('#drawerBackdrop').classList.add('open');
+      $('#learnLayoutDrawer').classList.add('open');
+      $('#learnLayoutDrawer').setAttribute('aria-hidden', 'false');
+    }
+
+    async function copyLearnLayoutSummary() {
+      const text = $('#learnLayoutCopyText')?.value || '';
+      try {
+        await navigator.clipboard.writeText(text);
+        setParserTestsMsg('Learn layout summary copied to clipboard.');
+      } catch {
+        $('#learnLayoutCopyText').select();
+        setParserTestsMsg('Select the summary text and copy manually.');
+      }
     }
 
     async function loadBoard() {
@@ -1112,7 +1414,12 @@
         parserTestsLoaded = true;
         renderSummary(data.summary);
         renderTestsTable(data.rows);
-        setParserTestsMsg(`Loaded ${data.rows?.length || 0} report(s). ${data.summary?.totalReferenceReports || 0} reference fixture(s).`);
+        renderParserTestsEmptyState(data.rows, data.summary);
+        if ((data.summary?.totalReferenceReports ?? 0) > 0) {
+          setParserTestsMsg(`Race Control Reports Loaded: ${data.rows?.length || 0}`);
+        } else {
+          setParserTestsMsg('');
+        }
       } catch (e) {
         setParserTestsMsg(e.message, true);
       }
@@ -1142,10 +1449,33 @@
 
     async function runRaceTest(raceNumber) {
       setParserTestsMsg(`Running regression for race ${raceNumber}...`);
+      hideRegressionBanner();
       try {
         const data = await apiPost('runRaceControlParserRegressionForRace', { seasonId, raceNumber });
         await loadBoard();
-        setParserTestsMsg(`Race ${raceNumber}: ${data.result?.status?.toUpperCase() || 'DONE'} (${data.result?.passed || 0}/${(data.result?.checks || []).length} checks passed).`);
+        const status = data.result?.status || 'done';
+        if (status === 'fail' || status === 'warn') {
+          renderRegressionBanner(
+            {
+              totalReferenceReports: boardData?.summary?.totalReferenceReports ?? 1,
+              passed: status === 'pass' ? 1 : 0,
+              warnings: status === 'warn' ? 1 : 0,
+              failed: status === 'fail' ? 1 : 0,
+            },
+            { failedRaces: [raceNumber] }
+          );
+        } else {
+          renderRegressionBanner(
+            {
+              totalReferenceReports: boardData?.summary?.totalReferenceReports ?? 1,
+              passed: 1,
+              warnings: 0,
+              failed: 0,
+            },
+            { failedRaces: [] }
+          );
+        }
+        setParserTestsMsg(`Race ${raceNumber}: ${status.toUpperCase()} (${data.result?.passed || 0}/${(data.result?.checks || []).length} checks passed).`);
       } catch (e) {
         setParserTestsMsg(e.message, true);
       }
@@ -1153,11 +1483,17 @@
 
     async function runFullRegression() {
       setParserTestsMsg('Running full parser regression (reparse all reference fixtures)...');
+      hideRegressionBanner();
       try {
         const data = await apiPost('runRaceControlParserRegression', { seasonId });
         await loadBoard();
         const s = data.summary;
-        setParserTestsMsg(`Regression complete: ${s.passed} passed, ${s.warnings} warnings, ${s.failed} failed. Parser ${s.parserVersion}.`);
+        const failedRaces = (s.results || [])
+          .filter((entry) => entry.result?.status === 'fail' || entry.result?.status === 'warn' || entry.error)
+          .map((entry) => entry.fixture?.raceNumber)
+          .filter(Boolean);
+        renderRegressionBanner(s, { failedRaces });
+        setParserTestsMsg('');
       } catch (e) {
         setParserTestsMsg(e.message, true);
       }
@@ -1175,80 +1511,105 @@
     }
 
     function viewDiagnostics(raceNumber) {
-      const row = boardData?.rows?.find((entry) => entry.raceNumber === raceNumber);
+      const row = getBoardRow(raceNumber);
       if (!row) return;
 
-      $('#drawerTitle').textContent = `Race ${raceNumber} — ${row.trackName || 'Diagnostics'}`;
       const diag = row.diagnostics || {};
       const debug = row.parserDebug || {};
       const pd = row.parserDiagnostics || {};
-      const suggestions = diag.suggestedCompatibilityRules || debug.suggestedCompatibilityRules || [];
+      const sectionsSkipped = deriveSectionsSkipped(pd.sectionsParsed);
+      const suggestions = buildDerivedSuggestions(row);
+      const rowSummary = diag.rowParseSummary || {};
+      const driverSummary = diag.driverReportSummary || {};
 
       const checksHtml = row.fixture?.lastRegressionResult?.checks?.length
         ? `<div class="drawer-section"><h4>Last Regression Checks</h4><ul class="drawer-list">${row.fixture.lastRegressionResult.checks.map((check) => `<li>${check.passed ? '✓' : '✗'} ${escapeHtml(check.label)}${check.message ? ` — ${escapeHtml(check.message)}` : ''}</li>`).join('')}</ul></div>`
         : '';
 
+      $('#drawerTitle').textContent = `Race ${raceNumber} — ${row.trackName || 'Diagnostics'}`;
+
       $('#drawerContent').innerHTML = `
         <div class="drawer-section">
           <h4>Status</h4>
-          <p><span class="status-pill ${statusClass(row.status)}">${escapeHtml(row.statusLabel)}</span> · Parser ${escapeHtml(row.parserVersion)} · Confidence <span class="confidence-${row.confidence}">${row.confidence || '—'}</span></p>
+          <p><span class="status-pill ${statusClass(row.status)}">${escapeHtml(row.statusLabel)}</span> · Reference: ${row.isReference ? 'YES' : 'NO'}</p>
           ${(diag.guidance || []).length ? `<ul class="drawer-list">${diag.guidance.map((g) => `<li>${escapeHtml(g)}</li>`).join('')}</ul>` : ''}
         </div>
         <div class="drawer-section">
-          <h4>Missing Fields</h4>
-          ${(diag.missingRequiredFields || []).length ? `<ul class="drawer-list">${diag.missingRequiredFields.map((f) => `<li>${escapeHtml(f)}</li>`).join('')}</ul>` : '<p class="sub">None</p>'}
-        </div>
-        <div class="drawer-section">
-          <h4>Confidence Reason</h4>
+          <h4>Compatibility Summary</h4>
+          <ul class="drawer-list">
+            <li>Parser Version: ${escapeHtml(pd.parserVersion || row.parserVersion || '—')}</li>
+            <li>Layout Detected: ${escapeHtml(pd.layoutDetected || '—')}</li>
+            <li>Confidence: <span class="confidence-${row.confidence || pd.confidence || 'low'}">${escapeHtml(pd.confidence || row.confidence || '—')}</span></li>
+          </ul>
           <ul class="drawer-list">${(diag.confidenceReason || debug.confidenceReason || []).map((r) => `<li>${escapeHtml(r)}</li>`).join('') || '<li>—</li>'}</ul>
+          ${(debug.compatibilityFixesApplied || []).length ? `<p style="margin:8px 0 4px;font-size:10px;color:#888;text-transform:uppercase;">Fixes Applied</p><ul class="drawer-list">${debug.compatibilityFixesApplied.map((f) => `<li>${escapeHtml(f)}</li>`).join('')}</ul>` : ''}
+          ${(debug.layoutNotes || []).length ? `<p style="margin:8px 0 4px;font-size:10px;color:#888;text-transform:uppercase;">Layout Notes</p><ul class="drawer-list">${debug.layoutNotes.map((n) => `<li>${escapeHtml(n)}</li>`).join('')}</ul>` : ''}
         </div>
         <div class="drawer-section">
-          <h4>Compatibility Fixes</h4>
-          ${(debug.compatibilityFixesApplied || []).length ? `<ul class="drawer-list">${debug.compatibilityFixesApplied.map((f) => `<li>${escapeHtml(f)}</li>`).join('')}</ul>` : '<p class="sub">None</p>'}
+          <h4>Missing Items</h4>
+          <p style="margin:0 0 6px;font-size:10px;color:#888;text-transform:uppercase;">Required Fields</p>
+          ${(diag.missingRequiredFields || []).length ? `<ul class="drawer-list">${diag.missingRequiredFields.map((f) => `<li>${escapeHtml(f)}</li>`).join('')}</ul>` : '<p class="sub">None</p>'}
+          <p style="margin:8px 0 6px;font-size:10px;color:#888;text-transform:uppercase;">Anchors Missing</p>
+          ${(pd.anchorsMissing || []).length ? `<ul class="drawer-list">${pd.anchorsMissing.map((f) => `<li>${escapeHtml(f)}</li>`).join('')}</ul>` : '<p class="sub">None</p>'}
+          <p style="margin:8px 0 6px;font-size:10px;color:#888;text-transform:uppercase;">Sections Skipped</p>
+          ${sectionsSkipped.length ? `<ul class="drawer-list">${sectionsSkipped.map((f) => `<li>${escapeHtml(f)}</li>`).join('')}</ul>` : '<p class="sub">None</p>'}
         </div>
         <div class="drawer-section">
-          <h4>Layout Notes</h4>
-          ${(debug.layoutNotes || []).length ? `<ul class="drawer-list">${debug.layoutNotes.map((n) => `<li>${escapeHtml(n)}</li>`).join('')}</ul>` : '<p class="sub">None</p>'}
+          <h4>Quick Statistics</h4>
+          <dl class="drawer-stat-grid">
+            <div class="drawer-stat-card"><dt>Rows Parsed</dt><dd>${rowSummary.parsedCount ?? pd.parsedResultRows ?? row.driversParsed ?? '—'}</dd></div>
+            <div class="drawer-stat-card"><dt>Expected Rows</dt><dd>${pd.expectedResultRows ?? row.expectedDrivers ?? '—'}</dd></div>
+            <div class="drawer-stat-card"><dt>Drivers Parsed</dt><dd>${row.driversParsed ?? driverSummary.count ?? '—'}</dd></div>
+            <div class="drawer-stat-card"><dt>Race Events</dt><dd>${pd.sectionsParsed?.sessionEvents ? 'Parsed' : 'Missing'}</dd></div>
+            <div class="drawer-stat-card"><dt>Driver Reports</dt><dd>${driverSummary.count ?? '—'}</dd></div>
+            <div class="drawer-stat-card"><dt>Failed Rows</dt><dd>${rowSummary.failedRowCount ?? 0}</dd></div>
+            <div class="drawer-stat-card"><dt>SOF Source</dt><dd>${escapeHtml(pd.sofSource || '—')}</dd></div>
+            <div class="drawer-stat-card"><dt>SOF Found</dt><dd>${pd.sofFound ? 'Yes' : 'No'}</dd></div>
+          </dl>
         </div>
         <div class="drawer-section">
-          <h4>Row Parse Summary</h4>
+          <h4>Row Parse Detail</h4>
           <ul class="drawer-list">
-            <li>Parsed: ${diag.rowParseSummary?.parsedCount ?? '—'}</li>
-            <li>Failed rows: ${diag.rowParseSummary?.failedRowCount ?? 0}</li>
-            <li>Failed positions: ${(diag.rowParseSummary?.failedPositions || []).join(', ') || '—'}</li>
-            <li>Duplicate positions: ${(diag.rowParseSummary?.duplicatePositions || []).join(', ') || '—'}</li>
-            <li>Duplicate cars: ${(diag.rowParseSummary?.duplicateCarNumbers || []).join(', ') || '—'}</li>
+            <li>Failed positions: ${(rowSummary.failedPositions || debug.failedPositions || []).join(', ') || '—'}</li>
+            <li>Duplicate positions: ${(rowSummary.duplicatePositions || []).join(', ') || '—'}</li>
+            <li>Duplicate cars: ${(rowSummary.duplicateCarNumbers || []).join(', ') || '—'}</li>
           </ul>
         </div>
         <div class="drawer-section">
-          <h4>SOF</h4>
-          <ul class="drawer-list">
-            <li>Found: ${pd.sofFound ? 'Yes' : 'No'} (${escapeHtml(pd.sofSource || '—')})</li>
-            <li>Matches: ${(pd.sofMatches || []).join(', ') || '—'}</li>
-          </ul>
-          ${(debug.sofDebugSnippets || pd.sofNearbyText || []).slice(0, 3).map((s) => `<div class="snippet">${escapeHtml(s)}</div>`).join('')}
+          <h4>SOF Snippets</h4>
+          ${(debug.sofDebugSnippets || pd.sofNearbyText || []).slice(0, 3).map((s) => `<div class="snippet">${escapeHtml(s)}</div>`).join('') || '<p class="sub">None</p>'}
         </div>
         <div class="drawer-section">
           <h4>Anchor Summary</h4>
           <ul class="drawer-list">
-            <li>Layout: ${escapeHtml(pd.layoutDetected || '—')}</li>
             <li>Found: ${(pd.anchorsFound || []).join(', ') || '—'}</li>
             <li>Missing: ${(pd.anchorsMissing || []).join(', ') || '—'}</li>
           </ul>
         </div>
-        ${suggestions.length ? `<div class="drawer-section"><h4>Suggested Compatibility Rules</h4><p class="sub">Informational only — copy into Cursor for parser updates. Does not auto-modify code.</p>${suggestions.map((s) => `<div class="suggestion"><strong>${escapeHtml(s.field)}</strong>: ${escapeHtml(s.issue)}<div class="snippet">${escapeHtml(s.snippet || '')}</div><div class="snippet">${escapeHtml(s.suggestedRule || '')}</div></div>`).join('')}</div>` : ''}
+        ${suggestions.length ? `<div class="drawer-section"><h4>Suggested Compatibility Rules</h4><p class="sub">Informational only — use Learn Layout for copy/paste summary.</p>${suggestions.map((s) => `<div class="suggestion"><strong>${escapeHtml(s.field)}</strong>: ${escapeHtml(s.issue)}</div>`).join('')}</div>` : ''}
         ${checksHtml}
+        <details class="raw-json">
+          <summary>Expand raw diagnostics JSON</summary>
+          <div class="snippet">${escapeHtml(JSON.stringify({ parserDiagnostics: pd, parserDebug: debug, diagnostics: diag }, null, 2))}</div>
+        </details>
       `;
 
+      closeAllDrawers({ silent: true });
       $('#drawerBackdrop').classList.add('open');
       $('#diagnosticsDrawer').classList.add('open');
       $('#diagnosticsDrawer').setAttribute('aria-hidden', 'false');
     }
 
-    function closeDrawer() {
+    function closeAllDrawers(options = {}) {
       $('#drawerBackdrop').classList.remove('open');
       $('#diagnosticsDrawer').classList.remove('open');
       $('#diagnosticsDrawer').setAttribute('aria-hidden', 'true');
+      $('#learnLayoutDrawer').classList.remove('open');
+      $('#learnLayoutDrawer').setAttribute('aria-hidden', 'true');
+    }
+
+    function closeDrawer() {
+      closeAllDrawers();
     }
 
     window.addEventListener('hashchange', () => {
