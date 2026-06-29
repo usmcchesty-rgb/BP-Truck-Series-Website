@@ -38,7 +38,7 @@ async function handleIracingMemberLookup(req, res) {
     if (error instanceof IracingApiError) {
       return res.status(error.status).json({
         ok: false,
-        configured: error.code !== IRACING_ERROR.MISSING_CREDENTIALS,
+        configured: error.code !== IRACING_ERROR.MISSING_OAUTH_CONFIG,
         code: error.code,
         error: error.message,
         details: error.details,

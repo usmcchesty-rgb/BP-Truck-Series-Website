@@ -43,8 +43,10 @@
   <main id="adminView" class="wrap" hidden>
     <h1>iRacing API Test</h1>
     <p class="sub">
-      Proof-of-life check for iRacing authentication and member lookup. Credentials stay on the server via
-      <code>IRACING_EMAIL</code> and <code>IRACING_PASSWORD</code> only.
+      Proof-of-life check for iRacing OAuth2 Password Limited authentication and member lookup.
+      Credentials stay on the server only via
+      <code>IRACING_CLIENT_ID</code>, <code>IRACING_CLIENT_SECRET</code>,
+      <code>IRACING_EMAIL</code>, and <code>IRACING_PASSWORD</code>.
     </p>
 
     <section class="panel">
@@ -165,7 +167,7 @@
       $('#resultCard').hidden = true;
       const code = data.code ? `[${data.code}] ` : '';
       const message = data.error || `Lookup failed (${status}).`;
-      const tone = data.code === 'MISSING_CREDENTIALS' ? 'warning' : 'error';
+      const tone = data.code === 'MISSING_OAUTH_CONFIG' ? 'warning' : 'error';
       showResultMessage(`${code}${message}`, tone);
       if (data.details) {
         $('#resultDebug').hidden = false;

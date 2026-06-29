@@ -1,16 +1,28 @@
 import crypto from 'crypto';
 
-const IRACING_AUTH_URL = 'https://members-ng.iracing.com/auth';
+const IRACING_TOKEN_URL = 'https://oauth.iracing.com/oauth2/token';
 const IRACING_DATA_BASE = 'https://members-ng.iracing.com/data';
-const SESSION_TTL_MS = 15 * 60 * 1000;
+const DEFAULT_SCOPE = 'iracing.auth';
+const ACCESS_TOKEN_BUFFER_MS = 30 * 1000;
 
-/** @type {{ cookieHeader: string, expiresAt: number } | null} */
-let cachedSession = null;
+/**
+ * Optional in-memory token cache for warm serverless invocations only.
+ * Never rely on this across cold starts; each invocation must be able to
+ * obtain a fresh token via Password Limited or Refresh Token grant.
+ *
+ * @type {{
+ *   accessToken: string;
+ *   accessTokenExpiresAt: number;
+ *   refreshToken: string | null;
+ *   refreshTokenExpiresAt: number;
+ * } | null}
+ */
+let optionalTokenCache = null;
 
 export const IRACING_ERROR = {
-  MISSING_CREDENTIALS: 'MISSING_CREDENTIALS',
+  MISSING_OAUTH_CONFIG: 'MISSING_OAUTH_CONFIG',
+  TOKEN_REQUEST_FAILED: 'TOKEN_REQUEST_FAILED',
   INVALID_CUSTOMER_ID: 'INVALID_CUSTOMER_ID',
-  LOGIN_FAILED: 'LOGIN_FAILED',
   MEMBER_NOT_FOUND: 'MEMBER_NOT_FOUND',
   API_UNAVAILABLE: 'API_UNAVAILABLE',
   UNEXPECTED_RESPONSE: 'UNEXPECTED_RESPONSE',
@@ -30,17 +42,19 @@ function readEnv(name) {
   return String(process.env[name] || '').trim();
 }
 
-export function getIracingCredentials() {
+export function getIracingOAuthConfig() {
   return {
+    clientId: readEnv('IRACING_CLIENT_ID'),
+    clientSecret: readEnv('IRACING_CLIENT_SECRET'),
     email: readEnv('IRACING_EMAIL') || readEnv('IRACING_USERNAME'),
     password: readEnv('IRACING_PASSWORD'),
-    totp: readEnv('IRACING_TOTP'),
+    scope: readEnv('IRACING_SCOPE') || DEFAULT_SCOPE,
   };
 }
 
 export function isIracingConfigured() {
-  const { email, password } = getIracingCredentials();
-  return Boolean(email && password);
+  const { clientId, clientSecret, email, password } = getIracingOAuthConfig();
+  return Boolean(clientId && clientSecret && email && password);
 }
 
 export function normalizeCustomerId(value) {
@@ -48,191 +62,265 @@ export function normalizeCustomerId(value) {
 }
 
 /**
- * Legacy members-ng login password encoding (required since late 2024).
+ * iRacing OAuth masking algorithm.
+ * base64( sha256( secret + normalizedIdentifier ) )
  *
- * Steps per iRacing legacy auth documentation:
- * 1. Lowercase the account email.
- * 2. Concatenate: plainPassword + lowercasedEmail (password first, email second).
- * 3. SHA-256 hash the concatenated string (binary digest).
- * 4. Base64-encode the digest and send that value as the JSON `password` field.
+ * - client_secret is masked with client_id
+ * - user password is masked with username (email)
  *
- * IRACING_PASSWORD must be the plain account password in Vercel env vars.
- * This helper performs the hash before transmission; never store/send plain text
- * from application code outside this function.
+ * @see https://oauth.iracing.com/oauth2/book/token_endpoint.html
  */
-export function hashLegacyIracingPassword(password, email) {
-  const normalizedEmail = String(email || '').trim().toLowerCase();
-  const digest = crypto.createHash('sha256').update(`${password}${normalizedEmail}`, 'utf8').digest();
+export function maskIracingSecret(secret, identifier) {
+  const normalizedId = String(identifier || '').trim().toLowerCase();
+  const digest = crypto.createHash('sha256').update(`${secret}${normalizedId}`, 'utf8').digest();
   return digest.toString('base64');
 }
 
-function extractCookieHeader(response) {
-  const getSetCookie = response.headers.getSetCookie?.bind(response.headers);
-  if (typeof getSetCookie === 'function') {
-    const cookies = getSetCookie();
-    if (Array.isArray(cookies) && cookies.length) {
-      return cookies.map((entry) => entry.split(';')[0]).join('; ');
-    }
-  }
-
-  const raw = response.headers.get('set-cookie');
-  if (!raw) return '';
-  return raw
-    .split(/,(?=[^;]+?=)/)
-    .map((entry) => entry.split(';')[0].trim())
-    .filter(Boolean)
-    .join('; ');
+function clearOptionalTokenCache() {
+  optionalTokenCache = null;
 }
 
-function clearSessionCache() {
-  cachedSession = null;
-}
-
-export async function authenticateIracing() {
-  if (!isIracingConfigured()) {
-    throw new IracingApiError(
-      IRACING_ERROR.MISSING_CREDENTIALS,
-      'Missing IRACING_EMAIL and/or IRACING_PASSWORD environment variables.',
-      503
-    );
-  }
-
+function storeTokenSet(tokenSet) {
   const now = Date.now();
-  if (cachedSession && cachedSession.expiresAt > now) {
-    return cachedSession.cookieHeader;
-  }
+  const accessExpiresIn = Number(tokenSet.expires_in);
+  const refreshExpiresIn = Number(tokenSet.refresh_token_expires_in);
 
-  const { email, password, totp } = getIracingCredentials();
-  const hashedPassword = hashLegacyIracingPassword(password, email);
+  optionalTokenCache = {
+    accessToken: String(tokenSet.access_token || ''),
+    accessTokenExpiresAt:
+      now + (Number.isFinite(accessExpiresIn) ? accessExpiresIn * 1000 : 600_000),
+    refreshToken: tokenSet.refresh_token ? String(tokenSet.refresh_token) : null,
+    refreshTokenExpiresAt:
+      tokenSet.refresh_token && Number.isFinite(refreshExpiresIn)
+        ? now + refreshExpiresIn * 1000
+        : 0,
+  };
+}
+
+function getCachedAccessToken() {
+  if (!optionalTokenCache?.accessToken) return null;
+  if (optionalTokenCache.accessTokenExpiresAt - ACCESS_TOKEN_BUFFER_MS <= Date.now()) {
+    return null;
+  }
+  return optionalTokenCache.accessToken;
+}
+
+function getCachedRefreshToken() {
+  if (!optionalTokenCache?.refreshToken) return null;
+  if (optionalTokenCache.refreshTokenExpiresAt <= Date.now()) return null;
+  return optionalTokenCache.refreshToken;
+}
+
+async function parseJsonResponse(response) {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+function tokenErrorMessage(body, fallback) {
+  if (!body) return fallback;
+  if (typeof body.error_description === 'string' && body.error_description.trim()) {
+    return body.error_description.trim();
+  }
+  if (typeof body.error === 'string' && body.error.trim()) {
+    return body.error.trim();
+  }
+  if (typeof body.message === 'string' && body.message.trim()) {
+    return body.message.trim();
+  }
+  return fallback;
+}
+
+async function requestOAuthToken(params) {
+  const body = new URLSearchParams(params);
 
   let response;
   try {
-    response = await fetch(IRACING_AUTH_URL, {
+    response = await fetch(IRACING_TOKEN_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email,
-        password: hashedPassword,
-        totp,
-      }),
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Accept: 'application/json',
+      },
+      body,
     });
   } catch (error) {
     throw new IracingApiError(
       IRACING_ERROR.API_UNAVAILABLE,
-      'Unable to reach iRacing authentication service.',
+      'Unable to reach iRacing OAuth token endpoint.',
       502,
       { cause: error.message }
     );
   }
 
-  let authBody = null;
-  try {
-    authBody = await response.json();
-  } catch {
-    authBody = null;
-  }
-
-  if (!response.ok) {
+  const payload = await parseJsonResponse(response);
+  if (!response.ok || !payload?.access_token) {
     throw new IracingApiError(
-      IRACING_ERROR.LOGIN_FAILED,
-      authBody?.message || authBody?.error || `iRacing authentication failed (${response.status}).`,
+      IRACING_ERROR.TOKEN_REQUEST_FAILED,
+      tokenErrorMessage(payload, `iRacing OAuth token request failed (${response.status}).`),
       response.status === 401 ? 401 : 502,
-      { status: response.status, body: authBody }
+      {
+        status: response.status,
+        body: payload,
+        retryAfter: response.headers.get('retry-after'),
+      }
     );
   }
 
-  const cookieHeader = extractCookieHeader(response);
-  if (!cookieHeader) {
-    throw new IracingApiError(
-      IRACING_ERROR.LOGIN_FAILED,
-      'iRacing authentication succeeded but no session cookie was returned.',
-      502,
-      { body: authBody }
-    );
-  }
-
-  cachedSession = {
-    cookieHeader,
-    expiresAt: now + SESSION_TTL_MS,
-  };
-  return cookieHeader;
+  storeTokenSet(payload);
+  return payload.access_token;
 }
 
-export async function fetchIracingData(path, params = {}) {
-  const cookieHeader = await authenticateIracing();
+async function requestPasswordLimitedToken() {
+  if (!isIracingConfigured()) {
+    throw new IracingApiError(
+      IRACING_ERROR.MISSING_OAUTH_CONFIG,
+      'Missing IRACING_CLIENT_ID, IRACING_CLIENT_SECRET, IRACING_EMAIL, and/or IRACING_PASSWORD.',
+      503
+    );
+  }
+
+  const { clientId, clientSecret, email, password, scope } = getIracingOAuthConfig();
+  return requestOAuthToken({
+    grant_type: 'password_limited',
+    client_id: clientId,
+    client_secret: maskIracingSecret(clientSecret, clientId),
+    username: email,
+    password: maskIracingSecret(password, email),
+    scope,
+  });
+}
+
+async function requestRefreshToken(refreshToken) {
+  const { clientId, clientSecret } = getIracingOAuthConfig();
+  if (!clientId || !clientSecret) {
+    throw new IracingApiError(
+      IRACING_ERROR.MISSING_OAUTH_CONFIG,
+      'Missing IRACING_CLIENT_ID and/or IRACING_CLIENT_SECRET.',
+      503
+    );
+  }
+
+  return requestOAuthToken({
+    grant_type: 'refresh_token',
+    client_id: clientId,
+    client_secret: maskIracingSecret(clientSecret, clientId),
+    refresh_token: refreshToken,
+  });
+}
+
+export async function getIracingAccessToken({ forceRefresh = false } = {}) {
+  if (!forceRefresh) {
+    const cached = getCachedAccessToken();
+    if (cached) return cached;
+  }
+
+  if (!forceRefresh) {
+    const refreshToken = getCachedRefreshToken();
+    if (refreshToken) {
+      try {
+        return await requestRefreshToken(refreshToken);
+      } catch (error) {
+        clearOptionalTokenCache();
+        if (!(error instanceof IracingApiError)) throw error;
+        if (
+          error.code !== IRACING_ERROR.TOKEN_REQUEST_FAILED &&
+          error.code !== IRACING_ERROR.API_UNAVAILABLE
+        ) {
+          throw error;
+        }
+      }
+    }
+  } else {
+    clearOptionalTokenCache();
+  }
+
+  return requestPasswordLimitedToken();
+}
+
+export async function fetchIracingData(path, params = {}, options = {}) {
+  const accessToken = await getIracingAccessToken({
+    forceRefresh: options.forceRefresh === true,
+  });
   const url = new URL(`${IRACING_DATA_BASE}/${String(path || '').replace(/^\//, '')}`);
   Object.entries(params).forEach(([key, value]) => {
     if (value != null && value !== '') url.searchParams.set(key, String(value));
   });
 
-  let metaResponse;
-  try {
-    metaResponse = await fetch(url, {
-      headers: { Cookie: cookieHeader },
-    });
-  } catch (error) {
-    throw new IracingApiError(
-      IRACING_ERROR.API_UNAVAILABLE,
-      'Unable to reach iRacing data API.',
-      502,
-      { cause: error.message }
-    );
+  async function request(token, retriedAuth = false) {
+    let metaResponse;
+    try {
+      metaResponse = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
+      });
+    } catch (error) {
+      throw new IracingApiError(
+        IRACING_ERROR.API_UNAVAILABLE,
+        'Unable to reach iRacing data API.',
+        502,
+        { cause: error.message }
+      );
+    }
+
+    const meta = await parseJsonResponse(metaResponse);
+
+    if (metaResponse.status === 401 && !retriedAuth) {
+      clearOptionalTokenCache();
+      const refreshedToken = await getIracingAccessToken({ forceRefresh: true });
+      return request(refreshedToken, true);
+    }
+
+    if (!metaResponse.ok) {
+      throw new IracingApiError(
+        IRACING_ERROR.API_UNAVAILABLE,
+        tokenErrorMessage(meta, `iRacing data request failed (${metaResponse.status}).`),
+        metaResponse.status >= 500 ? 502 : metaResponse.status,
+        { status: metaResponse.status, body: meta }
+      );
+    }
+
+    if (!meta?.link) {
+      throw new IracingApiError(
+        IRACING_ERROR.UNEXPECTED_RESPONSE,
+        'iRacing data response did not include a result link.',
+        502,
+        { body: meta }
+      );
+    }
+
+    let dataResponse;
+    try {
+      dataResponse = await fetch(meta.link, {
+        headers: { Accept: 'application/json' },
+      });
+    } catch (error) {
+      throw new IracingApiError(
+        IRACING_ERROR.API_UNAVAILABLE,
+        'Unable to fetch iRacing result payload.',
+        502,
+        { cause: error.message }
+      );
+    }
+
+    const payload = await parseJsonResponse(dataResponse);
+    if (!dataResponse.ok) {
+      throw new IracingApiError(
+        IRACING_ERROR.API_UNAVAILABLE,
+        `iRacing result fetch failed (${dataResponse.status}).`,
+        502,
+        { status: dataResponse.status, body: payload }
+      );
+    }
+
+    return payload;
   }
 
-  let meta = null;
-  try {
-    meta = await metaResponse.json();
-  } catch {
-    meta = null;
-  }
-
-  if (!metaResponse.ok) {
-    throw new IracingApiError(
-      IRACING_ERROR.API_UNAVAILABLE,
-      meta?.message || meta?.error || `iRacing data request failed (${metaResponse.status}).`,
-      metaResponse.status >= 500 ? 502 : metaResponse.status,
-      { status: metaResponse.status, body: meta }
-    );
-  }
-
-  if (!meta?.link) {
-    throw new IracingApiError(
-      IRACING_ERROR.UNEXPECTED_RESPONSE,
-      'iRacing data response did not include a result link.',
-      502,
-      { body: meta }
-    );
-  }
-
-  let dataResponse;
-  try {
-    dataResponse = await fetch(meta.link);
-  } catch (error) {
-    throw new IracingApiError(
-      IRACING_ERROR.API_UNAVAILABLE,
-      'Unable to fetch iRacing result payload.',
-      502,
-      { cause: error.message }
-    );
-  }
-
-  let payload = null;
-  try {
-    payload = await dataResponse.json();
-  } catch {
-    payload = null;
-  }
-
-  if (!dataResponse.ok) {
-    throw new IracingApiError(
-      IRACING_ERROR.API_UNAVAILABLE,
-      `iRacing result fetch failed (${dataResponse.status}).`,
-      502,
-      { status: dataResponse.status, body: payload }
-    );
-  }
-
-  return payload;
+  return request(accessToken);
 }
 
 function pickMemberObject(payload, customerId) {
@@ -295,7 +383,8 @@ function normalizeMemberRecord(member, customerId) {
     club_name: clubName || null,
     member_since: memberSinceRaw ? String(memberSinceRaw) : null,
     debug: {
-      topLevelKeys: member && typeof member === 'object' ? Object.keys(member).slice(0, 24) : [],
+      auth: 'oauth2_password_limited',
+      topLevelKeys: Object.keys(member).slice(0, 24),
       cust_id: member.cust_id ?? member.customer_id ?? member.custId ?? null,
       display_name: member.display_name ?? member.displayName ?? null,
       club_name: member.club_name ?? member.clubName ?? null,
@@ -317,8 +406,8 @@ export async function getIracingMember(customerIdInput) {
 
   if (!isIracingConfigured()) {
     throw new IracingApiError(
-      IRACING_ERROR.MISSING_CREDENTIALS,
-      'Missing IRACING_EMAIL and/or IRACING_PASSWORD environment variables.',
+      IRACING_ERROR.MISSING_OAUTH_CONFIG,
+      'Missing IRACING_CLIENT_ID, IRACING_CLIENT_SECRET, IRACING_EMAIL, and/or IRACING_PASSWORD.',
       503
     );
   }
@@ -341,7 +430,6 @@ export async function getIracingMember(customerIdInput) {
     }
 
     const normalized = normalizeMemberRecord(member, customerId);
-
     if (!normalized) {
       throw new IracingApiError(
         IRACING_ERROR.UNEXPECTED_RESPONSE,
@@ -360,12 +448,15 @@ export async function getIracingMember(customerIdInput) {
       ...normalized,
     };
   } catch (error) {
-    clearSessionCache();
+    if (error instanceof IracingApiError && error.code === IRACING_ERROR.TOKEN_REQUEST_FAILED) {
+      clearOptionalTokenCache();
+    }
 
     if (error instanceof IracingApiError) {
       throw error;
     }
 
+    clearOptionalTokenCache();
     throw new IracingApiError(
       IRACING_ERROR.API_UNAVAILABLE,
       error.message || 'iRacing lookup failed.',
@@ -402,7 +493,7 @@ export async function lookupIracingMember(customerIdInput) {
 
     const customerId = normalizeCustomerId(customerIdInput);
     const base = {
-      configured: error.code !== IRACING_ERROR.MISSING_CREDENTIALS,
+      configured: error.code !== IRACING_ERROR.MISSING_OAUTH_CONFIG,
       ok: false,
       status: error.status,
       verified: false,
@@ -412,7 +503,7 @@ export async function lookupIracingMember(customerIdInput) {
       details: error.details,
     };
 
-    if (error.code === IRACING_ERROR.MISSING_CREDENTIALS) {
+    if (error.code === IRACING_ERROR.MISSING_OAUTH_CONFIG) {
       return {
         ...base,
         configured: false,
@@ -434,3 +525,13 @@ export async function lookupIracingMember(customerIdInput) {
 }
 
 export const isIracingLookupConfigured = isIracingConfigured;
+
+/** @deprecated Use getIracingAccessToken() */
+export const authenticateIracing = getIracingAccessToken;
+
+/** @deprecated Use getIracingOAuthConfig() */
+export const getIracingCredentials = getIracingOAuthConfig;
+
+/** @deprecated Use maskIracingSecret() */
+export const hashLegacyIracingPassword = (password, email) =>
+  maskIracingSecret(password, email);
