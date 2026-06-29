@@ -57,6 +57,143 @@ import {
   resolveFantasySlateProgression,
 } from './_fantasy-slate-progression.js';
 import { getFantasyAuthConfig, getUserFromBearerToken } from './_fantasy-auth.js';
+import {
+  getDriverApplicationById,
+  listDriverApplications,
+  submitDriverApplication,
+  updateDriverApplication,
+} from './_driver-applications.js';
+
+function parseRequestBody(req) {
+  if (!req.body) return {};
+  if (typeof req.body === 'string') {
+    try {
+      return JSON.parse(req.body);
+    } catch {
+      return {};
+    }
+  }
+  return req.body;
+}
+
+function adminPasswordFromRequest(req, body = {}) {
+  return String(
+    body.password ||
+      req.query?.password ||
+      req.headers['x-admin-password'] ||
+      req.headers['X-Admin-Password'] ||
+      ''
+  ).trim();
+}
+
+function isAdminPasswordValid(req, body = {}) {
+  return adminPasswordFromRequest(req, body) === process.env.ADMIN_PASSWORD;
+}
+
+async function handleDriverApplicationRoutes(req, res) {
+  const queryAction = String(req.query?.action || '').trim();
+  const body = parseRequestBody(req);
+  const action = String(body.action || queryAction || '').trim();
+
+  if (
+    req.method === 'POST' &&
+    (action === 'submitDriverApplication' || queryAction === 'submitDriverApplication')
+  ) {
+    try {
+      const result = await submitDriverApplication(body);
+      if (!result.ok) {
+        res.status(result.status).json({ error: result.error });
+        return true;
+      }
+      res.status(result.status).json({
+        ok: true,
+        application: result.application,
+        message:
+          'Application received. Our staff will review your information and contact you if we need anything else.',
+      });
+      return true;
+    } catch (error) {
+      res.status(500).json({ error: error.message || 'Failed to submit application.' });
+      return true;
+    }
+  }
+
+  if (
+    req.method === 'GET' &&
+    (action === 'listDriverApplications' || queryAction === 'listDriverApplications')
+  ) {
+    if (!isAdminPasswordValid(req, body)) {
+      res.status(401).json({ error: 'Bad password' });
+      return true;
+    }
+    try {
+      const applications = await listDriverApplications();
+      res.status(200).json({ applications });
+      return true;
+    } catch (error) {
+      res.status(500).json({ error: error.message || 'Failed to load applications.' });
+      return true;
+    }
+  }
+
+  const applicationId = String(req.query?.id || body.id || '').trim();
+  const isApplicationDetailGet =
+    req.method === 'GET' &&
+    applicationId &&
+    (action === 'getDriverApplication' ||
+      queryAction === 'getDriverApplication' ||
+      queryAction === 'driverApplication');
+  if (isApplicationDetailGet) {
+    if (!isAdminPasswordValid(req, body)) {
+      res.status(401).json({ error: 'Bad password' });
+      return true;
+    }
+    try {
+      const application = await getDriverApplicationById(applicationId);
+      if (!application) {
+        res.status(404).json({ error: 'Application not found.' });
+        return true;
+      }
+      res.status(200).json({ application });
+      return true;
+    } catch (error) {
+      res.status(500).json({ error: error.message || 'Failed to load application.' });
+      return true;
+    }
+  }
+
+  const isApplicationUpdate =
+    (req.method === 'PATCH' || req.method === 'POST') &&
+    applicationId &&
+    (action === 'updateDriverApplication' ||
+      queryAction === 'updateDriverApplication' ||
+      (queryAction === 'driverApplication' && req.method === 'PATCH'));
+  if (
+    isApplicationUpdate &&
+    (req.method === 'PATCH' ||
+      action === 'updateDriverApplication' ||
+      queryAction === 'updateDriverApplication')
+  ) {
+    if (!isAdminPasswordValid(req, body)) {
+      res.status(401).json({ error: 'Bad password' });
+      return true;
+    }
+    try {
+      const result = await updateDriverApplication(applicationId, body);
+      if (!result.ok) {
+        res.status(result.status).json({ error: result.error });
+        return true;
+      }
+      res.status(result.status).json({ ok: true, application: result.application });
+      return true;
+    } catch (error) {
+      res.status(500).json({ error: error.message || 'Failed to update application.' });
+      return true;
+    }
+  }
+
+  return false;
+}
 
 async function handleGetFantasyDraftSlate(req, res) {
   try {
@@ -76,6 +213,8 @@ async function handleGetFantasyDraftSlate(req, res) {
 }
 
 export default async function handler(req, res) {
+  if (await handleDriverApplicationRoutes(req, res)) return;
+
   const queryAction = String(req.query?.action || '').trim();
 
   if (req.method === 'GET') {

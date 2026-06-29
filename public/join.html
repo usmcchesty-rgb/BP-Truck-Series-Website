@@ -12,23 +12,76 @@
     <header class="topbar"></header>
 
     <main class="join-page-main">
-      <section class="panel join-page-panel">
+      <section class="panel join-page-panel" id="joinFormSection">
         <h2>Join Blazing Pedals</h2>
         <p class="join-page-intro">
-          Driver applications are coming soon. This page will allow applicants to submit their name,
-          iRacing Customer ID, contact information, and racing background.
+          Complete the application below. Every submission is reviewed by league staff to help ensure
+          competitive, respectful racing for everyone in the community.
         </p>
-        <div class="join-page-future">
-          <h3>Future application system will retrieve</h3>
-          <ul>
-            <li>Oval iRating</li>
-            <li>Oval Safety Rating</li>
-            <li>Official oval career stats</li>
-            <li>League history</li>
-            <li>Application status</li>
-          </ul>
-        </div>
-        <span class="join-page-coming-soon" aria-disabled="true">APPLICATION SYSTEM COMING SOON</span>
+
+        <form id="joinApplicationForm" class="join-form" novalidate>
+          <fieldset class="join-form-section">
+            <legend>Driver Info</legend>
+            <label class="join-field-label" for="driverName">Driver Name <span class="join-required">*</span></label>
+            <input id="driverName" class="join-input" name="driver_name" type="text" required autocomplete="name" />
+
+            <label class="join-field-label" for="iracingCustomerId">iRacing Customer ID <span class="join-required">*</span></label>
+            <input
+              id="iracingCustomerId"
+              class="join-input"
+              name="iracing_customer_id"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]+"
+              required
+            />
+
+            <label class="join-field-label" for="preferredNumber">Preferred Number</label>
+            <input id="preferredNumber" class="join-input" name="preferred_number" type="text" />
+
+            <label class="join-checkbox-label">
+              <input id="ageConfirmed" name="age_confirmed" type="checkbox" value="true" required />
+              <span>I confirm that I am at least 13 years old. <span class="join-required">*</span></span>
+            </label>
+          </fieldset>
+
+          <fieldset class="join-form-section">
+            <legend>Contact Info</legend>
+            <label class="join-field-label" for="discordName">Discord Name</label>
+            <input id="discordName" class="join-input" name="discord_name" type="text" autocomplete="username" />
+
+            <label class="join-field-label" for="email">Email</label>
+            <input id="email" class="join-input" name="email" type="email" autocomplete="email" />
+
+            <label class="join-field-label" for="timezone">Time Zone</label>
+            <input id="timezone" class="join-input" name="timezone" type="text" placeholder="e.g. US/Eastern" />
+          </fieldset>
+
+          <fieldset class="join-form-section">
+            <legend>Racing Background</legend>
+            <label class="join-field-label" for="referredBy">Referred By</label>
+            <input id="referredBy" class="join-input" name="referred_by" type="text" />
+
+            <label class="join-field-label" for="racingBackground">Racing Background</label>
+            <textarea id="racingBackground" class="join-textarea" name="racing_background" rows="5"></textarea>
+
+            <label class="join-field-label" for="whyJoin">Why do you want to join Blazing Pedals?</label>
+            <textarea id="whyJoin" class="join-textarea" name="why_join" rows="5"></textarea>
+          </fieldset>
+
+          <fieldset class="join-form-section join-form-section--submit">
+            <legend>Submit</legend>
+            <p id="joinFormError" class="join-form-message join-form-message--error" hidden></p>
+            <button id="joinSubmitBtn" class="join-submit-btn" type="submit">SUBMIT APPLICATION</button>
+          </fieldset>
+        </form>
+      </section>
+
+      <section class="panel join-page-panel join-success-panel" id="joinSuccessSection" hidden>
+        <h2>Application Received</h2>
+        <p class="join-page-intro" id="joinSuccessMessage">
+          Application received. Our staff will review your information and contact you if we need anything else.
+        </p>
       </section>
     </main>
 
@@ -43,5 +96,6 @@
         right: "tagline",
       });
     </script>
+    <script src="/join.js"></script>
   </body>
 </html>
