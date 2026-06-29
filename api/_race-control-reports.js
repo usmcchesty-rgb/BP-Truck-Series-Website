@@ -85,6 +85,9 @@ export function buildReportSummary(parsedJson, parseStatus) {
     sof: parsedJson?.sof ?? null,
     cautionCount: parsedJson?.cautionCount ?? null,
     resultCount: Array.isArray(parsedJson?.results) ? parsedJson.results.length : 0,
+    totalDrivers:
+      parsedJson?.summary?.totalDrivers ??
+      (Array.isArray(parsedJson?.results) ? parsedJson.results.length : 0),
     eventCount: Array.isArray(parsedJson?.raceEvents) ? parsedJson.raceEvents.length : 0,
     parseWarnings: Array.isArray(parsedJson?.parseWarnings) ? parsedJson.parseWarnings : [],
   };

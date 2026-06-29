@@ -30,6 +30,7 @@
     .status-row dt { color: #888; font-weight: 900; text-transform: uppercase; font-size: 10px; margin: 0; }
     .status-row dd { margin: 0; color: #eee; }
     .warnings { margin-top: 12px; padding: 10px; border: 1px solid #663; background: rgba(80, 60, 0, 0.2); font-size: 11px; max-width: 520px; }
+    .warnings.is-partial { border-color: #855; background: rgba(90, 40, 0, 0.25); color: #f5c99a; }
     .warnings ul { margin: 6px 0 0 18px; padding: 0; }
   </style>
 </head>
@@ -92,6 +93,10 @@
           <div class="status-row"><dt>Cautions</dt><dd id="statusCautions">—</dd></div>
           <div class="status-row"><dt>Drivers</dt><dd id="statusDrivers">—</dd></div>
         </dl>
+      </div>
+
+      <div id="partialParseWarning" class="warnings is-partial" hidden>
+        Race Control PDF parsed partially. Results table needs review.
       </div>
 
       <div id="parseWarnings" class="warnings" hidden></div>
@@ -304,14 +309,28 @@
             ? parsed.cautionCount
             : '—';
       const driverCount =
-        summary.resultCount != null
-          ? summary.resultCount
-          : Array.isArray(parsed.results)
-            ? parsed.results.length
-            : null;
+        summary.totalDrivers != null
+          ? summary.totalDrivers
+          : summary.resultCount != null
+            ? summary.resultCount
+            : Array.isArray(parsed.results)
+              ? parsed.results.length
+              : null;
       $('#statusDrivers').textContent = driverCount != null ? driverCount : '—';
 
-      const warnings = summary.parseWarnings || parsed.parseWarnings || [];
+      const diagnostics = parsed.parserDiagnostics || {};
+      const partialParseWarningEl = $('#partialParseWarning');
+      const lowConfidence =
+        diagnostics.resultParseConfidence === 'low' ||
+        (driverCount != null && driverCount < 10);
+      if (partialParseWarningEl) {
+        partialParseWarningEl.hidden = !(hasPdf && lowConfidence);
+      }
+
+      const warnings = [
+        ...(summary.parseWarnings || []),
+        ...(parsed.parseWarnings || []),
+      ].filter((value, index, list) => list.indexOf(value) === index);
       const warningsEl = $('#parseWarnings');
       if (warnings.length) {
         warningsEl.hidden = false;

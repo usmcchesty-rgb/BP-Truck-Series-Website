@@ -16,6 +16,7 @@ const KNOWN_CARS = [
   'Toyota Tundra TRD Pro',
   'Chevrolet Silverado',
   'Ford F150',
+  'Ford F-150',
   'RAM',
 ];
 
@@ -57,9 +58,12 @@ const NATIONALITY_PHRASES = [
 ];
 
 const STATUS_VALUES = new Set(['Running', 'Disco', 'DQ', 'DNQ', 'Disqualified']);
+const LICENSE_CLASS_PATTERN = /^[A-Z]{1,3}$/;
 
 const TIME_TOKEN =
   /^(\d{1,2}:\d{2}:\d{2}\.\d{3}|\d{1,2}:\d{2}\.\d{3}|-)$/;
+
+const RESULT_ROW_START_PATTERN = /\b(\d{1,2}) (\d{1,2}) (\d{1,3}) ([A-Z])/g;
 
 function resolveDebugFilePath() {
   if (process.env.VERCEL) return '/tmp/race-control-debug.txt';
@@ -200,7 +204,7 @@ function extractNationality(tokens) {
   return null;
 }
 
-function parseDriverIdentity(tokens) {
+function parseDriverIdentityStrict(tokens) {
   if (!tokens.length) return null;
 
   for (const car of KNOWN_CARS) {
@@ -226,6 +230,29 @@ function parseDriverIdentity(tokens) {
   }
 
   return null;
+}
+
+function parseDriverIdentityLenient(tokens) {
+  if (tokens.length < 3) return null;
+
+  for (const natCount of [2, 1]) {
+    if (tokens.length <= natCount + 1) continue;
+    const nationality = tokens.slice(-natCount).join(' ');
+    const beforeNat = tokens.slice(0, -natCount);
+
+    for (let carLen = Math.min(4, beforeNat.length - 1); carLen >= 1; carLen -= 1) {
+      const car = beforeNat.slice(-carLen).join(' ');
+      const driverName = beforeNat.slice(0, -carLen).join(' ').trim();
+      if (driverName.length < 2 || !/[A-Za-z]/.test(driverName)) continue;
+      return { driverName, nationality, car };
+    }
+  }
+
+  return null;
+}
+
+function parseDriverIdentity(tokens) {
+  return parseDriverIdentityStrict(tokens) || parseDriverIdentityLenient(tokens);
 }
 
 export function parseRaceHeader(text) {
@@ -269,7 +296,74 @@ export function parseRaceHeader(text) {
   };
 }
 
-function getResultsSectionText(text) {
+function extractRaceSummaryMeta(text, results) {
+  const meta = {};
+  const cautionLaps = text.match(/\bCaution Laps[:\s]+(\d+)/i);
+  const leadChanges = text.match(/\bLead Changes[:\s]+(\d+)/i);
+  const averageLapTime = text.match(/\bAverage Lap Time[:\s]+([\d:.]+)/i);
+  const lapsCompletedHeader = text.match(/\bLaps Completed[:\s]+(\d+)/i);
+
+  if (cautionLaps) meta.cautionLaps = Number(cautionLaps[1]);
+  if (leadChanges) meta.leadChanges = Number(leadChanges[1]);
+  if (averageLapTime) meta.averageLapTime = averageLapTime[1];
+  if (lapsCompletedHeader) {
+    meta.lapsCompleted = Number(lapsCompletedHeader[1]);
+  } else if (results?.length) {
+    meta.lapsCompleted = results[0]?.laps ?? null;
+  }
+
+  return meta;
+}
+
+function findResultRowCandidates(sectionText) {
+  const candidates = [];
+  const pattern = new RegExp(RESULT_ROW_START_PATTERN.source, 'g');
+  let match;
+  while ((match = pattern.exec(sectionText)) !== null) {
+    candidates.push({
+      index: match.index,
+      position: Number(match[1]),
+      classPosition: Number(match[2]),
+      carNumber: Number(match[3]),
+    });
+  }
+  return candidates;
+}
+
+function findSequentialResultRowStarts(sectionText) {
+  const candidates = findResultRowCandidates(sectionText);
+  const starts = [];
+  let searchFrom = 0;
+
+  for (let expectedPosition = 1; expectedPosition <= 60; expectedPosition += 1) {
+    const options = candidates.filter(
+      (candidate) =>
+        candidate.index >= searchFrom && candidate.position === expectedPosition
+    );
+
+    let accepted = null;
+    for (const candidate of options) {
+      const nextPositionIndex = candidates.find(
+        (item) => item.index > candidate.index && item.position === expectedPosition + 1
+      )?.index;
+      const endIndex = nextPositionIndex ?? sectionText.length;
+      const rowText = sectionText.slice(candidate.index, endIndex).trim();
+      const parsed = parseOneResultRow(rowText.split(/\s+/), 0);
+      if (parsed?.result?.position === expectedPosition) {
+        accepted = { ...candidate, endIndex };
+        break;
+      }
+    }
+
+    if (!accepted) break;
+    starts.push(accepted);
+    searchFrom = accepted.index + 1;
+  }
+
+  return starts;
+}
+
+export function getResultsSectionText(text) {
   const warnings = [];
   const lapChartIdx = text.indexOf('LAP CHART - RACE');
   if (lapChartIdx === -1) {
@@ -311,7 +405,11 @@ function parseOneResultRow(tokens, startIdx) {
   const carNumber = Number(tokens[startIdx + 2]);
   const identityStart = startIdx + 3;
 
-  for (let endIdx = identityStart + 12; endIdx <= Math.min(tokens.length - 1, identityStart + 50); endIdx += 1) {
+  for (
+    let endIdx = identityStart + 12;
+    endIdx <= Math.min(tokens.length - 1, identityStart + 60);
+    endIdx += 1
+  ) {
     const status = tokens[endIdx];
     if (!STATUS_VALUES.has(status)) continue;
 
@@ -340,7 +438,8 @@ function parseOneResultRow(tokens, startIdx) {
       !Number.isFinite(grid) ||
       !Number.isFinite(iRating) ||
       !Number.isFinite(safetyRating) ||
-      !licenseClass
+      !licenseClass ||
+      !LICENSE_CLASS_PATTERN.test(licenseClass)
     ) {
       continue;
     }
@@ -390,33 +489,31 @@ export function parseResults(sectionText) {
 
   if (!sectionText?.trim()) {
     warnings.push('Results section is empty.');
-    return { results, warnings };
+    return { results, warnings, rowStarts: [] };
   }
 
-  const tokens = sectionText.trim().split(/\s+/);
-  let idx = 0;
-  let consecutiveFailures = 0;
+  const rowStarts = findSequentialResultRowStarts(sectionText);
 
-  while (idx < tokens.length) {
-    const parsed = parseOneResultRow(tokens, idx);
-    if (!parsed) {
-      consecutiveFailures += 1;
-      if (consecutiveFailures > 80) break;
-      idx += 1;
-      continue;
+  for (let i = 0; i < rowStarts.length; i += 1) {
+    const start = rowStarts[i];
+    const end = i + 1 < rowStarts.length ? rowStarts[i + 1].index : sectionText.length;
+    const rowText = sectionText.slice(start.index, end).trim();
+    const parsed = parseOneResultRow(rowText.split(/\s+/), 0);
+    if (parsed?.result) {
+      results.push(parsed.result);
     }
-
-    consecutiveFailures = 0;
-    results.push(parsed.result);
-    idx = parsed.nextIdx;
   }
 
   if (!results.length) {
     warnings.push('No finishing results table detected in PDF text.');
+  } else if (rowStarts.length > results.length) {
+    warnings.push(
+      `Detected ${rowStarts.length} result row anchors but parsed ${results.length} rows.`
+    );
   }
 
   results.sort((a, b) => a.position - b.position);
-  return { results, warnings };
+  return { results, warnings, rowStarts };
 }
 
 function classifySessionEventType(text) {
@@ -498,7 +595,7 @@ export function parseDriverReports(text) {
       const parts = driversMatch[1].trim().split(/\s+/);
       for (const part of parts) {
         if (/^\d{3,5}$/.test(part)) iRating = Number(part);
-        if (/^[A-Z]$/.test(part)) licenseClass = part;
+        if (/^[A-Z]{1,3}$/.test(part)) licenseClass = part;
         if (/^\d+\.\d+$/.test(part)) safetyRating = Number(part);
       }
     }
@@ -530,7 +627,7 @@ export function parseDriverReports(text) {
   return { drivers, warnings };
 }
 
-function buildSummary(parsed) {
+function buildSummary(parsed, extraMeta = {}) {
   const results = parsed.results || [];
   const finishStatuses = new Set(['Running', 'Disco']);
   const finishers = results.filter((row) => finishStatuses.has(row.status)).length;
@@ -551,11 +648,105 @@ function buildSummary(parsed) {
     trackName: parsed.trackName || null,
     cautionCount: parsed.cautionCount ?? 0,
     totalDrivers: results.length,
+    resultCount: results.length,
     finishers,
     dnfCount: Math.max(0, results.length - finishers),
     fastestLap,
     fastestLapDriver,
+    ...extraMeta,
   };
+}
+
+function buildParserDiagnostics(sectionText, results, normalized, rowStarts) {
+  const parsedRows = results.length;
+  const expectedRows = rowStarts?.length ?? 0;
+  let resultParseConfidence = 'low';
+  if (parsedRows >= 30) resultParseConfidence = 'high';
+  else if (parsedRows >= 10) resultParseConfidence = 'medium';
+
+  return {
+    resultsDetected: parsedRows,
+    firstDriver: results[0]?.driverName || null,
+    lastDriver: results[parsedRows - 1]?.driverName || null,
+    expectedResultRows: expectedRows,
+    parsedResultRows: parsedRows,
+    resultParseConfidence,
+    sectionAnchorsFound: {
+      raceHeader: /This document was generated:/i.test(normalized),
+      lapChart: /LAP CHART - RACE/i.test(normalized),
+      sessionReports: /SESSION REPORTS/i.test(normalized),
+      incidentReports: /INCIDENT REPORTS/i.test(normalized),
+    },
+  };
+}
+
+function addResultsSanityWarnings(parseWarnings, results, winner, sof) {
+  if (results.length === 1 && winner) {
+    parseWarnings.push(
+      'Only the first finishing position was parsed. Results iteration failed.'
+    );
+  } else if (winner && results.length > 0 && results.length < 10) {
+    parseWarnings.push(
+      `Only ${results.length} finishing positions parsed. Results section likely terminated early.`
+    );
+  }
+
+  if (sof != null && results.length > 0 && results.length < 10) {
+    parseWarnings.push(
+      'SOF detected but finishing order is incomplete. Parse is only partially healthy.'
+    );
+  }
+}
+
+export function buildRaceControlValidation(parsed, official = null) {
+  if (!official) {
+    return {
+      winnerMatch: null,
+      cautionMatch: null,
+      sofMatch: null,
+      warnings: ['No official comparison source available during parse.'],
+    };
+  }
+
+  const warnings = [];
+  const pdfWinner = parsed?.winner || parsed?.summary?.winner || null;
+  const officialWinner = official?.winner || null;
+  const pdfCautions = parsed?.cautionCount ?? parsed?.summary?.cautionCount ?? null;
+  const officialCautions = official?.cautionCount ?? null;
+  const pdfSof = parsed?.sof ?? parsed?.summary?.sof ?? null;
+  const officialSof = official?.sof ?? null;
+
+  let winnerMatch = null;
+  if (pdfWinner && officialWinner) {
+    winnerMatch = pdfWinner.toLowerCase() === officialWinner.toLowerCase();
+    if (!winnerMatch) {
+      warnings.push(
+        `Race Control PDF winner (${pdfWinner}) differs from official winner (${officialWinner}). Official results take precedence.`
+      );
+    }
+  }
+
+  let cautionMatch = null;
+  if (pdfCautions != null && officialCautions != null) {
+    cautionMatch = pdfCautions === officialCautions;
+    if (!cautionMatch) {
+      warnings.push(
+        `Race Control PDF caution count (${pdfCautions}) differs from official source (${officialCautions}).`
+      );
+    }
+  }
+
+  let sofMatch = null;
+  if (pdfSof != null && officialSof != null) {
+    sofMatch = pdfSof === officialSof;
+    if (!sofMatch) {
+      warnings.push(
+        `Race Control PDF SOF (${pdfSof}) differs from official source (${officialSof}).`
+      );
+    }
+  }
+
+  return { winnerMatch, cautionMatch, sofMatch, warnings };
 }
 
 export async function extractPdfText(buffer) {
@@ -590,6 +781,7 @@ export function parseRaceControlPdfText(text, options = {}) {
       raceEvents: [],
       drivers: [],
       summary: buildSummary({ results: [], winner: null, sof: null, trackName: trackHint, cautionCount: 0 }),
+      parserDiagnostics: buildParserDiagnostics('', [], normalized, []),
       parseWarnings: ['PDF contained no extractable text.'],
     };
   }
@@ -620,6 +812,10 @@ export function parseRaceControlPdfText(text, options = {}) {
   if (!trackName) parseWarnings.push('Track name not detected in PDF text.');
   if (header.sof == null) parseWarnings.push('SOF not detected in PDF text.');
 
+  addResultsSanityWarnings(parseWarnings, results, winner, header.sof);
+
+  const summaryMeta = extractRaceSummaryMeta(normalized, results);
+
   const parsed = {
     raceNumber,
     generatedAt: header.generatedAt,
@@ -633,7 +829,19 @@ export function parseRaceControlPdfText(text, options = {}) {
     parseWarnings,
   };
 
-  parsed.summary = buildSummary(parsed);
+  parsed.summary = buildSummary(parsed, summaryMeta);
+  parsed.parserDiagnostics = buildParserDiagnostics(
+    resultsSection.section,
+    results,
+    normalized,
+    parsedResults.rowStarts
+  );
+
+  if (options.officialComparison) {
+    parsed.validation = buildRaceControlValidation(parsed, options.officialComparison);
+    appendUniqueWarnings(parseWarnings, parsed.validation.warnings);
+  }
+
   return parsed;
 }
 
@@ -684,5 +892,5 @@ export {
   buildExtractionDebug,
   resolveDebugFilePath,
   writeExtractionDebugFile,
-  getResultsSectionText,
+  findSequentialResultRowStarts,
 };
