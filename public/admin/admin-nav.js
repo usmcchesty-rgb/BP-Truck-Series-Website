@@ -17,6 +17,25 @@
   const STYLE_ID = "admin-shell-nav-styles";
 
   const LAYOUT_STYLE_ID = "admin-layout-styles";
+  const MISSION_CONTROL_STYLE_ID = "admin-mission-control-styles";
+  const MISSION_CONTROL_SCRIPT_ID = "admin-mission-control-script";
+
+  function injectMissionControlAssets() {
+    if (!document.getElementById(MISSION_CONTROL_STYLE_ID)) {
+      const link = document.createElement("link");
+      link.id = MISSION_CONTROL_STYLE_ID;
+      link.rel = "stylesheet";
+      link.href = "/admin/admin-mission-control.css";
+      document.head.appendChild(link);
+    }
+    if (!document.getElementById(MISSION_CONTROL_SCRIPT_ID)) {
+      const script = document.createElement("script");
+      script.id = MISSION_CONTROL_SCRIPT_ID;
+      script.src = "/admin/admin-mission-control.js";
+      script.defer = true;
+      document.body.appendChild(script);
+    }
+  }
 
   function injectLayoutStyles() {
     if (document.getElementById(LAYOUT_STYLE_ID)) return;
@@ -37,6 +56,8 @@
         background: linear-gradient(180deg, #0d0d0d 0%, #050505 100%);
         border-bottom: 2px solid #e50914;
         box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+      }
+      .admin-shell-sticky {
         position: sticky;
         top: 0;
         z-index: 1000;
@@ -198,16 +219,19 @@
       .join("");
 
     root.innerHTML = `
-      <header class="admin-shell-nav">
-        <div class="admin-shell-nav__top">
-          <div class="admin-shell-nav__brand">BP <span>ADMIN</span></div>
-          <div class="admin-shell-nav__actions">
-            <a class="admin-shell-nav__public" href="/">View Public Site</a>
-            <button id="logoutBtn" class="btn admin-shell-nav__logout" type="button" hidden>Logout</button>
+      <div class="admin-shell-sticky">
+        <header class="admin-shell-nav">
+          <div class="admin-shell-nav__top">
+            <div class="admin-shell-nav__brand">BP <span>ADMIN</span></div>
+            <div class="admin-shell-nav__actions">
+              <a class="admin-shell-nav__public" href="/">View Public Site</a>
+              <button id="logoutBtn" class="btn admin-shell-nav__logout" type="button" hidden>Logout</button>
+            </div>
           </div>
-        </div>
-        <nav class="admin-shell-nav__links" aria-label="Admin sections">${linksHtml}</nav>
-      </header>
+          <nav class="admin-shell-nav__links" aria-label="Admin sections">${linksHtml}</nav>
+        </header>
+        <div id="admin-mission-control-root"></div>
+      </div>
     `;
 
     wireLogoutButton();
@@ -245,6 +269,7 @@
     if (!mount) return;
 
     injectStyles();
+    injectMissionControlAssets();
 
     const baseItems = NAV_ITEMS.filter((item) => !item.optional);
     const activeId = getCurrentPageId();
@@ -260,6 +285,10 @@
         if (!logoutBtn) return;
         logoutBtn.dataset.navBound = "page";
         logoutBtn.hidden = !loggedIn;
+        if (window.AdminMissionControl) {
+          if (loggedIn) window.AdminMissionControl.show();
+          else window.AdminMissionControl.hide();
+        }
       },
       refreshActive() {
         updateActiveLinks(mount, getCurrentPageId());
