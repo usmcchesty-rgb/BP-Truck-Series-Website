@@ -55,8 +55,16 @@
     return Boolean(lockState.isLocked || savedLineup?.status === 'locked');
   }
 
-  function canEdit() {
+  function canPick() {
+    return !isLocked();
+  }
+
+  function canSubmit() {
     return isLoggedIn && !isLocked();
+  }
+
+  function isDriverInactive(driver) {
+    return Pills.isDriverInactive ? Pills.isDriverInactive(driver) : String(driver?.status || 'Active') === 'Inactive';
   }
 
   function renderSalaryMeter() {
@@ -92,7 +100,7 @@
             <span class="fantasy-lineup-pick-row__salary salary">${formatMoney(driver.salary)}</span>
             ${renderFantasyGradePill(driver.valueGrade)}
             ${
-              canEdit()
+              canPick()
                 ? `<button type="button" class="fantasy-lineup-pick-row__remove" data-remove-id="${escapeHtml(driver.driverId)}" aria-label="Remove ${escapeHtml(driver.driverName)}">×</button>`
                 : ''
             }
@@ -132,12 +140,10 @@
         ${renderSalaryMeter()}
         <div class="fantasy-lineup-builder__actions">
           ${
-            canEdit()
+            canPick()
               ? `<button type="button" id="fantasySuggestLineupBtn" class="fantasy-btn fantasy-btn--secondary">Suggest Lineup</button>
                  <button type="button" id="fantasyClearLineupBtn" class="fantasy-btn fantasy-btn--secondary">Clear</button>
-                 <button type="button" id="fantasySubmitLineupBtn" class="fantasy-btn fantasy-btn--primary"${
-                   !validCount || overCap || dupes ? ' disabled' : ''
-                 }>${savedLineup ? 'Update Lineup' : 'Submit Lineup'}</button>`
+                 ${canSubmit() ? `<button type="button" id="fantasySubmitLineupBtn" class="fantasy-btn fantasy-btn--primary"${!validCount || overCap || dupes ? ' disabled' : ''}>${savedLineup ? 'Update Lineup' : 'Submit Lineup'}</button>` : `<a class="fantasy-btn fantasy-btn--primary" href="/fantasy/login.html">Log In to Submit</a>`}`
               : ''
           }
         </div>
@@ -175,7 +181,7 @@
                   return `<tr${inactiveClass ? ` class="${inactiveClass}"` : ''}>
                     <td>
                       ${
-                        canEdit()
+                        canPick()
                           ? `<button type="button" class="fantasy-lineup-pick-btn${selected ? ' is-selected' : ''}" data-pick-id="${escapeHtml(id)}"${full && !selected ? ' disabled' : ''}>${selected ? 'Selected' : 'Add'}</button>`
                           : '—'
                       }
@@ -216,14 +222,20 @@
   }
 
   function toggleDriver(id) {
-    if (!canEdit()) return;
+    if (!canPick()) return;
     const sid = String(id);
+    const driver = driverById(sid);
     if (selectedIds.includes(sid)) {
       selectedIds = selectedIds.filter((x) => x !== sid);
+      submitMessage = '';
     } else if (selectedIds.length < LINEUP_SIZE) {
+      if (driver && isDriverInactive(driver)) {
+        submitMessage = `${driver.driverName} is inactive — high risk they may not race this week.`;
+      } else {
+        submitMessage = '';
+      }
       selectedIds = [...selectedIds, sid];
     }
-    submitMessage = '';
     refreshBuilder();
   }
 
@@ -265,11 +277,22 @@
   }
 
   async function submitLineup() {
-    if (!canEdit()) return;
+    if (!canSubmit()) return;
     submitMessage = '';
     const drivers = selectedDrivers();
     if (drivers.length !== LINEUP_SIZE) {
       submitMessage = `Select exactly ${LINEUP_SIZE} drivers.`;
+      refreshBuilder();
+      return;
+    }
+    if (new Set(selectedIds).size !== selectedIds.length) {
+      submitMessage = 'Duplicate drivers are not allowed.';
+      refreshBuilder();
+      return;
+    }
+    const inactive = drivers.filter((d) => isDriverInactive(d));
+    if (inactive.length) {
+      submitMessage = `${inactive.map((d) => d.driverName).join(', ')} ${inactive.length === 1 ? 'is' : 'are'} inactive and cannot be rostered.`;
       refreshBuilder();
       return;
     }
@@ -329,7 +352,8 @@
       lockState = {
         lockTime: slateMeta.lockTime,
         lockAt: slateMeta.lockAt,
-        lockMessage: !slateMeta.lockTime && !slateMeta.lockAt ? 'Lineup lock time not set' : null,
+        lockMessage: slateMeta.lockMessage || null,
+        hasLockSchedule: Boolean(slateMeta.lockAt),
         isLocked: slateMeta.lockAt ? Date.now() >= new Date(slateMeta.lockAt).getTime() : false,
       };
 

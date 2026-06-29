@@ -20,10 +20,13 @@ import {
 } from './_social-share-settings.js';
 import {
   countLineupsForSlate,
+  getFantasyAdminSubmittedLineups,
   getFantasyLaunchDashboard,
+  getFantasyPublicStandings,
   getUserLineupForCurrentSlate,
   submitFantasyLineup,
 } from './_fantasy-lineups.js';
+import { loadLatestFantasySlate } from './_fantasy-public-slate.js';
 import { getFantasyAuthConfig, getUserFromBearerToken } from './_fantasy-auth.js';
 
 async function handleGetFantasyDraftSlate(req, res) {
@@ -136,6 +139,16 @@ export default async function handler(req, res) {
         return res.status(200).json(dashboard);
       } catch (error) {
         return res.status(500).json({ error: error.message || 'Failed to load dashboard.' });
+      }
+    }
+    if (queryAction === 'getFantasyStandings') {
+      try {
+        const settings = await getSettings();
+        const seasonId = req.query?.seasonId || settings.seasonId || '27987';
+        const standings = await getFantasyPublicStandings(seasonId);
+        return res.status(200).json(standings);
+      } catch (error) {
+        return res.status(500).json({ error: error.message || 'Failed to load fantasy standings.' });
       }
     }
     return res.status(200).json(await getSettings());
@@ -269,14 +282,31 @@ export default async function handler(req, res) {
       const payload = requestedSlateId
         ? await loadFantasySlateById(requestedSlateId)
         : await loadFantasyDraftSlate(seasonId);
-      const slateId = payload?.slate?.id || null;
-      const lineupCount = slateId ? await countLineupsForSlate(slateId) : 0;
+      const publishedPayload = await loadLatestFantasySlate(seasonId);
+      const publishedSlateId = publishedPayload?.slate?.id || null;
+      const lineupCount = publishedSlateId ? await countLineupsForSlate(publishedSlateId) : 0;
       return res.status(200).json({
         slate: payload?.slate || null,
+        publishedSlate: publishedPayload?.slate || null,
         lineupCount,
       });
     } catch (error) {
       return res.status(500).json({ error: error.message || 'Failed to load slate stats.' });
+    }
+  }
+
+  if (action === 'getFantasySubmittedLineups') {
+    try {
+      const settings = await getSettings();
+      const seasonId = body.seasonId || settings.seasonId || '27987';
+      const slateId =
+        body.slateId != null && Number.isFinite(Number(body.slateId))
+          ? Number(body.slateId)
+          : null;
+      const result = await getFantasyAdminSubmittedLineups(seasonId, slateId);
+      return res.status(200).json(result);
+    } catch (error) {
+      return res.status(500).json({ error: error.message || 'Failed to load submitted lineups.' });
     }
   }
 

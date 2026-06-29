@@ -2,14 +2,14 @@
 -- Requires Supabase Auth enabled (email/password).
 --
 -- Supabase Dashboard → Authentication → URL Configuration:
---   Site URL: https://blazingpedals.vercel.app
+--   Site URL: https://www.blazingpedalsracing.com
 --   Redirect URLs (add each):
---     https://blazingpedals.vercel.app/fantasy/login.html
---     https://blazingpedals.vercel.app/fantasy/signup.html
---     https://blazingpedals.vercel.app/fantasy/dashboard.html
---     https://blazingpedals.vercel.app/fantasy/lineup.html
---   (Also add http://localhost:3000/fantasy/login.html etc. for local dev.)
--- Signup uses emailRedirectTo → /fantasy/login.html so confirmation links land on the login page.
+--     https://www.blazingpedalsracing.com/fantasy/login.html
+--     https://www.blazingpedalsracing.com/fantasy/signup.html
+--     https://www.blazingpedalsracing.com/fantasy/dashboard.html
+--     https://www.blazingpedalsracing.com/fantasy/lineup.html
+--     https://blazingpedals.vercel.app/fantasy/login.html (Vercel preview)
+--   Email templates: see supabase/fantasy_auth_email_templates.md
 
 -- Optional lock enforcement (ISO timestamp). lock_time remains display text on slate.
 alter table fantasy_slates add column if not exists lock_at timestamptz;

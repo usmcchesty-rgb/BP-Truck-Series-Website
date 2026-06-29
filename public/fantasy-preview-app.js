@@ -137,8 +137,8 @@
           'BP Fantasy Final Takeaway',
           `<p>${escapeHtml(
             spotlights.bestValue?.driverName
-              ? `BP Fantasy takeaway: ${spotlights.bestValue.driverName} leads the value board while ${ownership[0]?.driverName || 'the field'} projects as the top fantasy ownership play. Use the demo lineup builder to explore cap-efficient combinations before lock.`
-              : 'BP Fantasy takeaway: Review the full slate, compare drivers side-by-side, and use the demo lineup builder before lock.'
+              ? `BP Fantasy takeaway: ${spotlights.bestValue.driverName} leads the value board while ${ownership[0]?.driverName || 'the field'} projects as the top fantasy ownership play. Build your lineup before lock.`
+              : 'BP Fantasy takeaway: Review the full slate, compare drivers side-by-side, and build your lineup before lock.'
           )}</p>`
         )}
       </article>

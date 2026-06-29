@@ -126,7 +126,7 @@
               <div id="fantasyDriverShareHost"></div>
             </div>
             ${renderHeroBadges(driver)}
-            <p class="fantasy-app-readonly-note">Race ${escapeHtml(slate.raceNumber ?? '—')} · ${escapeHtml(slate.track || 'TBD')} · Read-only preview</p>
+            <p class="fantasy-app-copy">Race ${escapeHtml(slate.raceNumber ?? '—')} · ${escapeHtml(slate.track || 'TBD')} · Current published slate</p>
             <p class="fantasy-driver-hero-actions">
               <a class="fantasy-btn fantasy-btn--secondary" href="${escapeHtml(compareUrl(driver))}">Compare Driver</a>
               <a class="fantasy-btn fantasy-btn--secondary" href="/fantasy/slate.html">Back to Race Slate</a>

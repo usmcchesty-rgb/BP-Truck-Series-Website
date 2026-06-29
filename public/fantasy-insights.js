@@ -359,11 +359,11 @@
     const eff = computeSalaryEfficiency(lineup, cap);
     const avgOwn = lineup.averageOwnership;
     const parts = [
-      `This ${risk.toLowerCase()} BP Fantasy demo lineup earns a ${grade} lineup grade`,
+      `This ${risk.toLowerCase()} BP Fantasy lineup earns a ${grade} lineup grade`,
       eff != null ? `using ${eff}% of the salary cap` : null,
       avgOwn != null ? `with ${avgOwn}% average projected ownership` : null,
     ].filter(Boolean);
-    return `${parts.join(' ')}. Projected fantasy score: ${lineup.projectedScore ?? '—'}. Demo only — not saved or submitted.`;
+    return `${parts.join(' ')}. Projected fantasy score: ${lineup.projectedScore ?? '—'}.`;
   }
 
   window.BPFantasyInsights = {

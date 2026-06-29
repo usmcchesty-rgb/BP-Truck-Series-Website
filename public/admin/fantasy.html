@@ -529,8 +529,12 @@
           <div class="admin-card">
             <div class="admin-card-title">Fantasy Status</div>
             <div class="admin-kv">
-              <div class="admin-k">Public status</div>
-              <div class="admin-v">Lineups enabled</div>
+              <div class="admin-k">Published slate</div>
+              <div class="admin-v" id="fantasyPublishedSlateSummary">—</div>
+            </div>
+            <div class="admin-kv">
+              <div class="admin-k">Lock time</div>
+              <div class="admin-v" id="fantasyPublishedLockTime">—</div>
             </div>
             <div class="admin-kv">
               <div class="admin-k">Submitted lineups</div>
@@ -538,9 +542,36 @@
             </div>
             <div class="admin-kv">
               <div class="admin-k">Backend</div>
-              <div class="admin-v">Salary draft + player lineups</div>
+              <div class="admin-v">Live player lineups</div>
             </div>
-            <div class="admin-note">Generate a draft slate, publish it for players, and set a lock time before race week.</div>
+            <div class="admin-note">Publish a slate for players, set a lock time, and monitor submitted lineups below.</div>
+          </div>
+
+          <!-- Submitted Lineups -->
+          <div class="admin-card admin-card--full">
+            <div class="admin-card-title">Submitted Lineups</div>
+            <span class="field-help">Read-only view of player entries for the current published slate. Admins cannot edit player lineups.</span>
+            <div class="fantasy-generate-row">
+              <button id="reloadSubmittedLineupsBtn" class="btn btn-secondary" type="button">Reload Submitted Lineups</button>
+              <span id="submittedLineupsStatus" class="fantasy-generate-status"></span>
+            </div>
+            <div class="table-wrap" style="margin-top:12px;">
+              <table class="fantasy-admin-lineups-table">
+                <thead>
+                  <tr>
+                    <th>Player</th>
+                    <th>Email</th>
+                    <th>Status</th>
+                    <th>Salary</th>
+                    <th>Submitted</th>
+                    <th>Lineup</th>
+                  </tr>
+                </thead>
+                <tbody id="fantasySubmittedLineupsBody">
+                  <tr><td colspan="6" class="muted">Load submitted lineups for the published slate.</td></tr>
+                </tbody>
+              </table>
+            </div>
           </div>
 
           <!-- Slate Setup -->
@@ -782,7 +813,9 @@
           console.error('[Fantasy Admin] Settings load failed:', err);
         });
         loadFantasyDraftSlate()
-          .then(() => Promise.all([loadFantasySchedulePreview(), loadFantasyAdminStats()]))
+          .then(() =>
+            Promise.all([loadFantasySchedulePreview(), loadFantasyAdminStats(), loadSubmittedLineups()])
+          )
           .catch((err) => {
             console.error('[Fantasy Admin] Draft slate load failed:', err);
           });
@@ -1480,6 +1513,18 @@
 
           if (countEl) countEl.textContent = String(data.lineupCount ?? 0);
 
+          const publishedSummaryEl = $('#fantasyPublishedSlateSummary');
+          const publishedLockEl = $('#fantasyPublishedLockTime');
+          const published = data.publishedSlate;
+          if (publishedSummaryEl) {
+            publishedSummaryEl.textContent = published?.race_number
+              ? `Race ${published.race_number} — ${published.track || 'TBD'} (${published.status || 'published'})`
+              : 'No published slate';
+          }
+          if (publishedLockEl) {
+            publishedLockEl.textContent = published?.lock_time || published?.lock_at || 'Not set';
+          }
+
           const slate = data.slate;
           if (slate && lockInput && document.activeElement !== lockInput) {
             lockInput.value = slate.lock_time || '';
@@ -1494,6 +1539,71 @@
         } catch (error) {
           if (countEl) countEl.textContent = '—';
           console.error('[Fantasy Admin] Stats load failed:', error);
+        }
+      }
+
+      async function loadSubmittedLineups() {
+        const body = $('#fantasySubmittedLineupsBody');
+        const statusEl = $('#submittedLineupsStatus');
+        if (!body) return;
+
+        if (statusEl) {
+          statusEl.textContent = 'Loading submitted lineups...';
+          statusEl.classList.remove('error');
+        }
+
+        try {
+          const res = await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              password: getSessionPw(),
+              action: 'getFantasySubmittedLineups',
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Could not load submitted lineups.');
+
+          const lineups = Array.isArray(data.lineups) ? data.lineups : [];
+          if (!lineups.length) {
+            safeSetInnerHtml(
+              body,
+              `<tr><td colspan="6" class="muted">${data.slate ? 'No lineups submitted yet for this slate.' : 'No published slate — publish a slate to collect lineups.'}</td></tr>`
+            );
+          } else {
+            safeSetInnerHtml(
+              body,
+              lineups
+                .map((row) => {
+                  const drivers = (row.drivers || [])
+                    .map((d) => `${escapeAdminHtml(d.driverName)} (${formatFantasySalary(d.salary)})`)
+                    .join(', ');
+                  return `<tr>
+                    <td>${escapeAdminHtml(row.displayName || 'Player')}</td>
+                    <td>${escapeAdminHtml(row.email || '—')}</td>
+                    <td>${escapeAdminHtml(row.status || 'submitted')}</td>
+                    <td class="salary">${formatFantasySalary(row.totalSalary)}</td>
+                    <td>${escapeAdminHtml(formatFantasyDate(row.submittedAt))}</td>
+                    <td><details><summary>${(row.drivers || []).length} drivers</summary><ul class="fantasy-admin-lineup-detail">${(row.drivers || [])
+                      .map((d) => `<li>${escapeAdminHtml(d.driverName)} — ${formatFantasySalary(d.salary)}</li>`)
+                      .join('')}</ul><p class="admin-note">${escapeAdminHtml(drivers)}</p></details></td>
+                  </tr>`;
+                })
+                .join('')
+            );
+          }
+
+          if (statusEl) {
+            statusEl.textContent = data.slate
+              ? `${lineups.length} lineup(s) for Race ${data.slate.raceNumber ?? data.slate.race_number ?? ''}.`
+              : 'No published slate.';
+          }
+        } catch (error) {
+          safeSetInnerHtml(body, `<tr><td colspan="6" class="muted">${escapeAdminHtml(error.message || 'Load failed')}</td></tr>`);
+          if (statusEl) {
+            statusEl.textContent = error.message || 'Load failed';
+            statusEl.classList.add('error');
+          }
         }
       }
 
@@ -1530,7 +1640,7 @@
           if (!res.ok) throw new Error(data.error || 'Publish failed');
 
           applyFantasySlatePayload(data);
-          await loadFantasyAdminStats();
+          await Promise.all([loadFantasyAdminStats(), loadSubmittedLineups()]);
           const raceNum = data.slate?.race_number ?? '';
           const track = data.slate?.track || 'TBD';
           const publishedId = data.slate?.id ?? '';
@@ -2164,6 +2274,7 @@
       $('#uploadFantasyHeroBtn')?.addEventListener('click', uploadFantasyHeroBackground);
       $('#removeFantasyHeroBtn')?.addEventListener('click', removeFantasyHeroBackground);
       $('#saveFantasyHeroUrlBtn')?.addEventListener('click', saveFantasyHeroUrl);
+      $('#reloadSubmittedLineupsBtn')?.addEventListener('click', loadSubmittedLineups);
       $('#generateFantasySalariesBtn')?.addEventListener('click', generateFantasySalaries);
       $('#reloadFantasyDraftBtn')?.addEventListener('click', loadFantasyDraftSlate);
       $('#publishFantasySlateBtn')?.addEventListener('click', publishFantasySlate);

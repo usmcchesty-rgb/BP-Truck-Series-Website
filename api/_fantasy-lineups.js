@@ -1,6 +1,7 @@
 import { getSettings, supabase } from './_lib.js';
 import { loadLatestFantasySlate } from './_fantasy-public-slate.js';
 import { ensureFantasyProfile } from './_fantasy-auth.js';
+import { deriveDriverActivityStatus } from './_fantasy-public-analysis.js';
 
 const SALARY_CAP = 50000;
 const LINEUP_SIZE = 5;
@@ -143,6 +144,11 @@ function validateLineupPayload(drivers, slateDrivers, salaryCap = SALARY_CAP, li
     if (!slateDriver) {
       throw new Error('One or more drivers are not on the current slate.');
     }
+    const activity = deriveDriverActivityStatus(slateDriver);
+    if (activity.status === 'Inactive') {
+      const name = slateDriver.driverName || slateDriver.driver_name || 'Driver';
+      throw new Error(`${name} is inactive and cannot be rostered. Pick an active driver.`);
+    }
     const salary = Number(slateDriver.finalSalary ?? slateDriver.salary ?? slateDriver.final_salary);
     if (!Number.isFinite(salary)) throw new Error('Invalid driver salary on slate.');
     totalSalary += salary;
@@ -271,6 +277,142 @@ export async function countLineupsForSlate(slateId) {
     .eq('slate_id', slateId);
   if (error) return 0;
   return count || 0;
+}
+
+function mapLineupDriverRow(row) {
+  return {
+    driverId: row.driver_id,
+    driverName: row.driver_name,
+    salary: row.salary,
+    slotOrder: row.slot_order,
+  };
+}
+
+export async function listSubmittedLineupsForSlate(slateId) {
+  const sb = supabase();
+  if (!sb || !slateId) return [];
+
+  const { data: rows, error } = await sb
+    .from('fantasy_lineups')
+    .select('*')
+    .eq('slate_id', Number(slateId))
+    .order('submitted_at', { ascending: true });
+
+  if (error || !rows?.length) return [];
+
+  const userIds = [...new Set(rows.map((row) => row.user_id))];
+  const { data: profiles } = await sb
+    .from('fantasy_profiles')
+    .select('user_id, display_name, email')
+    .in('user_id', userIds);
+
+  const profileByUser = new Map((profiles || []).map((p) => [p.user_id, p]));
+  const lineupIds = rows.map((row) => row.id);
+  const { data: driverRows } = await sb
+    .from('fantasy_lineup_drivers')
+    .select('*')
+    .in('lineup_id', lineupIds)
+    .order('slot_order', { ascending: true });
+
+  const driversByLineup = new Map();
+  for (const driver of driverRows || []) {
+    const list = driversByLineup.get(driver.lineup_id) || [];
+    list.push(mapLineupDriverRow(driver));
+    driversByLineup.set(driver.lineup_id, list);
+  }
+
+  return rows.map((row) => {
+    const profile = profileByUser.get(row.user_id) || {};
+    return {
+      lineupId: row.id,
+      userId: row.user_id,
+      displayName:
+        String(profile.display_name || '').trim() ||
+        (profile.email ? profile.email.split('@')[0] : 'Player'),
+      email: profile.email || null,
+      totalSalary: row.total_salary,
+      submittedAt: row.submitted_at,
+      updatedAt: row.updated_at,
+      status: row.status,
+      drivers: driversByLineup.get(row.id) || [],
+    };
+  });
+}
+
+export async function getFantasyPublicStandings(seasonId) {
+  const payload = await loadLatestFantasySlate(seasonId);
+  if (!payload?.slate?.id || payload.slate.status !== 'published') {
+    return {
+      slate: null,
+      entries: [],
+      scoringAvailable: false,
+      message: 'Standings will appear after a slate is published and race scoring is complete.',
+    };
+  }
+
+  const slateRow = payload.slate;
+  const lock = parseLockState(slateRow);
+  const lineups = await listSubmittedLineupsForSlate(slateRow.id);
+
+  return {
+    slate: {
+      id: slateRow.id,
+      seasonId: slateRow.season_id,
+      raceNumber: slateRow.race_number,
+      track: slateRow.track,
+      status: slateRow.status,
+      lockTime: slateRow.lock_time || null,
+      ...lock,
+    },
+    entries: lineups.map((entry, index) => ({
+      rank: index + 1,
+      lineupId: entry.lineupId,
+      displayName: entry.displayName,
+      totalSalary: entry.totalSalary,
+      submittedAt: entry.submittedAt,
+      status: lock.isLocked && entry.status !== 'locked' ? 'locked' : entry.status,
+      racePoints: null,
+      totalPoints: null,
+      driverCount: entry.drivers.length,
+    })),
+    scoringAvailable: false,
+    message: 'Race scoring is not live yet. Player ranks reflect submission order until points are posted.',
+  };
+}
+
+export async function getFantasyAdminSubmittedLineups(seasonId, slateId = null) {
+  let targetSlateId = slateId != null ? Number(slateId) : null;
+  let slateRow = null;
+
+  if (targetSlateId) {
+    slateRow = await loadSlateById(targetSlateId);
+  } else {
+    const payload = await loadLatestFantasySlate(seasonId);
+    slateRow = payload?.slate || null;
+    targetSlateId = slateRow?.id ?? null;
+  }
+
+  if (!targetSlateId || !slateRow) {
+    return { slate: null, lineups: [], lineupCount: 0 };
+  }
+
+  const lock = parseLockState(slateRow);
+  const lineups = await listSubmittedLineupsForSlate(targetSlateId);
+
+  return {
+    slate: {
+      id: slateRow.id,
+      seasonId: slateRow.season_id,
+      raceNumber: slateRow.race_number,
+      track: slateRow.track,
+      status: slateRow.status,
+      lockTime: slateRow.lock_time || null,
+      publishedAt: slateRow.published_at || null,
+      ...lock,
+    },
+    lineups,
+    lineupCount: lineups.length,
+  };
 }
 
 export async function getFantasyLaunchDashboard(user) {

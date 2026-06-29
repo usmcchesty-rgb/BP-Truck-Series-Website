@@ -204,7 +204,7 @@
         <section class="fantasy-app-hero-panel fantasy-glass-panel">
           <p class="fantasy-app-eyebrow">Salary History</p>
           <h1 class="fantasy-app-page-title">Race ${escapeHtml(data.latestSlate?.raceNumber ?? '—')} Salary Movement</h1>
-          <p class="fantasy-app-readonly-note">Read-only salary history preview based on saved fantasy slates.</p>
+          <p class="fantasy-app-copy">Salary history from saved BP Fantasy slates across the season.</p>
         </section>
         ${renderInsights(data.insights || {})}
         ${renderMoverCards(data.movers || {})}

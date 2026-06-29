@@ -2,9 +2,9 @@ import { createClient } from '@supabase/supabase-js';
 import { supabase } from './_lib.js';
 
 // Supabase Auth URL Configuration (Dashboard → Authentication → URL Configuration):
-// Site URL: https://blazingpedals.vercel.app
+// Site URL: https://www.blazingpedalsracing.com
 // Redirect URLs: /fantasy/login.html, /fantasy/signup.html, /fantasy/dashboard.html, /fantasy/lineup.html
-// Client signup sets emailRedirectTo → origin/fantasy/login.html
+// Email templates: supabase/fantasy_auth_email_templates.md
 
 export function getFantasyAuthConfig() {
   const url = process.env.SUPABASE_URL || '';

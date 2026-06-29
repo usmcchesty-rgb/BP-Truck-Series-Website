@@ -2608,3 +2608,73 @@ body.fantasy-page main.fantasy-app-page{
 .fantasy-dashboard-auth-panel .fantasy-cta-actions{
   margin-top:12px;
 }
+
+.fantasy-dashboard-status.is-pending{ color:#f0c040; }
+.fantasy-dashboard-status.is-submitted{ color:#9fd89f; }
+.fantasy-dashboard-status.is-locked{ color:#ff8080; }
+
+.fantasy-dashboard-lineup-cards{
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(140px, 1fr));
+  gap:10px;
+  margin:12px 0 0;
+}
+
+.fantasy-dashboard-lineup-card{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  padding:10px;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:6px;
+  background:rgba(0,0,0,.22);
+}
+
+.fantasy-dashboard-lineup-card__slot{
+  color:#999;
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+}
+
+.fantasy-standings-table{
+  width:100%;
+  border-collapse:collapse;
+}
+
+.fantasy-standings-table th,
+.fantasy-standings-table td{
+  padding:10px;
+  border-bottom:1px solid rgba(255,255,255,.06);
+  text-align:left;
+}
+
+.fantasy-standings-table th{
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+  color:#fff;
+}
+
+.fantasy-admin-lineups-table{
+  width:100%;
+  border-collapse:collapse;
+  font-size:12px;
+}
+
+.fantasy-admin-lineups-table th,
+.fantasy-admin-lineups-table td{
+  padding:8px 10px;
+  border-bottom:1px solid rgba(255,255,255,.06);
+  text-align:left;
+  vertical-align:top;
+}
+
+.fantasy-admin-lineup-detail{
+  margin:6px 0 0;
+  padding-left:16px;
+  color:#bbb;
+  line-height:1.5;
+}
