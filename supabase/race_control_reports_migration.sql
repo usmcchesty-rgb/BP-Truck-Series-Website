@@ -1,4 +1,4 @@
--- Race Control PDF reports (supplemental race data — not required for site operation)
+-- Race Control PDF reports (iRaceControl Race Report PDFs — supplemental, not required)
 -- Run once in the Supabase SQL editor.
 
 create table if not exists race_control_reports (
@@ -24,7 +24,7 @@ create table if not exists race_control_reports (
 create index if not exists race_control_reports_season_race_idx
   on race_control_reports (season_id, race_number desc);
 
--- Storage bucket for Race Control PDFs
+-- Storage bucket for iRaceControl / Race Control PDFs
 insert into storage.buckets (id, name, public)
 values ('race-control-pdfs', 'race-control-pdfs', true)
 on conflict (id) do update set public = true;

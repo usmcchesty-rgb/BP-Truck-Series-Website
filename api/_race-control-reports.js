@@ -2,6 +2,8 @@ import { getSettings, supabase } from './_lib.js';
 import { getPointsRaceByNumber } from './_schedule-points-races.js';
 import { parseRaceControlPdfBuffer } from './_race-control-pdf-parser.js';
 
+// iRaceControl Race Report PDFs — supplemental enrichment, not required for site operation.
+
 export const RACE_CONTROL_BUCKET = 'race-control-pdfs';
 
 export const PARSE_STATUS = {
