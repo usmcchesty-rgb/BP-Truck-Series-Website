@@ -64,7 +64,8 @@ async function renderLandingCta() {
     const slateRes = await fetch('/api/settings?action=getFantasyPublicSlate');
     if (slateRes.ok) {
       const slateData = await slateRes.json();
-      slatePublished = slateData?.slate?.status === 'published';
+      slatePublished =
+        slateData?.progression?.isPlayable === true || slateData?.slate?.playable === true;
     }
   } catch {
     // Default to logged-out CTA when slate cannot be loaded.

@@ -278,24 +278,33 @@
     `;
   }
 
-  function renderSlateHeader(slate = {}) {
+  function renderSlateHeader(slate = {}, progression = {}) {
+    const raceComplete = Boolean(slate.raceComplete || slate.slatePhase === 'race-complete' || progression?.slatePhase === 'race-complete');
+    const playable = slate.playable !== false && progression?.isPlayable !== false;
+    const statusLabel = raceComplete
+      ? 'Race complete — scoring pending'
+      : playable
+        ? 'Published'
+        : 'Archived';
+
     return `
       <section class="fantasy-app-hero-panel fantasy-glass-panel">
         <div class="fantasy-hero-header-row">
           <div>
-            <p class="fantasy-app-eyebrow">Race Slate</p>
+            <p class="fantasy-app-eyebrow">${raceComplete ? 'Archived Race Slate' : 'Race Slate'}</p>
             <h1 class="fantasy-app-page-title">Race ${escapeHtml(slate.raceNumber ?? '—')} — ${escapeHtml(slate.track || 'TBD')}</h1>
           </div>
           <div id="fantasySlateShareHost"></div>
         </div>
+        ${raceComplete ? '<p class="fantasy-lineup-warning">Results are posted for this race. This slate is archived — lineup submission is closed.</p>' : ''}
         <div class="fantasy-slate-meta-grid">
           <div><span>Lock</span><strong>${escapeHtml(slate.lockTime || 'TBD')}</strong></div>
           <div><span>Salary Cap</span><strong>${formatMoney(slate.salaryCap ?? 50000)}</strong></div>
           <div><span>Model</span><strong>${escapeHtml(slate.modelVersion || '—')}</strong></div>
-          <div><span>Status</span><strong>${escapeHtml(slate.status || 'draft')}</strong></div>
+          <div><span>Status</span><strong>${escapeHtml(statusLabel)}</strong></div>
         </div>
         <p class="fantasy-slate-hero-actions">
-          <a class="fantasy-btn fantasy-btn--primary" href="/fantasy/lineup.html">Build Lineup</a>
+          ${playable ? '<a class="fantasy-btn fantasy-btn--primary" href="/fantasy/lineup.html">Build Lineup</a>' : '<a class="fantasy-btn fantasy-btn--primary" href="/fantasy/standings.html">View Standings</a>'}
           <a class="fantasy-btn fantasy-btn--secondary" href="/fantasy/preview.html">Race Preview</a>
         </p>
       </section>
@@ -322,7 +331,7 @@
     const root = $('#fantasySlateRoot');
     if (!root) return;
     root.innerHTML = `
-      ${renderSlateHeader(data.slate || {})}
+      ${renderSlateHeader(data.slate || {}, data.progression || {})}
       ${Insights.renderProphetSection ? Insights.renderProphetSection(Insights.buildProphetLines?.(data.drivers || [], data.slate || {}) || []) : ''}
       ${renderDriverCards(data.drivers || [])}
       ${renderPowerRankings(data.fantasyPowerRankings || [])}
@@ -345,10 +354,13 @@
       const data = await res.json();
       renderSlatePage(data);
       const subtitleEl = document.querySelector('.page-season');
-      if (subtitleEl && data?.slate?.status === 'published') {
+      if (subtitleEl && data?.slate) {
         const raceNumber = data.slate.raceNumber ?? '—';
         const track = data.slate.track || 'TBD';
-        subtitleEl.textContent = `RACE ${raceNumber} — ${String(track).toUpperCase()}`;
+        const archived = data.slate.raceComplete || data.slate.slatePhase === 'race-complete';
+        subtitleEl.textContent = archived
+          ? `RACE ${raceNumber} ARCHIVE`
+          : `RACE ${raceNumber} — ${String(track).toUpperCase()}`;
       }
     } catch {
       renderEmpty('Fantasy slate coming soon.');

@@ -3,6 +3,11 @@ import { parseScheduleRacesFromHtml } from './_caution-stats.js';
 import { enrichScheduleRaces } from './_schedule-points-races.js';
 import { findEffectiveNextPointsRace } from './_race-date-status.js';
 import { enrichFantasyDraftPayload, normalizeSlateDriver } from './_fantasy-slate.js';
+import {
+  buildFantasyProgressionMeta,
+  isFantasyRaceComplete,
+  resolveFantasySlateProgression,
+} from './_fantasy-slate-progression.js';
 import { MIN_BEST_VALUE_SALARY } from './_fantasy-admin-analytics.js';
 import {
   buildPublicAnalysis,
@@ -141,36 +146,60 @@ async function loadFallbackPublicSlateRow(seasonId) {
 }
 
 async function loadPublicCurrentSlateRow(seasonId) {
-  const upcomingRaceNumber = await resolveUpcomingRaceNumber(seasonId);
-
-  if (upcomingRaceNumber != null) {
-    const published = await loadSlateForRace(seasonId, upcomingRaceNumber, 'published');
-    if (published) return published;
-  }
-
-  return loadFallbackPublicSlateRow(seasonId);
+  const progression = await resolveFantasySlateProgression(seasonId);
+  return progression.activeSlateRow;
 }
 
-export async function loadLatestFantasySlate(seasonId) {
-  const slate = await loadPublicCurrentSlateRow(seasonId);
-  if (!slate) return null;
+async function loadPublicDisplaySlateRow(seasonId) {
+  const progression = await resolveFantasySlateProgression(seasonId);
+  return progression.displaySlateRow;
+}
+
+async function loadSlatePayloadFromRow(slateRow) {
+  if (!slateRow) return null;
 
   const sb = supabase();
   const { data: drivers } = await sb
     .from('fantasy_slate_drivers')
     .select('*')
-    .eq('slate_id', slate.id)
+    .eq('slate_id', slateRow.id)
     .order('fantasy_tier_score', { ascending: false });
 
   return enrichFantasyDraftPayload({
-    slate,
+    slate: slateRow,
     drivers: (drivers || []).map(normalizeSlateDriver),
   });
 }
 
+export async function loadLatestFantasySlate(seasonId) {
+  const progression = await resolveFantasySlateProgression(seasonId);
+  if (!progression.activeSlateRow) return null;
+  return loadSlatePayloadFromRow(progression.activeSlateRow);
+}
+
+export async function loadDisplayFantasySlate(seasonId) {
+  const progression = await resolveFantasySlateProgression(seasonId);
+  if (!progression.displaySlateRow) return null;
+
+  const payload = await loadSlatePayloadFromRow(progression.displaySlateRow);
+  if (!payload) return null;
+
+  return {
+    ...payload,
+    progression: buildFantasyProgressionMeta(progression),
+  };
+}
+
 export async function buildFantasyPublicSlateResponse(seasonId) {
-  const payload = await loadLatestFantasySlate(seasonId);
+  const progression = await resolveFantasySlateProgression(seasonId);
+  const payload = await loadDisplayFantasySlate(seasonId);
   if (!payload?.slate || payload.slate.status !== 'published') return null;
+
+  const progressionMeta = payload.progression || buildFantasyProgressionMeta(progression);
+  const raceComplete = isFantasyRaceComplete(
+    progression.scheduleRaces,
+    payload.slate.race_number
+  );
 
   const rawDrivers = payload.drivers || [];
   const slateMeta = {
@@ -182,6 +211,12 @@ export async function buildFantasyPublicSlateResponse(seasonId) {
   const cards = buildPublicSlateCards(rawDrivers, payload.slate.meta || payload.meta || null, analysis);
   const publicDrivers = rawDrivers.map((driver) => enrichPublicDriver(driver, analysis));
 
+  const slatePhase = progressionMeta.isPlayable
+    ? 'active'
+    : raceComplete
+      ? 'race-complete'
+      : progressionMeta.slatePhase;
+
   return {
     slate: {
       id: payload.slate.id,
@@ -191,11 +226,17 @@ export async function buildFantasyPublicSlateResponse(seasonId) {
       lockTime: payload.slate.lock_time || null,
       lockAt: payload.slate.lock_at || null,
       status: payload.slate.status,
+      slatePhase,
+      playable: progressionMeta.isPlayable,
+      isArchived: progressionMeta.isArchived,
+      raceComplete,
+      scoringPending: raceComplete && !progressionMeta.isPlayable,
       modelVersion: payload.slate.model_version || null,
       generatedAt: payload.slate.generated_at || null,
       salaryCap: SALARY_CAP,
       lineupSize: 5,
     },
+    progression: progressionMeta,
     drivers: publicDrivers,
     cards,
     fantasyPowerRankings: analysis.fantasyPowerRankings,
@@ -207,7 +248,7 @@ export async function buildFantasyPublicSlateResponse(seasonId) {
       biggestFallers: cards.biggestFallers,
     },
     analytics: payload.analytics || null,
-    readOnly: false,
+    readOnly: !progressionMeta.isPlayable,
   };
 }
 
@@ -288,7 +329,7 @@ export async function buildFantasySalaryHistoryResponse(seasonId) {
 }
 
 export async function buildFantasyDriverDetailResponse(seasonId, options = {}) {
-  const payload = await loadLatestFantasySlate(seasonId);
+  const payload = await loadDisplayFantasySlate(seasonId);
   if (!payload?.drivers?.length) return null;
 
   const rawDrivers = payload.drivers || [];

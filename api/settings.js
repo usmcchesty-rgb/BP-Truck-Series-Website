@@ -27,6 +27,10 @@ import {
   submitFantasyLineup,
 } from './_fantasy-lineups.js';
 import { loadLatestFantasySlate } from './_fantasy-public-slate.js';
+import {
+  buildFantasyProgressionMeta,
+  resolveFantasySlateProgression,
+} from './_fantasy-slate-progression.js';
 import { getFantasyAuthConfig, getUserFromBearerToken } from './_fantasy-auth.js';
 
 async function handleGetFantasyDraftSlate(req, res) {
@@ -283,11 +287,26 @@ export default async function handler(req, res) {
         ? await loadFantasySlateById(requestedSlateId)
         : await loadFantasyDraftSlate(seasonId);
       const publishedPayload = await loadLatestFantasySlate(seasonId);
-      const publishedSlateId = publishedPayload?.slate?.id || null;
-      const lineupCount = publishedSlateId ? await countLineupsForSlate(publishedSlateId) : 0;
+      const progression = await resolveFantasySlateProgression(seasonId);
+      const countSlateId =
+        progression.activeSlateRow?.id ||
+        progression.archivedSlateRow?.id ||
+        publishedPayload?.slate?.id ||
+        null;
+      const lineupCount = countSlateId ? await countLineupsForSlate(countSlateId) : 0;
       return res.status(200).json({
         slate: payload?.slate || null,
-        publishedSlate: publishedPayload?.slate || null,
+        publishedSlate: progression.archivedSlateRow || progression.activeSlateRow || publishedPayload?.slate || null,
+        activePlayableSlate: progression.activeSlateRow,
+        completedPublishedSlate: progression.archivedSlateRow,
+        progression: buildFantasyProgressionMeta(progression),
+        nextRace: progression.nextRaceNumber
+          ? {
+              raceNumber: progression.nextRaceNumber,
+              track: progression.nextRaceTrack,
+              date: progression.nextRaceDate,
+            }
+          : null,
         lineupCount,
       });
     } catch (error) {

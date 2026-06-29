@@ -55,7 +55,7 @@
     </div>`;
   }
 
-  function lineupStatusCard(profile, slate, lineup, lock) {
+  function lineupStatusCard(profile, slate, lineup, lock, progression = {}) {
     if (!profile) {
       return `
         <section class="fantasy-app-section fantasy-dashboard-auth-panel fantasy-glass-panel">
@@ -69,19 +69,42 @@
     }
 
     const locked = Boolean(lock?.isLocked || lineup?.status === 'locked');
+    const raceComplete = Boolean(
+      slate?.raceComplete || progression?.slatePhase === 'race-complete' || lock?.raceComplete
+    );
+    const playable = slate?.playable !== false && progression?.isPlayable !== false;
     let statusText = 'Not submitted';
     let statusClass = 'is-pending';
 
-    if (lineup?.drivers?.length) {
+    if (raceComplete && lineup?.drivers?.length) {
+      statusText = 'Race complete — scoring pending';
+      statusClass = 'is-locked';
+    } else if (raceComplete) {
+      statusText = 'Race complete';
+      statusClass = 'is-locked';
+    } else if (lineup?.drivers?.length) {
       statusText = locked ? 'Locked' : 'Submitted';
       statusClass = locked ? 'is-locked' : 'is-submitted';
+    } else if (!playable) {
+      statusText = 'Next slate coming soon';
+      statusClass = 'is-pending';
     }
 
-    const lineupActionLabel = lineup?.drivers?.length
-      ? locked
-        ? 'View Lineup'
-        : 'Edit Lineup'
-      : 'Build Lineup';
+    const lineupActionLabel = raceComplete
+      ? 'View Archived Lineup'
+      : lineup?.drivers?.length
+        ? locked
+          ? 'View Lineup'
+          : 'Edit Lineup'
+        : playable
+          ? 'Build Lineup'
+          : 'View Race Slate';
+
+    const notSubmittedCopy = raceComplete
+      ? `Race ${escapeHtml(slate?.raceNumber ?? '—')} is complete. Fantasy scoring is pending.`
+      : playable
+        ? `You have not submitted a lineup for Race ${escapeHtml(slate?.raceNumber ?? '—')} yet.`
+        : 'The next BP Fantasy slate has not been published yet.';
 
     return `
       <section class="fantasy-app-section fantasy-dashboard-auth-panel fantasy-glass-panel">
@@ -90,6 +113,7 @@
           <div><span>Email</span><strong>${escapeHtml(profile.email || '—')}</strong></div>
           <div><span>Lineup Status</span><strong class="fantasy-dashboard-status ${statusClass}">${escapeHtml(statusText)}</strong></div>
           <div><span>Lock</span><strong>${escapeHtml(slate?.lockTime || lock?.lockMessage || 'TBD')}</strong></div>
+          <div><span>Slate</span><strong>${escapeHtml(raceComplete ? 'Race complete' : playable ? 'Active' : 'Archived / upcoming')}</strong></div>
           <div><span>Salary Cap</span><strong>${formatMoney(slate?.salaryCap ?? 50000)}</strong></div>
         </div>
         ${
@@ -98,7 +122,7 @@
                 <p class="fantasy-app-copy">${formatMoney(lineup.totalSalary)} spent · ${lineup.drivers.length} drivers · submitted ${escapeHtml(formatDate(lineup.submittedAt))}</p>
                 ${lineupDriverCards(lineup)}
               </div>`
-            : `<p class="fantasy-app-copy">You have not submitted a lineup for Race ${escapeHtml(slate?.raceNumber ?? '—')} yet.</p>`
+            : `<p class="fantasy-app-copy">${notSubmittedCopy}</p>`
         }
         <div class="fantasy-cta-actions">
           <a class="fantasy-btn fantasy-btn--primary" href="/fantasy/lineup.html">${escapeHtml(lineupActionLabel)}</a>
@@ -112,11 +136,14 @@
     const profile = launchData?.profile || null;
     const lineup = launchData?.lineup || null;
     const lock = launchData?.lock || {};
+    const progression = launchData?.progression || slateData?.progression || {};
     const drivers = slateData?.drivers || [];
     const power = slateData?.fantasyPowerRankings || [];
     const topPick = power[0] || null;
     const bestValue = slateData?.spotlightCards?.bestValue || null;
-    const hasPublishedSlate = Boolean(slate?.raceNumber && slate?.status === 'published');
+    const hasPublishedSlate = Boolean(slate?.raceNumber);
+    const raceComplete = Boolean(slate?.raceComplete || progression?.slatePhase === 'race-complete');
+    const playable = progression?.isPlayable !== false && slate?.playable !== false;
 
     return `
       <section class="fantasy-app-hero-panel fantasy-glass-panel fantasy-dashboard-hero">
@@ -127,14 +154,16 @@
             ? `<div class="fantasy-slate-meta-grid">
                 <div><span>Current Race</span><strong>Race ${escapeHtml(slate.raceNumber)}</strong></div>
                 <div><span>Lock</span><strong>${escapeHtml(slate.lockTime || lock.lockMessage || 'TBD')}</strong></div>
+                <div><span>Slate</span><strong>${escapeHtml(raceComplete ? 'Race complete' : playable ? 'Active' : 'Archived')}</strong></div>
                 <div><span>Salary Cap</span><strong>${formatMoney(slate.salaryCap ?? 50000)}</strong></div>
-                <div><span>Slate Status</span><strong>${escapeHtml(slate.status || 'published')}</strong></div>
-              </div>`
+              </div>
+              ${raceComplete ? '<p class="fantasy-app-copy">This race has results posted. Fantasy scoring is pending for this slate.</p>' : ''}
+              ${!playable && !raceComplete && progression?.nextRaceNumber ? `<p class="fantasy-app-copy">Next race: Race ${escapeHtml(progression.nextRaceNumber)}${progression.nextRaceTrack ? ` — ${escapeHtml(progression.nextRaceTrack)}` : ''}. Slate coming soon.</p>` : ''}`
             : `<p class="fantasy-app-copy">The next BP Fantasy slate has not been published yet. Check back soon.</p>`
         }
       </section>
 
-      ${lineupStatusCard(profile, slate, lineup, lock)}
+      ${lineupStatusCard(profile, slate, lineup, lock, progression)}
 
       ${
         hasPublishedSlate

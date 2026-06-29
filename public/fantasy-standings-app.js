@@ -34,6 +34,7 @@
   function renderStandings(data) {
     const slate = data?.slate || null;
     const entries = data?.entries || [];
+    const raceComplete = Boolean(slate?.raceComplete || slate?.slatePhase === 'race-complete');
     const root = $('#fantasyStandingsRoot');
     if (!root) return;
 
@@ -59,8 +60,8 @@
         <div class="fantasy-slate-meta-grid">
           <div><span>Lock</span><strong>${escapeHtml(slate.lockTime || 'TBD')}</strong></div>
           <div><span>Entries</span><strong>${entries.length}</strong></div>
-          <div><span>Scoring</span><strong>${data.scoringAvailable ? 'Live' : 'Pending'}</strong></div>
-          <div><span>Slate</span><strong>${escapeHtml(slate.status || 'published')}</strong></div>
+          <div><span>Scoring</span><strong>${data.scoringAvailable ? 'Live' : raceComplete ? 'Pending' : 'Pending'}</strong></div>
+          <div><span>Slate</span><strong>${raceComplete ? 'Race complete' : 'Published'}</strong></div>
         </div>
         <p class="fantasy-app-copy">${escapeHtml(data.message || '')}</p>
       </section>

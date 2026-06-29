@@ -533,6 +533,14 @@
               <div class="admin-v" id="fantasyPublishedSlateSummary">—</div>
             </div>
             <div class="admin-kv">
+              <div class="admin-k">Slate phase</div>
+              <div class="admin-v" id="fantasyPublishedSlatePhase">—</div>
+            </div>
+            <div class="admin-kv">
+              <div class="admin-k">Next race</div>
+              <div class="admin-v" id="fantasyNextRaceSummary">—</div>
+            </div>
+            <div class="admin-kv">
               <div class="admin-k">Lock time</div>
               <div class="admin-v" id="fantasyPublishedLockTime">—</div>
             </div>
@@ -630,6 +638,7 @@
             <span class="field-help">Tiers use field-normalized component scores and percentile slot assignment. Salaries save as draft only.</span>
             <div class="fantasy-generate-row">
               <button id="generateFantasySalariesBtn" class="btn" type="button">Generate Salaries</button>
+              <button id="generateNextRaceSlateBtn" class="btn btn-secondary" type="button">Generate Next Race Slate</button>
               <button id="reloadFantasyDraftBtn" class="btn btn-secondary" type="button">Reload Draft</button>
               <button id="publishFantasySlateBtn" class="btn btn-secondary" type="button">Publish Slate</button>
               <button id="saveFantasyLockBtn" class="btn btn-secondary" type="button">Save Lock Time</button>
@@ -1514,12 +1523,31 @@
           if (countEl) countEl.textContent = String(data.lineupCount ?? 0);
 
           const publishedSummaryEl = $('#fantasyPublishedSlateSummary');
+          const publishedPhaseEl = $('#fantasyPublishedSlatePhase');
+          const nextRaceEl = $('#fantasyNextRaceSummary');
           const publishedLockEl = $('#fantasyPublishedLockTime');
-          const published = data.publishedSlate;
+          const published = data.publishedSlate || data.completedPublishedSlate;
+          const progression = data.progression || {};
           if (publishedSummaryEl) {
             publishedSummaryEl.textContent = published?.race_number
               ? `Race ${published.race_number} — ${published.track || 'TBD'} (${published.status || 'published'})`
               : 'No published slate';
+          }
+          if (publishedPhaseEl) {
+            if (progression.slatePhase === 'race-complete' || data.completedPublishedSlate) {
+              publishedPhaseEl.textContent = 'Race complete — scoring pending';
+            } else if (progression.isPlayable) {
+              publishedPhaseEl.textContent = 'Active — accepting lineups';
+            } else if (progression.hasUpcomingRaceWithoutSlate) {
+              publishedPhaseEl.textContent = 'Next race slate not published yet';
+            } else {
+              publishedPhaseEl.textContent = progression.slatePhase || '—';
+            }
+          }
+          if (nextRaceEl) {
+            nextRaceEl.textContent = data.nextRace?.raceNumber
+              ? `Race ${data.nextRace.raceNumber} — ${data.nextRace.track || 'TBD'}${data.nextRace.date ? ` (${data.nextRace.date})` : ''}`
+              : 'Schedule unavailable';
           }
           if (publishedLockEl) {
             publishedLockEl.textContent = published?.lock_time || published?.lock_at || 'Not set';
@@ -2274,6 +2302,16 @@
       $('#uploadFantasyHeroBtn')?.addEventListener('click', uploadFantasyHeroBackground);
       $('#removeFantasyHeroBtn')?.addEventListener('click', removeFantasyHeroBackground);
       $('#saveFantasyHeroUrlBtn')?.addEventListener('click', saveFantasyHeroUrl);
+      async function generateNextRaceSlate() {
+        const statusEl = $('#fantasyGenerateStatus');
+        if (statusEl) {
+          statusEl.textContent = 'Generating next race draft slate...';
+          statusEl.classList.remove('error');
+        }
+        await generateFantasySalaries();
+      }
+
+      $('#generateNextRaceSlateBtn')?.addEventListener('click', generateNextRaceSlate);
       $('#reloadSubmittedLineupsBtn')?.addEventListener('click', loadSubmittedLineups);
       $('#generateFantasySalariesBtn')?.addEventListener('click', generateFantasySalaries);
       $('#reloadFantasyDraftBtn')?.addEventListener('click', loadFantasyDraftSlate);

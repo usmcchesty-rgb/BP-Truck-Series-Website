@@ -28,6 +28,9 @@
   let savedLineup = null;
   let isLoggedIn = false;
   let submitMessage = '';
+  let slatePlayable = true;
+  let slatePhase = 'active';
+  let raceComplete = false;
 
   function $(sel) {
     return document.querySelector(sel);
@@ -52,11 +55,17 @@
   }
 
   function isLocked() {
-    return Boolean(lockState.isLocked || savedLineup?.status === 'locked');
+    return Boolean(
+      raceComplete ||
+      lockState.isLocked ||
+      lockState.raceComplete ||
+      savedLineup?.status === 'locked' ||
+      !slatePlayable
+    );
   }
 
   function canPick() {
-    return !isLocked();
+    return slatePlayable && !raceComplete && !Boolean(lockState.isLocked || lockState.raceComplete);
   }
 
   function canSubmit() {
@@ -111,6 +120,12 @@
   }
 
   function renderStatusBanner() {
+    if (raceComplete || slatePhase === 'race-complete' || slateMeta.isArchived) {
+      return `<p class="fantasy-lineup-warning"><strong>Race complete:</strong> This slate is archived. Scoring is pending — lineup submission and editing are closed.</p>`;
+    }
+    if (!slatePlayable) {
+      return `<p class="fantasy-lineup-warning"><strong>Next slate coming soon.</strong> Lineup building opens when the next race slate is published.</p>`;
+    }
     if (lockState.lockMessage && !lockState.hasLockSchedule) {
       return `<p class="fantasy-lineup-warning"><strong>Notice:</strong> ${escapeHtml(lockState.lockMessage)} — submissions stay open until an admin sets a lock time.</p>`;
     }
@@ -212,7 +227,7 @@
           <div><span>Lock</span><strong>${escapeHtml(slateMeta.lockTime || lockState.lockMessage || 'TBD')}</strong></div>
           <div><span>Salary Cap</span><strong>${formatMoney(salaryCap)}</strong></div>
           <div><span>Lineup Size</span><strong>${LINEUP_SIZE} drivers</strong></div>
-          <div><span>Slate Status</span><strong>${escapeHtml(slateMeta.status || '—')}</strong></div>
+          <div><span>Slate Status</span><strong>${escapeHtml(slatePhase === 'race-complete' ? 'Race complete' : slateMeta.status || '—')}</strong></div>
         </div>
       </section>
       <div id="fantasyLineupBuilder">${renderBuilderPanel()}</div>
@@ -348,13 +363,17 @@
       const slateData = await slateRes.json();
       cachedDrivers = slateData.drivers || [];
       slateMeta = slateData.slate || {};
+      slatePlayable = slateMeta.playable !== false && slateData.progression?.isPlayable !== false;
+      slatePhase = slateMeta.slatePhase || slateData.progression?.slatePhase || 'active';
+      raceComplete = Boolean(slateMeta.raceComplete || slateMeta.scoringPending || slatePhase === 'race-complete');
       salaryCap = Number(slateMeta.salaryCap) || 50000;
       lockState = {
         lockTime: slateMeta.lockTime,
         lockAt: slateMeta.lockAt,
-        lockMessage: slateMeta.lockMessage || null,
+        lockMessage: slateMeta.lockMessage || lockState.lockMessage || null,
         hasLockSchedule: Boolean(slateMeta.lockAt),
-        isLocked: slateMeta.lockAt ? Date.now() >= new Date(slateMeta.lockAt).getTime() : false,
+        isLocked: raceComplete || Boolean(slateMeta.lockAt && Date.now() >= new Date(slateMeta.lockAt).getTime()),
+        raceComplete,
       };
 
       try {
@@ -366,6 +385,9 @@
       }
 
       await loadSavedLineup();
+      if (lockState.raceComplete || raceComplete) {
+        lockState.isLocked = true;
+      }
       renderPage();
     } catch {
       root.innerHTML = '<section class="fantasy-app-empty"><p>Fantasy slate coming soon.</p></section>';
