@@ -386,7 +386,146 @@ export function deriveParserConfidence({ parsed, layoutDiagnostics }) {
     confidence = 'medium';
   }
 
+  if (parsed.sof != null && confidence === 'low' && rowCount >= 5) {
+    confidence = 'medium';
+  }
+
   return confidence;
+}
+
+const SOF_SCAN_PATTERNS = [
+  { id: 'sof_label_first', re: /\bSOF\s*[:\.]?\s*(\d{3,5})\b/gi },
+  { id: 'sof_number_first', re: /\b(\d{3,5})\s+SOF\b/gi },
+  {
+    id: 'strength_of_field',
+    re: /\bStrength[\s-]*(?:of[\s-]*)?[Ff]ield[\s-]*[:\.]?\s*(\d{3,5})\b/gi,
+  },
+  { id: 'strength_field_short', re: /\bStrength[\s-]+field[\s-]*[:\.]?\s*(\d{3,5})\b/gi },
+];
+
+function isValidSofValue(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric >= 100 && numeric <= 99999;
+}
+
+function collectSofDebugSnippets(text, maxSnippets = 20, maxLen = 200) {
+  const normalized = String(text || '');
+  const keywords = ['SOF', 'Strength', 'Field'];
+  const snippets = [];
+  const seen = new Set();
+
+  for (const keyword of keywords) {
+    let searchFrom = 0;
+    const lower = normalized.toLowerCase();
+    const needle = keyword.toLowerCase();
+
+    while (snippets.length < maxSnippets) {
+      const found = lower.indexOf(needle, searchFrom);
+      if (found < 0) break;
+
+      const start = Math.max(0, found - 70);
+      const snippet = normalized.slice(start, start + maxLen).trim();
+      if (snippet && !seen.has(snippet)) {
+        seen.add(snippet);
+        snippets.push(snippet.slice(0, maxLen));
+      }
+      searchFrom = found + needle.length;
+    }
+  }
+
+  return snippets.slice(0, maxSnippets);
+}
+
+function findSofMatchesInText(text) {
+  const normalized = String(text || '').replace(/\s+/g, ' ').trim();
+  const matches = [];
+  const seen = new Set();
+
+  for (const pattern of SOF_SCAN_PATTERNS) {
+    const re = new RegExp(pattern.re.source, pattern.re.flags);
+    let match;
+    while ((match = re.exec(normalized)) !== null) {
+      const value = Number(match[1]);
+      if (!isValidSofValue(value)) continue;
+
+      const key = `${match.index}:${value}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      const snippetStart = Math.max(0, match.index - 80);
+      const snippetEnd = Math.min(normalized.length, match.index + match[0].length + 80);
+      matches.push({
+        value,
+        index: match.index,
+        patternId: pattern.id,
+        matchText: match[0],
+        nearbyText: normalized.slice(snippetStart, snippetEnd).trim(),
+      });
+    }
+  }
+
+  matches.sort((a, b) => a.index - b.index);
+  return { normalized, matches };
+}
+
+function pickPreferredSofMatch(matches, text) {
+  if (!matches.length) return null;
+
+  const raceIdx = text.search(/\bRACE\s*-/i);
+  if (raceIdx < 0) return matches[0];
+
+  return matches.slice().sort((a, b) => {
+    const distanceDelta = Math.abs(a.index - raceIdx) - Math.abs(b.index - raceIdx);
+    if (distanceDelta !== 0) return distanceDelta;
+    return a.index - b.index;
+  })[0];
+}
+
+/**
+ * Scan full extracted PDF text for Strength of Field (layout-independent).
+ * Priority: existing header SOF > nearest match to RACE header > first match.
+ */
+export function extractStrengthOfField(text, options = {}) {
+  const existingSof =
+    options.existingSof != null && isValidSofValue(options.existingSof)
+      ? Number(options.existingSof)
+      : null;
+
+  const { normalized, matches } = findSofMatchesInText(text);
+  const sofMatches = [...new Set(matches.map((entry) => entry.value))];
+  const sofNearbyText = matches.map((entry) => entry.nearbyText);
+
+  if (existingSof != null) {
+    return {
+      sof: existingSof,
+      sofFound: true,
+      sofSource: 'race_header',
+      sofMatches: sofMatches.length ? sofMatches : [existingSof],
+      sofNearbyText,
+      sofDebugSnippets: [],
+    };
+  }
+
+  const selected = pickPreferredSofMatch(matches, normalized);
+  if (selected) {
+    return {
+      sof: selected.value,
+      sofFound: true,
+      sofSource: 'global_scan',
+      sofMatches,
+      sofNearbyText,
+      sofDebugSnippets: [],
+    };
+  }
+
+  return {
+    sof: null,
+    sofFound: false,
+    sofSource: null,
+    sofMatches: [],
+    sofNearbyText: [],
+    sofDebugSnippets: collectSofDebugSnippets(normalized),
+  };
 }
 
 export function parsePrimaryRaceHeader(text, compatibility = null) {

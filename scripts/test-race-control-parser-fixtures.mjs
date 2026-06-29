@@ -90,6 +90,12 @@ function runFixtureChecks(fixture, parsed, validation) {
   assertExpectation('results parsed', parsed.results?.length ?? 0, expect.resultsCount, failures);
   assertExpectation('winner', parsed.winner, expect.winner, failures);
   assertExpectation('SOF', parsed.sof, expect.sof, failures);
+  if (expect.sof != null) {
+    assertExpectation('sofFound', parsed.parserDiagnostics?.sofFound, true, failures);
+    assertExpectation('parsed.sof present', parsed.sof != null, true, failures);
+  }
+  assertExpectation('sofFound', parsed.parserDiagnostics?.sofFound, expect.sofFound, failures);
+  assertExpectation('sofSource', parsed.parserDiagnostics?.sofSource, expect.sofSource, failures);
   assertExpectation('cautionCount', parsed.cautionCount, expect.cautionCount, failures);
   assertMin('cautionCount', parsed.cautionCount, expect.cautionCountMin, failures);
   assertMin('race events', parsed.raceEvents?.length ?? 0, expect.raceEventsMin, failures);
@@ -191,6 +197,8 @@ async function runFixture(fixture) {
       results: parsed.results?.length ?? 0,
       winner: parsed.winner,
       sof: parsed.sof,
+      sofFound: parsed.parserDiagnostics?.sofFound,
+      sofSource: parsed.parserDiagnostics?.sofSource,
       cautions: parsed.cautionCount,
       raceEvents: parsed.raceEvents?.length ?? 0,
       stages: parsed.stages?.length ?? 0,

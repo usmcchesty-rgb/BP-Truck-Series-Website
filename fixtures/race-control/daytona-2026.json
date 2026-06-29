@@ -16,6 +16,8 @@
   "expect": {
     "resultsCount": 35,
     "sof": 2427,
+    "sofFound": true,
+    "sofSource": "race_header",
     "cautionCountMin": 5,
     "raceEventsMin": 15,
     "stagesMin": 1,

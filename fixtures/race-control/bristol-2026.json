@@ -1,0 +1,32 @@
+{
+  "id": "bristol-2026",
+  "label": "Bristol 2026",
+  "layoutReference": "Bristol 2026",
+  "raceNumber": 5,
+  "source": {
+    "url": "https://oxwgzeyvbjdqveaxzoxs.supabase.co/storage/v1/object/public/race-control-pdfs/season-27987/race-5/race-control.pdf",
+    "textFile": "fixtures/race-control/text/bristol-2026.txt"
+  },
+  "officialContext": {
+    "officialWinner": "Chris Carroll",
+    "officialFieldSize": 29,
+    "officialStarters": 29,
+    "officialTrack": "Bristol Motor Speedway",
+    "hasOfficialResults": true
+  },
+  "expect": {
+    "resultsCount": 29,
+    "winner": "Chris Carroll",
+    "sof": 2682,
+    "sofFound": true,
+    "sofSource": "global_scan",
+    "cautionCountMin": 1,
+    "raceEventsMin": 10,
+    "stagesMin": 0,
+    "driverReportsMin": 20,
+    "driversWithPitStopsMin": 15,
+    "driversWithBestLapMin": 15,
+    "parserConfidence": "medium",
+    "parserVersion": "iracecontrol-v3"
+  }
+}

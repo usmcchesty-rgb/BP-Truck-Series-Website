@@ -22,6 +22,7 @@ import {
   resolveSessionReportsSection,
   buildParserLayoutDiagnostics,
   deriveParserConfidence,
+  extractStrengthOfField,
 } from './_iracecontrol-compatibility.js';
 
 export { IRACECONTROL_PARSER_VERSION, SUPPORTED_LAYOUTS };
@@ -1838,6 +1839,16 @@ export function parseRaceControlPdfText(text, options = {}) {
   const header = parseRaceHeader(normalized, compatibility);
   appendUniqueWarnings(parseWarnings, header.warnings);
 
+  const sofExtraction = extractStrengthOfField(normalized, { existingSof: header.sof });
+  const resolvedSof = header.sof ?? sofExtraction.sof ?? null;
+  if (resolvedSof != null && header.sof == null) {
+    recordCompatibility(
+      compatibility,
+      'sof_global_scan',
+      'SOF resolved via full-document text scan.'
+    );
+  }
+
   const resultsSection = getResultsSectionText(normalized, compatibility);
   appendUniqueWarnings(parseWarnings, resultsSection.warnings);
 
@@ -1906,9 +1917,9 @@ export function parseRaceControlPdfText(text, options = {}) {
   const trackName = header.trackName || trackHint || null;
 
   if (!trackName) parseWarnings.push('Track name not detected in PDF text.');
-  if (header.sof == null) parseWarnings.push('SOF not detected in PDF text.');
+  if (resolvedSof == null) parseWarnings.push('SOF not detected in PDF text.');
 
-  addResultsSanityWarnings(parseWarnings, results, winner, header.sof);
+  addResultsSanityWarnings(parseWarnings, results, winner, resolvedSof);
 
   const summaryMeta = extractRaceSummaryMeta(normalized, results);
 
@@ -1917,7 +1928,7 @@ export function parseRaceControlPdfText(text, options = {}) {
     generatedAt: header.generatedAt,
     trackName,
     layoutTrackName: header.layoutTrackName || null,
-    sof: header.sof,
+    sof: resolvedSof,
     winner,
     cautionCount,
     results,
@@ -1942,11 +1953,15 @@ export function parseRaceControlPdfText(text, options = {}) {
     sections: { resultsBoundaryUsed: resultsSection.boundaryUsed },
     compatibility,
     discovery: anchorDiscovery,
-    header,
+    header: { ...header, sof: resolvedSof },
   });
   parsed.parserDiagnostics = {
     ...baseDiagnostics,
     ...layoutDiagnostics,
+    sofFound: sofExtraction.sofFound || resolvedSof != null,
+    sofSource: sofExtraction.sofSource || (resolvedSof != null ? 'race_header' : null),
+    sofMatches: sofExtraction.sofMatches,
+    sofNearbyText: sofExtraction.sofNearbyText,
     resultParseConfidence: deriveParserConfidence({
       parsed: { ...parsed, parserDiagnostics: baseDiagnostics },
       layoutDiagnostics,
@@ -1979,6 +1994,11 @@ export function parseRaceControlPdfText(text, options = {}) {
     parserDebug.sectionsParsed = layoutDiagnostics.sectionsParsed;
     parserDebug.parserVersion = layoutDiagnostics.parserVersion;
     parserDebug.supportedLayouts = layoutDiagnostics.supportedLayouts;
+    parserDebug.sofFound = parsed.parserDiagnostics.sofFound;
+    parserDebug.sofSource = parsed.parserDiagnostics.sofSource;
+    parserDebug.sofMatches = parsed.parserDiagnostics.sofMatches;
+    parserDebug.sofNearbyText = parsed.parserDiagnostics.sofNearbyText;
+    parserDebug.sofDebugSnippets = sofExtraction.sofDebugSnippets;
     parsed.parserDebug = parserDebug;
   } else {
     parsed.parserDebug = {
@@ -1991,6 +2011,11 @@ export function parseRaceControlPdfText(text, options = {}) {
       sectionsParsed: layoutDiagnostics.sectionsParsed,
       parserVersion: layoutDiagnostics.parserVersion,
       supportedLayouts: layoutDiagnostics.supportedLayouts,
+      sofFound: parsed.parserDiagnostics.sofFound,
+      sofSource: parsed.parserDiagnostics.sofSource,
+      sofMatches: parsed.parserDiagnostics.sofMatches,
+      sofNearbyText: parsed.parserDiagnostics.sofNearbyText,
+      sofDebugSnippets: sofExtraction.sofDebugSnippets,
     };
   }
 

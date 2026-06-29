@@ -1,0 +1,32 @@
+{
+  "id": "phoenix-2026",
+  "label": "Phoenix 2026",
+  "layoutReference": "Phoenix 2026",
+  "raceNumber": 7,
+  "source": {
+    "url": "https://oxwgzeyvbjdqveaxzoxs.supabase.co/storage/v1/object/public/race-control-pdfs/season-27987/race-7/race-control.pdf",
+    "textFile": "fixtures/race-control/text/phoenix-2026.txt"
+  },
+  "officialContext": {
+    "officialWinner": "Dalton Kilroe",
+    "officialFieldSize": 19,
+    "officialStarters": 19,
+    "officialTrack": "Phoenix Raceway",
+    "hasOfficialResults": true
+  },
+  "expect": {
+    "resultsCount": 19,
+    "winner": "Dalton Kilroe",
+    "sof": 2649,
+    "sofFound": true,
+    "sofSource": "global_scan",
+    "cautionCountMin": 1,
+    "raceEventsMin": 10,
+    "stagesMin": 0,
+    "driverReportsMin": 15,
+    "driversWithPitStopsMin": 10,
+    "driversWithBestLapMin": 10,
+    "parserConfidence": "medium",
+    "parserVersion": "iracecontrol-v3"
+  }
+}

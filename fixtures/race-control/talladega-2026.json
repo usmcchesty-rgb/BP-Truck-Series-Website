@@ -18,6 +18,8 @@
     "resultsCount": 35,
     "winner": "Chris Berg",
     "sof": 2424,
+    "sofFound": true,
+    "sofSource": "race_header",
     "cautionCount": 7,
     "raceEventsMin": 15,
     "stagesMin": 0,
