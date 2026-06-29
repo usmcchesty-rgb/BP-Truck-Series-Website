@@ -82,10 +82,6 @@
           </select>
         </div>
         <div>
-          <label class="field-label" for="raceNumber">Race Number</label>
-          <input id="raceNumber" class="input" type="number" min="1" step="1" placeholder="Race #">
-        </div>
-        <div>
           <label class="field-label" for="pdfFile">Race Control PDF</label>
           <input id="pdfFile" class="input" type="file" accept="application/pdf,.pdf">
         </div>
@@ -229,19 +225,53 @@
       return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
     }
 
-    function readRaceNumber() {
-      const fromInput = Number($('#raceNumber').value);
-      if (Number.isInteger(fromInput) && fromInput > 0) return fromInput;
-      const fromSelect = Number($('#raceSelect').value);
-      if (Number.isInteger(fromSelect) && fromSelect > 0) return fromSelect;
-      return null;
+    function isNonPointsRace(race) {
+      const points = String(race?.points ?? '').trim().toLowerCase();
+      const status = String(race?.status ?? '').trim().toLowerCase();
+      const label = String(race?.track ?? race?.trackName ?? '');
+      if (points === 'no' || status === 'non-points') return true;
+      return /\b(duel|duels|non-points|exhibition|clash)\b/i.test(label);
     }
 
-    function syncRaceFields(raceNumber) {
+    function resolveOfficialRaceNumber(race, pointsIndex) {
+      const candidates = [
+        race?.officialPointsRaceNumber,
+        race?.race_number,
+        race?.scheduleRow,
+      ];
+      for (const value of candidates) {
+        const num = Number(value);
+        if (Number.isInteger(num) && num > 0) return num;
+      }
+      return pointsIndex;
+    }
+
+    function normalizeScheduleRaces(rawRaces) {
+      let pointsIndex = 0;
+      return (rawRaces || [])
+        .filter((race) => !isNonPointsRace(race))
+        .map((race) => {
+          pointsIndex += 1;
+          return {
+            raceNumber: resolveOfficialRaceNumber(race, pointsIndex),
+            trackName: String(race?.track || race?.trackName || 'TBD').trim() || 'TBD',
+            date: race?.date || null,
+          };
+        });
+    }
+
+    function readRaceNumber() {
+      const fromSelect = Number($('#raceSelect').value);
+      return Number.isInteger(fromSelect) && fromSelect > 0 ? fromSelect : null;
+    }
+
+    function selectRace(raceNumber) {
       const num = Number(raceNumber);
       if (!Number.isInteger(num) || num < 1) return;
-      $('#raceNumber').value = String(num);
-      $('#raceSelect').value = String(num);
+      const select = $('#raceSelect');
+      if (!select) return;
+      const hasOption = Array.from(select.options).some((option) => Number(option.value) === num);
+      if (hasOption) select.value = String(num);
     }
 
     function statusBadgeClass(parseStatus) {
@@ -260,15 +290,15 @@
       try {
         const res = await fetch('/api/schedule');
         const data = await res.json();
-        scheduleRaces = Array.isArray(data.races) ? data.races : [];
+        scheduleRaces = normalizeScheduleRaces(data.races);
         const select = $('#raceSelect');
         select.innerHTML = scheduleRaces.length
           ? scheduleRaces.map((race) => {
-              const num = race.officialPointsRaceNumber || race.scheduleRow;
-              return `<option value="${num}">Race ${num} — ${race.track || 'TBD'}</option>`;
+              return `<option value="${race.raceNumber}">Race ${race.raceNumber} — ${race.trackName}</option>`;
             }).join('')
-          : '<option value="">No races found</option>';
+          : '<option value="">No points races found</option>';
       } catch {
+        scheduleRaces = [];
         $('#raceSelect').innerHTML = '<option value="">Failed to load schedule</option>';
       }
     }
@@ -300,7 +330,7 @@
       `).join('');
       list.querySelectorAll('button[data-race]').forEach((btn) => {
         btn.addEventListener('click', () => {
-          syncRaceFields(btn.dataset.race);
+          selectRace(btn.dataset.race);
           loadReportForRace(Number(btn.dataset.race));
         });
       });
@@ -385,10 +415,10 @@
     async function loadReportForRace(raceNumber) {
       const num = Number(raceNumber);
       if (!Number.isInteger(num) || num < 1) {
-        setMsg('Enter a valid race number.', true);
+        setMsg('Select a valid race.', true);
         return;
       }
-      syncRaceFields(num);
+      selectRace(num);
       setMsg('Loading report...');
       try {
         const data = await apiPost('getRaceControlReport', { raceNumber: num });
@@ -413,7 +443,7 @@
       const fileInput = $('#pdfFile');
       const file = fileInput.files?.[0];
       if (!raceNumber) {
-        setMsg('Select or enter a race number.', true);
+        setMsg('Select a race from the dropdown.', true);
         return;
       }
       if (!file) {
@@ -444,7 +474,7 @@
     async function reparsePdf() {
       const raceNumber = readRaceNumber();
       if (!raceNumber) {
-        setMsg('Select or enter a race number.', true);
+        setMsg('Select a race from the dropdown.', true);
         return;
       }
       setMsg('Reparsing PDF...');
@@ -461,7 +491,7 @@
     async function deletePdf() {
       const raceNumber = readRaceNumber();
       if (!raceNumber) {
-        setMsg('Select or enter a race number.', true);
+        setMsg('Select a race from the dropdown.', true);
         return;
       }
       if (!confirm(`Delete Race Control PDF for Race ${raceNumber}?`)) return;
@@ -480,17 +510,12 @@
       const params = new URLSearchParams(location.search);
       const raceNumber = Number(params.get('raceNumber'));
       if (!Number.isInteger(raceNumber) || raceNumber < 1) return;
-      syncRaceFields(raceNumber);
+      selectRace(raceNumber);
       loadReportForRace(raceNumber);
     }
 
     $('#raceSelect')?.addEventListener('change', () => {
       const raceNumber = Number($('#raceSelect').value);
-      if (raceNumber) loadReportForRace(raceNumber);
-    });
-
-    $('#raceNumber')?.addEventListener('change', () => {
-      const raceNumber = readRaceNumber();
       if (raceNumber) loadReportForRace(raceNumber);
     });
 
