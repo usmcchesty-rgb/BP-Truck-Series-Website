@@ -14,6 +14,7 @@
     { id: "transcripts", label: "Transcripts", href: "/admin/transcripts" },
     { id: "race-control", label: "Race Control", href: "/admin/race-control.html" },
     { id: "applications", label: "Applications", href: "/admin/applications.html" },
+    { id: "iracing-test", label: "iRacing Test", href: "/admin/iracing-test.html" },
   ];
 
   const STYLE_ID = "admin-shell-nav-styles";
@@ -211,6 +212,7 @@
     if (path.endsWith("/track-images")) return "track-images";
     if (path.endsWith("/race-control.html") || path.endsWith("/race-control")) return "race-control";
     if (path.endsWith("/applications.html") || path.endsWith("/applications")) return "applications";
+    if (path.endsWith("/iracing-test.html") || path.endsWith("/iracing-test")) return "iracing-test";
     return "";
   }
 

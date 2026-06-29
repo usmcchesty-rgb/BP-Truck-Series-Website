@@ -10,6 +10,7 @@
     { "source": "/admin/transcripts", "destination": "/admin/transcripts.html" },
     { "source": "/admin/race-control", "destination": "/admin/race-control.html" },
     { "source": "/admin/applications", "destination": "/admin/applications.html" },
+    { "source": "/admin/iracing-test", "destination": "/admin/iracing-test.html" },
     { "source": "/admin/parser-tests", "destination": "/admin/parser-tests.html" },
     { "source": "/api/driver-applications", "destination": "/api/settings?action=submitDriverApplication" },
     { "source": "/api/admin/driver-applications", "destination": "/api/settings?action=listDriverApplications" },

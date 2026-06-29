@@ -10,43 +10,50 @@ import {
   getSiteOrigin,
 } from './_share-html.js';
 import { resolveOgImageMeta } from './_share-image-meta.js';
-import { isIracingLookupConfigured, lookupIracingMember } from './_iracing-member.js';
-
-function normalizeIracingCustomerId(value) {
-  return String(value ?? '').trim().replace(/\D/g, '');
-}
+import {
+  IRACING_ERROR,
+  IracingApiError,
+  getIracingMember,
+  isIracingConfigured,
+  normalizeCustomerId,
+} from './_iracing.js';
 
 async function handleIracingMemberLookup(req, res) {
-  const customerId = normalizeIracingCustomerId(
+  const customerId = normalizeCustomerId(
     req.query?.customerId ?? req.query?.customer_id ?? req.query?.cust_id
   );
 
-  if (!customerId || !/^\d+$/.test(customerId)) {
-    return res.status(400).json({
-      configured: true,
-      verified: false,
-      error: 'Valid numeric Customer ID is required.',
-    });
-  }
-
-  const result = await lookupIracingMember(customerId);
-  const status = result.status || (result.ok ? 200 : 503);
-
-  if (result.ok) {
+  try {
+    const result = await getIracingMember(customerId);
     return res.status(200).json({
-      configured: result.configured,
-      verified: true,
-      customerId: result.customerId,
-      displayName: result.displayName,
+      ok: true,
+      configured: true,
+      customer_id: result.customer_id,
+      display_name: result.display_name,
+      club_name: result.club_name,
+      member_since: result.member_since,
+      debug: result.debug,
+    });
+  } catch (error) {
+    if (error instanceof IracingApiError) {
+      return res.status(error.status).json({
+        ok: false,
+        configured: error.code !== IRACING_ERROR.MISSING_CREDENTIALS,
+        code: error.code,
+        error: error.message,
+        details: error.details,
+        customer_id: customerId || null,
+      });
+    }
+
+    return res.status(500).json({
+      ok: false,
+      configured: isIracingConfigured(),
+      code: IRACING_ERROR.API_UNAVAILABLE,
+      error: error.message || 'iRacing lookup failed.',
+      customer_id: customerId || null,
     });
   }
-
-  return res.status(status).json({
-    configured: result.configured,
-    verified: false,
-    customerId: result.customerId || customerId,
-    error: result.error || 'iRacing lookup failed.',
-  });
 }
 
 function parseBody(req) {

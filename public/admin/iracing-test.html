@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>iRacing API Test</title>
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/admin/admin-layout.css">
+  <style>
+    .sub { color: var(--bp-text-secondary); font-size: 12px; margin-bottom: 16px; line-height: 1.45; }
+    .panel { padding: 14px; margin-bottom: 14px; max-width: 760px; }
+    .panel h2 { margin: 0 0 12px; font-size: 18px; color: #ff3030; }
+    .field-label { display: block; font-size: 11px; color: #999; font-weight: 900; text-transform: uppercase; margin: 10px 0 4px; }
+    .input { width: 100%; margin-bottom: 8px; padding: 8px; background: #090909; color: #fff; border: 1px solid #555; border-radius: 4px; font-size: 12px; box-sizing: border-box; }
+    .btn-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+    #adminMsg, #loginMsg, #resultBox { margin-top: 10px; font-size: 12px; color: #ccc; white-space: pre-wrap; line-height: 1.5; }
+    #adminMsg.error, #loginMsg.error, #resultBox.error { color: #ff6060; }
+    #resultBox.success { color: #7fd99a; }
+    #resultBox.warning { color: #ffb347; }
+    .pw-row { max-width: 320px; margin-bottom: 14px; }
+    .result-card { margin-top: 14px; padding: 14px; border: 1px solid #333; background: rgba(0,0,0,.25); }
+    .result-card h3 { margin: 0 0 10px; font-size: 14px; color: #ff3030; text-transform: uppercase; letter-spacing: .4px; }
+    .result-grid { display: grid; grid-template-columns: 140px 1fr; gap: 8px 12px; font-size: 12px; }
+    .result-grid dt { color: #888; font-weight: 900; text-transform: uppercase; font-size: 10px; margin: 0; }
+    .result-grid dd { margin: 0; color: #eee; }
+    .debug-block { margin-top: 12px; padding: 10px; border: 1px solid #333; background: #090909; font-family: Consolas, Monaco, monospace; font-size: 11px; color: #bbb; overflow: auto; }
+  </style>
+</head>
+<body>
+  <div id="admin-nav-root"></div>
+  <script src="/admin/admin-nav.js"></script>
+
+  <main id="loginView" class="wrap" hidden>
+    <h1>iRacing API Test</h1>
+    <p class="sub">Enter the admin password to run server-side iRacing member lookup tests.</p>
+    <div class="pw-row">
+      <input id="loginPw" class="input" type="password" placeholder="Admin password" autocomplete="current-password">
+      <button class="btn" type="button" onclick="login()">Unlock</button>
+      <pre id="loginMsg"></pre>
+    </div>
+  </main>
+
+  <main id="adminView" class="wrap" hidden>
+    <h1>iRacing API Test</h1>
+    <p class="sub">
+      Proof-of-life check for iRacing authentication and member lookup. Credentials stay on the server via
+      <code>IRACING_EMAIL</code> and <code>IRACING_PASSWORD</code> only.
+    </p>
+
+    <section class="panel">
+      <h2>Member Lookup</h2>
+      <label class="field-label" for="customerId">iRacing Customer ID</label>
+      <input id="customerId" class="input" type="text" inputmode="numeric" placeholder="e.g. 123456">
+      <div class="btn-row">
+        <button id="lookupBtn" class="btn" type="button">Lookup</button>
+      </div>
+      <div id="resultBox" hidden></div>
+      <div id="resultCard" class="result-card" hidden>
+        <h3>Lookup Result</h3>
+        <dl class="result-grid">
+          <dt>Customer ID</dt><dd id="resultCustomerId">—</dd>
+          <dt>Display Name</dt><dd id="resultDisplayName">—</dd>
+          <dt>Club Name</dt><dd id="resultClubName">—</dd>
+          <dt>Member Since</dt><dd id="resultMemberSince">—</dd>
+        </dl>
+        <pre id="resultDebug" class="debug-block" hidden></pre>
+      </div>
+    </section>
+
+    <pre id="adminMsg"></pre>
+  </main>
+
+  <script>
+    const SESSION_KEY = 'bp_admin_pw';
+
+    function $(sel) { return document.querySelector(sel); }
+
+    function getSessionPw() { return sessionStorage.getItem(SESSION_KEY) || ''; }
+
+    async function verifyPassword(pw) {
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pw, verifyOnly: true })
+      });
+      return res.ok;
+    }
+
+    function showLogin() {
+      $('#loginView').hidden = false;
+      $('#adminView').hidden = true;
+      if (window.AdminNav) AdminNav.setLoggedIn(false);
+    }
+
+    function showAdmin() {
+      $('#loginView').hidden = true;
+      $('#adminView').hidden = false;
+      if (window.AdminNav) AdminNav.setLoggedIn(true);
+    }
+
+    async function login() {
+      const msg = $('#loginMsg');
+      const pw = $('#loginPw').value;
+      if (!pw) {
+        msg.textContent = 'Enter the admin password.';
+        msg.classList.add('error');
+        return;
+      }
+      msg.textContent = 'Checking...';
+      msg.classList.remove('error');
+      try {
+        if (!(await verifyPassword(pw))) throw new Error('Bad password');
+        sessionStorage.setItem(SESSION_KEY, pw);
+        $('#loginPw').value = '';
+        msg.textContent = '';
+        showAdmin();
+      } catch (error) {
+        msg.textContent = error.message;
+        msg.classList.add('error');
+      }
+    }
+
+    async function initSession() {
+      const pw = getSessionPw();
+      if (!pw) return showLogin();
+      try {
+        if (await verifyPassword(pw)) return showAdmin();
+      } catch {}
+      sessionStorage.removeItem(SESSION_KEY);
+      showLogin();
+    }
+
+    function setMsg(text, isError = false) {
+      const msg = $('#adminMsg');
+      msg.textContent = text;
+      msg.classList.toggle('error', isError);
+    }
+
+    function showResultMessage(text, tone = '') {
+      const box = $('#resultBox');
+      box.textContent = text;
+      box.hidden = !text;
+      box.classList.remove('success', 'error', 'warning');
+      if (tone) box.classList.add(tone);
+    }
+
+    function renderSuccess(data) {
+      showResultMessage('Driver lookup succeeded.', 'success');
+      $('#resultCard').hidden = false;
+      $('#resultCustomerId').textContent = data.customer_id || '—';
+      $('#resultDisplayName').textContent = data.display_name || '—';
+      $('#resultClubName').textContent = data.club_name || '—';
+      $('#resultMemberSince').textContent = data.member_since || '—';
+      const debugEl = $('#resultDebug');
+      if (data.debug) {
+        debugEl.hidden = false;
+        debugEl.textContent = JSON.stringify(data.debug, null, 2);
+      } else {
+        debugEl.hidden = true;
+        debugEl.textContent = '';
+      }
+    }
+
+    function renderFailure(data, status) {
+      $('#resultCard').hidden = true;
+      const code = data.code ? `[${data.code}] ` : '';
+      const message = data.error || `Lookup failed (${status}).`;
+      const tone = data.code === 'MISSING_CREDENTIALS' ? 'warning' : 'error';
+      showResultMessage(`${code}${message}`, tone);
+      if (data.details) {
+        $('#resultDebug').hidden = false;
+        $('#resultDebug').textContent = JSON.stringify(data.details, null, 2);
+      }
+    }
+
+    async function lookupMember() {
+      const customerId = ($('#customerId').value || '').replace(/\D/g, '');
+      $('#customerId').value = customerId;
+      showResultMessage('');
+      $('#resultCard').hidden = true;
+      setMsg('');
+
+      if (!customerId) {
+        showResultMessage('Enter a numeric iRacing Customer ID.', 'warning');
+        return;
+      }
+
+      const btn = $('#lookupBtn');
+      btn.disabled = true;
+      btn.textContent = 'Looking up...';
+
+      try {
+        const res = await fetch(`/api/iracing/member/${encodeURIComponent(customerId)}`);
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.ok) {
+          renderSuccess(data);
+          setMsg('');
+          return;
+        }
+        renderFailure(data, res.status);
+      } catch (error) {
+        showResultMessage(error.message || 'Lookup request failed.', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Lookup';
+      }
+    }
+
+    $('#lookupBtn')?.addEventListener('click', lookupMember);
+    $('#customerId')?.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') lookupMember();
+    });
+    $('#loginPw')?.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') login();
+    });
+
+    initSession();
+  </script>
+</body>
+</html>
