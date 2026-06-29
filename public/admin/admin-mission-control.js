@@ -235,7 +235,7 @@
               ${modeBadge}
               <span class="admin-mission-control__badge is-${escapeHtml(task.status)}">${escapeHtml(STATUS_LABELS[task.status] || task.status)}</span>
               ${
-                task.completionSource === 'automatic' && task.autoReason
+                isAuto && task.autoReason
                   ? `<span class="admin-mission-control__task-desc">${escapeHtml(task.autoReason)}</span>`
                   : ''
               }

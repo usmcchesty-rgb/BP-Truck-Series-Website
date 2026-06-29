@@ -565,7 +565,32 @@ export function evaluateAutomaticTask(taskId, ctx) {
   };
 }
 
-export function resolveTaskCompletionState(taskDef, ctx, manualCompletedIds = new Set()) {
+export function isTaskCalendarGated(calendarGate = {}) {
+  const { dueDateKey, todayKey, hasRaceDate } = calendarGate;
+  return Boolean(hasRaceDate && dueDateKey && todayKey && dueDateKey > todayKey);
+}
+
+function buildCalendarGatedCompletion(taskDef, calendarGate = {}) {
+  const dayLabel = calendarGate.dayLabel || null;
+  return {
+    detectionMode: taskDef.detectionMode || DETECTION_MODES.MANUAL,
+    completed: false,
+    completionSource: null,
+    autoReason: dayLabel ? `Scheduled for ${dayLabel}` : 'Scheduled for a later date',
+    calendarGated: true,
+  };
+}
+
+export function resolveTaskCompletionState(
+  taskDef,
+  ctx,
+  manualCompletedIds = new Set(),
+  calendarGate = {}
+) {
+  if (isTaskCalendarGated(calendarGate)) {
+    return buildCalendarGatedCompletion(taskDef, calendarGate);
+  }
+
   const detectionMode = taskDef.detectionMode || DETECTION_MODES.MANUAL;
   const base = {
     detectionMode,

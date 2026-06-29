@@ -363,9 +363,9 @@ function computeTaskDueDateKey(raceDateParts, workflow, dayKey) {
 }
 
 function computeTaskStatus({ completed, dueDateKey, todayKey, hasRaceDate }) {
-  if (completed) return 'done';
-  if (!hasRaceDate || !dueDateKey) return 'pending';
+  if (!hasRaceDate || !dueDateKey) return completed ? 'done' : 'pending';
   if (dueDateKey > todayKey) return 'upcoming';
+  if (completed) return 'done';
   if (dueDateKey === todayKey) return 'due';
   return 'overdue';
 }
@@ -392,14 +392,15 @@ export function buildWorkflowTasks({
 
   const tasks = MISSION_CONTROL_TASKS.filter((task) => task.workflow === workflow).map((task) => {
     const dueDateKey = computeTaskDueDateKey(raceDateParts, workflow, task.day);
+    const calendarGate = { dueDateKey, todayKey, hasRaceDate, dayLabel: task.dayLabel };
     const completion = detectionContext
-      ? resolveTaskCompletionState(task, detectionContext, manualCompletedIds)
-      : {
-          completed: manualCompletedIds.has(task.id),
-          completionSource: manualCompletedIds.has(task.id) ? 'manual' : null,
-          detectionMode: task.detectionMode || DETECTION_MODES.MANUAL,
-          autoReason: null,
-        };
+      ? resolveTaskCompletionState(task, detectionContext, manualCompletedIds, calendarGate)
+      : resolveTaskCompletionState(
+          task,
+          {},
+          manualCompletedIds,
+          calendarGate
+        );
     const completed = Boolean(completion.completed);
     const status = computeTaskStatus({ completed, dueDateKey, todayKey, hasRaceDate });
     return {
@@ -413,6 +414,7 @@ export function buildWorkflowTasks({
       completionSource: completion.completionSource,
       autoReason: completion.autoReason || null,
       autoPending: completion.autoPending === true,
+      calendarGated: completion.calendarGated === true,
     };
   });
 
