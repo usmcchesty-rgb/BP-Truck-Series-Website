@@ -1,0 +1,32 @@
+{
+  "id": "talladega-2026",
+  "label": "Talladega 2026",
+  "layoutReference": "Talladega 2026",
+  "raceNumber": 14,
+  "source": {
+    "url": "https://oxwgzeyvbjdqveaxzoxs.supabase.co/storage/v1/object/public/race-control-pdfs/season-27987/race-14/race-control.pdf",
+    "textFile": "fixtures/race-control/text/talladega-2026.txt"
+  },
+  "officialContext": {
+    "officialWinner": "Chris Berg",
+    "officialFieldSize": 35,
+    "officialStarters": 35,
+    "officialTrack": "Talladega Superspeedway",
+    "hasOfficialResults": true
+  },
+  "expect": {
+    "resultsCount": 35,
+    "winner": "Chris Berg",
+    "sof": 2424,
+    "cautionCount": 7,
+    "raceEventsMin": 15,
+    "stagesMin": 0,
+    "driverReportsMin": 30,
+    "driversWithPitStopsMin": 25,
+    "driversWithBestLapMin": 25,
+    "parserConfidence": "high",
+    "validationConfidence": "high",
+    "layoutDetected": "Talladega 2026",
+    "parserVersion": "iracecontrol-v3"
+  }
+}

@@ -11,8 +11,9 @@ import {
   extractOfficialRaceFinishes,
   findScheduleEntryByScheduleId,
 } from './_simracerhub-schedule-results.js';
+import { IRACECONTROL_PARSER_VERSION as RACE_CONTROL_PARSER_VERSION } from './_iracecontrol-compatibility.js';
 
-export const RACE_CONTROL_PARSER_VERSION = 'iracecontrol-v2';
+export { RACE_CONTROL_PARSER_VERSION };
 
 function normalizeName(value) {
   return String(value || '')
@@ -498,6 +499,8 @@ export function buildParserHealth(parsedJson, validation = null) {
     rowsParsed,
     rowsExpected,
     parseTimeMs: parsedJson?.parseTimingMs ?? null,
+    compatibilityFixesApplied: parsedJson?.parserDebug?.compatibilityFixesApplied || [],
+    layoutNotes: parsedJson?.parserDebug?.layoutNotes || [],
     warnings: [
       ...(Array.isArray(parsedJson?.parseWarnings) ? parsedJson.parseWarnings : []),
       ...(validation?.infoMessages || []),

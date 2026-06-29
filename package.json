@@ -9,6 +9,7 @@
     "test:schedule-alignment": "node scripts/test-schedule-alignment-regression.mjs",
     "test:last3-wording": "node scripts/test-last3-average-wording.mjs",
     "test:race-date-status": "node scripts/test-race-date-status.mjs",
+    "test:race-control-parser": "node scripts/test-race-control-parser-fixtures.mjs",
     "track-tool": "node server/track-processor.mjs"
   },
   "dependencies": {

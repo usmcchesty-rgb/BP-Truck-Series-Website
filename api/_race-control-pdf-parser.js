@@ -8,6 +8,23 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { extractText, getDocumentProxy } from 'unpdf';
+import {
+  IRACECONTROL_PARSER_VERSION,
+  SUPPORTED_LAYOUTS,
+  DOCUMENT_HEADER_PATTERNPlain,
+  discoverAnchors,
+  recordCompatibility,
+  findFirstMatchAfter,
+  findNextSectionBoundary,
+  findResultRowEndBoundary,
+  getResultsSectionFromText,
+  parsePrimaryRaceHeader,
+  resolveSessionReportsSection,
+  buildParserLayoutDiagnostics,
+  deriveParserConfidence,
+} from './_iracecontrol-compatibility.js';
+
+export { IRACECONTROL_PARSER_VERSION, SUPPORTED_LAYOUTS };
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DEBUG_PREVIEW_LENGTH = 5000;
@@ -514,7 +531,8 @@ function sliceResultRowText(sectionText, candidate, candidates) {
   const nextPositionIndex = candidates.find(
     (item) => item.index > candidate.index && item.position === candidate.position + 1
   )?.index;
-  const endIndex = nextPositionIndex ?? sectionText.length;
+  const endIndex =
+    nextPositionIndex ?? findResultRowEndBoundary(sectionText, candidate.index + 1);
   return sectionText.slice(candidate.index, endIndex).trim();
 }
 
@@ -1009,45 +1027,8 @@ function parseDriverIdentity(tokens) {
   return parseDriverIdentityStrict(tokens) || parseDriverIdentityLenient(tokens);
 }
 
-export function parseRaceHeader(text) {
-  const warnings = [];
-  const normalized = normalizeWhitespace(text);
-
-  const match = normalized.match(
-    /This document was generated:\s*(\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}:\d{2})\s+RACE\s*-\s*(.*?)\s*-\s*\([^)]*\)\s*-\s*(\d+)\s+SOF/i
-  );
-
-  if (match) {
-    return {
-      generatedAt: match[1].trim(),
-      trackName: match[2].trim(),
-      sof: Number(match[3]),
-      warnings,
-    };
-  }
-
-  const generatedMatch = normalized.match(
-    /This document was generated:\s*([\d/:\s]+?)\s+RACE\s*-\s*(.*?)\s*-\s*\([^)]*\)/i
-  );
-  const sofMatch = normalized.match(/\b(\d{3,5})\s+SOF\b/i);
-
-  if (generatedMatch) {
-    if (sofMatch == null) warnings.push('SOF not detected in race header.');
-    return {
-      generatedAt: generatedMatch[1].trim(),
-      trackName: generatedMatch[2].trim(),
-      sof: sofMatch ? Number(sofMatch[1]) : null,
-      warnings,
-    };
-  }
-
-  warnings.push('Race header not detected.');
-  return {
-    generatedAt: null,
-    trackName: null,
-    sof: null,
-    warnings,
-  };
+export function parseRaceHeader(text, compatibility = null) {
+  return parsePrimaryRaceHeader(normalizeWhitespace(text), compatibility);
 }
 
 function extractRaceSummaryMeta(text, results) {
@@ -1117,31 +1098,72 @@ function findSequentialResultRowStarts(sectionText) {
   return starts;
 }
 
-export function getResultsSectionText(text) {
-  const warnings = [];
-  const lapChartIdx = text.indexOf('LAP CHART - RACE');
-  if (lapChartIdx === -1) {
-    warnings.push('LAP CHART - RACE anchor not found.');
-    return { section: '', warnings };
-  }
+export function getResultsSectionText(text, compatibility = null) {
+  const result = getResultsSectionFromText(text, compatibility);
+  return {
+    ...result,
+    compatibilityFixesApplied: compatibility?.fixes || [],
+    layoutNotes: compatibility?.notes || [],
+  };
+}
 
-  const beforeLapChart = text.slice(0, lapChartIdx);
-  const headerMatch = beforeLapChart.match(/\bPos\s+Cls\s+Car\s+Driver\b/i);
-  if (headerMatch) {
-    const afterHeader = beforeLapChart.slice(headerMatch.index + headerMatch[0].length);
-    const rowStart = afterHeader.search(/\b\d+\s+\d+\s+\d+\s+[A-Z]/);
-    if (rowStart !== -1) {
-      return { section: afterHeader.slice(rowStart).trim(), warnings };
+export function parseStageSections(text, compatibility = null) {
+  const stages = [];
+  const pattern = /\bSTAGE\s+(\d+)\s*\(L(\d+)\)/gi;
+  let match;
+
+  while ((match = pattern.exec(text)) !== null) {
+    const stageNumber = Number(match[1]);
+    const lap = Number(match[2]);
+    const bodyStart = match.index + match[0].length;
+    const boundary = findNextSectionBoundary(text, bodyStart, {
+      anchorIds: [
+        'stageAny',
+        'lapChartRace',
+        'sessionReports',
+        'incidentReports',
+        'driverReportBlock',
+        'documentHeader',
+      ],
+      skipDocumentHeadersBefore: bodyStart + 50,
+    });
+    if (boundary?.fix) {
+      recordCompatibility(compatibility, boundary.fix, boundary.note);
+    }
+    const endIndex = boundary?.index ?? text.length;
+
+    const results = parseStageResults(text.slice(bodyStart, endIndex));
+    if (results.length) {
+      stages.push({ stageNumber, lap, results });
     }
   }
 
-  const rowStart = beforeLapChart.search(/\b\d+\s+\d+\s+\d+\s+[A-Z][a-z]/);
-  if (rowStart === -1) {
-    warnings.push('No finishing results rows detected.');
-    return { section: '', warnings };
+  if (stages.length) {
+    recordCompatibility(compatibility, 'stage_sections_parsed');
   }
 
-  return { section: beforeLapChart.slice(rowStart).trim(), warnings };
+  stages.sort((a, b) => a.stageNumber - b.stageNumber);
+  return stages;
+}
+
+function parseStageResults(body) {
+  const results = [];
+  const seenPositions = new Set();
+  const pattern =
+    /\b(\d{1,2})\s+(\d{1,3})\s+([A-Z][A-Za-z.'\s-]+?)(?=\s+\d{1,2}\s+\d{1,3}\s+[A-Z]|$)/g;
+
+  let match;
+  while ((match = pattern.exec(body)) !== null) {
+    const position = Number(match[1]);
+    const carNumber = Number(match[2]);
+    const driverName = match[3].trim();
+    if (!Number.isFinite(position) || !Number.isFinite(carNumber) || !driverName) continue;
+    if (seenPositions.has(position)) continue;
+    seenPositions.add(position);
+    results.push({ position, carNumber, driverName });
+  }
+
+  return results.sort((a, b) => a.position - b.position);
 }
 
 function parseOneResultRow(tokens, startIdx) {
@@ -1244,34 +1266,39 @@ export function parseResults(sectionText) {
 function classifySessionEventType(text) {
   const upper = String(text || '').toUpperCase();
   if (upper.includes('FULL COURSE YELLOW')) return 'full_course_yellow';
+  if (upper.includes('STAGE YELLOW')) return 'stage_yellow';
   if (upper.includes('GREEN FLAG')) return 'green_flag';
   if (upper.includes('ONE LAP TO GREEN')) return 'one_lap_to_green';
+  if (upper.includes('CLOSING PIT ENTRY')) return 'closing_pit_entry';
+  if (upper.includes('OPENING PIT ENTRY')) return 'opening_pit_entry';
+  if (upper.includes('OPENING PIT EXIT')) return 'opening_pit_exit';
   if (upper.includes('PENALTIES CLEARED')) return 'penalties_cleared';
+  if (upper.includes('PACE CAR DEPLOYED')) return 'pace_car_deployed';
   if (upper.includes('RACE CONTROL')) return 'race_control';
   return 'other';
 }
 
-export function parseSessionReports(text) {
-  const warnings = [];
-  const startIdx = text.indexOf('SESSION REPORTS');
-  const endIdx = text.indexOf('INCIDENT REPORTS');
+export function parseSessionReports(text, compatibility = null) {
+  const resolved = resolveSessionReportsSection(text, compatibility);
+  const warnings = [...resolved.warnings];
+  let section = resolved.section;
 
-  if (startIdx === -1) {
-    warnings.push('SESSION REPORTS section not found.');
+  if (!section && resolved.startIdx == null) {
     return { raceEvents: [], warnings };
   }
 
-  const section =
-    endIdx === -1
-      ? text.slice(startIdx + 'SESSION REPORTS'.length)
-      : text.slice(startIdx + 'SESSION REPORTS'.length, endIdx);
+  const raceMarker = section.match(/\bRACE\b/i);
+  const eventSource =
+    raceMarker && raceMarker.index != null
+      ? section.slice(raceMarker.index)
+      : section;
 
   const raceEvents = [];
   const eventPattern =
     /(\d{2}:\d{2}:\d{2})\s+L(\d+)\s+(.+?)(?=\d{2}:\d{2}:\d{2}\s+L\d+\s|$)/gi;
 
   let match;
-  while ((match = eventPattern.exec(section)) !== null) {
+  while ((match = eventPattern.exec(eventSource)) !== null) {
     const eventText = `${match[1]} L${match[2]} ${match[3].trim()}`;
     raceEvents.push({
       time: match[1],
@@ -1684,10 +1711,11 @@ function buildParserDiagnostics(sectionText, results, normalized, rowStarts) {
     parsedResultRows: parsedRows,
     resultParseConfidence,
     sectionAnchorsFound: {
-      raceHeader: /This document was generated:/i.test(normalized),
+      raceHeader: DOCUMENT_HEADER_PATTERNPlain.test(normalized),
       lapChart: /LAP CHART - RACE/i.test(normalized),
       sessionReports: /SESSION REPORTS/i.test(normalized),
       incidentReports: /INCIDENT REPORTS/i.test(normalized),
+      stageSections: /\bSTAGE\s+\d+\s*\(L/i.test(normalized),
     },
   };
 }
@@ -1798,14 +1826,25 @@ export function parseRaceControlPdfText(text, options = {}) {
     };
   }
 
-  const header = parseRaceHeader(normalized);
+  const compatibilityFixesApplied = [];
+  const layoutNotes = [];
+  const anchorDiscovery = discoverAnchors(normalized);
+  const compatibility = {
+    fixes: compatibilityFixesApplied,
+    notes: layoutNotes,
+    anchors: anchorDiscovery,
+  };
+
+  const header = parseRaceHeader(normalized, compatibility);
   appendUniqueWarnings(parseWarnings, header.warnings);
 
-  const resultsSection = getResultsSectionText(normalized);
+  const resultsSection = getResultsSectionText(normalized, compatibility);
   appendUniqueWarnings(parseWarnings, resultsSection.warnings);
 
   const parsedResults = parseResults(resultsSection.section);
   appendUniqueWarnings(parseWarnings, parsedResults.warnings);
+
+  const stages = parseStageSections(normalized, compatibility);
 
   let parserDebug = null;
   if (options.collectParserDebug !== false) {
@@ -1840,6 +1879,9 @@ export function parseRaceControlPdfText(text, options = {}) {
         failedRowCount: failedRowDiagnostics.failedRowCount,
         failedPositions: failedRowDiagnostics.failedPositions,
         successfulPositions: failedRowDiagnostics.successfulPositions,
+        compatibilityFixesApplied: [...compatibilityFixesApplied],
+        layoutNotes: [...layoutNotes],
+        resultsBoundaryUsed: resultsSection.boundaryUsed,
       };
     } catch (error) {
       parserDebug = {
@@ -1849,7 +1891,7 @@ export function parseRaceControlPdfText(text, options = {}) {
     }
   }
 
-  const session = parseSessionReports(normalized);
+  const session = parseSessionReports(normalized, compatibility);
   appendUniqueWarnings(parseWarnings, session.warnings);
 
   const results = parsedResults.results;
@@ -1874,23 +1916,53 @@ export function parseRaceControlPdfText(text, options = {}) {
     raceNumber,
     generatedAt: header.generatedAt,
     trackName,
+    layoutTrackName: header.layoutTrackName || null,
     sof: header.sof,
     winner,
     cautionCount,
     results,
     raceEvents: session.raceEvents,
+    stages: stages.length ? stages : [],
     drivers: driverReports.drivers,
     driverReportDiagnostics: driverReports.diagnostics,
     parseWarnings,
   };
 
   parsed.summary = buildSummary(parsed, summaryMeta);
-  parsed.parserDiagnostics = buildParserDiagnostics(
+
+  const baseDiagnostics = buildParserDiagnostics(
     resultsSection.section,
     results,
     normalized,
     parsedResults.rowStarts
   );
+  const layoutDiagnostics = buildParserLayoutDiagnostics({
+    text: normalized,
+    parsed,
+    sections: { resultsBoundaryUsed: resultsSection.boundaryUsed },
+    compatibility,
+    discovery: anchorDiscovery,
+    header,
+  });
+  parsed.parserDiagnostics = {
+    ...baseDiagnostics,
+    ...layoutDiagnostics,
+    resultParseConfidence: deriveParserConfidence({
+      parsed: { ...parsed, parserDiagnostics: baseDiagnostics },
+      layoutDiagnostics,
+    }),
+  };
+
+  if (layoutDiagnostics.anchorsMissing.length) {
+    parseWarnings.push(
+      `Missing layout anchors: ${layoutDiagnostics.anchorsMissing.join(', ')}. Partial parse preserved.`
+    );
+  }
+  if (layoutDiagnostics.layoutDetected === 'unknown') {
+    parseWarnings.push(
+      'Unrecognized iRaceControl layout variant. Parsed available sections with reduced confidence.'
+    );
+  }
 
   if (options.officialComparison) {
     parsed.validation = buildRaceControlValidation(parsed, options.officialComparison);
@@ -1899,10 +1971,26 @@ export function parseRaceControlPdfText(text, options = {}) {
 
   if (parserDebug) {
     parserDebug.driverReportDiagnostics = driverReports.diagnostics;
+    parserDebug.compatibilityFixesApplied = compatibilityFixesApplied;
+    parserDebug.layoutNotes = layoutNotes;
+    parserDebug.layoutDetected = layoutDiagnostics.layoutDetected;
+    parserDebug.anchorsFound = layoutDiagnostics.anchorsFound;
+    parserDebug.anchorsMissing = layoutDiagnostics.anchorsMissing;
+    parserDebug.sectionsParsed = layoutDiagnostics.sectionsParsed;
+    parserDebug.parserVersion = layoutDiagnostics.parserVersion;
+    parserDebug.supportedLayouts = layoutDiagnostics.supportedLayouts;
     parsed.parserDebug = parserDebug;
-  } else if (driverReports.diagnostics) {
+  } else {
     parsed.parserDebug = {
       driverReportDiagnostics: driverReports.diagnostics,
+      compatibilityFixesApplied,
+      layoutNotes,
+      layoutDetected: layoutDiagnostics.layoutDetected,
+      anchorsFound: layoutDiagnostics.anchorsFound,
+      anchorsMissing: layoutDiagnostics.anchorsMissing,
+      sectionsParsed: layoutDiagnostics.sectionsParsed,
+      parserVersion: layoutDiagnostics.parserVersion,
+      supportedLayouts: layoutDiagnostics.supportedLayouts,
     };
   }
 

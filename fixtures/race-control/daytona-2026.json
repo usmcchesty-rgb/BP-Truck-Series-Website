@@ -1,0 +1,33 @@
+{
+  "id": "daytona-2026",
+  "label": "Daytona 2026",
+  "layoutReference": "Daytona 2026",
+  "raceNumber": 1,
+  "source": {
+    "url": "https://oxwgzeyvbjdqveaxzoxs.supabase.co/storage/v1/object/public/race-control-pdfs/season-27987/race-1/race-control.pdf",
+    "textFile": "fixtures/race-control/text/daytona-2026.txt"
+  },
+  "officialContext": {
+    "officialFieldSize": 35,
+    "officialStarters": 35,
+    "officialTrack": "Daytona International Speedway",
+    "hasOfficialResults": true
+  },
+  "expect": {
+    "resultsCount": 35,
+    "sof": 2427,
+    "cautionCountMin": 5,
+    "raceEventsMin": 15,
+    "stagesMin": 1,
+    "stage1Lap": 18,
+    "stage1DriversMin": 10,
+    "driverReportsMin": 30,
+    "driversWithPitStopsMin": 25,
+    "driversWithBestLapMin": 25,
+    "parserConfidence": "high",
+    "validationConfidence": "high",
+    "layoutDetected": "Daytona 2026",
+    "parserVersion": "iracecontrol-v3",
+    "trackNameIncludes": "daytona"
+  }
+}
