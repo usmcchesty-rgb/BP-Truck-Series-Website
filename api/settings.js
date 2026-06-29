@@ -28,6 +28,10 @@ import {
 } from './_fantasy-lineups.js';
 import { loadLatestFantasySlate } from './_fantasy-public-slate.js';
 import {
+  computeFantasyLockAt,
+  DEFAULT_FANTASY_LOCK_DISPLAY,
+} from './_fantasy-lock-time.js';
+import {
   buildFantasyProgressionMeta,
   resolveFantasySlateProgression,
 } from './_fantasy-slate-progression.js';
@@ -250,6 +254,7 @@ export default async function handler(req, res) {
         raceNumber: body.raceNumber != null ? Number(body.raceNumber) : null,
         lockTime: body.lockTime,
         lockAt: body.lockAt,
+        useLockOverride: body.useLockOverride === true,
       });
       const lineupCount = await countLineupsForSlate(result?.slate?.id);
       return res.status(200).json({ ...result, lineupCount });
@@ -267,11 +272,35 @@ export default async function handler(req, res) {
         raceNumber: body.raceNumber != null ? Number(body.raceNumber) : null,
         lockTime: body.lockTime,
         lockAt: body.lockAt,
+        useLockOverride: body.useLockOverride === true,
       });
       const lineupCount = await countLineupsForSlate(result?.slate?.id);
       return res.status(200).json({ ...result, lineupCount });
     } catch (error) {
       return res.status(500).json({ error: error.message || 'Failed to update lock time.' });
+    }
+  }
+
+  if (action === 'previewFantasySlateLock') {
+    try {
+      const settings = await getSettings();
+      const seasonId = body.seasonId || settings.seasonId || '27987';
+      let raceNumber = body.raceNumber != null ? Number(body.raceNumber) : null;
+      if (body.slateId != null && Number.isFinite(Number(body.slateId))) {
+        const payload = await loadFantasySlateById(Number(body.slateId));
+        raceNumber = payload?.slate?.race_number ?? raceNumber;
+      }
+      const preview = await computeFantasyLockAt({
+        raceNumber,
+        lockTimeDisplay: body.lockTime || DEFAULT_FANTASY_LOCK_DISPLAY,
+        lockAtOverride: body.lockAt,
+        useLockOverride: body.useLockOverride === true,
+        seasonId,
+        settings,
+      });
+      return res.status(200).json(preview);
+    } catch (error) {
+      return res.status(500).json({ error: error.message || 'Failed to preview lock time.' });
     }
   }
 
@@ -294,6 +323,15 @@ export default async function handler(req, res) {
         publishedPayload?.slate?.id ||
         null;
       const lineupCount = countSlateId ? await countLineupsForSlate(countSlateId) : 0;
+      let lockPreview = null;
+      if (payload?.slate?.race_number) {
+        lockPreview = await computeFantasyLockAt({
+          raceNumber: payload.slate.race_number,
+          lockTimeDisplay: payload.slate.lock_time || DEFAULT_FANTASY_LOCK_DISPLAY,
+          seasonId,
+          settings,
+        });
+      }
       return res.status(200).json({
         slate: payload?.slate || null,
         publishedSlate: progression.archivedSlateRow || progression.activeSlateRow || publishedPayload?.slate || null,
@@ -308,6 +346,7 @@ export default async function handler(req, res) {
             }
           : null,
         lineupCount,
+        lockPreview,
       });
     } catch (error) {
       return res.status(500).json({ error: error.message || 'Failed to load slate stats.' });

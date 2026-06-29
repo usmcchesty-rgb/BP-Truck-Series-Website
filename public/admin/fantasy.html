@@ -596,14 +596,27 @@
               </div>
               <div class="admin-field">
                 <label class="field-label" for="lineupLockTime">Lineup Lock (display)</label>
-                <span class="field-help">Shown to players on slate and lineup pages.</span>
-                <input id="lineupLockTime" class="input" type="text" placeholder="e.g. 8:30 PM EST" />
+                <span class="field-help">Shown to players. Default is race day at this Eastern time (e.g. 6:30pm EST).</span>
+                <input id="lineupLockTime" class="input" type="text" value="6:30pm EST" placeholder="6:30pm EST" />
               </div>
-              <div class="admin-field">
-                <label class="field-label" for="lineupLockAt">Lineup Lock (enforced)</label>
-                <span class="field-help">Optional ISO datetime — submissions blocked after this time.</span>
-                <input id="lineupLockAt" class="input" type="datetime-local" />
+              <div class="admin-field admin-field--full">
+                <label class="field-label">Computed Lock</label>
+                <span class="field-help">Race date from schedule + display time above.</span>
+                <div id="fantasyComputedLockLabel" class="input" style="background:var(--surface-2);cursor:default;">—</div>
               </div>
+              <p id="fantasyLockWarning" class="fantasy-generate-status error" hidden></p>
+              <details class="admin-note" style="margin-top:0.5rem;">
+                <summary>Advanced — manual lock datetime override</summary>
+                <div class="admin-field" style="margin-top:0.75rem;">
+                  <label class="field-label" for="lineupLockAt">Manual lock datetime</label>
+                  <span class="field-help">Only when schedule date is missing or you need a custom lock moment.</span>
+                  <input id="lineupLockAt" class="input" type="datetime-local" />
+                </div>
+                <label class="field-label" style="display:flex;align-items:center;gap:0.5rem;margin-top:0.5rem;">
+                  <input id="useLockOverride" type="checkbox" />
+                  Use manual override instead of schedule + display time
+                </label>
+              </details>
               <div class="admin-field">
                 <label class="field-label">Salary cap</label>
                 <input class="input" type="text" value="$50,000" disabled />
@@ -751,6 +764,8 @@
       // --- Admin session (sessionStorage only; cleared when the tab/session closes) ---
       const SESSION_KEY = 'bp_admin_pw';
       let currentFantasySlateId = null;
+      const DEFAULT_FANTASY_LOCK_DISPLAY = '6:30pm EST';
+      let lockPreviewTimer = null;
       let fantasySlateLoaded = false;
 
       function safeNumber(value, fallback = null) {
@@ -1377,6 +1392,64 @@
         renderFantasySalaryReview(data.drivers || [], data.analytics || null);
         updateFantasyDraftHeader(data.slate || null);
         renderFantasyModelSummary(data.slate?.meta || data.meta || null, data.drivers || []);
+        if (data.lockPreview) renderLockPreview(data.lockPreview);
+      }
+
+      function buildLockPayload() {
+        const lockTime = String($('#lineupLockTime')?.value || '').trim() || DEFAULT_FANTASY_LOCK_DISPLAY;
+        const lockAtRaw = String($('#lineupLockAt')?.value || '').trim();
+        const useLockOverride = $('#useLockOverride')?.checked === true && Boolean(lockAtRaw);
+        return {
+          lockTime,
+          useLockOverride,
+          lockAt: useLockOverride && lockAtRaw ? new Date(lockAtRaw).toISOString() : undefined,
+        };
+      }
+
+      function renderLockPreview(preview = null) {
+        const computedEl = $('#fantasyComputedLockLabel');
+        const warningEl = $('#fantasyLockWarning');
+        if (computedEl) {
+          computedEl.textContent =
+            preview?.computedLockLabel || (preview?.lock_at ? String(preview.lock_at) : '—');
+        }
+        if (warningEl) {
+          if (preview?.warning) {
+            warningEl.textContent = preview.warning;
+            warningEl.hidden = false;
+          } else {
+            warningEl.textContent = '';
+            warningEl.hidden = true;
+          }
+        }
+      }
+
+      function scheduleLockPreview() {
+        clearTimeout(lockPreviewTimer);
+        lockPreviewTimer = setTimeout(refreshLockPreview, 400);
+      }
+
+      async function refreshLockPreview() {
+        if (!getSessionPw()) return;
+        const payload = buildLockPayload();
+        try {
+          const res = await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              password: getSessionPw(),
+              action: 'previewFantasySlateLock',
+              slateId: currentFantasySlateId,
+              lockTime: payload.lockTime,
+              useLockOverride: payload.useLockOverride,
+              lockAt: payload.lockAt,
+            }),
+          });
+          const data = await res.json();
+          if (res.ok) renderLockPreview(data);
+        } catch (error) {
+          console.error('[Fantasy Admin] Lock preview failed:', error);
+        }
       }
 
       function updateFantasyDraftHeader(slate = null, targetRace = null) {
@@ -1505,7 +1578,6 @@
       async function loadFantasyAdminStats() {
         const countEl = $('#fantasySubmittedLineupCount');
         const lockInput = $('#lineupLockTime');
-        const lockAtInput = $('#lineupLockAt');
 
         try {
           const res = await fetch('/api/settings', {
@@ -1555,10 +1627,12 @@
 
           const slate = data.slate;
           if (slate && lockInput && document.activeElement !== lockInput) {
-            lockInput.value = slate.lock_time || '';
+            lockInput.value = slate.lock_time || DEFAULT_FANTASY_LOCK_DISPLAY;
           }
-          if (slate && lockAtInput && document.activeElement !== lockAtInput) {
-            lockAtInput.value = slate.lock_at ? String(slate.lock_at).slice(0, 16) : '';
+          if (data.lockPreview) {
+            renderLockPreview(data.lockPreview);
+          } else if (slate?.race_number) {
+            scheduleLockPreview();
           }
           if (slate) {
             currentFantasySlateId = slate.id ?? currentFantasySlateId;
@@ -1638,9 +1712,7 @@
       async function publishFantasySlate() {
         const statusEl = $('#fantasyGenerateStatus');
         const btn = $('#publishFantasySlateBtn');
-        const lockTime = String($('#lineupLockTime')?.value || '').trim();
-        const lockAtRaw = String($('#lineupLockAt')?.value || '').trim();
-        const lockAt = lockAtRaw ? new Date(lockAtRaw).toISOString() : null;
+        const lockPayload = buildLockPayload();
 
         if (statusEl) {
           statusEl.textContent = 'Publishing slate...';
@@ -1660,8 +1732,7 @@
               password: getSessionPw(),
               action: 'publishFantasySlate',
               slateId: currentFantasySlateId,
-              lockTime,
-              lockAt,
+              ...lockPayload,
             }),
           });
           const data = await res.json();
@@ -1673,7 +1744,12 @@
           const track = data.slate?.track || 'TBD';
           const publishedId = data.slate?.id ?? '';
           if (statusEl) {
-            statusEl.textContent = `Published Race ${raceNum} — ${track}. ${data.lineupCount ?? 0} lineup(s) submitted.${publishedId ? ` Slate #${publishedId}.` : ''}`;
+            let message = `Published Race ${raceNum} — ${track}. ${data.lineupCount ?? 0} lineup(s) submitted.${publishedId ? ` Slate #${publishedId}.` : ''}`;
+            if (data.lockPreview?.warning) {
+              message += ` Warning: ${data.lockPreview.warning}`;
+              statusEl.classList.add('error');
+            }
+            statusEl.textContent = message;
           }
         } catch (error) {
           if (statusEl) {
@@ -1688,9 +1764,7 @@
       async function saveFantasyLockTime() {
         const statusEl = $('#fantasyGenerateStatus');
         const btn = $('#saveFantasyLockBtn');
-        const lockTime = String($('#lineupLockTime')?.value || '').trim();
-        const lockAtRaw = String($('#lineupLockAt')?.value || '').trim();
-        const lockAt = lockAtRaw ? new Date(lockAtRaw).toISOString() : null;
+        const lockPayload = buildLockPayload();
 
         if (statusEl) {
           statusEl.textContent = 'Saving lock time...';
@@ -1706,15 +1780,20 @@
               password: getSessionPw(),
               action: 'updateFantasySlateLock',
               slateId: currentFantasySlateId,
-              lockTime,
-              lockAt,
+              ...lockPayload,
             }),
           });
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || 'Save failed');
 
+          if (data.lockPreview) renderLockPreview(data.lockPreview);
           await loadFantasyAdminStats();
-          if (statusEl) statusEl.textContent = 'Lock time saved.';
+          if (statusEl) {
+            statusEl.textContent = data.lockPreview?.warning
+              ? `Lock time saved. Warning: ${data.lockPreview.warning}`
+              : 'Lock time saved.';
+            if (data.lockPreview?.warning) statusEl.classList.add('error');
+          }
         } catch (error) {
           if (statusEl) {
             statusEl.textContent = error.message || 'Save failed';
@@ -2317,6 +2396,9 @@
       $('#reloadFantasyDraftBtn')?.addEventListener('click', loadFantasyDraftSlate);
       $('#publishFantasySlateBtn')?.addEventListener('click', publishFantasySlate);
       $('#saveFantasyLockBtn')?.addEventListener('click', saveFantasyLockTime);
+      $('#lineupLockTime')?.addEventListener('input', scheduleLockPreview);
+      $('#lineupLockAt')?.addEventListener('change', scheduleLockPreview);
+      $('#useLockOverride')?.addEventListener('change', scheduleLockPreview);
       $('#runFantasyOptimizerBtn')?.addEventListener('click', runFantasyLineupOptimizer);
       $('#runFantasyBacktestBtn')?.addEventListener('click', runFantasySeasonBacktest);
       $('#backfillHistoricalSlatesBtn')?.addEventListener('click', backfillHistoricalSlates);

@@ -24,6 +24,10 @@ import {
   summarizeFantasySlateMeta,
 } from './_fantasy-salary-scoring.js';
 import {
+  computeFantasyLockAt,
+  DEFAULT_FANTASY_LOCK_DISPLAY,
+} from './_fantasy-lock-time.js';
+import {
   enrichFantasySlateDrivers,
   summarizeFantasySlateAnalytics,
 } from './_fantasy-admin-analytics.js';
@@ -569,12 +573,16 @@ export async function publishFantasySlate(options = {}) {
     updated_at: now,
   };
 
-  if (options.lockTime !== undefined) {
-    updates.lock_time = String(options.lockTime || '').trim() || null;
-  }
-  if (options.lockAt !== undefined) {
-    updates.lock_at = options.lockAt ? new Date(options.lockAt).toISOString() : null;
-  }
+  const lockFields = await computeFantasyLockAt({
+    raceNumber: draft.slate.race_number,
+    lockTimeDisplay: options.lockTime ?? draft.slate.lock_time ?? DEFAULT_FANTASY_LOCK_DISPLAY,
+    lockAtOverride: options.lockAt,
+    useLockOverride: options.useLockOverride === true,
+    seasonId,
+    settings,
+  });
+  updates.lock_time = lockFields.lock_time;
+  updates.lock_at = lockFields.lock_at;
 
   const { data, error } = await sb
     .from('fantasy_slates')
@@ -592,10 +600,13 @@ export async function publishFantasySlate(options = {}) {
     throw new Error('Published slate id mismatch.');
   }
 
-  return enrichFantasyDraftPayload({
-    slate: data,
-    drivers: draft.drivers || [],
-  });
+  return {
+    ...enrichFantasyDraftPayload({
+      slate: data,
+      drivers: draft.drivers || [],
+    }),
+    lockPreview: lockFields,
+  };
 }
 
 export async function updateFantasySlateLock(options = {}) {
@@ -631,16 +642,23 @@ export async function updateFantasySlateLock(options = {}) {
 
   if (!slate) throw new Error('No fantasy slate found to update lock time.');
 
-  const updates = { updated_at: new Date().toISOString() };
-  if (options.lockTime !== undefined) {
-    updates.lock_time = String(options.lockTime || '').trim() || null;
-  }
-  if (options.lockAt !== undefined) {
-    updates.lock_at = options.lockAt ? new Date(options.lockAt).toISOString() : null;
-  }
+  const lockFields = await computeFantasyLockAt({
+    raceNumber: slate.race_number,
+    lockTimeDisplay: options.lockTime ?? slate.lock_time ?? DEFAULT_FANTASY_LOCK_DISPLAY,
+    lockAtOverride: options.lockAt,
+    useLockOverride: options.useLockOverride === true,
+    seasonId,
+    settings,
+  });
+
+  const updates = {
+    updated_at: new Date().toISOString(),
+    lock_time: lockFields.lock_time,
+    lock_at: lockFields.lock_at,
+  };
 
   const { data, error } = await sb.from('fantasy_slates').update(updates).eq('id', slate.id).select('*').single();
   if (error) throw new Error(error.message || 'Failed to update lock time.');
 
-  return { slate: data };
+  return { slate: data, lockPreview: lockFields };
 }
