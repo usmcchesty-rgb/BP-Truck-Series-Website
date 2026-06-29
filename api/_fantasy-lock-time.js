@@ -52,6 +52,66 @@ export function formatComputedLockLabel(lockAtIso, lockTimeDisplay = '') {
   return `${formattedDate} ${display}`;
 }
 
+export function formatLockTimeLinePretty(lockTimeDisplay = '') {
+  const raw = String(lockTimeDisplay || '').trim() || DEFAULT_FANTASY_LOCK_DISPLAY;
+  const withoutTz = raw.replace(/\b(EST|ET|Eastern)\b/gi, '').trim();
+  const minutes = parseRaceStartTimeToMinutes(withoutTz);
+  const tzMatch = raw.match(/\b(EST|ET|Eastern)\b/i);
+  const tz = tzMatch ? tzMatch[0].toUpperCase().replace('EASTERN', 'EST') : 'EST';
+
+  if (minutes == null) return raw.toUpperCase().includes('PM') || raw.toUpperCase().includes('AM') ? raw : raw;
+
+  const hour24 = Math.floor(minutes / 60);
+  const minute = minutes % 60;
+  const hour12 = hour24 % 12 || 12;
+  const ampm = hour24 >= 12 ? 'PM' : 'AM';
+  return `${hour12}:${String(minute).padStart(2, '0')} ${ampm} ${tz}`;
+}
+
+export function getLockDisplayState(lockAtIso, now = new Date()) {
+  if (!lockAtIso) return { state: 'normal', hoursUntil: null, isLocked: false };
+  const lockAt = new Date(lockAtIso);
+  if (Number.isNaN(lockAt.getTime())) return { state: 'normal', hoursUntil: null, isLocked: false };
+
+  const ms = lockAt.getTime() - now.getTime();
+  if (ms <= 0) return { state: 'locked', hoursUntil: 0, isLocked: true };
+  const hoursUntil = ms / (3600 * 1000);
+  if (hoursUntil <= 48) return { state: 'warning', hoursUntil, isLocked: false };
+  return { state: 'normal', hoursUntil, isLocked: false };
+}
+
+export function buildLockDisplayCard(fields = {}, now = new Date()) {
+  const { lock_at, lock_time } = fields;
+  let lockDateLine = null;
+  const lockTimeLine = formatLockTimeLinePretty(lock_time);
+
+  if (lock_at) {
+    lockDateLine = new Intl.DateTimeFormat('en-US', {
+      timeZone: EASTERN_TIMEZONE,
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    }).format(new Date(lock_at));
+  }
+
+  const { state, hoursUntil, isLocked } = getLockDisplayState(lock_at, now);
+  return {
+    lockDateLine,
+    lockTimeLine,
+    lockState: state,
+    lockStateLabel: isLocked ? 'Locked' : state === 'warning' ? 'Closing soon' : 'Open',
+    hoursUntilLock: hoursUntil,
+  };
+}
+
+function enrichLockPreview(base, now = new Date()) {
+  return {
+    ...base,
+    ...buildLockDisplayCard(base, now),
+  };
+}
+
 export async function resolveRaceDateForSlate(raceNumber, settings = null) {
   const resolvedSettings = settings || (await getSettings());
   const html = await fetchHtml(resolvedSettings.scheduleUrl);
@@ -90,41 +150,50 @@ export async function computeFantasyLockAt(options = {}) {
     if (!Number.isFinite(parsed.getTime())) {
       throw new Error('Invalid manual lock datetime override.');
     }
-    return {
-      lock_time: display,
-      lock_at: parsed.toISOString(),
-      computedLockLabel: formatComputedLockLabel(parsed.toISOString(), display),
-      warning: null,
-      usedOverride: true,
-      raceDate: null,
-      seasonId,
-    };
+    return enrichLockPreview(
+      {
+        lock_time: display,
+        lock_at: parsed.toISOString(),
+        computedLockLabel: formatComputedLockLabel(parsed.toISOString(), display),
+        warning: null,
+        usedOverride: true,
+        raceDate: null,
+        seasonId,
+      },
+      options.now
+    );
   }
 
   const raceNumber = Number(options.raceNumber);
   if (!Number.isFinite(raceNumber) || raceNumber < 1) {
-    return {
-      lock_time: display,
-      lock_at: null,
-      computedLockLabel: null,
-      warning: 'Slate race number missing — set an advanced lock datetime manually.',
-      usedOverride: false,
-      raceDate: null,
-      seasonId,
-    };
+    return enrichLockPreview(
+      {
+        lock_time: display,
+        lock_at: null,
+        computedLockLabel: null,
+        warning: 'Slate race number missing — set an advanced lock datetime manually.',
+        usedOverride: false,
+        raceDate: null,
+        seasonId,
+      },
+      options.now
+    );
   }
 
   const { race, dateParts, warning } = await resolveRaceDateForSlate(raceNumber, settings);
   if (!dateParts) {
-    return {
-      lock_time: display,
-      lock_at: null,
-      computedLockLabel: null,
-      warning,
-      usedOverride: false,
-      raceDate: race?.date || null,
-      seasonId,
-    };
+    return enrichLockPreview(
+      {
+        lock_time: display,
+        lock_at: null,
+        computedLockLabel: null,
+        warning,
+        usedOverride: false,
+        raceDate: race?.date || null,
+        seasonId,
+      },
+      options.now
+    );
   }
 
   const minutes = parseDisplayLockTimeMinutes(display);
@@ -146,13 +215,16 @@ export async function computeFantasyLockAt(options = {}) {
     throw new Error('Failed to compute lineup lock datetime from schedule date and display time.');
   }
 
-  return {
-    lock_time: display,
-    lock_at,
-    computedLockLabel: formatComputedLockLabel(lock_at, display),
-    warning: null,
-    usedOverride: false,
-    raceDate: race?.date || null,
-    seasonId,
-  };
+  return enrichLockPreview(
+    {
+      lock_time: display,
+      lock_at,
+      computedLockLabel: formatComputedLockLabel(lock_at, display),
+      warning: null,
+      usedOverride: false,
+      raceDate: race?.date || null,
+      seasonId,
+    },
+    options.now
+  );
 }

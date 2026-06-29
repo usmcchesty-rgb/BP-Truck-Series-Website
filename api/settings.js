@@ -32,6 +32,10 @@ import {
   DEFAULT_FANTASY_LOCK_DISPLAY,
 } from './_fantasy-lock-time.js';
 import {
+  buildAdminMissionControlResponse,
+  setMissionControlTaskComplete,
+} from './_admin-mission-control.js';
+import {
   buildFantasyProgressionMeta,
   resolveFantasySlateProgression,
 } from './_fantasy-slate-progression.js';
@@ -301,6 +305,46 @@ export default async function handler(req, res) {
       return res.status(200).json(preview);
     } catch (error) {
       return res.status(500).json({ error: error.message || 'Failed to preview lock time.' });
+    }
+  }
+
+  if (action === 'getAdminMissionControl') {
+    try {
+      const settings = await getSettings();
+      const seasonId = body.seasonId || settings.seasonId || '27987';
+      const progression = await resolveFantasySlateProgression(seasonId, { settings });
+      const missionControl = await buildAdminMissionControlResponse({ seasonId, settings });
+      const lineupSlateId =
+        progression.activeSlateRow?.id ||
+        progression.archivedSlateRow?.id ||
+        null;
+      const lineupCount = lineupSlateId ? await countLineupsForSlate(lineupSlateId) : 0;
+      return res.status(200).json({ ...missionControl, lineupCount });
+    } catch (error) {
+      return res.status(500).json({ error: error.message || 'Failed to load mission control.' });
+    }
+  }
+
+  if (action === 'updateAdminMissionControlTask') {
+    try {
+      const settings = await getSettings();
+      const seasonId = body.seasonId || settings.seasonId || '27987';
+      await setMissionControlTaskComplete({
+        seasonId,
+        raceNumber: body.raceNumber,
+        taskId: body.taskId,
+        completed: body.completed !== false,
+      });
+      const missionControl = await buildAdminMissionControlResponse({ seasonId, settings });
+      const activeProgression = await resolveFantasySlateProgression(seasonId, { settings });
+      const lineupSlateId =
+        activeProgression.activeSlateRow?.id ||
+        activeProgression.archivedSlateRow?.id ||
+        null;
+      const lineupCount = lineupSlateId ? await countLineupsForSlate(lineupSlateId) : 0;
+      return res.status(200).json({ ok: true, ...missionControl, lineupCount });
+    } catch (error) {
+      return res.status(500).json({ error: error.message || 'Failed to update mission control task.' });
     }
   }
 

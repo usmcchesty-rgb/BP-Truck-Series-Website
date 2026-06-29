@@ -470,6 +470,190 @@
         .tool-grid { grid-template-columns: 1fr; }
         .fantasy-summary-cards { grid-template-columns: 1fr; }
         .fantasy-admin-table { min-width: 0; }
+        .mission-control-summary { grid-template-columns: 1fr 1fr; }
+      }
+
+      .submission-closes-card {
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 10px;
+        padding: 14px 16px;
+        background: linear-gradient(180deg, rgba(255,255,255,.06) 0%, rgba(255,255,255,.02) 100%);
+        display: grid;
+        gap: 6px;
+        max-width: 360px;
+      }
+      .submission-closes-card.is-warning {
+        border-color: rgba(255, 196, 0, 0.55);
+        background: linear-gradient(180deg, rgba(255, 196, 0, .12) 0%, rgba(255, 196, 0, .04) 100%);
+        box-shadow: 0 0 18px rgba(255, 196, 0, .08);
+      }
+      .submission-closes-card.is-locked {
+        border-color: rgba(255, 48, 48, 0.55);
+        background: linear-gradient(180deg, rgba(255, 48, 48, .14) 0%, rgba(255, 48, 48, .04) 100%);
+        box-shadow: 0 0 18px rgba(255, 48, 48, .08);
+      }
+      .submission-closes-card__label {
+        font-size: 10px;
+        font-weight: 900;
+        letter-spacing: .16em;
+        text-transform: uppercase;
+        color: #bbb;
+      }
+      .submission-closes-card__date {
+        font-size: 16px;
+        font-weight: 900;
+        color: #fff;
+        line-height: 1.3;
+      }
+      .submission-closes-card__time {
+        font-size: 14px;
+        font-weight: 800;
+        color: #ddd;
+      }
+      .submission-closes-card__status {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 4px;
+        font-size: 11px;
+        font-weight: 900;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        color: #aaa;
+      }
+      .submission-closes-card.is-warning .submission-closes-card__status { color: #ffd54a; }
+      .submission-closes-card.is-locked .submission-closes-card__status { color: #ff7070; }
+
+      .mission-control-summary {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 14px;
+      }
+      .mission-control-stat {
+        border: 1px solid rgba(255,255,255,.08);
+        border-radius: 8px;
+        padding: 10px 12px;
+        background: rgba(255,255,255,.03);
+      }
+      .mission-control-stat__k {
+        font-size: 10px;
+        font-weight: 900;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+        color: #888;
+        margin-bottom: 4px;
+      }
+      .mission-control-stat__v {
+        font-size: 13px;
+        font-weight: 900;
+        color: #fff;
+        line-height: 1.35;
+      }
+      .mission-control-groups {
+        display: grid;
+        gap: 12px;
+      }
+      .mission-control-day {
+        border-top: 1px solid rgba(255,255,255,.06);
+        padding-top: 10px;
+      }
+      .mission-control-day:first-child {
+        border-top: 0;
+        padding-top: 0;
+      }
+      .mission-control-day__title {
+        font-size: 11px;
+        font-weight: 900;
+        letter-spacing: .14em;
+        text-transform: uppercase;
+        color: #ff3030;
+        margin-bottom: 8px;
+      }
+      .mission-control-task {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        gap: 10px;
+        align-items: start;
+        padding: 8px 0;
+        border-top: 1px solid rgba(255,255,255,.04);
+      }
+      .mission-control-task:first-of-type { border-top: 0; }
+      .mission-control-task__check {
+        margin-top: 2px;
+        width: 16px;
+        height: 16px;
+        accent-color: #ff3030;
+        cursor: pointer;
+      }
+      .mission-control-task__body { min-width: 0; }
+      .mission-control-task__title {
+        font-size: 13px;
+        font-weight: 900;
+        color: #fff;
+        line-height: 1.35;
+      }
+      .mission-control-task__desc {
+        font-size: 11px;
+        color: #999;
+        line-height: 1.45;
+        margin-top: 2px;
+      }
+      .mission-control-task__meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        margin-top: 6px;
+      }
+      .mission-control-badge {
+        display: inline-block;
+        font-size: 10px;
+        font-weight: 900;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        padding: 3px 8px;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,.12);
+        color: #ccc;
+      }
+      .mission-control-badge.is-done {
+        border-color: rgba(76, 175, 80, .45);
+        color: #8ee08f;
+        background: rgba(76, 175, 80, .08);
+      }
+      .mission-control-badge.is-due {
+        border-color: rgba(255, 196, 0, .45);
+        color: #ffd54a;
+        background: rgba(255, 196, 0, .08);
+      }
+      .mission-control-badge.is-overdue {
+        border-color: rgba(255, 48, 48, .45);
+        color: #ff7070;
+        background: rgba(255, 48, 48, .08);
+      }
+      .mission-control-badge.is-upcoming {
+        border-color: rgba(120, 170, 255, .35);
+        color: #9ec0ff;
+        background: rgba(120, 170, 255, .08);
+      }
+      .mission-control-badge.is-pending {
+        border-color: rgba(255,255,255,.15);
+        color: #bbb;
+      }
+      .mission-control-link {
+        font-size: 11px;
+        font-weight: 900;
+        color: #ff7070;
+        text-decoration: none;
+        letter-spacing: .04em;
+      }
+      .mission-control-link:hover { text-decoration: underline; }
+      .mission-control-note {
+        margin-top: 10px;
+        font-size: 11px;
+        color: #999;
+        line-height: 1.45;
       }
     </style>
 
@@ -523,6 +707,41 @@
             </div>
 
             <pre id="brandingMsg"></pre>
+          </div>
+
+          <!-- Mission Control -->
+          <div id="mission-control" class="admin-card admin-card--full">
+            <div class="admin-card-title">Mission Control</div>
+            <div class="mission-control-summary">
+              <div class="mission-control-stat">
+                <div class="mission-control-stat__k">Fantasy phase</div>
+                <div class="mission-control-stat__v" id="mcFantasyPhase">—</div>
+              </div>
+              <div class="mission-control-stat">
+                <div class="mission-control-stat__k">Race week</div>
+                <div class="mission-control-stat__v" id="mcRaceWeek">—</div>
+              </div>
+              <div class="mission-control-stat">
+                <div class="mission-control-stat__k">Submitted lineups</div>
+                <div class="mission-control-stat__v" id="mcLineupCount">—</div>
+              </div>
+              <div class="mission-control-stat">
+                <div class="mission-control-stat__k">Tasks remaining</div>
+                <div class="mission-control-stat__v" id="mcTasksRemaining">—</div>
+              </div>
+              <div class="mission-control-stat">
+                <div class="mission-control-stat__k">Next due task</div>
+                <div class="mission-control-stat__v" id="mcNextDueTask">—</div>
+              </div>
+            </div>
+            <div class="fantasy-generate-row">
+              <button id="reloadMissionControlBtn" class="btn btn-secondary" type="button">Reload Checklist</button>
+              <span id="missionControlStatus" class="fantasy-generate-status"></span>
+            </div>
+            <div id="missionControlGroups" class="mission-control-groups">
+              <p class="muted">Loading weekly checklist…</p>
+            </div>
+            <p id="missionControlRaceDateNote" class="mission-control-note" hidden></p>
           </div>
 
           <!-- Fantasy Status -->
@@ -600,9 +819,16 @@
                 <input id="lineupLockTime" class="input" type="text" value="6:30pm EST" placeholder="6:30pm EST" />
               </div>
               <div class="admin-field admin-field--full">
-                <label class="field-label">Computed Lock</label>
                 <span class="field-help">Race date from schedule + display time above.</span>
-                <div id="fantasyComputedLockLabel" class="input" style="background:var(--surface-2);cursor:default;">—</div>
+                <div id="submissionClosesCard" class="submission-closes-card" aria-live="polite">
+                  <div class="submission-closes-card__label">Submission Closes</div>
+                  <div id="submissionClosesDate" class="submission-closes-card__date">—</div>
+                  <div id="submissionClosesTime" class="submission-closes-card__time">6:30 PM EST</div>
+                  <div class="submission-closes-card__status">
+                    <span id="submissionClosesIcon" aria-hidden="true">🔓</span>
+                    <span id="submissionClosesStatus">Open</span>
+                  </div>
+                </div>
               </div>
               <p id="fantasyLockWarning" class="fantasy-generate-status error" hidden></p>
               <details class="admin-note" style="margin-top:0.5rem;">
@@ -838,7 +1064,12 @@
         });
         loadFantasyDraftSlate()
           .then(() =>
-            Promise.all([loadFantasySchedulePreview(), loadFantasyAdminStats(), loadSubmittedLineups()])
+            Promise.all([
+              loadFantasySchedulePreview(),
+              loadFantasyAdminStats(),
+              loadSubmittedLineups(),
+              loadMissionControl(),
+            ])
           )
           .catch((err) => {
             console.error('[Fantasy Admin] Draft slate load failed:', err);
@@ -1407,11 +1638,30 @@
       }
 
       function renderLockPreview(preview = null) {
-        const computedEl = $('#fantasyComputedLockLabel');
+        const cardEl = $('#submissionClosesCard');
+        const dateEl = $('#submissionClosesDate');
+        const timeEl = $('#submissionClosesTime');
+        const statusEl = $('#submissionClosesStatus');
+        const iconEl = $('#submissionClosesIcon');
         const warningEl = $('#fantasyLockWarning');
-        if (computedEl) {
-          computedEl.textContent =
-            preview?.computedLockLabel || (preview?.lock_at ? String(preview.lock_at) : '—');
+
+        const lockState = preview?.lockState || 'normal';
+        if (cardEl) {
+          cardEl.classList.remove('is-warning', 'is-locked');
+          if (lockState === 'warning') cardEl.classList.add('is-warning');
+          if (lockState === 'locked') cardEl.classList.add('is-locked');
+        }
+        if (dateEl) {
+          dateEl.textContent = preview?.lockDateLine || 'Set display time and save';
+        }
+        if (timeEl) {
+          timeEl.textContent = preview?.lockTimeLine || DEFAULT_FANTASY_LOCK_DISPLAY;
+        }
+        if (statusEl) {
+          statusEl.textContent = preview?.lockStateLabel || (preview?.lock_at ? 'Open' : 'Not set');
+        }
+        if (iconEl) {
+          iconEl.textContent = lockState === 'locked' ? '🔒' : lockState === 'warning' ? '⏳' : '🔓';
         }
         if (warningEl) {
           if (preview?.warning) {
@@ -1421,6 +1671,183 @@
             warningEl.textContent = '';
             warningEl.hidden = true;
           }
+        }
+      }
+
+      let missionControlRaceNumber = null;
+      let missionControlSeasonId = null;
+
+      function missionStatusLabel(status) {
+        const labels = {
+          done: 'Done',
+          due: 'Due',
+          upcoming: 'Upcoming',
+          overdue: 'Overdue',
+          pending: 'Pending',
+        };
+        return labels[status] || status;
+      }
+
+      function renderMissionControl(data = {}) {
+        missionControlRaceNumber = data.raceNumber ?? null;
+        missionControlSeasonId = data.seasonId ?? null;
+
+        const phaseEl = $('#mcFantasyPhase');
+        const raceWeekEl = $('#mcRaceWeek');
+        const lineupEl = $('#mcLineupCount');
+        const remainingEl = $('#mcTasksRemaining');
+        const nextDueEl = $('#mcNextDueTask');
+        const groupsEl = $('#missionControlGroups');
+        const noteEl = $('#missionControlRaceDateNote');
+
+        if (phaseEl) phaseEl.textContent = data.fantasyPhase || '—';
+        if (raceWeekEl) {
+          const next = data.nextRace;
+          const raceLabel = data.raceNumber
+            ? `Race ${data.raceNumber}${data.raceDate ? ` — ${data.raceDate}` : ''}`
+            : next?.raceNumber
+              ? `Race ${next.raceNumber}${next.date ? ` — ${next.date}` : ''} (upcoming)`
+              : 'Schedule unavailable';
+          raceWeekEl.textContent = raceLabel;
+        }
+        if (lineupEl) lineupEl.textContent = String(data.lineupCount ?? '—');
+        if (remainingEl) remainingEl.textContent = String(data.summary?.remainingCount ?? '—');
+        if (nextDueEl) {
+          const next = data.summary?.nextDueTask;
+          nextDueEl.textContent = next
+            ? `${next.dayLabel}: ${next.title} (${missionStatusLabel(next.status)})`
+            : 'All tasks complete';
+        }
+
+        if (noteEl) {
+          if (data.hasRaceDate === false) {
+            noteEl.textContent =
+              'Schedule race date unavailable — checklist shown without overdue labels. Confirm schedule in Admin settings.';
+            noteEl.hidden = false;
+          } else {
+            noteEl.hidden = true;
+            noteEl.textContent = '';
+          }
+        }
+
+        if (!groupsEl) return;
+
+        const tasks = data.tasks || [];
+        if (!tasks.length) {
+          groupsEl.innerHTML = '<p class="muted">No checklist tasks available.</p>';
+          return;
+        }
+
+        const byDay = new Map();
+        for (const task of tasks) {
+          const key = task.dayLabel || task.day;
+          if (!byDay.has(key)) byDay.set(key, []);
+          byDay.get(key).push(task);
+        }
+
+        groupsEl.innerHTML = Array.from(byDay.entries())
+          .map(
+            ([dayLabel, dayTasks]) => `
+              <section class="mission-control-day">
+                <div class="mission-control-day__title">${escapeAdminHtml(dayLabel)}</div>
+                ${dayTasks
+                  .map(
+                    (task) => `
+                  <div class="mission-control-task" data-task-id="${escapeAdminHtml(task.id)}">
+                    <input
+                      class="mission-control-task__check"
+                      type="checkbox"
+                      data-task-id="${escapeAdminHtml(task.id)}"
+                      ${task.completed ? 'checked' : ''}
+                      aria-label="Mark ${escapeAdminHtml(task.title)} complete"
+                    />
+                    <div class="mission-control-task__body">
+                      <div class="mission-control-task__title">${escapeAdminHtml(task.title)}</div>
+                      ${
+                        task.description
+                          ? `<div class="mission-control-task__desc">${escapeAdminHtml(task.description)}</div>`
+                          : ''
+                      }
+                      <div class="mission-control-task__meta">
+                        <span class="mission-control-badge is-${escapeAdminHtml(task.status)}">${escapeAdminHtml(missionStatusLabel(task.status))}</span>
+                        ${
+                          task.href
+                            ? `<a class="mission-control-link" href="${escapeAdminHtml(task.href)}" target="_blank" rel="noopener">Open →</a>`
+                            : ''
+                        }
+                      </div>
+                    </div>
+                  </div>`
+                  )
+                  .join('')}
+              </section>`
+          )
+          .join('');
+
+        groupsEl.querySelectorAll('.mission-control-task__check').forEach((input) => {
+          input.addEventListener('change', () => {
+            toggleMissionControlTask(input.dataset.taskId, input.checked);
+          });
+        });
+      }
+
+      async function loadMissionControl() {
+        const statusEl = $('#missionControlStatus');
+        if (statusEl) {
+          statusEl.textContent = 'Loading checklist...';
+          statusEl.classList.remove('error');
+        }
+        try {
+          const res = await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              password: getSessionPw(),
+              action: 'getAdminMissionControl',
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Mission control unavailable');
+          renderMissionControl(data);
+          if (statusEl) statusEl.textContent = '';
+        } catch (error) {
+          if (statusEl) {
+            statusEl.textContent = error.message || 'Load failed';
+            statusEl.classList.add('error');
+          }
+        }
+      }
+
+      async function toggleMissionControlTask(taskId, completed) {
+        const statusEl = $('#missionControlStatus');
+        if (!taskId || missionControlRaceNumber == null) return;
+        if (statusEl) {
+          statusEl.textContent = 'Saving...';
+          statusEl.classList.remove('error');
+        }
+        try {
+          const res = await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              password: getSessionPw(),
+              action: 'updateAdminMissionControlTask',
+              seasonId: missionControlSeasonId,
+              raceNumber: missionControlRaceNumber,
+              taskId,
+              completed,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Save failed');
+          renderMissionControl(data);
+          if (statusEl) statusEl.textContent = completed ? 'Task marked done.' : 'Task reopened.';
+        } catch (error) {
+          if (statusEl) {
+            statusEl.textContent = error.message || 'Save failed';
+            statusEl.classList.add('error');
+          }
+          await loadMissionControl();
         }
       }
 
@@ -1739,7 +2166,7 @@
           if (!res.ok) throw new Error(data.error || 'Publish failed');
 
           applyFantasySlatePayload(data);
-          await Promise.all([loadFantasyAdminStats(), loadSubmittedLineups()]);
+          await Promise.all([loadFantasyAdminStats(), loadSubmittedLineups(), loadMissionControl()]);
           const raceNum = data.slate?.race_number ?? '';
           const track = data.slate?.track || 'TBD';
           const publishedId = data.slate?.id ?? '';
@@ -2392,6 +2819,7 @@
 
       $('#generateNextRaceSlateBtn')?.addEventListener('click', generateNextRaceSlate);
       $('#reloadSubmittedLineupsBtn')?.addEventListener('click', loadSubmittedLineups);
+      $('#reloadMissionControlBtn')?.addEventListener('click', loadMissionControl);
       $('#generateFantasySalariesBtn')?.addEventListener('click', generateFantasySalaries);
       $('#reloadFantasyDraftBtn')?.addEventListener('click', loadFantasyDraftSlate);
       $('#publishFantasySlateBtn')?.addEventListener('click', publishFantasySlate);

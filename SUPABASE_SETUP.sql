@@ -61,6 +61,10 @@ alter table site_settings add column if not exists "tiktokIconUpdatedAt" timesta
 alter table site_settings add column if not exists "socialShareOrder" text;
 alter table site_settings add column if not exists "socialShareBoxSizePx" int default 48;
 alter table site_settings add column if not exists "socialShareIconMaxPx" int default 40;
+alter table site_settings add column if not exists "facebookShareMode" text default 'sharer';
+
+-- Admin Mission Control checklist (per season/race week task completion)
+alter table site_settings add column if not exists "adminMissionControl" jsonb default '{}'::jsonb;
 
 insert into site_settings (id, "seriesName", "seasonName", "standingsUrl", "scheduleUrl", "playoffCut", "refreshSeconds")
 values (1, 'Blazing Pedals Truck Series', 'Season 11', 'https://www.simracerhub.com/scoring/season_standings.php?season_id=27987', 'https://www.simracerhub.com/scoring/season_schedule.php?season_id=27987', 16, 60)
