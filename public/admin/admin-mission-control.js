@@ -183,13 +183,14 @@
     }
   }
 
-  function getActiveRaceContext(data) {
-    const bucket = getWorkflowBucket(data, state.selectedWorkflow);
-    return {
-      raceNumber: bucket?.raceNumber ?? null,
-      seasonId: data?.seasonId ?? null,
-      workflow: state.selectedWorkflow,
-    };
+  function isManualTask(task) {
+    return task?.detectionMode === 'manual';
+  }
+
+  function renderDetectionSummary(data) {
+    const detection = data?.detectionSummary;
+    if (!detection) return '—';
+    return `Auto ${detection.automatic.label} · Manual ${detection.manual.label} · Overall ${detection.overall.label}`;
   }
 
   function renderTaskList(root, tasks) {
@@ -203,17 +204,26 @@
     }
 
     listEl.innerHTML = dayTasks
-      .map(
-        (task) => `
+      .map((task) => {
+        const isManual = isManualTask(task);
+        const isAuto = !isManual;
+        const modeBadge = isManual
+          ? '<span class="admin-mission-control__mode-badge is-manual">Manual</span>'
+          : '<span class="admin-mission-control__mode-badge is-auto"><span class="admin-mission-control__auto-icon" aria-hidden="true">⚙</span> Auto</span>';
+        const control = isManual
+          ? `<input
+              class="admin-mission-control__check"
+              type="checkbox"
+              data-task-id="${escapeHtml(task.id)}"
+              data-workflow="${escapeHtml(task.workflow)}"
+              ${task.completed ? 'checked' : ''}
+              aria-label="Mark ${escapeHtml(task.title)} complete"
+            />`
+          : `<span class="admin-mission-control__task-check-placeholder" aria-hidden="true">${task.completed ? '✓' : '—'}</span>`;
+
+        return `
         <div class="admin-mission-control__task" data-task-id="${escapeHtml(task.id)}">
-          <input
-            class="admin-mission-control__check"
-            type="checkbox"
-            data-task-id="${escapeHtml(task.id)}"
-            data-workflow="${escapeHtml(task.workflow)}"
-            ${task.completed ? 'checked' : ''}
-            aria-label="Mark ${escapeHtml(task.title)} complete"
-          />
+          ${control}
           <div>
             <div class="admin-mission-control__task-title">${escapeHtml(task.title)}</div>
             ${
@@ -222,7 +232,13 @@
                 : ''
             }
             <div class="admin-mission-control__task-meta">
+              ${modeBadge}
               <span class="admin-mission-control__badge is-${escapeHtml(task.status)}">${escapeHtml(STATUS_LABELS[task.status] || task.status)}</span>
+              ${
+                task.completionSource === 'automatic' && task.autoReason
+                  ? `<span class="admin-mission-control__task-desc">${escapeHtml(task.autoReason)}</span>`
+                  : ''
+              }
               ${
                 task.href
                   ? `<a class="admin-mission-control__link" href="${escapeHtml(task.href)}" target="_blank" rel="noopener">Open →</a>`
@@ -230,8 +246,8 @@
               }
             </div>
           </div>
-        </div>`
-      )
+        </div>`;
+      })
       .join('');
 
     listEl.querySelectorAll('.admin-mission-control__check').forEach((input) => {
@@ -334,6 +350,7 @@
     const postRaceEl = root.querySelector('[data-mc-post-race]');
     const nextRaceEl = root.querySelector('[data-mc-next-race]');
     const remainingEl = root.querySelector('[data-mc-remaining]');
+    const detectionEl = root.querySelector('[data-mc-detection]');
     const nextDueEl = root.querySelector('[data-mc-next-due]');
     const toggleBtn = root.querySelector('[data-mc-toggle]');
     const drawerEl = root.querySelector('[data-mc-drawer]');
@@ -343,6 +360,7 @@
     if (postRaceEl) postRaceEl.textContent = formatRaceLabel(postRace, 'No completed race');
     if (nextRaceEl) nextRaceEl.textContent = formatRaceLabel(nextRace, 'No upcoming race');
     if (remainingEl) remainingEl.textContent = String(payload?.summary?.remainingCount ?? '—');
+    if (detectionEl) detectionEl.textContent = renderDetectionSummary(payload);
     if (nextDueEl) nextDueEl.textContent = formatNextDue(payload);
 
     if (workflowLabelEl) {
@@ -384,7 +402,8 @@
           <div class="admin-mission-control__summary">
             <span class="admin-mission-control__chip">Post-race: <strong data-mc-post-race>—</strong></span>
             <span class="admin-mission-control__chip">Next race: <strong data-mc-next-race>—</strong></span>
-            <span class="admin-mission-control__chip"><strong data-mc-remaining>—</strong> left</span>
+            <span class="admin-mission-control__chip admin-mission-control__chip--counts" data-mc-detection>—</span>
+            <span class="admin-mission-control__chip"><strong data-mc-remaining>—</strong> open</span>
             <span class="admin-mission-control__chip admin-mission-control__chip--next"><span data-mc-next-due>—</span></span>
           </div>
           <div class="admin-mission-control__actions">
@@ -464,11 +483,12 @@
   }
 
   async function toggleTask(taskId, workflow, completed) {
-    const ctx = getActiveRaceContext(state.data);
-    const bucket = getWorkflowBucket(state.data, workflow || ctx.workflow);
+    const bucket = getWorkflowBucket(state.data, workflow || state.selectedWorkflow);
     const raceNumber = bucket?.raceNumber;
+    const task = (bucket?.tasks || []).find((row) => row.id === taskId);
 
     if (!taskId || raceNumber == null || !getSessionPw()) return;
+    if (task && !isManualTask(task)) return;
 
     setStatus('Saving…', false);
     try {
@@ -480,7 +500,7 @@
           action: 'updateAdminMissionControlTask',
           seasonId: state.data?.seasonId,
           raceNumber,
-          workflow: workflow || ctx.workflow,
+          workflow: workflow || state.selectedWorkflow,
           taskId,
           completed,
         }),

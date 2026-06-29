@@ -6,6 +6,12 @@ import {
   parseScheduleDateParts,
 } from './_race-date-status.js';
 import { getPointsRaceByNumber } from './_schedule-points-races.js';
+import {
+  DETECTION_MODES,
+  loadMissionControlDetectionContext,
+  resolveTaskCompletionState,
+  summarizeDetectionCounts,
+} from './_mission-control-task-engine.js';
 
 export const MISSION_CONTROL_TASKS = [
   {
@@ -190,6 +196,32 @@ export const MISSION_CONTROL_TASKS = [
   },
 ];
 
+const TASK_DETECTION_MODES = {
+  'sun-upload-race-control-pdf': DETECTION_MODES.MANUAL,
+  'sun-confirm-race-results': DETECTION_MODES.AUTOMATIC,
+  'sun-score-fantasy-lineups': DETECTION_MODES.PLACEHOLDER,
+  'mon-upload-transcript': DETECTION_MODES.MANUAL,
+  'mon-publish-race-recap': DETECTION_MODES.AUTOMATIC,
+  'wed-generate-power-rankings': DETECTION_MODES.MANUAL,
+  'wed-publish-power-rankings': DETECTION_MODES.AUTOMATIC,
+  'wed-review-fantasy-salaries': DETECTION_MODES.MANUAL,
+  'thu-publish-driver-spotlight': DETECTION_MODES.AUTOMATIC,
+  'thu-confirm-broadcast-link': DETECTION_MODES.AUTOMATIC,
+  'thu-confirm-next-race-schedule': DETECTION_MODES.AUTOMATIC,
+  'fri-post-weekend-outlook': DETECTION_MODES.AUTOMATIC,
+  'fri-publish-fantasy-slate': DETECTION_MODES.AUTOMATIC,
+  'fri-confirm-lineup-lock': DETECTION_MODES.MANUAL,
+  'sat-verify-fantasy-slate-published': DETECTION_MODES.AUTOMATIC,
+  'sat-verify-lineups-open': DETECTION_MODES.AUTOMATIC,
+  'sat-confirm-submission-close': DETECTION_MODES.MANUAL,
+  'sat-lock-monitor-entries': DETECTION_MODES.AUTOMATIC,
+};
+
+for (const task of MISSION_CONTROL_TASKS) {
+  task.detectionMode = TASK_DETECTION_MODES[task.id] || DETECTION_MODES.MANUAL;
+  task.raceRole = task.raceRole || (task.workflow === 'postRace' ? 'completed' : 'upcoming');
+}
+
 const POST_RACE_DAY_OFFSET = {
   sunday: 0,
   monday: 1,
@@ -349,17 +381,26 @@ export function buildWorkflowTasks({
   raceNumber,
   raceDate,
   completedTaskIds = [],
+  detectionContext = null,
   now = new Date(),
 }) {
   const raceDateParts = raceDate ? parseScheduleDateParts(raceDate) : null;
   const todayKey = easternDateKey(now);
   const hasRaceDate = Boolean(raceDateParts);
-  const completedSet = new Set(completedTaskIds);
+  const manualCompletedIds = new Set(completedTaskIds);
   const dayOrder = getDayOrderForWorkflow(workflow);
 
   const tasks = MISSION_CONTROL_TASKS.filter((task) => task.workflow === workflow).map((task) => {
     const dueDateKey = computeTaskDueDateKey(raceDateParts, workflow, task.day);
-    const completed = completedSet.has(task.id);
+    const completion = detectionContext
+      ? resolveTaskCompletionState(task, detectionContext, manualCompletedIds)
+      : {
+          completed: manualCompletedIds.has(task.id),
+          completionSource: manualCompletedIds.has(task.id) ? 'manual' : null,
+          detectionMode: task.detectionMode || DETECTION_MODES.MANUAL,
+          autoReason: null,
+        };
+    const completed = Boolean(completion.completed);
     const status = computeTaskStatus({ completed, dueDateKey, todayKey, hasRaceDate });
     return {
       ...task,
@@ -369,6 +410,9 @@ export function buildWorkflowTasks({
       dueDateKey,
       completed,
       completedAt: completed ? true : false,
+      completionSource: completion.completionSource,
+      autoReason: completion.autoReason || null,
+      autoPending: completion.autoPending === true,
     };
   });
 
@@ -411,6 +455,7 @@ function buildWorkflowBucket({
   scheduleRaces,
   store,
   seasonId,
+  detectionContext,
   now,
 }) {
   if (!bucket?.raceNumber) {
@@ -422,6 +467,7 @@ function buildWorkflowBucket({
       hasRaceDate: false,
       tasks: [],
       summary: summarizeMissionControl([]),
+      detectionSummary: summarizeDetectionCounts([]),
       completedTaskIds: [],
     };
   }
@@ -433,6 +479,7 @@ function buildWorkflowBucket({
     raceNumber: bucket.raceNumber,
     raceDate,
     completedTaskIds,
+    detectionContext,
     now,
   });
 
@@ -444,6 +491,7 @@ function buildWorkflowBucket({
     hasRaceDate: Boolean(raceDate && parseScheduleDateParts(raceDate)),
     tasks,
     summary: summarizeMissionControl(tasks),
+    detectionSummary: summarizeDetectionCounts(tasks),
     completedTaskIds,
   };
 }
@@ -476,6 +524,9 @@ export async function setMissionControlTaskComplete(options = {}) {
   if (resolvedWorkflow !== taskDef.workflow) {
     throw new Error(`Task ${taskId} does not belong to workflow ${workflow}.`);
   }
+  if (taskDef.detectionMode !== DETECTION_MODES.MANUAL) {
+    throw new Error('Only manual tasks can be marked complete from admin.');
+  }
 
   const store = await loadMissionControlStore();
   if (!store[seasonId]) store[seasonId] = {};
@@ -507,12 +558,23 @@ export async function buildAdminMissionControlResponse(options = {}) {
   const raceBuckets = resolveMissionControlRaces(scheduleRaces, { now, settings });
   const store = await loadMissionControlStore(settings);
 
+  const detectionContext = await loadMissionControlDetectionContext({
+    settings,
+    seasonId,
+    now,
+    scheduleRaces,
+    fantasyProgression,
+    postRace: raceBuckets.postRace,
+    nextRace: raceBuckets.nextRace,
+  });
+
   const postRace = buildWorkflowBucket({
     workflow: 'postRace',
     bucket: raceBuckets.postRace,
     scheduleRaces,
     store,
     seasonId,
+    detectionContext,
     now,
   });
 
@@ -522,11 +584,13 @@ export async function buildAdminMissionControlResponse(options = {}) {
     scheduleRaces,
     store,
     seasonId,
+    detectionContext,
     now,
   });
 
   const allTasks = [...postRace.tasks, ...nextRace.tasks];
   const summary = summarizeMissionControl(allTasks);
+  const detectionSummary = summarizeDetectionCounts(allTasks);
 
   return {
     seasonId,
@@ -536,6 +600,7 @@ export async function buildAdminMissionControlResponse(options = {}) {
     nextRace,
     tasks: allTasks,
     summary,
+    detectionSummary,
     hasRaceDate: Boolean(postRace.hasRaceDate || nextRace.hasRaceDate),
     workflows: {
       postRace,
