@@ -8,6 +8,7 @@
     { "source": "/admin/news", "destination": "/admin/news.html" },
     { "source": "/admin/social-sharing", "destination": "/admin/social-sharing.html" },
     { "source": "/admin/transcripts", "destination": "/admin/transcripts.html" },
+    { "source": "/admin/race-control", "destination": "/admin/race-control.html" },
     { "source": "/news/:slug", "destination": "/news-article.html?slug=:slug" },
     { "source": "/drivers/:driverId", "destination": "/driver-profile.html?driverId=:driverId" },
     { "source": "/streamview", "destination": "/streamview.html" },

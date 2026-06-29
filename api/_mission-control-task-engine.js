@@ -4,6 +4,11 @@ import { enrichScheduleRaces, getPointsRaceByNumber } from './_schedule-points-r
 import { getEasternDateParts, hasRaceResults, parseScheduleDateParts } from './_race-date-status.js';
 import { parseLockState } from './_fantasy-lineups.js';
 import { resolveFantasySlateProgression } from './_fantasy-slate-progression.js';
+import {
+  loadRaceControlReportForRace,
+  PARSE_STATUS,
+  formatParseStatusLabel,
+} from './_race-control-reports.js';
 
 const GREEN_FLAG_PLAYLIST_ID = 'PL4aFms0YBw6_uE-yoYgOFDtaNcN9ozPIO';
 const GREEN_FLAG_RSS_URL = `https://www.youtube.com/feeds/videos.xml?playlist_id=${GREEN_FLAG_PLAYLIST_ID}`;
@@ -363,6 +368,61 @@ function findPowerRankingsForRace(weeks, race, window) {
 }
 
 export const MISSION_CONTROL_EVALUATORS = {
+  'sun-upload-race-control-pdf'(ctx) {
+    const postRace = normalizeRaceRef(ctx.postRace);
+    const report = ctx.raceControlReport || null;
+
+    if (!postRace) {
+      return { complete: false, reason: 'No completed race set for Race Control PDF check.' };
+    }
+
+    if (!report) {
+      return {
+        complete: false,
+        reason: `Missing Race Control PDF for Race ${postRace.raceNumber}.`,
+      };
+    }
+
+    const status = report.parseStatus;
+    const label = formatParseStatusLabel(status, report.parsedJson);
+
+    if (status === PARSE_STATUS.PARSED) {
+      const summary = report.summary || {};
+      const detail = [
+        summary.winner ? `winner ${summary.winner}` : null,
+        summary.sof != null ? `SOF ${summary.sof}` : null,
+        summary.cautionCount != null ? `${summary.cautionCount} cautions` : null,
+      ]
+        .filter(Boolean)
+        .join(', ');
+      return {
+        complete: true,
+        reason: detail
+          ? `Race Control PDF parsed for Race ${postRace.raceNumber} (${detail}).`
+          : `Race Control PDF parsed for Race ${postRace.raceNumber}.`,
+      };
+    }
+
+    if (status === PARSE_STATUS.UPLOADED) {
+      return {
+        complete: true,
+        reason: `Race Control PDF uploaded for Race ${postRace.raceNumber}; parse pending.`,
+      };
+    }
+
+    if (status === PARSE_STATUS.PARSE_FAILED) {
+      return {
+        complete: false,
+        reason: `Race Control PDF uploaded for Race ${postRace.raceNumber} but parse failed — needs review.`,
+      };
+    }
+
+    return {
+      complete: false,
+      reason: `${label} for Race ${postRace.raceNumber}.`,
+    };
+  },
+
   'sun-confirm-race-results'(ctx) {
     const postRace = normalizeRaceRef(ctx.postRace);
     const race = getPostRaceFromContext(ctx);
@@ -648,10 +708,13 @@ export async function loadMissionControlDetectionContext(options = {}) {
   const nextRaceRace =
     nextRaceNumber != null ? getPointsRaceByNumber(scheduleRaces, Number(nextRaceNumber)) : null;
 
-  const [newsArticles, publishedPowerRankingWeeks, broadcast] = await Promise.all([
+  const [newsArticles, publishedPowerRankingWeeks, broadcast, raceControlReport] = await Promise.all([
     loadPublishedNewsArticles(),
     loadPublishedPowerRankingWeeks(),
     loadBroadcastState(nextRaceRace || options.nextRace),
+    postRaceNumber != null
+      ? loadRaceControlReportForRace(seasonId, postRaceNumber)
+      : Promise.resolve(null),
   ]);
 
   const postRaceWindow = getPostRaceWindow(postRaceRace, nextRaceRace);
@@ -680,6 +743,7 @@ export async function loadMissionControlDetectionContext(options = {}) {
     newsArticles,
     publishedPowerRankingWeeks,
     broadcast,
+    raceControlReport,
   };
 }
 

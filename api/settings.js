@@ -36,6 +36,13 @@ import {
   setMissionControlTaskComplete,
 } from './_admin-mission-control.js';
 import {
+  deleteRaceControlReport,
+  getRaceControlReport,
+  listRaceControlReports,
+  reparseRaceControlReport,
+  uploadRaceControlReport,
+} from './_race-control-reports.js';
+import {
   buildFantasyProgressionMeta,
   resolveFantasySlateProgression,
 } from './_fantasy-slate-progression.js';
@@ -410,6 +417,59 @@ export default async function handler(req, res) {
       return res.status(200).json(result);
     } catch (error) {
       return res.status(500).json({ error: error.message || 'Failed to load submitted lineups.' });
+    }
+  }
+
+  if (action === 'getRaceControlReport') {
+    try {
+      const settings = await getSettings();
+      const seasonId = body.seasonId || settings.seasonId || '27987';
+      const raceNumber = body.raceNumber != null ? Number(body.raceNumber) : null;
+      if (raceNumber != null) {
+        const report = await getRaceControlReport(seasonId, raceNumber);
+        return res.status(200).json({ report });
+      }
+      const reports = await listRaceControlReports(seasonId);
+      return res.status(200).json({ reports });
+    } catch (error) {
+      return res.status(error.status || 500).json({ error: error.message || 'Failed to load race control report.' });
+    }
+  }
+
+  if (action === 'uploadRaceControlReport') {
+    try {
+      const settings = await getSettings();
+      const report = await uploadRaceControlReport(body, { settings });
+      return res.status(200).json({ ok: true, report });
+    } catch (error) {
+      if (error.details?.setupSql) {
+        return res.status(error.status || 400).json({
+          error: error.message || 'Upload failed.',
+          bucket: error.details.bucket,
+          setupSql: error.details.setupSql,
+        });
+      }
+      return res.status(error.status || 500).json({ error: error.message || 'Race Control PDF upload failed.' });
+    }
+  }
+
+  if (action === 'deleteRaceControlReport') {
+    try {
+      const settings = await getSettings();
+      const result = await deleteRaceControlReport(body, { settings });
+      return res.status(200).json(result);
+    } catch (error) {
+      return res.status(error.status || 500).json({ error: error.message || 'Failed to delete race control report.' });
+    }
+  }
+
+  if (action === 'reparseRaceControlReport') {
+    try {
+      const settings = await getSettings();
+      const report = await reparseRaceControlReport(body, { settings });
+      return res.status(200).json({ ok: true, report });
+    } catch (error) {
+      return res.status(error.status || 500).json({ error: error.message || 'Failed to reparse race control report.' });
     }
   }
 

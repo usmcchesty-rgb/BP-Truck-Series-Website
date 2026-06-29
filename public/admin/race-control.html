@@ -1,0 +1,504 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Race Control Center</title>
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/admin/admin-layout.css">
+  <style>
+    .sub { color: var(--bp-text-secondary); font-size: 12px; margin-bottom: 16px; line-height: 1.45; }
+    .notice { padding: 12px 14px; border: 1px solid #355; background: rgba(0, 40, 40, 0.35); border-radius: 4px; margin-bottom: 16px; font-size: 12px; line-height: 1.5; }
+    .panel { padding: 14px; margin-bottom: 14px; }
+    .panel h2 { margin: 0 0 12px; font-size: 18px; color: #ff3030; }
+    .field-label { display: block; font-size: 11px; color: #999; font-weight: 900; text-transform: uppercase; margin: 10px 0 4px; }
+    .input, .select { width: 100%; margin-bottom: 8px; padding: 8px; background: #090909; color: #fff; border: 1px solid #555; border-radius: 4px; font-size: 12px; }
+    .btn-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+    .btn-secondary { background: linear-gradient(#1c1c1c, #080808); }
+    .btn-danger { background: linear-gradient(#5a1010, #2a0505); border-color: #733; }
+    #adminMsg, #loginMsg { margin-top: 10px; font-size: 12px; color: #ccc; white-space: pre-wrap; }
+    #adminMsg.error, #loginMsg.error { color: #ff6060; }
+    .pw-row { max-width: 320px; margin-bottom: 14px; }
+    .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+    .status-badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 900; text-transform: uppercase; border: 1px solid #444; }
+    .status-badge.is-missing { color: #aaa; border-color: #555; }
+    .status-badge.is-uploaded { color: #9cf; border-color: #369; }
+    .status-badge.is-parsed { color: #9f9; border-color: #393; }
+    .status-badge.is-failed { color: #f99; border-color: #933; }
+    .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 12px 0; }
+    .summary-card { padding: 10px; border: 1px solid #333; background: rgba(0,0,0,.25); }
+    .summary-card strong { display: block; font-size: 16px; margin-top: 4px; }
+    .summary-card span { font-size: 10px; color: #888; text-transform: uppercase; font-weight: 900; }
+    .table-wrap { overflow-x: auto; margin-top: 12px; }
+    table.data-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    table.data-table th, table.data-table td { border: 1px solid #333; padding: 6px 8px; text-align: left; }
+    table.data-table th { background: #111; color: #ccc; text-transform: uppercase; font-size: 10px; }
+    .warnings { margin-top: 10px; padding: 10px; border: 1px solid #663; background: rgba(80, 60, 0, 0.2); font-size: 11px; }
+    .warnings ul { margin: 6px 0 0 18px; padding: 0; }
+    .saved-list { display: grid; gap: 8px; margin-bottom: 16px; }
+    .saved-item { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid #333; background: rgba(0,0,0,.25); }
+    .saved-item strong { font-size: 13px; }
+    .saved-item span { color: #888; font-size: 11px; display: block; margin-top: 2px; }
+    .saved-item button { padding: 4px 10px; font-size: 9px; }
+    .events-list { display: grid; gap: 6px; margin-top: 10px; max-height: 280px; overflow-y: auto; }
+    .event-item { padding: 8px 10px; border: 1px solid #333; background: rgba(0,0,0,.2); font-size: 11px; }
+    .ai-ready { margin-top: 10px; font-size: 12px; color: #9f9; }
+    .ai-pending { margin-top: 10px; font-size: 12px; color: #aaa; }
+  </style>
+</head>
+<body>
+  <div id="admin-nav-root"></div>
+  <script src="/admin/admin-nav.js"></script>
+
+  <main id="loginView" class="wrap" hidden>
+    <h1>Race Control Center</h1>
+    <p class="sub">Enter the admin password to manage Race Control PDFs.</p>
+    <div class="pw-row">
+      <input id="loginPw" class="input" type="password" placeholder="Admin password" autocomplete="current-password">
+      <button class="btn" type="button" onclick="login()">Unlock</button>
+      <pre id="loginMsg"></pre>
+    </div>
+  </main>
+
+  <main id="adminView" class="wrap" hidden>
+    <h1>Race Control Center</h1>
+    <div class="notice">
+      This data supplements official results. The site does not depend on it.
+      Schedule/results, fantasy, power rankings, and news continue to work without a Race Control PDF.
+    </div>
+
+    <div class="panel">
+      <h2>Uploaded Reports</h2>
+      <div id="savedList" class="saved-list"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Upload / Manage</h2>
+      <div class="meta-grid">
+        <div>
+          <label class="field-label" for="raceSelect">Race</label>
+          <select id="raceSelect" class="select">
+            <option value="">Loading races...</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label" for="raceNumber">Race Number</label>
+          <input id="raceNumber" class="input" type="number" min="1" step="1" placeholder="Race #">
+        </div>
+        <div>
+          <label class="field-label" for="pdfFile">Race Control PDF</label>
+          <input id="pdfFile" class="input" type="file" accept="application/pdf,.pdf">
+        </div>
+      </div>
+
+      <div id="reportMeta" hidden>
+        <div class="meta-grid" style="margin-top: 10px;">
+          <div><span class="field-label">File</span><div id="fileName">—</div></div>
+          <div><span class="field-label">Uploaded</span><div id="uploadedAt">—</div></div>
+          <div><span class="field-label">Parse Status</span><div id="parseStatus">—</div></div>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn" type="button" onclick="uploadPdf()">Upload / Replace PDF</button>
+        <button class="btn btn-secondary" type="button" onclick="reparsePdf()">Reparse PDF</button>
+        <button class="btn btn-danger" type="button" onclick="deletePdf()">Delete PDF</button>
+      </div>
+      <pre id="adminMsg"></pre>
+    </div>
+
+    <div class="panel" id="summaryPanel" hidden>
+      <h2>Parsed Summary</h2>
+      <div class="summary-grid">
+        <div class="summary-card"><span>Winner (PDF)</span><strong id="summaryWinner">—</strong></div>
+        <div class="summary-card"><span>SOF</span><strong id="summarySof">—</strong></div>
+        <div class="summary-card"><span>Cautions</span><strong id="summaryCautions">—</strong></div>
+        <div class="summary-card"><span>Results</span><strong id="summaryResults">—</strong></div>
+        <div class="summary-card"><span>Events</span><strong id="summaryEvents">—</strong></div>
+      </div>
+      <div id="aiReadyLine" class="ai-pending"></div>
+      <div id="parseWarnings" class="warnings" hidden></div>
+    </div>
+
+    <div class="panel" id="resultsPanel" hidden>
+      <h2>Driver Results (PDF extract)</h2>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Pos</th><th>Car</th><th>Driver</th><th>Start</th><th>Inc</th><th>Laps</th><th>Best Lap</th><th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="resultsBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel" id="eventsPanel" hidden>
+      <h2>Session Events (PDF extract)</h2>
+      <div id="eventsList" class="events-list"></div>
+    </div>
+  </main>
+
+  <script>
+    const $ = (s) => document.querySelector(s);
+    const SESSION_KEY = 'bp_admin_pw';
+    let scheduleRaces = [];
+    let savedReports = [];
+    let currentReport = null;
+
+    function getSessionPw() { return sessionStorage.getItem(SESSION_KEY) || ''; }
+
+    async function apiPost(action, payload = {}) {
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: getSessionPw(), action, ...payload })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || data.setupSql || 'Request failed.');
+      return data;
+    }
+
+    async function verifyPassword(pw) {
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pw, verifyOnly: true })
+      });
+      return res.ok;
+    }
+
+    function showLogin() {
+      $('#loginView').hidden = false;
+      $('#adminView').hidden = true;
+      if (window.AdminNav) AdminNav.setLoggedIn(false);
+    }
+
+    async function showAdmin() {
+      $('#loginView').hidden = true;
+      $('#adminView').hidden = false;
+      if (window.AdminNav) AdminNav.setLoggedIn(true);
+      await loadSchedule();
+      await loadSavedList();
+      applyQueryRaceNumber();
+    }
+
+    async function login() {
+      const msg = $('#loginMsg');
+      const pw = $('#loginPw').value;
+      if (!pw) { msg.textContent = 'Enter the admin password.'; msg.classList.add('error'); return; }
+      msg.textContent = 'Checking...';
+      msg.classList.remove('error');
+      try {
+        if (!(await verifyPassword(pw))) throw new Error('Bad password');
+        sessionStorage.setItem(SESSION_KEY, pw);
+        $('#loginPw').value = '';
+        msg.textContent = '';
+        showAdmin();
+      } catch (e) {
+        msg.textContent = e.message;
+        msg.classList.add('error');
+      }
+    }
+
+    function logout() {
+      sessionStorage.removeItem(SESSION_KEY);
+      showLogin();
+    }
+
+    async function initSession() {
+      const pw = getSessionPw();
+      if (!pw) return showLogin();
+      try {
+        if (await verifyPassword(pw)) return showAdmin();
+      } catch {}
+      sessionStorage.removeItem(SESSION_KEY);
+      showLogin();
+    }
+
+    function setMsg(text, isError = false) {
+      const msg = $('#adminMsg');
+      msg.textContent = text;
+      msg.classList.toggle('error', isError);
+    }
+
+    function formatTimestamp(value) {
+      if (!value) return '—';
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+    }
+
+    function readRaceNumber() {
+      const fromInput = Number($('#raceNumber').value);
+      if (Number.isInteger(fromInput) && fromInput > 0) return fromInput;
+      const fromSelect = Number($('#raceSelect').value);
+      if (Number.isInteger(fromSelect) && fromSelect > 0) return fromSelect;
+      return null;
+    }
+
+    function syncRaceFields(raceNumber) {
+      const num = Number(raceNumber);
+      if (!Number.isInteger(num) || num < 1) return;
+      $('#raceNumber').value = String(num);
+      $('#raceSelect').value = String(num);
+    }
+
+    function statusBadgeClass(parseStatus) {
+      if (parseStatus === 'parsed') return 'is-parsed';
+      if (parseStatus === 'uploaded') return 'is-uploaded';
+      if (parseStatus === 'parse_failed') return 'is-failed';
+      return 'is-missing';
+    }
+
+    function formatStatusLabel(report) {
+      if (!report) return 'Not uploaded';
+      return report.parseStatusLabel || report.parseStatus || 'Unknown';
+    }
+
+    async function loadSchedule() {
+      try {
+        const res = await fetch('/api/schedule');
+        const data = await res.json();
+        scheduleRaces = Array.isArray(data.races) ? data.races : [];
+        const select = $('#raceSelect');
+        select.innerHTML = scheduleRaces.length
+          ? scheduleRaces.map((race) => {
+              const num = race.officialPointsRaceNumber || race.scheduleRow;
+              return `<option value="${num}">Race ${num} — ${race.track || 'TBD'}</option>`;
+            }).join('')
+          : '<option value="">No races found</option>';
+      } catch {
+        $('#raceSelect').innerHTML = '<option value="">Failed to load schedule</option>';
+      }
+    }
+
+    async function loadSavedList() {
+      try {
+        const data = await apiPost('getRaceControlReport');
+        savedReports = Array.isArray(data.reports) ? data.reports : [];
+        renderSavedList();
+      } catch (e) {
+        setMsg(e.message, true);
+      }
+    }
+
+    function renderSavedList() {
+      const list = $('#savedList');
+      if (!savedReports.length) {
+        list.innerHTML = '<p class="sub">No Race Control PDFs uploaded yet.</p>';
+        return;
+      }
+      list.innerHTML = savedReports.map((row) => `
+        <div class="saved-item">
+          <div>
+            <strong>Race ${row.raceNumber}${row.trackName ? ` — ${row.trackName}` : ''}</strong>
+            <span>${formatStatusLabel(row)} · ${row.originalFilename || 'race-control.pdf'} · ${formatTimestamp(row.uploadedAt)}</span>
+          </div>
+          <button class="btn btn-secondary" type="button" data-race="${row.raceNumber}">View</button>
+        </div>
+      `).join('');
+      list.querySelectorAll('button[data-race]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          syncRaceFields(btn.dataset.race);
+          loadReportForRace(Number(btn.dataset.race));
+        });
+      });
+    }
+
+    function renderReport(report) {
+      currentReport = report || null;
+      const hasReport = Boolean(report);
+
+      $('#reportMeta').hidden = !hasReport;
+      $('#summaryPanel').hidden = !hasReport;
+      $('#resultsPanel').hidden = !hasReport;
+      $('#eventsPanel').hidden = !hasReport;
+
+      if (!hasReport) {
+        $('#fileName').textContent = '—';
+        $('#uploadedAt').textContent = '—';
+        $('#parseStatus').innerHTML = '<span class="status-badge is-missing">Not uploaded</span>';
+        $('#aiReadyLine').textContent = 'Upload a Race Control PDF to enrich AI/news analysis.';
+        $('#aiReadyLine').className = 'ai-pending';
+        return;
+      }
+
+      $('#fileName').textContent = report.originalFilename || 'race-control.pdf';
+      $('#uploadedAt').textContent = formatTimestamp(report.uploadedAt);
+      $('#parseStatus').innerHTML = `<span class="status-badge ${statusBadgeClass(report.parseStatus)}">${formatStatusLabel(report)}</span>`;
+
+      const summary = report.summary || {};
+      const parsed = report.parsedJson || {};
+      $('#summaryWinner').textContent = summary.winner || parsed.winner || '—';
+      $('#summarySof').textContent = summary.sof ?? parsed.sof ?? '—';
+      $('#summaryCautions').textContent = summary.cautionCount ?? parsed.cautionCount ?? '—';
+      $('#summaryResults').textContent = summary.resultCount ?? (parsed.results || []).length ?? '—';
+      $('#summaryEvents').textContent = summary.eventCount ?? (parsed.raceEvents || []).length ?? '—';
+
+      if (report.aiReady) {
+        $('#aiReadyLine').textContent = 'AI-ready: supplemental Race Control context is available for this race.';
+        $('#aiReadyLine').className = 'ai-ready';
+      } else if (report.parseStatus === 'uploaded') {
+        $('#aiReadyLine').textContent = 'PDF uploaded — parse pending. Reparse if summary does not appear.';
+        $('#aiReadyLine').className = 'ai-pending';
+      } else if (report.parseStatus === 'parse_failed') {
+        $('#aiReadyLine').textContent = 'Parse failed — review PDF format or re-upload.';
+        $('#aiReadyLine').className = 'ai-pending';
+      } else {
+        $('#aiReadyLine').textContent = 'Supplemental context not yet available.';
+        $('#aiReadyLine').className = 'ai-pending';
+      }
+
+      const warnings = summary.parseWarnings || parsed.parseWarnings || [];
+      const warningsEl = $('#parseWarnings');
+      if (warnings.length) {
+        warningsEl.hidden = false;
+        warningsEl.innerHTML = `<strong>Parse warnings</strong><ul>${warnings.map((w) => `<li>${w}</li>`).join('')}</ul>`;
+      } else {
+        warningsEl.hidden = true;
+        warningsEl.innerHTML = '';
+      }
+
+      const results = parsed.results || [];
+      $('#resultsBody').innerHTML = results.length
+        ? results.map((row) => `
+            <tr>
+              <td>${row.position ?? '—'}</td>
+              <td>${row.carNumber ?? '—'}</td>
+              <td>${row.driverName ?? '—'}</td>
+              <td>${row.startPosition ?? '—'}</td>
+              <td>${row.incidentCount ?? '—'}</td>
+              <td>${row.lapsCompleted ?? '—'}</td>
+              <td>${row.bestLap ?? '—'}</td>
+              <td>${row.status ?? '—'}</td>
+            </tr>
+          `).join('')
+        : '<tr><td colspan="8">No driver results extracted from PDF.</td></tr>';
+
+      const events = parsed.raceEvents || [];
+      $('#eventsList').innerHTML = events.length
+        ? events.map((event) => `<div class="event-item">${event.text || event.type || 'Event'}</div>`).join('')
+        : '<p class="sub">No session events extracted from PDF.</p>';
+    }
+
+    async function loadReportForRace(raceNumber) {
+      const num = Number(raceNumber);
+      if (!Number.isInteger(num) || num < 1) {
+        setMsg('Enter a valid race number.', true);
+        return;
+      }
+      syncRaceFields(num);
+      setMsg('Loading report...');
+      try {
+        const data = await apiPost('getRaceControlReport', { raceNumber: num });
+        renderReport(data.report || null);
+        setMsg(data.report ? `Loaded Race ${num} Race Control report.` : `No Race Control PDF for Race ${num}.`);
+      } catch (e) {
+        setMsg(e.message, true);
+      }
+    }
+
+    function readFileAsBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(new Error('Failed to read PDF file.'));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function uploadPdf() {
+      const raceNumber = readRaceNumber();
+      const fileInput = $('#pdfFile');
+      const file = fileInput.files?.[0];
+      if (!raceNumber) {
+        setMsg('Select or enter a race number.', true);
+        return;
+      }
+      if (!file) {
+        setMsg('Choose a Race Control PDF file.', true);
+        return;
+      }
+      if (file.type && file.type !== 'application/pdf') {
+        setMsg('File must be a PDF.', true);
+        return;
+      }
+      setMsg('Uploading and parsing PDF...');
+      try {
+        const pdfBase64 = await readFileAsBase64(file);
+        const data = await apiPost('uploadRaceControlReport', {
+          raceNumber,
+          pdfBase64,
+          originalFilename: file.name,
+        });
+        fileInput.value = '';
+        renderReport(data.report || null);
+        await loadSavedList();
+        setMsg(`Uploaded Race Control PDF for Race ${raceNumber}.`);
+      } catch (e) {
+        setMsg(e.message, true);
+      }
+    }
+
+    async function reparsePdf() {
+      const raceNumber = readRaceNumber();
+      if (!raceNumber) {
+        setMsg('Select or enter a race number.', true);
+        return;
+      }
+      setMsg('Reparsing PDF...');
+      try {
+        const data = await apiPost('reparseRaceControlReport', { raceNumber });
+        renderReport(data.report || null);
+        await loadSavedList();
+        setMsg(`Reparsed Race Control PDF for Race ${raceNumber}.`);
+      } catch (e) {
+        setMsg(e.message, true);
+      }
+    }
+
+    async function deletePdf() {
+      const raceNumber = readRaceNumber();
+      if (!raceNumber) {
+        setMsg('Select or enter a race number.', true);
+        return;
+      }
+      if (!confirm(`Delete Race Control PDF for Race ${raceNumber}?`)) return;
+      setMsg('Deleting...');
+      try {
+        await apiPost('deleteRaceControlReport', { raceNumber });
+        renderReport(null);
+        await loadSavedList();
+        setMsg(`Deleted Race Control PDF for Race ${raceNumber}.`);
+      } catch (e) {
+        setMsg(e.message, true);
+      }
+    }
+
+    function applyQueryRaceNumber() {
+      const params = new URLSearchParams(location.search);
+      const raceNumber = Number(params.get('raceNumber'));
+      if (!Number.isInteger(raceNumber) || raceNumber < 1) return;
+      syncRaceFields(raceNumber);
+      loadReportForRace(raceNumber);
+    }
+
+    $('#raceSelect')?.addEventListener('change', () => {
+      const raceNumber = Number($('#raceSelect').value);
+      if (raceNumber) loadReportForRace(raceNumber);
+    });
+
+    $('#raceNumber')?.addEventListener('change', () => {
+      const raceNumber = readRaceNumber();
+      if (raceNumber) loadReportForRace(raceNumber);
+    });
+
+    $('#loginPw')?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') login();
+    });
+
+    initSession();
+  </script>
+</body>
+</html>

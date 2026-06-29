@@ -12,6 +12,7 @@
     { id: "news", label: "News", href: "/admin/news" },
     { id: "social-sharing", label: "Social Sharing", href: "/admin/social-sharing" },
     { id: "transcripts", label: "Transcripts", href: "/admin/transcripts" },
+    { id: "race-control", label: "Race Control", href: "/admin/race-control.html" },
   ];
 
   const STYLE_ID = "admin-shell-nav-styles";

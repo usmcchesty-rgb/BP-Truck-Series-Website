@@ -21,8 +21,8 @@ export const MISSION_CONTROL_TASKS = [
     day: 'sunday',
     dayLabel: 'Sunday',
     title: 'Upload Race Control PDF',
-    description: 'Add race control notes for league reference.',
-    href: '/admin/news',
+    description: 'Upload supplemental lap chart, cautions, and event data (optional enrichment).',
+    href: '/admin/race-control.html',
   },
   {
     id: 'sun-confirm-race-results',
@@ -197,7 +197,7 @@ export const MISSION_CONTROL_TASKS = [
 ];
 
 const TASK_DETECTION_MODES = {
-  'sun-upload-race-control-pdf': DETECTION_MODES.MANUAL,
+  'sun-upload-race-control-pdf': DETECTION_MODES.AUTOMATIC,
   'sun-confirm-race-results': DETECTION_MODES.AUTOMATIC,
   'sun-score-fantasy-lineups': DETECTION_MODES.PLACEHOLDER,
   'mon-upload-transcript': DETECTION_MODES.MANUAL,
