@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Blazing Pedals — Join</title>
-    <meta name="description" content="Apply to join Blazing Pedals, a competitive sim racing league built around clean racing and organized events." />
+    <meta name="description" content="Join Blazing Pedals on Discord while driver applications are being finalized." />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
@@ -12,96 +12,145 @@
     <header class="topbar"></header>
 
     <main class="join-page-main">
-      <section class="panel join-page-panel" id="joinFormSection">
-        <h2>Join Blazing Pedals</h2>
+      <section class="panel join-page-panel join-coming-soon-panel">
+        <span class="join-coming-soon-badge">Coming Soon</span>
+        <h2>JOIN BLAZING PEDALS</h2>
+        <p class="join-page-subtitle">Driver Applications Coming Soon</p>
         <p class="join-page-intro">
-          Complete the application below. Every submission is reviewed by league staff to help ensure
-          competitive, respectful racing for everyone in the community.
+          We're putting the finishing touches on a fully integrated driver application system that will automatically
+          verify iRacing identity, import official racing statistics, review league history, and streamline the
+          recruiting process.
+        </p>
+        <p class="join-page-intro join-page-intro--closing">
+          Until then, we'd love to have you join our community.
         </p>
 
-        <form id="joinApplicationForm" class="join-form" novalidate>
-          <fieldset class="join-form-section">
-            <legend>Driver Info</legend>
-
-            <label class="join-field-label" for="iracingCustomerId">iRacing Customer ID <span class="join-required">*</span></label>
-            <div class="join-lookup-row">
-              <input
-                id="iracingCustomerId"
-                class="join-input join-input--lookup"
-                name="iracing_customer_id"
-                type="text"
-                inputmode="numeric"
-                pattern="[0-9]+"
-                required
-              />
-              <button id="lookupDriverBtn" class="join-lookup-btn" type="button">LOOKUP DRIVER</button>
-            </div>
-
-            <label class="join-field-label" for="iracingDisplayName">iRacing Display Name <span class="join-required">*</span></label>
-            <input
-              id="iracingDisplayName"
-              class="join-input"
-              name="iracing_display_name"
-              type="text"
-              required
-              autocomplete="off"
+        <div class="join-discord-section">
+          <svg class="join-discord-logo" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path
+              fill="currentColor"
+              d="M20.317 4.369a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.331c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.419 0 1.334-.956 2.419-2.157 2.419zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.419 0 1.334-.946 2.419-2.157 2.419z"
             />
-            <p class="join-field-help">
-              Enter your name exactly as it appears in iRacing, including any trailing number. This may be auto-filled after lookup.
-            </p>
-            <p id="lookupStatus" class="join-form-message" hidden></p>
-
-            <label class="join-field-label" for="driverName">Applicant Name / Real Name</label>
-            <input id="driverName" class="join-input" name="driver_name" type="text" autocomplete="name" />
-
-            <label class="join-field-label" for="preferredNumber">Preferred Number</label>
-            <input id="preferredNumber" class="join-input" name="preferred_number" type="text" />
-
-            <label class="join-checkbox-label">
-              <input id="ageConfirmed" name="age_confirmed" type="checkbox" value="true" required />
-              <span>I confirm that I am at least 13 years old. <span class="join-required">*</span></span>
-            </label>
-          </fieldset>
-
-          <fieldset class="join-form-section">
-            <legend>Contact Info</legend>
-            <label class="join-field-label" for="discordName">Discord Username</label>
-            <input id="discordName" class="join-input" name="discord_name" type="text" autocomplete="username" />
-            <p class="join-field-help">Optional. Used if staff needs to contact you.</p>
-
-            <label class="join-field-label" for="email">Email</label>
-            <input id="email" class="join-input" name="email" type="email" autocomplete="email" />
-
-            <label class="join-field-label" for="timezone">Time Zone</label>
-            <input id="timezone" class="join-input" name="timezone" type="text" placeholder="e.g. US/Eastern" />
-          </fieldset>
-
-          <fieldset class="join-form-section">
-            <legend>Racing Background</legend>
-            <label class="join-field-label" for="referredBy">Referred By</label>
-            <input id="referredBy" class="join-input" name="referred_by" type="text" />
-
-            <label class="join-field-label" for="racingBackground">Racing Background</label>
-            <textarea id="racingBackground" class="join-textarea" name="racing_background" rows="5"></textarea>
-
-            <label class="join-field-label" for="whyJoin">Why do you want to join Blazing Pedals?</label>
-            <textarea id="whyJoin" class="join-textarea" name="why_join" rows="5"></textarea>
-          </fieldset>
-
-          <fieldset class="join-form-section join-form-section--submit">
-            <legend>Submit</legend>
-            <p id="joinFormError" class="join-form-message join-form-message--error" hidden></p>
-            <button id="joinSubmitBtn" class="join-submit-btn" type="submit">SUBMIT APPLICATION</button>
-          </fieldset>
-        </form>
+          </svg>
+          <h3 class="join-discord-heading">Join Our Discord</h3>
+          <p class="join-discord-text">
+            Interested in racing with Blazing Pedals?
+            Join our Discord server to introduce yourself, meet our drivers, stay up to date with league announcements,
+            and get signed up while our automated application system is under development.
+          </p>
+          <a
+            class="join-discord-btn home-hero-btn-primary"
+            href="https://discord.gg/JsSxvwQvX"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <svg class="join-discord-btn-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path
+                fill="currentColor"
+                d="M20.317 4.369a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.331c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.419 0 1.334-.956 2.419-2.157 2.419zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.419 0 1.334-.946 2.419-2.157 2.419z"
+              />
+            </svg>
+            JOIN OUR DISCORD
+          </a>
+          <p class="join-discord-footnote">
+            Applications will be available directly through this website soon.
+          </p>
+        </div>
       </section>
 
-      <section class="panel join-page-panel join-success-panel" id="joinSuccessSection" hidden>
-        <h2>Application Received</h2>
-        <p class="join-page-intro" id="joinSuccessMessage">
-          Application received. Our staff will review your information and contact you if we need anything else.
-        </p>
-      </section>
+      <!-- Application form preserved for future activation — do not remove -->
+      <div hidden id="joinApplicationLegacy" aria-hidden="true">
+        <section class="panel join-page-panel" id="joinFormSection">
+          <h2>Join Blazing Pedals</h2>
+          <p class="join-page-intro">
+            Complete the application below. Every submission is reviewed by league staff to help ensure
+            competitive, respectful racing for everyone in the community.
+          </p>
+
+          <form id="joinApplicationForm" class="join-form" novalidate>
+            <fieldset class="join-form-section">
+              <legend>Driver Info</legend>
+
+              <label class="join-field-label" for="iracingCustomerId">iRacing Customer ID <span class="join-required">*</span></label>
+              <div class="join-lookup-row">
+                <input
+                  id="iracingCustomerId"
+                  class="join-input join-input--lookup"
+                  name="iracing_customer_id"
+                  type="text"
+                  inputmode="numeric"
+                  pattern="[0-9]+"
+                  required
+                />
+                <button id="lookupDriverBtn" class="join-lookup-btn" type="button">LOOKUP DRIVER</button>
+              </div>
+
+              <label class="join-field-label" for="iracingDisplayName">iRacing Display Name <span class="join-required">*</span></label>
+              <input
+                id="iracingDisplayName"
+                class="join-input"
+                name="iracing_display_name"
+                type="text"
+                required
+                autocomplete="off"
+              />
+              <p class="join-field-help">
+                Enter your name exactly as it appears in iRacing, including any trailing number. This may be auto-filled after lookup.
+              </p>
+              <p id="lookupStatus" class="join-form-message" hidden></p>
+
+              <label class="join-field-label" for="driverName">Applicant Name / Real Name</label>
+              <input id="driverName" class="join-input" name="driver_name" type="text" autocomplete="name" />
+
+              <label class="join-field-label" for="preferredNumber">Preferred Number</label>
+              <input id="preferredNumber" class="join-input" name="preferred_number" type="text" />
+
+              <label class="join-checkbox-label">
+                <input id="ageConfirmed" name="age_confirmed" type="checkbox" value="true" required />
+                <span>I confirm that I am at least 13 years old. <span class="join-required">*</span></span>
+              </label>
+            </fieldset>
+
+            <fieldset class="join-form-section">
+              <legend>Contact Info</legend>
+              <label class="join-field-label" for="discordName">Discord Username</label>
+              <input id="discordName" class="join-input" name="discord_name" type="text" autocomplete="username" />
+              <p class="join-field-help">Optional. Used if staff needs to contact you.</p>
+
+              <label class="join-field-label" for="email">Email</label>
+              <input id="email" class="join-input" name="email" type="email" autocomplete="email" />
+
+              <label class="join-field-label" for="timezone">Time Zone</label>
+              <input id="timezone" class="join-input" name="timezone" type="text" placeholder="e.g. US/Eastern" />
+            </fieldset>
+
+            <fieldset class="join-form-section">
+              <legend>Racing Background</legend>
+              <label class="join-field-label" for="referredBy">Referred By</label>
+              <input id="referredBy" class="join-input" name="referred_by" type="text" />
+
+              <label class="join-field-label" for="racingBackground">Racing Background</label>
+              <textarea id="racingBackground" class="join-textarea" name="racing_background" rows="5"></textarea>
+
+              <label class="join-field-label" for="whyJoin">Why do you want to join Blazing Pedals?</label>
+              <textarea id="whyJoin" class="join-textarea" name="why_join" rows="5"></textarea>
+            </fieldset>
+
+            <fieldset class="join-form-section join-form-section--submit">
+              <legend>Submit</legend>
+              <p id="joinFormError" class="join-form-message join-form-message--error" hidden></p>
+              <button id="joinSubmitBtn" class="join-submit-btn" type="submit">SUBMIT APPLICATION</button>
+            </fieldset>
+          </form>
+        </section>
+
+        <section class="panel join-page-panel join-success-panel" id="joinSuccessSection" hidden>
+          <h2>Application Received</h2>
+          <p class="join-page-intro" id="joinSuccessMessage">
+            Application received. Our staff will review your information and contact you if we need anything else.
+          </p>
+        </section>
+      </div>
     </main>
 
     <footer>FAST DRIVERS. CLOSE RACING. <span>BIG FUN.</span></footer>
@@ -115,6 +164,6 @@
         right: "tagline",
       });
     </script>
-    <script src="/join.js"></script>
+    <!-- join.js omitted while applications are coming soon; re-enable with the legacy form block -->
   </body>
 </html>
