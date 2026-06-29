@@ -11,6 +11,318 @@ import { extractText, getDocumentProxy } from 'unpdf';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DEBUG_PREVIEW_LENGTH = 5000;
+const PARSER_DEBUG_PREVIEW_LENGTH = 200;
+const PARSER_DEBUG_REMAINING_TOKENS = 300;
+
+const PARSER_DEBUG_FILES = {
+  fullText: 'race-control-debug-full.txt',
+  resultsSection: 'race-control-results-section.txt',
+  tokens: 'race-control-results-tokens.json',
+  anchors: 'race-control-result-anchors.json',
+  rowAttempts: 'race-control-parsed-row-attempts.json',
+  failure: 'race-control-parser-failure.json',
+};
+
+function resolveParserDebugDir() {
+  if (process.env.VERCEL) return '/tmp';
+  return path.join(__dirname, '..', 'data');
+}
+
+function resolveParserDebugPath(filename) {
+  return path.join(resolveParserDebugDir(), filename);
+}
+
+function writeParserDebugTextFile(filename, text) {
+  const filePath = resolveParserDebugPath(filename);
+  const dir = path.dirname(filePath);
+  if (!process.env.VERCEL) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  fs.writeFileSync(filePath, String(text || ''), 'utf8');
+  return filePath;
+}
+
+function writeParserDebugJsonFile(filename, payload) {
+  const filePath = resolveParserDebugPath(filename);
+  const dir = path.dirname(filePath);
+  if (!process.env.VERCEL) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  fs.writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+  return filePath;
+}
+
+function charIndexToTokenIndex(sectionText, charIndex) {
+  const prefix = sectionText.slice(0, Math.max(0, charIndex)).trim();
+  if (!prefix) return 0;
+  return prefix.split(/\s+/).filter(Boolean).length;
+}
+
+function buildSectionPreview(sectionText, charIndex, beforeChars = 120, afterChars = 120) {
+  const start = Math.max(0, charIndex - beforeChars);
+  const end = Math.min(sectionText.length, charIndex + afterChars);
+  return sectionText.slice(start, end).trim();
+}
+
+function diagnoseParseOneResultRowFailure(tokens, startIdx) {
+  if (startIdx + 14 >= tokens.length) {
+    return `Insufficient tokens (${tokens.length}) for a result row starting at index ${startIdx}.`;
+  }
+  if (
+    !/^\d+$/.test(tokens[startIdx]) ||
+    !/^\d+$/.test(tokens[startIdx + 1]) ||
+    !/^\d+$/.test(tokens[startIdx + 2])
+  ) {
+    return `Row prefix is not position/classPosition/carNumber at token index ${startIdx} (${tokens.slice(startIdx, startIdx + 5).join(' ')}).`;
+  }
+
+  const position = Number(tokens[startIdx]);
+  const identityStart = startIdx + 3;
+  const rejectionReasons = [];
+
+  for (
+    let endIdx = identityStart + 12;
+    endIdx <= Math.min(tokens.length - 1, identityStart + 60);
+    endIdx += 1
+  ) {
+    const status = tokens[endIdx];
+    if (!STATUS_VALUES.has(status)) continue;
+
+    let cursor = endIdx - 1;
+    const bestLapOn = Number(tokens[cursor--]);
+    if (!Number.isFinite(bestLapOn)) {
+      rejectionReasons.push(`status=${status}: bestLapOn not numeric (${tokens[cursor + 1]})`);
+      continue;
+    }
+
+    const bestLap = tokens[cursor--];
+    if (!isTimeToken(bestLap)) {
+      rejectionReasons.push(`status=${status}: bestLap invalid (${bestLap})`);
+      continue;
+    }
+
+    const trailingTimes = [];
+    while (cursor >= identityStart && isTimeToken(tokens[cursor])) {
+      trailingTimes.unshift(tokens[cursor--]);
+    }
+
+    const laps = Number(tokens[cursor--]);
+    const incidents = Number(tokens[cursor--]);
+    const grid = Number(tokens[cursor--]);
+    const iRating = Number(tokens[cursor--]);
+    const safetyRating = Number(tokens[cursor--]);
+    const licenseClass = tokens[cursor--];
+
+    if (
+      !Number.isFinite(laps) ||
+      !Number.isFinite(incidents) ||
+      !Number.isFinite(grid) ||
+      !Number.isFinite(iRating) ||
+      !Number.isFinite(safetyRating) ||
+      !licenseClass ||
+      !LICENSE_CLASS_PATTERN.test(licenseClass)
+    ) {
+      rejectionReasons.push(
+        `status=${status}: numeric/license tail invalid (laps=${tokens[cursor + 1]}, incidents=${tokens[cursor + 2]}, grid=${tokens[cursor + 3]}, iRating=${tokens[cursor + 4]}, SR=${tokens[cursor + 5]}, lic=${licenseClass})`
+      );
+      continue;
+    }
+
+    const identityTokens = tokens.slice(identityStart, cursor + 1);
+    const identity = parseDriverIdentity(identityTokens);
+    if (!identity) {
+      rejectionReasons.push(
+        `status=${status}: driver identity not resolved (${identityTokens.slice(0, 8).join(' ')}...)`
+      );
+      continue;
+    }
+
+    return null;
+  }
+
+  if (rejectionReasons.length) {
+    return `No valid status window matched. Attempts: ${rejectionReasons.slice(0, 3).join(' | ')}`;
+  }
+
+  return `No Running/Disco/DQ/DNQ status token found within scan window after token index ${identityStart}.`;
+}
+
+function buildResultsParseInstrumentation(sectionText) {
+  const section = String(sectionText || '');
+  const tokens = section.trim() ? section.trim().split(/\s+/).filter(Boolean) : [];
+  const tokensPayload = { tokenCount: tokens.length, tokens };
+  const tokensPath = writeParserDebugJsonFile(PARSER_DEBUG_FILES.tokens, tokensPayload);
+
+  const candidates = findResultRowCandidates(section);
+  const anchors = candidates.map((candidate) => ({
+    position: candidate.position,
+    classPosition: candidate.classPosition,
+    carNumber: String(candidate.carNumber),
+    charIndex: candidate.index,
+    tokenIndex: charIndexToTokenIndex(section, candidate.index),
+    preview: section.slice(candidate.index, candidate.index + PARSER_DEBUG_PREVIEW_LENGTH).trim(),
+  }));
+  const anchorsPath = writeParserDebugJsonFile(PARSER_DEBUG_FILES.anchors, {
+    anchorCount: anchors.length,
+    anchors,
+  });
+
+  const attempts = [];
+  let failure = null;
+  let searchFrom = 0;
+  let lastSuccessfulPosition = 0;
+  let lastSuccessfulCharIndex = null;
+
+  for (let expectedPosition = 1; expectedPosition <= 60; expectedPosition += 1) {
+    const options = candidates.filter(
+      (candidate) =>
+        candidate.index >= searchFrom && candidate.position === expectedPosition
+    );
+
+    if (!options.length) {
+      failure = {
+        failedAtPosition: expectedPosition,
+        reason: `No row anchor found for position ${expectedPosition} at or after char index ${searchFrom}.`,
+        lastSuccessfulPosition: lastSuccessfulPosition || null,
+        remainingTokens: tokens.slice(charIndexToTokenIndex(section, searchFrom)).slice(0, PARSER_DEBUG_REMAINING_TOKENS),
+        sectionPreviewBeforeFailure: buildSectionPreview(section, searchFrom, 160, 0),
+        sectionPreviewAfterFailure: buildSectionPreview(section, searchFrom, 0, 160),
+      };
+      break;
+    }
+
+    let accepted = null;
+    for (const candidate of options) {
+      const nextPositionIndex = candidates.find(
+        (item) => item.index > candidate.index && item.position === expectedPosition + 1
+      )?.index;
+      const endIndex = nextPositionIndex ?? section.length;
+      const rowText = section.slice(candidate.index, endIndex).trim();
+      const rowTokens = rowText.split(/\s+/).filter(Boolean);
+      const parsed = parseOneResultRow(rowTokens, 0);
+      const preview = rowText.slice(0, PARSER_DEBUG_PREVIEW_LENGTH);
+
+      if (parsed?.result?.position === expectedPosition) {
+        attempts.push({
+          position: expectedPosition,
+          success: true,
+          driverName: parsed.result.driverName,
+          carNumber: String(parsed.result.carNumber),
+          charIndex: candidate.index,
+          tokenIndex: charIndexToTokenIndex(section, candidate.index),
+          preview,
+        });
+        accepted = { ...candidate, endIndex };
+        break;
+      }
+
+      attempts.push({
+        position: expectedPosition,
+        success: false,
+        reason: diagnoseParseOneResultRowFailure(rowTokens, 0) || 'parseOneResultRow returned null',
+        charIndex: candidate.index,
+        tokenIndex: charIndexToTokenIndex(section, candidate.index),
+        preview,
+      });
+    }
+
+    if (!accepted) {
+      const failedAttempt = attempts[attempts.length - 1];
+      failure = {
+        failedAtPosition: expectedPosition,
+        reason:
+          failedAttempt?.reason ||
+          `Sequential row validation failed for position ${expectedPosition}.`,
+        lastSuccessfulPosition: lastSuccessfulPosition || null,
+        remainingTokens: tokens
+          .slice(failedAttempt?.tokenIndex ?? charIndexToTokenIndex(section, searchFrom))
+          .slice(0, PARSER_DEBUG_REMAINING_TOKENS),
+        sectionPreviewBeforeFailure: buildSectionPreview(
+          section,
+          failedAttempt?.charIndex ?? searchFrom,
+          160,
+          0
+        ),
+        sectionPreviewAfterFailure: buildSectionPreview(
+          section,
+          failedAttempt?.charIndex ?? searchFrom,
+          0,
+          160
+        ),
+      };
+      break;
+    }
+
+    lastSuccessfulPosition = expectedPosition;
+    lastSuccessfulCharIndex = accepted.index;
+    searchFrom = accepted.index + 1;
+  }
+
+  const attemptsPath = writeParserDebugJsonFile(PARSER_DEBUG_FILES.rowAttempts, {
+    attemptCount: attempts.length,
+    attempts,
+  });
+
+  let failurePath = null;
+  const hasFailedAttempt = attempts.some((attempt) => !attempt.success);
+  const stoppedBefore35 =
+    failure &&
+    failure.failedAtPosition <= 35 &&
+    lastSuccessfulPosition < 35;
+  const failureFilePath = resolveParserDebugPath(PARSER_DEBUG_FILES.failure);
+  if (failure && (hasFailedAttempt || stoppedBefore35)) {
+    failurePath = writeParserDebugJsonFile(PARSER_DEBUG_FILES.failure, failure);
+  } else {
+    try {
+      if (fs.existsSync(failureFilePath)) fs.unlinkSync(failureFilePath);
+    } catch {
+      // ignore cleanup errors
+    }
+  }
+
+  const positionAnchorsDetected = [
+    ...new Set(anchors.map((anchor) => anchor.position)),
+  ].sort((a, b) => a - b);
+  const positions1Through35Detected = positionAnchorsDetected.filter(
+    (position) => position >= 1 && position <= 35
+  );
+
+  return {
+    tokensPath,
+    anchorsPath,
+    attemptsPath,
+    failurePath,
+    tokenCount: tokens.length,
+    anchorCount: anchors.length,
+    parsedAttemptCount: attempts.length,
+    failedAtPosition:
+      hasFailedAttempt || stoppedBefore35 ? failure?.failedAtPosition ?? null : null,
+    failureReason:
+      hasFailedAttempt || stoppedBefore35 ? failure?.reason ?? null : null,
+    lastSuccessfulPosition: lastSuccessfulPosition || null,
+    sequentialAnchorsAccepted: attempts.filter((attempt) => attempt.success).length,
+    positionAnchorsDetected,
+    positions1Through35Detected,
+    positions1Through35Count: positions1Through35Detected.length,
+    allPositions1Through35AnchorsDetected: positions1Through35Detected.length === 35,
+  };
+}
+
+function writeResultsParseInstrumentation(sectionText) {
+  const section = String(sectionText || '');
+  const resultsSectionPath = writeParserDebugTextFile(
+    PARSER_DEBUG_FILES.resultsSection,
+    section
+  );
+  const instrumentation = buildResultsParseInstrumentation(section);
+
+  return {
+    debugFilesWritten: true,
+    resultsSectionPath,
+    resultsSectionLength: section.length,
+    ...instrumentation,
+  };
+}
 
 const KNOWN_CARS = [
   'Toyota Tundra TRD Pro',
@@ -795,6 +1107,40 @@ export function parseRaceControlPdfText(text, options = {}) {
   const parsedResults = parseResults(resultsSection.section);
   appendUniqueWarnings(parseWarnings, parsedResults.warnings);
 
+  let parserDebug = null;
+  if (options.collectParserDebug !== false) {
+    try {
+      const instrumentation = writeResultsParseInstrumentation(resultsSection.section);
+      parserDebug = {
+        debugFilesWritten: instrumentation.debugFilesWritten,
+        fullTextPath: options.fullTextPath || null,
+        resultsSectionPath: instrumentation.resultsSectionPath,
+        tokensPath: instrumentation.tokensPath,
+        anchorsPath: instrumentation.anchorsPath,
+        rowAttemptsPath: instrumentation.attemptsPath,
+        failurePath: instrumentation.failurePath,
+        resultsSectionLength: instrumentation.resultsSectionLength,
+        tokenCount: instrumentation.tokenCount,
+        anchorCount: instrumentation.anchorCount,
+        parsedAttemptCount: instrumentation.parsedAttemptCount,
+        failedAtPosition: instrumentation.failedAtPosition,
+        failureReason: instrumentation.failureReason,
+        lastSuccessfulPosition: instrumentation.lastSuccessfulPosition,
+        sequentialAnchorsAccepted: instrumentation.sequentialAnchorsAccepted,
+        positionAnchorsDetected: instrumentation.positionAnchorsDetected,
+        positions1Through35Detected: instrumentation.positions1Through35Detected,
+        positions1Through35Count: instrumentation.positions1Through35Count,
+        allPositions1Through35AnchorsDetected:
+          instrumentation.allPositions1Through35AnchorsDetected,
+      };
+    } catch (error) {
+      parserDebug = {
+        debugFilesWritten: false,
+        instrumentationError: error?.message || String(error),
+      };
+    }
+  }
+
   const session = parseSessionReports(normalized);
   appendUniqueWarnings(parseWarnings, session.warnings);
 
@@ -842,12 +1188,23 @@ export function parseRaceControlPdfText(text, options = {}) {
     appendUniqueWarnings(parseWarnings, parsed.validation.warnings);
   }
 
+  if (parserDebug) {
+    parsed.parserDebug = parserDebug;
+  }
+
   return parsed;
 }
 
 export async function parseRaceControlPdfBuffer(buffer, options = {}) {
   const { text, totalPages } = await extractPdfText(buffer);
   const extractionMeta = buildExtractionDebug(text, totalPages);
+
+  let fullTextPath = null;
+  try {
+    fullTextPath = writeParserDebugTextFile(PARSER_DEBUG_FILES.fullText, text);
+  } catch {
+    fullTextPath = null;
+  }
 
   try {
     const debugFilePath = writeExtractionDebugFile(text);
@@ -857,7 +1214,16 @@ export async function parseRaceControlPdfBuffer(buffer, options = {}) {
     extractionMeta.debug.debugFileWritten = false;
   }
 
-  const parsed = parseRaceControlPdfText(text, options);
+  const parsed = parseRaceControlPdfText(text, {
+    ...options,
+    fullTextPath,
+    collectParserDebug: options.collectParserDebug !== false,
+  });
+
+  if (parsed.parserDebug) {
+    parsed.parserDebug.fullTextPath = fullTextPath;
+    parsed.parserDebug.debugFilesWritten = Boolean(fullTextPath && parsed.parserDebug.resultsSectionPath);
+  }
 
   if (totalPages === 0) {
     parsed.parseWarnings.push('PDF parser returned zero pages.');
@@ -893,4 +1259,7 @@ export {
   resolveDebugFilePath,
   writeExtractionDebugFile,
   findSequentialResultRowStarts,
+  resolveParserDebugPath,
+  writeResultsParseInstrumentation,
+  buildResultsParseInstrumentation,
 };
