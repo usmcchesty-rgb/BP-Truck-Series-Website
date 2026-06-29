@@ -43,6 +43,16 @@ import {
   uploadRaceControlReport,
 } from './_race-control-reports.js';
 import {
+  getRaceControlParserRegressionSummary,
+  getRaceControlParserTestBoard,
+  listRaceControlParserFixtures,
+  markRaceControlParserFixture,
+  runRaceControlParserRegression,
+  runRaceControlParserRegressionForRace,
+  seedKnownRaceControlParserFixtures,
+  unmarkRaceControlParserFixture,
+} from './_race-control-parser-regression.js';
+import {
   buildFantasyProgressionMeta,
   resolveFantasySlateProgression,
 } from './_fantasy-slate-progression.js';
@@ -470,6 +480,78 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, report });
     } catch (error) {
       return res.status(error.status || 500).json({ error: error.message || 'Failed to reparse race control report.' });
+    }
+  }
+
+  if (action === 'getRaceControlParserFixtures') {
+    try {
+      const settings = await getSettings();
+      const seasonId = body.seasonId || settings.seasonId || '27987';
+      const fixtures = await listRaceControlParserFixtures(seasonId);
+      const summary = await getRaceControlParserRegressionSummary(seasonId);
+      return res.status(200).json({ fixtures, summary });
+    } catch (error) {
+      return res.status(error.status || 500).json({ error: error.message || 'Failed to load parser fixtures.' });
+    }
+  }
+
+  if (action === 'getRaceControlParserTestBoard') {
+    try {
+      const settings = await getSettings();
+      const seasonId = body.seasonId || settings.seasonId || '27987';
+      const board = await getRaceControlParserTestBoard(seasonId);
+      return res.status(200).json(board);
+    } catch (error) {
+      return res.status(error.status || 500).json({ error: error.message || 'Failed to load parser test board.' });
+    }
+  }
+
+  if (action === 'markRaceControlParserFixture') {
+    try {
+      const settings = await getSettings();
+      const fixture = await markRaceControlParserFixture(body, { settings });
+      return res.status(200).json({ ok: true, fixture });
+    } catch (error) {
+      return res.status(error.status || 500).json({ error: error.message || 'Failed to mark parser fixture.' });
+    }
+  }
+
+  if (action === 'unmarkRaceControlParserFixture') {
+    try {
+      const result = await unmarkRaceControlParserFixture(body);
+      return res.status(200).json(result);
+    } catch (error) {
+      return res.status(error.status || 500).json({ error: error.message || 'Failed to remove parser fixture.' });
+    }
+  }
+
+  if (action === 'runRaceControlParserRegression') {
+    try {
+      const settings = await getSettings();
+      const summary = await runRaceControlParserRegression(body, { settings });
+      return res.status(200).json({ ok: true, summary });
+    } catch (error) {
+      return res.status(error.status || 500).json({ error: error.message || 'Parser regression run failed.' });
+    }
+  }
+
+  if (action === 'runRaceControlParserRegressionForRace') {
+    try {
+      const settings = await getSettings();
+      const result = await runRaceControlParserRegressionForRace(body, { settings });
+      return res.status(200).json({ ok: true, ...result });
+    } catch (error) {
+      return res.status(error.status || 500).json({ error: error.message || 'Parser regression run failed for race.' });
+    }
+  }
+
+  if (action === 'seedKnownRaceControlParserFixtures') {
+    try {
+      const settings = await getSettings();
+      const result = await seedKnownRaceControlParserFixtures(body, { settings });
+      return res.status(200).json({ ok: true, ...result });
+    } catch (error) {
+      return res.status(error.status || 500).json({ error: error.message || 'Failed to seed known parser fixtures.' });
     }
   }
 

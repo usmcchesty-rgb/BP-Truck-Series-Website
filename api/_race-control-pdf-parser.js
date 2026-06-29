@@ -24,6 +24,7 @@ import {
   deriveParserConfidence,
   extractStrengthOfField,
 } from './_iracecontrol-compatibility.js';
+import { buildExtendedParserDiagnostics } from './_race-control-parser-diagnostics.js';
 
 export { IRACECONTROL_PARSER_VERSION, SUPPORTED_LAYOUTS };
 
@@ -1955,9 +1956,20 @@ export function parseRaceControlPdfText(text, options = {}) {
     discovery: anchorDiscovery,
     header: { ...header, sof: resolvedSof },
   });
+  const diagnosticsBase = { ...baseDiagnostics, ...layoutDiagnostics };
+  const extendedDiagnostics = buildExtendedParserDiagnostics({
+    ...parsed,
+    parserDiagnostics: diagnosticsBase,
+    parserDebug: parserDebug || {
+      compatibilityFixesApplied,
+      layoutNotes,
+      driverReportDiagnostics: driverReports.diagnostics,
+      sofDebugSnippets: sofExtraction.sofDebugSnippets,
+    },
+  });
   parsed.parserDiagnostics = {
-    ...baseDiagnostics,
-    ...layoutDiagnostics,
+    ...diagnosticsBase,
+    ...extendedDiagnostics,
     sofFound: sofExtraction.sofFound || resolvedSof != null,
     sofSource: sofExtraction.sofSource || (resolvedSof != null ? 'race_header' : null),
     sofMatches: sofExtraction.sofMatches,
@@ -1967,6 +1979,7 @@ export function parseRaceControlPdfText(text, options = {}) {
       layoutDiagnostics,
     }),
   };
+  parsed.parserDiagnostics.confidence = parsed.parserDiagnostics.resultParseConfidence;
 
   if (layoutDiagnostics.anchorsMissing.length) {
     parseWarnings.push(
@@ -1999,6 +2012,13 @@ export function parseRaceControlPdfText(text, options = {}) {
     parserDebug.sofMatches = parsed.parserDiagnostics.sofMatches;
     parserDebug.sofNearbyText = parsed.parserDiagnostics.sofNearbyText;
     parserDebug.sofDebugSnippets = sofExtraction.sofDebugSnippets;
+    parserDebug.requiredFieldsFound = parsed.parserDiagnostics.requiredFieldsFound;
+    parserDebug.missingRequiredFields = parsed.parserDiagnostics.missingRequiredFields;
+    parserDebug.guidance = parsed.parserDiagnostics.guidance;
+    parserDebug.suggestedCompatibilityRules = parsed.parserDiagnostics.suggestedCompatibilityRules;
+    parserDebug.confidenceReason = parsed.parserDiagnostics.confidenceReason;
+    parserDebug.rowParseSummary = parsed.parserDiagnostics.rowParseSummary;
+    parserDebug.driverReportSummary = parsed.parserDiagnostics.driverReportSummary;
     parsed.parserDebug = parserDebug;
   } else {
     parsed.parserDebug = {
@@ -2016,6 +2036,13 @@ export function parseRaceControlPdfText(text, options = {}) {
       sofMatches: parsed.parserDiagnostics.sofMatches,
       sofNearbyText: parsed.parserDiagnostics.sofNearbyText,
       sofDebugSnippets: sofExtraction.sofDebugSnippets,
+      requiredFieldsFound: parsed.parserDiagnostics.requiredFieldsFound,
+      missingRequiredFields: parsed.parserDiagnostics.missingRequiredFields,
+      guidance: parsed.parserDiagnostics.guidance,
+      suggestedCompatibilityRules: parsed.parserDiagnostics.suggestedCompatibilityRules,
+      confidenceReason: parsed.parserDiagnostics.confidenceReason,
+      rowParseSummary: parsed.parserDiagnostics.rowParseSummary,
+      driverReportSummary: parsed.parserDiagnostics.driverReportSummary,
     };
   }
 

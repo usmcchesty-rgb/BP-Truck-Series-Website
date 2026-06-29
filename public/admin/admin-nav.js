@@ -13,6 +13,7 @@
     { id: "social-sharing", label: "Social Sharing", href: "/admin/social-sharing" },
     { id: "transcripts", label: "Transcripts", href: "/admin/transcripts" },
     { id: "race-control", label: "Race Control", href: "/admin/race-control.html" },
+    { id: "parser-tests", label: "Parser Tests", href: "/admin/parser-tests.html" },
   ];
 
   const STYLE_ID = "admin-shell-nav-styles";
@@ -208,6 +209,8 @@
     if (path.endsWith("/social-sharing")) return "social-sharing";
     if (path.endsWith("/transcripts")) return "transcripts";
     if (path.endsWith("/track-images")) return "track-images";
+    if (path.endsWith("/race-control.html") || path.endsWith("/race-control")) return "race-control";
+    if (path.endsWith("/parser-tests.html") || path.endsWith("/parser-tests")) return "parser-tests";
     return "";
   }
 
