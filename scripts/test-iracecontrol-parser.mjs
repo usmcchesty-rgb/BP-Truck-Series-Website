@@ -144,6 +144,38 @@ function buildTalladegaSample() {
       continue;
     }
 
+    if (position === 34) {
+      rows.push(
+        buildSampleRow({
+          position: 34,
+          classPosition: 34,
+          carNumber: 45,
+          driverName: 'Dylan Eckard',
+          car: 'Chevrolet Silverado',
+          licenseClass: 'C',
+          safetyRating: '2.11',
+          iRating: '1263',
+          grid: '24',
+          incidents: '9',
+          laps: '11',
+          finishTime: '0:13:56.787',
+          gap: '90 LAPS',
+          interval: '27 LAPS',
+          bestLap: '00:52.089',
+          bestLapOn: '2',
+          status: 'Running',
+        })
+      );
+      continue;
+    }
+
+    if (position === 35) {
+      rows.push(
+        '35 35 44 Aaron Bockover United States Chevrolet Silverado A 3.08 2811 35 0 -1 102 LAPS 12 LAPS Disco'
+      );
+      continue;
+    }
+
     if (position >= 27) {
       rows.push(
         buildSampleRow({
@@ -255,6 +287,13 @@ const pass =
   checks.aaronDriver === 'Aaron Bockover' &&
   checks.aaronCar === '44' &&
   checks.aaronPosition === 35 &&
+  aaron?.status === 'Disco' &&
+  aaron?.laps === -1 &&
+  aaron?.finishTime == null &&
+  aaron?.gap === '102 LAPS' &&
+  aaron?.interval === '12 LAPS' &&
+  aaron?.bestLap == null &&
+  parsed.results.find((row) => row.position === 34)?.driverName === 'Dylan Eckard' &&
   checks.parserDiagnostics?.resultsDetected === 35 &&
   checks.parserDiagnostics?.resultParseConfidence === 'high' &&
   parsed.parserDebug?.sequentialAnchorsAccepted === 35 &&

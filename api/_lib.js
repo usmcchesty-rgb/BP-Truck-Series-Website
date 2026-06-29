@@ -40,11 +40,13 @@ export function supabase() {
 }
 
 export async function getSettings() {
+  const { SOCIAL_SHARE_DEFAULTS } = await import('./_social-share-settings.js');
+  const base = { ...DEFAULTS, ...SOCIAL_SHARE_DEFAULTS };
   const sb = supabase();
-  if (!sb) return DEFAULTS;
+  if (!sb) return base;
   const { data, error } = await sb.from('site_settings').select('*').eq('id', 1).maybeSingle();
-  if (error || !data) return DEFAULTS;
-  return { ...DEFAULTS, ...data };
+  if (error || !data) return base;
+  return { ...base, ...data };
 }
 
 export async function getDriverProfiles() {

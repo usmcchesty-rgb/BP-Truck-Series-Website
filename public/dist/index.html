@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Blazing Pedals Truck Series</title>
+  <link rel="stylesheet" crossorigin href="/assets/index-CH8Jhu4h.css">
+</head>
+<body>
+
+<div class="page-bg"></div>
+
+<header class="topbar"></header>
+
+<main class="home-main">
+
+  <section class="panel home-hero" aria-label="Featured story">
+    <span class="home-hero-tag">FEATURE STORY</span>
+    <h2>
+      FAST DRIVERS.
+      <span style="color:#ff1d1d;">CLOSE RACING.</span>
+      BIG FUN.
+    </h2>
+    <p>
+      Blazing Pedals Truck Series is a competitive iRacing NASCAR Truck league
+      featuring weekly races, season-long points battles, playoffs, driver statistics,
+      live broadcasts, and championship competition.
+    </p>
+    <div class="home-cta-row">
+      <button type="button" onclick="location.href='standings.html'">VIEW STANDINGS</button>
+      <button type="button" onclick="location.href='schedule.html'">VIEW SCHEDULE</button>
+      <button type="button" onclick="location.href='news.html'">LATEST NEWS</button>
+    </div>
+  </section>
+
+  <section class="home-magazine-grid" aria-label="Homepage content">
+
+    <article class="home-card panel home-section home-news" aria-label="Latest news">
+      <h2>LATEST NEWS</h2>
+      <div class="home-news-list" id="homeNewsList">
+        <div class="home-news-item home-news-item--placeholder">
+          <div class="home-news-thumb" aria-hidden="true">📰</div>
+          <div class="home-news-copy">
+            <h4>Season 11 Playoff Picture Heating Up</h4>
+            <p>News content coming soon. Check back for race reports, driver interviews, and championship coverage.</p>
+            <time>Coming Soon</time>
+          </div>
+        </div>
+        <div class="home-news-item home-news-item--placeholder">
+          <div class="home-news-thumb" aria-hidden="true">🏁</div>
+          <div class="home-news-copy">
+            <h4>Weekly Race Recaps</h4>
+            <p>Full race results, highlights, and standings updates will publish here after each event.</p>
+            <time>Coming Soon</time>
+          </div>
+        </div>
+        <div class="home-news-item home-news-item--placeholder">
+          <div class="home-news-thumb" aria-hidden="true">🎙️</div>
+          <div class="home-news-copy">
+            <h4>League Announcements</h4>
+            <p>Schedule changes, rule updates, and community news will appear in this feed.</p>
+            <time>Coming Soon</time>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <article class="home-card home-card-wide panel home-section home-green-flag" aria-label="Green Flag TV broadcasts">
+      <h2>GREEN FLAG TV BROADCASTS</h2>
+      <p class="home-broadcast-title" id="homeBroadcastTitle">Loading broadcast...</p>
+      <div class="home-youtube-wrap">
+        <iframe
+          id="homeBroadcastEmbed"
+          class="home-youtube-embed"
+          src="https://www.youtube.com/embed/videoseries?list=PL4aFms0YBw6_uE-yoYgOFDtaNcN9ozPIO"
+          title="Green Flag TV race broadcasts"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          referrerpolicy="strict-origin-when-cross-origin"
+          allowfullscreen
+          loading="lazy"
+        ></iframe>
+      </div>
+      <p class="home-green-flag-note">Race broadcasts provided by Green Flag TV.</p>
+      <div class="home-cta-row">
+        <button
+          type="button"
+          onclick="window.open('https://www.youtube.com/playlist?list=PL4aFms0YBw6_uE-yoYgOFDtaNcN9ozPIO','_blank','noopener')"
+        >
+          VIEW FULL PLAYLIST
+        </button>
+      </div>
+    </article>
+
+    <article class="home-card panel home-section" aria-label="Standings top 10">
+      <h2>STANDINGS — TOP 10</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>POS</th>
+              <th>DRIVER</th>
+              <th>POINTS</th>
+              <th>WINS</th>
+            </tr>
+          </thead>
+          <tbody id="homeStandingsBody">
+            <tr><td colspan="4">Loading standings...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="home-cta-row">
+        <button type="button" onclick="location.href='standings.html'">FULL STANDINGS</button>
+      </div>
+    </article>
+
+    <article class="home-card card home-section" aria-label="Power rankings">
+      <h3>POWER RANKINGS</h3>
+      <div class="home-rank-list" id="homePowerRankingsList">
+        <div class="home-rank-item home-rank-placeholder">
+          <span class="home-rank-loading">Loading rankings...</span>
+        </div>
+      </div>
+      <button type="button" onclick="location.href='power-rankings.html'" class="home-card-btn">VIEW FULL RANKINGS</button>
+    </article>
+
+    <article class="home-card card next-race-card" aria-label="Next race">
+      <h3>NEXT RACE</h3>
+      <div class="next-race-row">
+        <div class="next-race-media">
+          <img id="homeNextRaceImg" alt="" hidden />
+          <div class="next-race-placeholder" id="homeNextRacePlaceholder" aria-hidden="true">🏁</div>
+        </div>
+        <div class="next-race-info">
+          <div class="track" id="homeNextRaceTrack">TBD</div>
+        </div>
+      </div>
+      <p class="next-race-copy" id="homeNextRaceDate">Date TBD</p>
+      <p class="next-race-time" id="homeNextRaceTime"></p>
+      <button type="button" onclick="location.href='schedule.html'" class="home-card-btn">FULL SCHEDULE</button>
+    </article>
+
+    <article class="home-card card last-winner-card" aria-label="Latest race winner">
+      <h3>LATEST RACE WINNER</h3>
+      <div class="last-winner last-winner--home">
+        <div class="last-winner-driver">
+          <a id="homeLastWinnerPhotoLink" class="last-winner-photo-wrap" href="drivers.html">
+            <img id="homeLastWinnerImg" src="/assets/placeholder-Gad3uElR.png" alt="" />
+          </a>
+          <div class="last-winner-identity">
+            <a id="homeLastWinnerNameLink" class="last-winner-name-link" href="drivers.html">
+              <b id="homeLastWinnerName">—</b>
+            </a>
+            <span id="homeLastWinnerFinish" class="last-winner-finish-badge" hidden>1ST</span>
+            <span id="homeLastWinnerPositionChange" class="last-winner-position-change" hidden></span>
+          </div>
+        </div>
+        <div class="last-winner-details">
+          <div class="last-winner-meta">
+            <span id="homeLastWinnerTrack" class="last-winner-track">Track TBD</span>
+            <span id="homeLastWinnerDate" class="last-winner-date">Date TBD</span>
+          </div>
+          <div class="home-winner-stats-grid" id="homeLastWinnerStats" hidden></div>
+        </div>
+      </div>
+    </article>
+
+    <article class="home-card card home-spotlight-card" aria-label="Driver spotlight">
+      <h3>DRIVER SPOTLIGHT</h3>
+      <div id="homeSpotlightActive" hidden>
+        <img src="/assets/placeholder-Gad3uElR.png" alt="" id="homeSpotlightImg" />
+        <p id="homeSpotlightDriverName" class="home-spotlight-name">—</p>
+        <p id="homeSpotlightCarNumber" class="home-spotlight-car" hidden></p>
+        <h4 id="homeSpotlightHeadline" class="home-spotlight-headline"></h4>
+        <p id="homeSpotlightDek" class="home-spotlight-dek"></p>
+        <a id="homeSpotlightArticleLink" class="home-card-btn home-spotlight-link">READ SPOTLIGHT</a>
+      </div>
+      <div id="homeSpotlightPlaceholder">
+        <img src="/assets/placeholder-Gad3uElR.png" alt="" id="homeSpotlightPlaceholderImg" />
+        <p class="home-placeholder" id="homeSpotlightCopy">
+          Driver spotlight stories coming soon.
+        </p>
+      </div>
+    </article>
+
+    <article class="home-card panel home-section home-league-updates" aria-label="League updates">
+      <h2>LEAGUE UPDATES</h2>
+      <div class="home-social-placeholder">
+        <div class="home-social-icon" aria-hidden="true">f</div>
+        <p id="homeLeagueUpdatesCopy">Facebook league updates and community posts coming soon.</p>
+        <button type="button" id="homeLeagueFacebookBtn" hidden>VIEW FACEBOOK</button>
+      </div>
+    </article>
+
+    <article class="home-card home-card-full panel home-section home-sponsors" aria-label="Sponsors">
+      <h2>SPONSORS</h2>
+      <div class="home-sponsors-strip" id="homeSponsorsStrip"></div>
+    </article>
+
+  </section>
+
+</main>
+
+<footer>
+  FAST DRIVERS. CLOSE RACING.
+  <span> BIG FUN.</span>
+</footer>
+
+<script src="public-nav.js"></script>
+<script>
+  BPPublicNav.init({
+    active: "home",
+    title: "BLAZING PEDALS TRUCK SERIES",
+    subtitle: "SEASON 11",
+    subtitleId: "seasonLabel",
+    right: "tagline",
+  });
+</script>
+<script src="miles-apex-avatar.js"></script>
+<script src="news-article-image.js"></script>
+<script src="home.js"></script>
+</body>
+</html>

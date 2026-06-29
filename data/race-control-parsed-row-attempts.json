@@ -1,0 +1,320 @@
+{
+  "attemptCount": 35,
+  "attempts": [
+    {
+      "position": 1,
+      "success": true,
+      "driverName": "Chris Berg",
+      "carNumber": "66",
+      "charIndex": 0,
+      "tokenIndex": 0,
+      "preview": "1 1 66 Chris Berg United States Chevrolet Silverado A 2.61 3271 4 8 101 1:55:20.209 00:51.906 55 Running"
+    },
+    {
+      "position": 2,
+      "success": true,
+      "driverName": "Hunter Lagunes",
+      "carNumber": "27",
+      "charIndex": 105,
+      "tokenIndex": 19,
+      "preview": "2 2 27 Hunter Lagunes United States Ford F150 A 4.46 4825 12 0 101 1:55:20.212 0:00.003 0.003 00:51.857 92 Running"
+    },
+    {
+      "position": 3,
+      "success": true,
+      "driverName": "Levi Allen",
+      "carNumber": "79",
+      "charIndex": 220,
+      "tokenIndex": 40,
+      "preview": "3 3 79 Levi Allen United States Ford F150 A 4.99 3796 17 4 101 1:55:20.292 0:00.083 0.079 00:51.677 55 Running"
+    },
+    {
+      "position": 4,
+      "success": true,
+      "driverName": "Matthew Kleinschmidt",
+      "carNumber": "59",
+      "charIndex": 331,
+      "tokenIndex": 61,
+      "preview": "4 4 59 Matthew Kleinschmidt United States Chevrolet Silverado A 2.90 3483 29 16 101 1:55:20.322 0:00.113 0.030 00:51.412 51 Running"
+    },
+    {
+      "position": 5,
+      "success": true,
+      "driverName": "Miguel Gomez-Gaudet",
+      "carNumber": "89",
+      "charIndex": 463,
+      "tokenIndex": 82,
+      "preview": "5 5 89 Miguel Gomez-Gaudet United States RAM B 2.54 1607 13 8 101 1:55:20.357 0:00.147 0.034 00:51.739 87 Running"
+    },
+    {
+      "position": 6,
+      "success": true,
+      "driverName": "Preston Sparks",
+      "carNumber": "51",
+      "charIndex": 577,
+      "tokenIndex": 102,
+      "preview": "6 6 51 Preston Sparks United States Toyota Tundra TRD Pro B 3.46 4282 15 5 101 1:55:20.406 0:00.197 0.049 00:52.105 71 Running"
+    },
+    {
+      "position": 7,
+      "success": true,
+      "driverName": "Tanner Marr",
+      "carNumber": "4",
+      "charIndex": 704,
+      "tokenIndex": 125,
+      "preview": "7 7 4 Tanner Marr United States Chevrolet Silverado B 3.26 2913 30 1 101 1:55:20.462 0:00.253 0.056 00:51.583 51 Running"
+    },
+    {
+      "position": 8,
+      "success": true,
+      "driverName": "Kyle Wellman",
+      "carNumber": "42",
+      "charIndex": 825,
+      "tokenIndex": 146,
+      "preview": "8 8 42 Kyle Wellman United States Chevrolet Silverado A 2.24 2692 19 8 101 1:55:20.561 0:00.352 0.098 00:51.921 27 Running"
+    },
+    {
+      "position": 9,
+      "success": true,
+      "driverName": "Haiden Wheeler",
+      "carNumber": "68",
+      "charIndex": 948,
+      "tokenIndex": 167,
+      "preview": "9 9 68 Haiden Wheeler United States RAM A 4.64 2742 11 8 101 1:55:20.576 0:00.367 0.015 00:52.075 90 Running"
+    },
+    {
+      "position": 10,
+      "success": true,
+      "driverName": "Christian Ritchie",
+      "carNumber": "33",
+      "charIndex": 1057,
+      "tokenIndex": 187,
+      "preview": "10 10 33 Christian Ritchie United States Chevrolet Silverado B 2.89 2455 32 12 101 1:55:20.642 0:00.433 0.065 00:51.855 90 Running"
+    },
+    {
+      "position": 11,
+      "success": true,
+      "driverName": "Bryan Dees",
+      "carNumber": "17",
+      "charIndex": 1188,
+      "tokenIndex": 208,
+      "preview": "11 11 17 Bryan Dees United States Chevrolet Silverado A 4.24 2897 22 0 101 1:55:20.692 0:00.483 0.050 00:51.827 2 Running"
+    },
+    {
+      "position": 12,
+      "success": true,
+      "driverName": "Ryan Washeleski",
+      "carNumber": "86",
+      "charIndex": 1310,
+      "tokenIndex": 229,
+      "preview": "12 12 86 Ryan Washeleski United States Toyota Tundra TRD Pro A 3.24 2344 3 8 101 1:55:20.802 0:00.593 0.109 00:51.741 93 Running"
+    },
+    {
+      "position": 13,
+      "success": true,
+      "driverName": "Mike Massengill",
+      "carNumber": "20",
+      "charIndex": 1439,
+      "tokenIndex": 252,
+      "preview": "13 13 20 Mike Massengill United States Chevrolet Silverado A 2.67 1124 34 20 101 1:55:20.982 0:00.772 0.179 00:51.819 92 Running"
+    },
+    {
+      "position": 14,
+      "success": true,
+      "driverName": "Derek Paulson",
+      "carNumber": "6",
+      "charIndex": 1568,
+      "tokenIndex": 273,
+      "preview": "14 14 6 Derek Paulson United States Ford F150 A 3.49 2743 31 12 101 1:55:21.084 0:00.875 0.102 00:51.872 90 Running"
+    },
+    {
+      "position": 15,
+      "success": true,
+      "driverName": "Cody Gibson",
+      "carNumber": "7",
+      "charIndex": 1684,
+      "tokenIndex": 294,
+      "preview": "15 15 7 Cody Gibson United States Chevrolet Silverado A 4.25 3069 5 12 101 1:55:21.087 0:00.878 0.002 00:51.472 51 Running"
+    },
+    {
+      "position": 16,
+      "success": true,
+      "driverName": "Noah S. VanHoute",
+      "carNumber": "0",
+      "charIndex": 1807,
+      "tokenIndex": 315,
+      "preview": "16 16 00 Noah S. VanHoute United States Chevrolet Silverado A 2.60 2011 6 8 101 1:55:21.136 0:00.927 0.048 00:51.933 27 Running"
+    },
+    {
+      "position": 17,
+      "success": true,
+      "driverName": "Taylor Butcher-BenjaminUnited",
+      "carNumber": "10",
+      "charIndex": 1935,
+      "tokenIndex": 337,
+      "preview": "17 17 10 Taylor Butcher-BenjaminUnited States Chevrolet Silverado A 4.99 5030 10 4 101 1:55:21.143 0:00.934 0.006 00:51.935 27 Running"
+    },
+    {
+      "position": 18,
+      "success": true,
+      "driverName": "Mark Arthur",
+      "carNumber": "12",
+      "charIndex": 2070,
+      "tokenIndex": 357,
+      "preview": "18 18 12 Mark Arthur United States Chevrolet Silverado A 3.76 5756 8 16 101 1:55:21.215 0:01.006 0.072 00:51.886 71 Running"
+    },
+    {
+      "position": 19,
+      "success": true,
+      "driverName": "Larry Bell",
+      "carNumber": "43",
+      "charIndex": 2194,
+      "tokenIndex": 378,
+      "preview": "19 19 43 Larry Bell Canada Chevrolet Silverado A 3.49 1854 33 8 101 1:55:21.255 0:01.046 0.040 00:51.621 51 Running"
+    },
+    {
+      "position": 20,
+      "success": true,
+      "driverName": "Chris Carroll",
+      "carNumber": "99",
+      "charIndex": 2310,
+      "tokenIndex": 398,
+      "preview": "20 20 99 Chris Carroll Canada Chevrolet Silverado A 3.13 4613 28 12 101 1:55:21.288 0:01.079 0.032 00:51.881 2 Running"
+    },
+    {
+      "position": 21,
+      "success": true,
+      "driverName": "Kody Miller",
+      "carNumber": "11",
+      "charIndex": 2429,
+      "tokenIndex": 418,
+      "preview": "21 21 11 Kody Miller United States Chevrolet Silverado B 1.74 3231 2 12 101 1:55:21.338 0:01.129 0.050 00:52.144 55 Running"
+    },
+    {
+      "position": 22,
+      "success": true,
+      "driverName": "Dalton Kilroe",
+      "carNumber": "41",
+      "charIndex": 2553,
+      "tokenIndex": 439,
+      "preview": "22 22 41 Dalton Kilroe United States Chevrolet Silverado A 4.05 3888 9 4 101 1:55:21.350 0:01.141 0.011 00:51.844 29 Running"
+    },
+    {
+      "position": 23,
+      "success": true,
+      "driverName": "William Bruton",
+      "carNumber": "83",
+      "charIndex": 2678,
+      "tokenIndex": 460,
+      "preview": "23 23 83 William Bruton United States Chevrolet Silverado A 2.38 1772 20 8 101 1:55:21.383 0:01.173 0.032 00:51.632 28 Running"
+    },
+    {
+      "position": 24,
+      "success": true,
+      "driverName": "Ty Marasco",
+      "carNumber": "1",
+      "charIndex": 2805,
+      "tokenIndex": 481,
+      "preview": "24 24 1 Ty Marasco United States RAM A 2.37 2557 21 8 101 1:55:21.412 0:01.203 0.029 00:51.931 92 Running"
+    },
+    {
+      "position": 25,
+      "success": true,
+      "driverName": "Brian Zimmerman",
+      "carNumber": "28",
+      "charIndex": 2911,
+      "tokenIndex": 501,
+      "preview": "25 25 28 Brian Zimmerman United States Ford F150 A 4.99 5030 23 8 101 1:55:21.497 0:01.288 0.084 00:52.103 55 Running"
+    },
+    {
+      "position": 26,
+      "success": true,
+      "driverName": "Trevor Harmon",
+      "carNumber": "16",
+      "charIndex": 3029,
+      "tokenIndex": 522,
+      "preview": "26 26 16 Trevor Harmon United States Toyota Tundra TRD Pro A 3.58 2651 14 12 101 1:55:21.631 0:01.422 0.134 00:51.390 51 Running"
+    },
+    {
+      "position": 27,
+      "success": true,
+      "driverName": "Alex Menet",
+      "carNumber": "55",
+      "charIndex": 3158,
+      "tokenIndex": 545,
+      "preview": "27 27 55 Alex Menet United States Chevrolet Silverado C 2.25 1087 18 18 101 1:55:32.149 0:11.939 10.517 00:52.018 90 Running"
+    },
+    {
+      "position": 28,
+      "success": true,
+      "driverName": "Agnello Marzuillo",
+      "carNumber": "94",
+      "charIndex": 3283,
+      "tokenIndex": 566,
+      "preview": "28 28 94 Agnello Marzuillo Italy Chevrolet Silverado A 2.05 2750 16 16 100 1:55:29.238 1 LAP 1 LAP 00:51.983 55 Running"
+    },
+    {
+      "position": 29,
+      "success": true,
+      "driverName": "Michael Kelly",
+      "carNumber": "47",
+      "charIndex": 3403,
+      "tokenIndex": 588,
+      "preview": "29 29 47 Michael Kelly United States Chevrolet Silverado A 2.10 1142 27 8 98 1:55:21.245 3 LAPS 2 LAPS 00:52.476 3 Running"
+    },
+    {
+      "position": 30,
+      "success": true,
+      "driverName": "Brian Roush",
+      "carNumber": "32",
+      "charIndex": 3526,
+      "tokenIndex": 611,
+      "preview": "30 30 32 Brian Roush United States Ford F150 A 3.02 2107 26 9 96 1:47:13.541 5 LAPS 2 LAPS 00:51.770 92 Disco"
+    },
+    {
+      "position": 31,
+      "success": true,
+      "driverName": "Earl Hall",
+      "carNumber": "49",
+      "charIndex": 3636,
+      "tokenIndex": 634,
+      "preview": "31 31 49 Earl Hall United States RAM B 3.45 1204 25 8 87 1:42:38.521 14 LAPS 9 LAPS 00:51.732 83 Running"
+    },
+    {
+      "position": 32,
+      "success": true,
+      "driverName": "Eddie Hagigh",
+      "carNumber": "97",
+      "charIndex": 3741,
+      "tokenIndex": 656,
+      "preview": "32 32 97 Eddie Hagigh United States Chevrolet Silverado A 2.31 2369 1 8 58 1:06:15.428 43 LAPS 29 LAPS 00:51.897 28 Disco"
+    },
+    {
+      "position": 33,
+      "success": true,
+      "driverName": "Scotty Stevens",
+      "carNumber": "22",
+      "charIndex": 3863,
+      "tokenIndex": 679,
+      "preview": "33 33 22 Scotty Stevens United States Ford F150 B 2.64 2847 7 8 38 0:45:04.118 63 LAPS 20 LAPS 00:51.755 27 Disco"
+    },
+    {
+      "position": 34,
+      "success": true,
+      "driverName": "Dylan Eckard",
+      "carNumber": "45",
+      "charIndex": 3977,
+      "tokenIndex": 702,
+      "preview": "34 34 45 Dylan Eckard United States Chevrolet Silverado C 2.11 1263 24 9 11 0:13:56.787 90 LAPS 27 LAPS 00:52.089 2 Running"
+    },
+    {
+      "position": 35,
+      "success": true,
+      "driverName": "Aaron Bockover",
+      "carNumber": "44",
+      "charIndex": 4101,
+      "tokenIndex": 725,
+      "preview": "35 35 44 Aaron Bockover United States Chevrolet Silverado A 3.08 2811 35 0 -1 102 LAPS 12 LAPS Disco"
+    }
+  ]
+}

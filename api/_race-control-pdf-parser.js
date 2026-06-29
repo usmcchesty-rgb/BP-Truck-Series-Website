@@ -76,6 +76,7 @@ function normalizeOptionalGap(value) {
 }
 
 const MIN_RESULT_TAIL_TOKENS = 10;
+const MIN_DNF_RESULT_TAIL_TOKENS = 7;
 
 function isLapsPhraseTokenPair(tokens, startIndex) {
   return (
@@ -138,6 +139,24 @@ function parseGapIntervalMiddle(middle) {
   return { gap, interval };
 }
 
+function parseDnfLapsOnlySuffix(remaining) {
+  if (!remaining.length) return null;
+
+  const status = remaining[remaining.length - 1];
+  if (!DNF_STATUS_VALUES.has(status)) return null;
+
+  const middle = remaining.slice(0, -1);
+  const { gap, interval } = parseGapIntervalMiddle(middle);
+
+  return {
+    gap,
+    interval,
+    bestLap: null,
+    bestLapOn: null,
+    status,
+  };
+}
+
 function parseResultRowSuffix(remaining) {
   if (remaining.length < 3) return null;
 
@@ -166,7 +185,7 @@ function parseResultRowSuffix(remaining) {
 }
 
 function parseResultRowTail(tail) {
-  if (!Array.isArray(tail) || tail.length < MIN_RESULT_TAIL_TOKENS) return null;
+  if (!Array.isArray(tail) || tail.length < MIN_DNF_RESULT_TAIL_TOKENS) return null;
 
   let i = 0;
   const licenseClass = tail[i++];
@@ -187,11 +206,30 @@ function parseResultRowTail(tail) {
     return null;
   }
 
-  const finishTimeRaw = tail[i++];
-  if (finishTimeRaw !== '-' && !isTimeToken(finishTimeRaw)) return null;
+  const finishCandidate = tail[i];
+  if (finishCandidate === '-' || isTimeToken(finishCandidate)) {
+    i += 1;
+    const suffix = parseResultRowSuffix(tail.slice(i));
+    if (!suffix) return null;
 
-  const suffix = parseResultRowSuffix(tail.slice(i));
-  if (!suffix) return null;
+    return {
+      licenseClass,
+      safetyRating,
+      iRating,
+      grid,
+      incidents,
+      laps,
+      finishTime: finishCandidate === '-' ? null : finishCandidate,
+      gap: suffix.gap,
+      interval: suffix.interval,
+      bestLap: suffix.bestLap,
+      bestLapOn: suffix.bestLapOn,
+      status: suffix.status,
+    };
+  }
+
+  const dnfSuffix = parseDnfLapsOnlySuffix(tail.slice(i));
+  if (!dnfSuffix) return null;
 
   return {
     licenseClass,
@@ -200,21 +238,21 @@ function parseResultRowTail(tail) {
     grid,
     incidents,
     laps,
-    finishTime: finishTimeRaw === '-' ? null : finishTimeRaw,
-    gap: suffix.gap,
-    interval: suffix.interval,
-    bestLap: suffix.bestLap,
-    bestLapOn: suffix.bestLapOn,
-    status: suffix.status,
+    finishTime: null,
+    gap: dnfSuffix.gap,
+    interval: dnfSuffix.interval,
+    bestLap: dnfSuffix.bestLap,
+    bestLapOn: dnfSuffix.bestLapOn,
+    status: dnfSuffix.status,
   };
 }
 
 function diagnoseResultRowTailDetailed(tail) {
   const parserState = { tailTokenCount: tail?.length ?? 0 };
 
-  if (!Array.isArray(tail) || tail.length < MIN_RESULT_TAIL_TOKENS) {
+  if (!Array.isArray(tail) || tail.length < MIN_DNF_RESULT_TAIL_TOKENS) {
     return {
-      reason: `Tail too short (${tail?.length ?? 0} tokens, need ${MIN_RESULT_TAIL_TOKENS}).`,
+      reason: `Tail too short (${tail?.length ?? 0} tokens, need ${MIN_DNF_RESULT_TAIL_TOKENS}).`,
       field: 'tail',
       parserState,
     };
@@ -256,66 +294,95 @@ function diagnoseResultRowTailDetailed(tail) {
     };
   }
 
-  const finishTimeRaw = tail[i++];
-  parserState.finishTime = finishTimeRaw;
-  if (finishTimeRaw !== '-' && !isTimeToken(finishTimeRaw)) {
-    return {
-      reason: `Invalid finishTime (${finishTimeRaw}).`,
-      field: 'finishTime',
-      parserState,
-    };
+  const finishCandidate = tail[i];
+  parserState.finishTime = finishCandidate;
+  if (finishCandidate === '-' || isTimeToken(finishCandidate)) {
+    const remaining = tail.slice(i + 1);
+    parserState.remainingAfterFinishTime = remaining;
+
+    if (remaining.length < 3) {
+      return {
+        reason: `Too few suffix tokens after finishTime (${remaining.length}, need at least 3).`,
+        field: 'suffix',
+        parserState,
+      };
+    }
+
+    const status = remaining[remaining.length - 1];
+    parserState.status = status;
+    if (!STATUS_VALUES.has(status)) {
+      return {
+        reason: `Invalid status (${status}).`,
+        field: 'status',
+        parserState,
+      };
+    }
+
+    const bestLapOnRaw = remaining[remaining.length - 2];
+    parserState.bestLapOn = bestLapOnRaw;
+    if (bestLapOnRaw !== '-' && !Number.isFinite(Number(bestLapOnRaw))) {
+      return {
+        reason: `Invalid bestLapOn (${bestLapOnRaw}).`,
+        field: 'bestLapOn',
+        parserState,
+      };
+    }
+
+    const bestLapRaw = remaining[remaining.length - 3];
+    parserState.bestLap = bestLapRaw;
+    if (bestLapRaw !== '-' && !isTimeToken(bestLapRaw)) {
+      return {
+        reason: `Invalid bestLap (${bestLapRaw}).`,
+        field: 'bestLap',
+        parserState,
+      };
+    }
+
+    parserState.gapIntervalMiddle = remaining.slice(0, -3);
+  } else {
+    parserState.remainingAfterFinishTime = tail.slice(i);
+    const dnfSuffix = parseDnfLapsOnlySuffix(tail.slice(i));
+    if (!dnfSuffix) {
+      return {
+        reason: `Invalid DNF suffix after laps (${tail.slice(i).join(' ')}).`,
+        field: 'dnfSuffix',
+        parserState,
+      };
+    }
+    parserState.status = dnfSuffix.status;
+    parserState.gapIntervalMiddle = tail.slice(i, -1);
   }
 
-  const remaining = tail.slice(i);
-  parserState.remainingAfterFinishTime = remaining;
-
-  if (remaining.length < 3) {
-    return {
-      reason: `Too few suffix tokens after finishTime (${remaining.length}, need at least 3).`,
-      field: 'suffix',
-      parserState,
-    };
-  }
-
-  const status = remaining[remaining.length - 1];
-  parserState.status = status;
-  if (!STATUS_VALUES.has(status)) {
-    return {
-      reason: `Invalid status (${status}).`,
-      field: 'status',
-      parserState,
-    };
-  }
-
-  const bestLapOnRaw = remaining[remaining.length - 2];
-  parserState.bestLapOn = bestLapOnRaw;
-  if (bestLapOnRaw !== '-' && !Number.isFinite(Number(bestLapOnRaw))) {
-    return {
-      reason: `Invalid bestLapOn (${bestLapOnRaw}).`,
-      field: 'bestLapOn',
-      parserState,
-    };
-  }
-
-  const bestLapRaw = remaining[remaining.length - 3];
-  parserState.bestLap = bestLapRaw;
-  if (bestLapRaw !== '-' && !isTimeToken(bestLapRaw)) {
-    return {
-      reason: `Invalid bestLap (${bestLapRaw}).`,
-      field: 'bestLap',
-      parserState,
-    };
-  }
-
-  parserState.gapIntervalMiddle = remaining.slice(0, -3);
   const parsed = parseResultRowTail(tail);
   if (parsed) return null;
 
   return {
-    reason: `Gap/interval suffix invalid (${parserState.gapIntervalMiddle.join(' ')}).`,
+    reason: `Gap/interval suffix invalid (${(parserState.gapIntervalMiddle || []).join(' ')}).`,
     field: 'gapInterval',
     parserState,
   };
+}
+
+function tryParseResultRowIdentityAndTail(tokens, identityStart, maxIdentityLen) {
+  let best = null;
+
+  for (let identityLen = 3; identityLen <= maxIdentityLen; identityLen += 1) {
+    const identityTokens = tokens.slice(identityStart, identityStart + identityLen);
+    const identity = parseDriverIdentity(identityTokens);
+    if (!identity) continue;
+
+    const tail = tokens.slice(identityStart + identityLen);
+    if (!tail.length || !LICENSE_CLASS_PATTERN.test(tail[0])) continue;
+
+    const tailParsed = parseResultRowTail(tail);
+    if (!tailParsed) continue;
+
+    if (!best || identityLen < best.identityLen) {
+      best = { identity, tail, tailParsed, identityLen };
+    }
+  }
+
+  return best;
 }
 
 function diagnoseParseOneResultRowDetailed(tokens, startIdx) {
@@ -351,7 +418,7 @@ function diagnoseParseOneResultRowDetailed(tokens, startIdx) {
 
   const position = Number(tokens[startIdx]);
   const identityStart = startIdx + 3;
-  const maxIdentityLen = tokens.length - startIdx - 3 - MIN_RESULT_TAIL_TOKENS;
+  const maxIdentityLen = tokens.length - startIdx - 3 - MIN_DNF_RESULT_TAIL_TOKENS;
   parserState.position = position;
   parserState.classPosition = Number(tokens[startIdx + 1]);
   parserState.carNumber = Number(tokens[startIdx + 2]);
@@ -388,11 +455,26 @@ function diagnoseParseOneResultRowDetailed(tokens, startIdx) {
       continue;
     }
 
+    const tail = tokens.slice(identityStart + identityLen);
+    if (!tail.length || !LICENSE_CLASS_PATTERN.test(tail[0])) {
+      bestFailure = {
+        reason: `${identity.driverName}: tail does not start with license class (${tail[0] ?? 'missing'}).`,
+        field: 'licenseClass',
+        parserState: {
+          ...parserState,
+          driverName: identity.driverName,
+          tailTokens: tail,
+        },
+        rowText,
+        tokens,
+      };
+      continue;
+    }
+
     parserState.driverName = identity.driverName;
     parserState.nationality = identity.nationality;
     parserState.car = identity.car;
 
-    const tail = tokens.slice(identityStart + identityLen);
     parserState.tailTokens = tail;
     const tailFailure = diagnoseResultRowTailDetailed(tail);
     if (tailFailure) {
@@ -729,6 +811,7 @@ const NATIONALITY_PHRASES = [
 ];
 
 const STATUS_VALUES = new Set(['Running', 'Disco', 'DQ', 'DNQ', 'Disqualified']);
+const DNF_STATUS_VALUES = new Set(['Disco', 'DQ', 'DNQ', 'Disqualified']);
 const LICENSE_CLASS_PATTERN = /^[A-Z]{1,3}$/;
 
 const TIME_TOKEN =
@@ -1075,50 +1158,41 @@ function parseOneResultRow(tokens, startIdx) {
   const classPosition = Number(tokens[startIdx + 1]);
   const carNumber = Number(tokens[startIdx + 2]);
   const identityStart = startIdx + 3;
-  const maxIdentityLen = tokens.length - startIdx - 3 - MIN_RESULT_TAIL_TOKENS;
+  const maxIdentityLen = tokens.length - startIdx - 3 - MIN_DNF_RESULT_TAIL_TOKENS;
 
   if (maxIdentityLen < 1) return null;
 
-  let parsedRow = null;
+  const parsedIdentity = tryParseResultRowIdentityAndTail(tokens, identityStart, maxIdentityLen);
+  if (!parsedIdentity) return null;
 
-  for (let identityLen = 3; identityLen <= maxIdentityLen; identityLen += 1) {
-    const identityTokens = tokens.slice(identityStart, identityStart + identityLen);
-    const identity = parseDriverIdentity(identityTokens);
-    if (!identity) continue;
+  const { identity, tail, tailParsed, identityLen } = parsedIdentity;
 
-    const tail = tokens.slice(identityStart + identityLen);
-    const tailParsed = parseResultRowTail(tail);
-    if (!tailParsed) continue;
-
-    parsedRow = {
-      result: {
-        position,
-        classPosition,
-        carNumber,
-        driverName: identity.driverName,
-        nationality: identity.nationality,
-        car: identity.car,
-        licenseClass: tailParsed.licenseClass,
-        safetyRating: tailParsed.safetyRating,
-        iRating: tailParsed.iRating,
-        grid: tailParsed.grid,
-        incidents: tailParsed.incidents,
-        laps: tailParsed.laps,
-        finishTime: tailParsed.finishTime,
-        gap: tailParsed.gap,
-        interval: tailParsed.interval,
-        bestLap: tailParsed.bestLap,
-        bestLapOn: tailParsed.bestLapOn,
-        status: tailParsed.status,
-        startPosition: tailParsed.grid,
-        incidentCount: tailParsed.incidents,
-        lapsCompleted: tailParsed.laps,
-      },
-      nextIdx: identityStart + identityLen + tail.length,
-    };
-  }
-
-  return parsedRow;
+  return {
+    result: {
+      position,
+      classPosition,
+      carNumber,
+      driverName: identity.driverName,
+      nationality: identity.nationality,
+      car: identity.car,
+      licenseClass: tailParsed.licenseClass,
+      safetyRating: tailParsed.safetyRating,
+      iRating: tailParsed.iRating,
+      grid: tailParsed.grid,
+      incidents: tailParsed.incidents,
+      laps: tailParsed.laps,
+      finishTime: tailParsed.finishTime,
+      gap: tailParsed.gap,
+      interval: tailParsed.interval,
+      bestLap: tailParsed.bestLap,
+      bestLapOn: tailParsed.bestLapOn,
+      status: tailParsed.status,
+      startPosition: tailParsed.grid,
+      incidentCount: tailParsed.incidents,
+      lapsCompleted: tailParsed.laps,
+    },
+    nextIdx: identityStart + identityLen + tail.length,
+  };
 }
 
 export function parseResults(sectionText) {
@@ -1138,22 +1212,24 @@ export function parseResults(sectionText) {
   const candidates = findResultRowCandidates(sectionText);
   const failedRowDiagnostics = collectFailedRowDiagnostics(sectionText, candidates);
   const rowStarts = findSequentialResultRowStarts(sectionText);
+  const seenPositions = new Set();
 
-  for (let i = 0; i < rowStarts.length; i += 1) {
-    const start = rowStarts[i];
-    const end = i + 1 < rowStarts.length ? rowStarts[i + 1].index : sectionText.length;
-    const rowText = sectionText.slice(start.index, end).trim();
+  for (const candidate of candidates) {
+    if (seenPositions.has(candidate.position)) continue;
+    seenPositions.add(candidate.position);
+
+    const rowText = sliceResultRowText(sectionText, candidate, candidates);
     const parsed = parseOneResultRow(rowText.split(/\s+/), 0);
-    if (parsed?.result) {
+    if (parsed?.result?.position === candidate.position) {
       results.push(parsed.result);
     }
   }
 
   if (!results.length) {
     warnings.push('No finishing results table detected in PDF text.');
-  } else if (rowStarts.length > results.length) {
+  } else if (seenPositions.size > results.length) {
     warnings.push(
-      `Detected ${rowStarts.length} result row anchors but parsed ${results.length} rows.`
+      `Detected ${seenPositions.size} result row anchors but parsed ${results.length} rows.`
     );
   } else if (failedRowDiagnostics.failedRowCount > 0) {
     warnings.push(
