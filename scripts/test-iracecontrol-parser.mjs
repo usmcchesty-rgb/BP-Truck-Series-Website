@@ -61,7 +61,13 @@ function buildSampleRow({
     laps,
     finishTime,
   ];
-  if (gap != null && gap !== '-') parts.push(gap);
+  if (gap != null && gap !== '-') {
+    if (String(gap).includes(' ')) {
+      parts.push(...String(gap).split(/\s+/));
+    } else {
+      parts.push(gap);
+    }
+  }
   if (interval != null && interval !== '-') parts.push(interval);
   parts.push(bestLap, bestLapOn, status);
   return parts.join(' ');
@@ -133,6 +139,23 @@ function buildTalladegaSample() {
           interval: '0.003',
           bestLap: '00:51.857',
           bestLapOn: '92',
+        })
+      );
+      continue;
+    }
+
+    if (position >= 27) {
+      rows.push(
+        buildSampleRow({
+          ...rowDefaults,
+          incidents: '12',
+          laps: '78',
+          finishTime: position === 35 ? '1:56:12.115' : '-',
+          gap: '5 Laps',
+          interval: null,
+          bestLap: position === 35 ? '00:51.906' : '00:54.321',
+          bestLapOn: position === 35 ? '55' : '67',
+          status: position === 35 ? 'Running' : 'Disco',
         })
       );
       continue;
@@ -235,6 +258,8 @@ const pass =
   checks.parserDiagnostics?.resultsDetected === 35 &&
   checks.parserDiagnostics?.resultParseConfidence === 'high' &&
   parsed.parserDebug?.sequentialAnchorsAccepted === 35 &&
+  parsed.parserDebug?.failedRowCount === 0 &&
+  parsed.parserDebug?.successfulPositions?.length === 35 &&
   !checks.hasFirstIterationWarning;
 
 console.log(pass ? '\nACCEPTANCE: PASS' : '\nACCEPTANCE: CHECK OUTPUT');
