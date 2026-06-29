@@ -8,7 +8,6 @@
   <link rel="stylesheet" href="/admin/admin-layout.css">
   <style>
     .sub { color: var(--bp-text-secondary); font-size: 12px; margin-bottom: 16px; line-height: 1.45; }
-    .notice { padding: 12px 14px; border: 1px solid #355; background: rgba(0, 40, 40, 0.35); border-radius: 4px; margin-bottom: 16px; font-size: 12px; line-height: 1.5; }
     .panel { padding: 14px; margin-bottom: 14px; }
     .panel h2 { margin: 0 0 12px; font-size: 18px; color: #ff3030; }
     .field-label { display: block; font-size: 11px; color: #999; font-weight: 900; text-transform: uppercase; margin: 10px 0 4px; }
@@ -16,34 +15,22 @@
     .btn-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
     .btn-secondary { background: linear-gradient(#1c1c1c, #080808); }
     .btn-danger { background: linear-gradient(#5a1010, #2a0505); border-color: #733; }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
     #adminMsg, #loginMsg { margin-top: 10px; font-size: 12px; color: #ccc; white-space: pre-wrap; }
     #adminMsg.error, #loginMsg.error { color: #ff6060; }
     .pw-row { max-width: 320px; margin-bottom: 14px; }
-    .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
-    .status-badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 900; text-transform: uppercase; border: 1px solid #444; }
-    .status-badge.is-missing { color: #aaa; border-color: #555; }
-    .status-badge.is-uploaded { color: #9cf; border-color: #369; }
-    .status-badge.is-parsed { color: #9f9; border-color: #393; }
-    .status-badge.is-failed { color: #f99; border-color: #933; }
-    .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 12px 0; }
-    .summary-card { padding: 10px; border: 1px solid #333; background: rgba(0,0,0,.25); }
-    .summary-card strong { display: block; font-size: 16px; margin-top: 4px; }
-    .summary-card span { font-size: 10px; color: #888; text-transform: uppercase; font-weight: 900; }
-    .table-wrap { overflow-x: auto; margin-top: 12px; }
-    table.data-table { width: 100%; border-collapse: collapse; font-size: 11px; }
-    table.data-table th, table.data-table td { border: 1px solid #333; padding: 6px 8px; text-align: left; }
-    table.data-table th { background: #111; color: #ccc; text-transform: uppercase; font-size: 10px; }
-    .warnings { margin-top: 10px; padding: 10px; border: 1px solid #663; background: rgba(80, 60, 0, 0.2); font-size: 11px; }
+    .upload-stack { display: grid; gap: 10px; max-width: 640px; }
+    .divider { border: 0; border-top: 1px solid #333; margin: 18px 0; }
+    .helper-text { font-size: 12px; color: #888; line-height: 1.45; margin: 0 0 14px; }
+    .path-hint { font-size: 11px; color: #666; margin-top: 4px; font-family: Consolas, Monaco, monospace; }
+    .status-card { border: 1px solid #333; background: rgba(0,0,0,.25); padding: 14px; max-width: 520px; }
+    .status-card h3 { margin: 0 0 12px; font-size: 14px; color: #ff3030; text-transform: uppercase; letter-spacing: 0.4px; }
+    .status-row { display: grid; grid-template-columns: 120px 1fr; gap: 8px 12px; font-size: 12px; padding: 4px 0; border-bottom: 1px solid #222; }
+    .status-row:last-child { border-bottom: 0; }
+    .status-row dt { color: #888; font-weight: 900; text-transform: uppercase; font-size: 10px; margin: 0; }
+    .status-row dd { margin: 0; color: #eee; }
+    .warnings { margin-top: 12px; padding: 10px; border: 1px solid #663; background: rgba(80, 60, 0, 0.2); font-size: 11px; max-width: 520px; }
     .warnings ul { margin: 6px 0 0 18px; padding: 0; }
-    .saved-list { display: grid; gap: 8px; margin-bottom: 16px; }
-    .saved-item { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid #333; background: rgba(0,0,0,.25); }
-    .saved-item strong { font-size: 13px; }
-    .saved-item span { color: #888; font-size: 11px; display: block; margin-top: 2px; }
-    .saved-item button { padding: 4px 10px; font-size: 9px; }
-    .events-list { display: grid; gap: 6px; margin-top: 10px; max-height: 280px; overflow-y: auto; }
-    .event-item { padding: 8px 10px; border: 1px solid #333; background: rgba(0,0,0,.2); font-size: 11px; }
-    .ai-ready { margin-top: 10px; font-size: 12px; color: #9f9; }
-    .ai-pending { margin-top: 10px; font-size: 12px; color: #aaa; }
   </style>
 </head>
 <body>
@@ -62,85 +49,69 @@
 
   <main id="adminView" class="wrap" hidden>
     <h1>Race Control Center</h1>
-    <div class="notice">
-      This data supplements official results. The site does not depend on it.
-      Schedule/results, fantasy, power rankings, and news continue to work without a Race Control PDF.
-    </div>
+    <p class="helper-text">Race Control PDFs supplement official results. The site does not require them.</p>
 
     <div class="panel">
-      <h2>Uploaded Reports</h2>
-      <div id="savedList" class="saved-list"></div>
-    </div>
+      <div class="upload-stack">
+        <div>
+          <label class="field-label" for="seasonSelect">Season</label>
+          <select id="seasonSelect" class="select">
+            <option value="">Loading season...</option>
+          </select>
+        </div>
 
-    <div class="panel">
-      <h2>Upload / Manage</h2>
-      <div class="meta-grid">
         <div>
           <label class="field-label" for="raceSelect">Race</label>
           <select id="raceSelect" class="select">
             <option value="">Loading races...</option>
           </select>
         </div>
+
         <div>
           <label class="field-label" for="pdfFile">Race Control PDF</label>
           <input id="pdfFile" class="input" type="file" accept="application/pdf,.pdf">
         </div>
+
+        <div class="btn-row" style="margin-top: 0;">
+          <button id="uploadBtn" class="btn" type="button" onclick="uploadPdf()">Upload / Replace PDF</button>
+        </div>
+
+        <p id="storagePathHint" class="path-hint"></p>
       </div>
 
-      <div id="reportMeta" hidden>
-        <div class="meta-grid" style="margin-top: 10px;">
-          <div><span class="field-label">File</span><div id="fileName">—</div></div>
-          <div><span class="field-label">Uploaded</span><div id="uploadedAt">—</div></div>
-          <div><span class="field-label">Parse Status</span><div id="parseStatus">—</div></div>
-        </div>
+      <hr class="divider">
+
+      <div class="status-card">
+        <h3>Status</h3>
+        <dl>
+          <div class="status-row"><dt>Status</dt><dd id="statusValue">Not uploaded</dd></div>
+          <div class="status-row"><dt>Uploaded</dt><dd id="statusUploaded">—</dd></div>
+          <div class="status-row"><dt>Parsed</dt><dd id="statusParsed">—</dd></div>
+          <div class="status-row"><dt>Winner</dt><dd id="statusWinner">—</dd></div>
+          <div class="status-row"><dt>SOF</dt><dd id="statusSof">—</dd></div>
+          <div class="status-row"><dt>Cautions</dt><dd id="statusCautions">—</dd></div>
+          <div class="status-row"><dt>Drivers</dt><dd id="statusDrivers">—</dd></div>
+        </dl>
       </div>
+
+      <div id="parseWarnings" class="warnings" hidden></div>
 
       <div class="btn-row">
-        <button class="btn" type="button" onclick="uploadPdf()">Upload / Replace PDF</button>
-        <button class="btn btn-secondary" type="button" onclick="reparsePdf()">Reparse PDF</button>
-        <button class="btn btn-danger" type="button" onclick="deletePdf()">Delete PDF</button>
+        <button id="reparseBtn" class="btn btn-secondary" type="button" onclick="reparsePdf()" disabled>Reparse PDF</button>
+        <button id="deleteBtn" class="btn btn-danger" type="button" onclick="deletePdf()" disabled>Delete PDF</button>
       </div>
+
       <pre id="adminMsg"></pre>
-    </div>
-
-    <div class="panel" id="summaryPanel" hidden>
-      <h2>Parsed Summary</h2>
-      <div class="summary-grid">
-        <div class="summary-card"><span>Winner (PDF)</span><strong id="summaryWinner">—</strong></div>
-        <div class="summary-card"><span>SOF</span><strong id="summarySof">—</strong></div>
-        <div class="summary-card"><span>Cautions</span><strong id="summaryCautions">—</strong></div>
-        <div class="summary-card"><span>Results</span><strong id="summaryResults">—</strong></div>
-        <div class="summary-card"><span>Events</span><strong id="summaryEvents">—</strong></div>
-      </div>
-      <div id="aiReadyLine" class="ai-pending"></div>
-      <div id="parseWarnings" class="warnings" hidden></div>
-    </div>
-
-    <div class="panel" id="resultsPanel" hidden>
-      <h2>Driver Results (PDF extract)</h2>
-      <div class="table-wrap">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Pos</th><th>Car</th><th>Driver</th><th>Start</th><th>Inc</th><th>Laps</th><th>Best Lap</th><th>Status</th>
-            </tr>
-          </thead>
-          <tbody id="resultsBody"></tbody>
-        </table>
-      </div>
-    </div>
-
-    <div class="panel" id="eventsPanel" hidden>
-      <h2>Session Events (PDF extract)</h2>
-      <div id="eventsList" class="events-list"></div>
     </div>
   </main>
 
   <script>
     const $ = (s) => document.querySelector(s);
     const SESSION_KEY = 'bp_admin_pw';
+
+    let seasonId = '';
+    let seasonName = 'Season';
     let scheduleRaces = [];
-    let savedReports = [];
     let currentReport = null;
 
     function getSessionPw() { return sessionStorage.getItem(SESSION_KEY) || ''; }
@@ -176,7 +147,6 @@
       $('#adminView').hidden = false;
       if (window.AdminNav) AdminNav.setLoggedIn(true);
       await loadSchedule();
-      await loadSavedList();
       applyQueryRaceNumber();
     }
 
@@ -196,11 +166,6 @@
         msg.textContent = e.message;
         msg.classList.add('error');
       }
-    }
-
-    function logout() {
-      sessionStorage.removeItem(SESSION_KEY);
-      showLogin();
     }
 
     async function initSession() {
@@ -234,11 +199,7 @@
     }
 
     function resolveOfficialRaceNumber(race, pointsIndex) {
-      const candidates = [
-        race?.officialPointsRaceNumber,
-        race?.race_number,
-        race?.scheduleRow,
-      ];
+      const candidates = [race?.officialPointsRaceNumber, race?.race_number, race?.scheduleRow];
       for (const value of candidates) {
         const num = Number(value);
         if (Number.isInteger(num) && num > 0) return num;
@@ -260,9 +221,31 @@
         });
     }
 
-    function readRaceNumber() {
-      const fromSelect = Number($('#raceSelect').value);
-      return Number.isInteger(fromSelect) && fromSelect > 0 ? fromSelect : null;
+    function getSelectedRace() {
+      const raceNumber = Number($('#raceSelect')?.value);
+      if (!Number.isInteger(raceNumber) || raceNumber < 1) return null;
+      const race = scheduleRaces.find((row) => row.raceNumber === raceNumber);
+      if (!race) return null;
+      return {
+        seasonId: String(seasonId || ''),
+        raceNumber: race.raceNumber,
+        trackName: race.trackName,
+        raceDate: race.date || null,
+      };
+    }
+
+    function buildStoragePath(selection) {
+      if (!selection?.seasonId || !selection?.raceNumber) return '';
+      return `season-${selection.seasonId}/race-${selection.raceNumber}/race-control.pdf`;
+    }
+
+    function updateStoragePathHint() {
+      const selection = getSelectedRace();
+      const hint = $('#storagePathHint');
+      if (!hint) return;
+      hint.textContent = selection
+        ? `Storage path: ${buildStoragePath(selection)}`
+        : '';
     }
 
     function selectRace(raceNumber) {
@@ -272,113 +255,61 @@
       if (!select) return;
       const hasOption = Array.from(select.options).some((option) => Number(option.value) === num);
       if (hasOption) select.value = String(num);
-    }
-
-    function statusBadgeClass(parseStatus) {
-      if (parseStatus === 'parsed') return 'is-parsed';
-      if (parseStatus === 'uploaded') return 'is-uploaded';
-      if (parseStatus === 'parse_failed') return 'is-failed';
-      return 'is-missing';
+      updateStoragePathHint();
     }
 
     function formatStatusLabel(report) {
       if (!report) return 'Not uploaded';
-      return report.parseStatusLabel || report.parseStatus || 'Unknown';
-    }
-
-    async function loadSchedule() {
-      try {
-        const res = await fetch('/api/schedule');
-        const data = await res.json();
-        scheduleRaces = normalizeScheduleRaces(data.races);
-        const select = $('#raceSelect');
-        select.innerHTML = scheduleRaces.length
-          ? scheduleRaces.map((race) => {
-              return `<option value="${race.raceNumber}">Race ${race.raceNumber} — ${race.trackName}</option>`;
-            }).join('')
-          : '<option value="">No points races found</option>';
-      } catch {
-        scheduleRaces = [];
-        $('#raceSelect').innerHTML = '<option value="">Failed to load schedule</option>';
+      switch (report.parseStatus) {
+        case 'parsed': return 'Parsed';
+        case 'uploaded': return 'Uploaded';
+        case 'parse_failed': return 'Parse failed';
+        default: return report.parseStatusLabel || 'Not uploaded';
       }
     }
 
-    async function loadSavedList() {
-      try {
-        const data = await apiPost('getRaceControlReport');
-        savedReports = Array.isArray(data.reports) ? data.reports : [];
-        renderSavedList();
-      } catch (e) {
-        setMsg(e.message, true);
-      }
+    function reportHasPdf(report) {
+      return Boolean(report?.fileUrl || report?.filePath || report?.uploadedAt);
     }
 
-    function renderSavedList() {
-      const list = $('#savedList');
-      if (!savedReports.length) {
-        list.innerHTML = '<p class="sub">No Race Control PDFs uploaded yet.</p>';
-        return;
-      }
-      list.innerHTML = savedReports.map((row) => `
-        <div class="saved-item">
-          <div>
-            <strong>Race ${row.raceNumber}${row.trackName ? ` — ${row.trackName}` : ''}</strong>
-            <span>${formatStatusLabel(row)} · ${row.originalFilename || 'race-control.pdf'} · ${formatTimestamp(row.uploadedAt)}</span>
-          </div>
-          <button class="btn btn-secondary" type="button" data-race="${row.raceNumber}">View</button>
-        </div>
-      `).join('');
-      list.querySelectorAll('button[data-race]').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          selectRace(btn.dataset.race);
-          loadReportForRace(Number(btn.dataset.race));
-        });
-      });
+    function updateActionButtons(report) {
+      const hasPdf = reportHasPdf(report);
+      const reparseBtn = $('#reparseBtn');
+      const deleteBtn = $('#deleteBtn');
+      if (reparseBtn) reparseBtn.disabled = !hasPdf;
+      if (deleteBtn) deleteBtn.disabled = !hasPdf;
     }
 
-    function renderReport(report) {
+    function renderStatusCard(report) {
       currentReport = report || null;
-      const hasReport = Boolean(report);
+      const summary = report?.summary || {};
+      const parsed = report?.parsedJson || {};
+      const hasPdf = reportHasPdf(report);
 
-      $('#reportMeta').hidden = !hasReport;
-      $('#summaryPanel').hidden = !hasReport;
-      $('#resultsPanel').hidden = !hasReport;
-      $('#eventsPanel').hidden = !hasReport;
+      $('#statusValue').textContent = formatStatusLabel(report);
+      $('#statusUploaded').textContent = hasPdf ? formatTimestamp(report.uploadedAt) : '—';
 
-      if (!hasReport) {
-        $('#fileName').textContent = '—';
-        $('#uploadedAt').textContent = '—';
-        $('#parseStatus').innerHTML = '<span class="status-badge is-missing">Not uploaded</span>';
-        $('#aiReadyLine').textContent = 'Upload a Race Control PDF to enrich AI/news analysis.';
-        $('#aiReadyLine').className = 'ai-pending';
-        return;
-      }
-
-      $('#fileName').textContent = report.originalFilename || 'race-control.pdf';
-      $('#uploadedAt').textContent = formatTimestamp(report.uploadedAt);
-      $('#parseStatus').innerHTML = `<span class="status-badge ${statusBadgeClass(report.parseStatus)}">${formatStatusLabel(report)}</span>`;
-
-      const summary = report.summary || {};
-      const parsed = report.parsedJson || {};
-      $('#summaryWinner').textContent = summary.winner || parsed.winner || '—';
-      $('#summarySof').textContent = summary.sof ?? parsed.sof ?? '—';
-      $('#summaryCautions').textContent = summary.cautionCount ?? parsed.cautionCount ?? '—';
-      $('#summaryResults').textContent = summary.resultCount ?? (parsed.results || []).length ?? '—';
-      $('#summaryEvents').textContent = summary.eventCount ?? (parsed.raceEvents || []).length ?? '—';
-
-      if (report.aiReady) {
-        $('#aiReadyLine').textContent = 'AI-ready: supplemental Race Control context is available for this race.';
-        $('#aiReadyLine').className = 'ai-ready';
-      } else if (report.parseStatus === 'uploaded') {
-        $('#aiReadyLine').textContent = 'PDF uploaded — parse pending. Reparse if summary does not appear.';
-        $('#aiReadyLine').className = 'ai-pending';
-      } else if (report.parseStatus === 'parse_failed') {
-        $('#aiReadyLine').textContent = 'Parse failed — review PDF format or re-upload.';
-        $('#aiReadyLine').className = 'ai-pending';
-      } else {
-        $('#aiReadyLine').textContent = 'Supplemental context not yet available.';
-        $('#aiReadyLine').className = 'ai-pending';
-      }
+      const parsedAt =
+        report?.parseStatus === 'parsed' || report?.parseStatus === 'parse_failed'
+          ? report.updatedAt || report.uploadedAt
+          : null;
+      $('#statusParsed').textContent = parsedAt ? formatTimestamp(parsedAt) : '—';
+      $('#statusWinner').textContent = summary.winner || parsed.winner || '—';
+      $('#statusSof').textContent =
+        summary.sof != null ? summary.sof : parsed.sof != null ? parsed.sof : '—';
+      $('#statusCautions').textContent =
+        summary.cautionCount != null
+          ? summary.cautionCount
+          : parsed.cautionCount != null
+            ? parsed.cautionCount
+            : '—';
+      const driverCount =
+        summary.resultCount != null
+          ? summary.resultCount
+          : Array.isArray(parsed.results)
+            ? parsed.results.length
+            : null;
+      $('#statusDrivers').textContent = driverCount != null ? driverCount : '—';
 
       const warnings = summary.parseWarnings || parsed.parseWarnings || [];
       const warningsEl = $('#parseWarnings');
@@ -390,41 +321,65 @@
         warningsEl.innerHTML = '';
       }
 
-      const results = parsed.results || [];
-      $('#resultsBody').innerHTML = results.length
-        ? results.map((row) => `
-            <tr>
-              <td>${row.position ?? '—'}</td>
-              <td>${row.carNumber ?? '—'}</td>
-              <td>${row.driverName ?? '—'}</td>
-              <td>${row.startPosition ?? '—'}</td>
-              <td>${row.incidentCount ?? '—'}</td>
-              <td>${row.lapsCompleted ?? '—'}</td>
-              <td>${row.bestLap ?? '—'}</td>
-              <td>${row.status ?? '—'}</td>
-            </tr>
-          `).join('')
-        : '<tr><td colspan="8">No driver results extracted from PDF.</td></tr>';
-
-      const events = parsed.raceEvents || [];
-      $('#eventsList').innerHTML = events.length
-        ? events.map((event) => `<div class="event-item">${event.text || event.type || 'Event'}</div>`).join('')
-        : '<p class="sub">No session events extracted from PDF.</p>';
+      updateActionButtons(report);
     }
 
-    async function loadReportForRace(raceNumber) {
-      const num = Number(raceNumber);
-      if (!Number.isInteger(num) || num < 1) {
-        setMsg('Select a valid race.', true);
+    async function loadSchedule() {
+      try {
+        const res = await fetch('/api/schedule');
+        const data = await res.json();
+        seasonId = String(data.settings?.seasonId || '27987');
+        seasonName = String(data.settings?.seasonName || 'Season 11').trim() || 'Season 11';
+        scheduleRaces = normalizeScheduleRaces(data.races);
+
+        const seasonSelect = $('#seasonSelect');
+        seasonSelect.innerHTML = `<option value="${seasonId}">${seasonName}</option>`;
+        seasonSelect.value = seasonId;
+
+        const raceSelect = $('#raceSelect');
+        raceSelect.innerHTML = scheduleRaces.length
+          ? scheduleRaces.map((race) =>
+              `<option value="${race.raceNumber}">Race ${race.raceNumber} — ${race.trackName}</option>`
+            ).join('')
+          : '<option value="">No points races found</option>';
+
+        updateStoragePathHint();
+
+        const selected = getSelectedRace();
+        if (selected) await loadReportForSelectedRace();
+        else renderStatusCard(null);
+      } catch {
+        scheduleRaces = [];
+        $('#seasonSelect').innerHTML = '<option value="">Failed to load season</option>';
+        $('#raceSelect').innerHTML = '<option value="">Failed to load schedule</option>';
+        renderStatusCard(null);
+      }
+    }
+
+    async function loadReportForSelectedRace() {
+      const selection = getSelectedRace();
+      if (!selection) {
+        setMsg('Select a race from the dropdown.', true);
+        renderStatusCard(null);
         return;
       }
-      selectRace(num);
+
+      updateStoragePathHint();
       setMsg('Loading report...');
+
       try {
-        const data = await apiPost('getRaceControlReport', { raceNumber: num });
-        renderReport(data.report || null);
-        setMsg(data.report ? `Loaded Race ${num} Race Control report.` : `No Race Control PDF for Race ${num}.`);
+        const data = await apiPost('getRaceControlReport', {
+          seasonId: selection.seasonId,
+          raceNumber: selection.raceNumber,
+        });
+        renderStatusCard(data.report || null);
+        setMsg(
+          data.report
+            ? `Loaded Race ${selection.raceNumber} — ${selection.trackName}.`
+            : `No Race Control PDF for Race ${selection.raceNumber} — ${selection.trackName}.`
+        );
       } catch (e) {
+        renderStatusCard(null);
         setMsg(e.message, true);
       }
     }
@@ -439,10 +394,11 @@
     }
 
     async function uploadPdf() {
-      const raceNumber = readRaceNumber();
+      const selection = getSelectedRace();
       const fileInput = $('#pdfFile');
       const file = fileInput.files?.[0];
-      if (!raceNumber) {
+
+      if (!selection) {
         setMsg('Select a race from the dropdown.', true);
         return;
       }
@@ -454,53 +410,66 @@
         setMsg('File must be a PDF.', true);
         return;
       }
-      setMsg('Uploading and parsing PDF...');
+
+      setMsg(`Uploading to ${buildStoragePath(selection)}...`);
+
       try {
         const pdfBase64 = await readFileAsBase64(file);
         const data = await apiPost('uploadRaceControlReport', {
-          raceNumber,
+          seasonId: selection.seasonId,
+          raceNumber: selection.raceNumber,
+          trackName: selection.trackName,
+          raceDate: selection.raceDate,
           pdfBase64,
           originalFilename: file.name,
         });
         fileInput.value = '';
-        renderReport(data.report || null);
-        await loadSavedList();
-        setMsg(`Uploaded Race Control PDF for Race ${raceNumber}.`);
+        renderStatusCard(data.report || null);
+        setMsg(`Uploaded Race Control PDF for Race ${selection.raceNumber} — ${selection.trackName}.`);
       } catch (e) {
         setMsg(e.message, true);
       }
     }
 
     async function reparsePdf() {
-      const raceNumber = readRaceNumber();
-      if (!raceNumber) {
+      const selection = getSelectedRace();
+      if (!selection) {
         setMsg('Select a race from the dropdown.', true);
         return;
       }
+      if (!reportHasPdf(currentReport)) return;
+
       setMsg('Reparsing PDF...');
       try {
-        const data = await apiPost('reparseRaceControlReport', { raceNumber });
-        renderReport(data.report || null);
-        await loadSavedList();
-        setMsg(`Reparsed Race Control PDF for Race ${raceNumber}.`);
+        const data = await apiPost('reparseRaceControlReport', {
+          seasonId: selection.seasonId,
+          raceNumber: selection.raceNumber,
+        });
+        renderStatusCard(data.report || null);
+        setMsg(`Reparsed Race Control PDF for Race ${selection.raceNumber}.`);
       } catch (e) {
         setMsg(e.message, true);
       }
     }
 
     async function deletePdf() {
-      const raceNumber = readRaceNumber();
-      if (!raceNumber) {
+      const selection = getSelectedRace();
+      if (!selection) {
         setMsg('Select a race from the dropdown.', true);
         return;
       }
-      if (!confirm(`Delete Race Control PDF for Race ${raceNumber}?`)) return;
+      if (!reportHasPdf(currentReport)) return;
+
+      if (!confirm(`Delete Race Control PDF for Race ${selection.raceNumber} — ${selection.trackName}?`)) return;
+
       setMsg('Deleting...');
       try {
-        await apiPost('deleteRaceControlReport', { raceNumber });
-        renderReport(null);
-        await loadSavedList();
-        setMsg(`Deleted Race Control PDF for Race ${raceNumber}.`);
+        await apiPost('deleteRaceControlReport', {
+          seasonId: selection.seasonId,
+          raceNumber: selection.raceNumber,
+        });
+        renderStatusCard(null);
+        setMsg(`Deleted Race Control PDF for Race ${selection.raceNumber}.`);
       } catch (e) {
         setMsg(e.message, true);
       }
@@ -509,14 +478,16 @@
     function applyQueryRaceNumber() {
       const params = new URLSearchParams(location.search);
       const raceNumber = Number(params.get('raceNumber'));
-      if (!Number.isInteger(raceNumber) || raceNumber < 1) return;
+      if (!Number.isInteger(raceNumber) || raceNumber < 1) {
+        if (getSelectedRace()) loadReportForSelectedRace();
+        return;
+      }
       selectRace(raceNumber);
-      loadReportForRace(raceNumber);
+      loadReportForSelectedRace();
     }
 
     $('#raceSelect')?.addEventListener('change', () => {
-      const raceNumber = Number($('#raceSelect').value);
-      if (raceNumber) loadReportForRace(raceNumber);
+      loadReportForSelectedRace();
     });
 
     $('#loginPw')?.addEventListener('keydown', (e) => {
