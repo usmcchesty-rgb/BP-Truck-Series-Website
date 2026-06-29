@@ -1,11 +1,17 @@
 import { getSettings, supabase } from './_lib.js';
-import { getEasternDateParts, parseScheduleDateParts } from './_race-date-status.js';
 import { resolveFantasySlateProgression, buildFantasyProgressionMeta } from './_fantasy-slate-progression.js';
+import {
+  getEasternDateParts,
+  getEffectivePointsRaceProgression,
+  parseScheduleDateParts,
+} from './_race-date-status.js';
 import { getPointsRaceByNumber } from './_schedule-points-races.js';
 
 export const MISSION_CONTROL_TASKS = [
   {
     id: 'sun-upload-race-control-pdf',
+    workflow: 'postRace',
+    raceRole: 'completed',
     day: 'sunday',
     dayLabel: 'Sunday',
     title: 'Upload Race Control PDF',
@@ -14,6 +20,8 @@ export const MISSION_CONTROL_TASKS = [
   },
   {
     id: 'sun-confirm-race-results',
+    workflow: 'postRace',
+    raceRole: 'completed',
     day: 'sunday',
     dayLabel: 'Sunday',
     title: 'Confirm race results posted',
@@ -22,6 +30,8 @@ export const MISSION_CONTROL_TASKS = [
   },
   {
     id: 'sun-score-fantasy-lineups',
+    workflow: 'postRace',
+    raceRole: 'completed',
     day: 'sunday',
     dayLabel: 'Sunday',
     title: 'Score fantasy lineups if results are available',
@@ -30,6 +40,8 @@ export const MISSION_CONTROL_TASKS = [
   },
   {
     id: 'mon-upload-transcript',
+    workflow: 'postRace',
+    raceRole: 'completed',
     day: 'monday',
     dayLabel: 'Monday',
     title: 'Upload race transcript',
@@ -38,6 +50,8 @@ export const MISSION_CONTROL_TASKS = [
   },
   {
     id: 'mon-publish-race-recap',
+    workflow: 'postRace',
+    raceRole: 'completed',
     day: 'monday',
     dayLabel: 'Monday',
     title: 'Publish race recap/news article if not already done',
@@ -45,31 +59,29 @@ export const MISSION_CONTROL_TASKS = [
     href: '/admin/news',
   },
   {
-    id: 'mon-archive-fantasy-slate',
-    day: 'monday',
-    dayLabel: 'Monday',
-    title: 'Archive completed fantasy slate',
-    description: 'Confirm the prior race slate is closed and archived.',
-    href: '/admin/fantasy.html',
-  },
-  {
     id: 'wed-generate-power-rankings',
+    workflow: 'postRace',
+    raceRole: 'completed',
     day: 'wednesday',
     dayLabel: 'Wednesday',
     title: 'Generate Power Rankings',
-    description: 'Build the latest rankings draft from race data.',
+    description: 'Build rankings from the completed race results.',
     href: '/admin/power-rankings',
   },
   {
     id: 'wed-publish-power-rankings',
+    workflow: 'postRace',
+    raceRole: 'completed',
     day: 'wednesday',
     dayLabel: 'Wednesday',
     title: 'Publish Power Rankings',
-    description: 'Review and publish rankings for the site.',
+    description: 'Review and publish rankings for the completed race.',
     href: '/admin/power-rankings',
   },
   {
     id: 'wed-review-fantasy-salaries',
+    workflow: 'nextRace',
+    raceRole: 'upcoming',
     day: 'wednesday',
     dayLabel: 'Wednesday',
     title: 'Review fantasy salaries for next race',
@@ -78,6 +90,8 @@ export const MISSION_CONTROL_TASKS = [
   },
   {
     id: 'thu-publish-driver-spotlight',
+    workflow: 'nextRace',
+    raceRole: 'upcoming',
     day: 'thursday',
     dayLabel: 'Thursday',
     title: 'Publish Driver Spotlight',
@@ -86,6 +100,8 @@ export const MISSION_CONTROL_TASKS = [
   },
   {
     id: 'thu-confirm-broadcast-link',
+    workflow: 'nextRace',
+    raceRole: 'upcoming',
     day: 'thursday',
     dayLabel: 'Thursday',
     title: 'Confirm broadcast link',
@@ -94,6 +110,8 @@ export const MISSION_CONTROL_TASKS = [
   },
   {
     id: 'thu-confirm-next-race-schedule',
+    workflow: 'nextRace',
+    raceRole: 'upcoming',
     day: 'thursday',
     dayLabel: 'Thursday',
     title: 'Confirm next race schedule/track',
@@ -102,6 +120,8 @@ export const MISSION_CONTROL_TASKS = [
   },
   {
     id: 'fri-post-weekend-outlook',
+    workflow: 'nextRace',
+    raceRole: 'upcoming',
     day: 'friday',
     dayLabel: 'Friday',
     title: 'Post Weekend Outlook news article',
@@ -110,6 +130,8 @@ export const MISSION_CONTROL_TASKS = [
   },
   {
     id: 'fri-publish-fantasy-slate',
+    workflow: 'nextRace',
+    raceRole: 'upcoming',
     day: 'friday',
     dayLabel: 'Friday',
     title: 'Publish fantasy slate if ready',
@@ -118,6 +140,8 @@ export const MISSION_CONTROL_TASKS = [
   },
   {
     id: 'fri-confirm-lineup-lock',
+    workflow: 'nextRace',
+    raceRole: 'upcoming',
     day: 'friday',
     dayLabel: 'Friday',
     title: 'Confirm lineup lock time',
@@ -126,6 +150,8 @@ export const MISSION_CONTROL_TASKS = [
   },
   {
     id: 'sat-verify-fantasy-slate-published',
+    workflow: 'nextRace',
+    raceRole: 'upcoming',
     day: 'saturday',
     dayLabel: 'Saturday / Race Day',
     title: 'Verify fantasy slate is published',
@@ -134,6 +160,8 @@ export const MISSION_CONTROL_TASKS = [
   },
   {
     id: 'sat-verify-lineups-open',
+    workflow: 'nextRace',
+    raceRole: 'upcoming',
     day: 'saturday',
     dayLabel: 'Saturday / Race Day',
     title: 'Verify lineup submissions are open before lock',
@@ -142,6 +170,8 @@ export const MISSION_CONTROL_TASKS = [
   },
   {
     id: 'sat-confirm-submission-close',
+    workflow: 'nextRace',
+    raceRole: 'upcoming',
     day: 'saturday',
     dayLabel: 'Saturday / Race Day',
     title: 'Confirm submission close time',
@@ -150,6 +180,8 @@ export const MISSION_CONTROL_TASKS = [
   },
   {
     id: 'sat-lock-monitor-entries',
+    workflow: 'nextRace',
+    raceRole: 'upcoming',
     day: 'saturday',
     dayLabel: 'Saturday / Race Day',
     title: 'Lock/monitor fantasy entries',
@@ -158,16 +190,23 @@ export const MISSION_CONTROL_TASKS = [
   },
 ];
 
-const DAY_OFFSET_FROM_RACE = {
+const POST_RACE_DAY_OFFSET = {
+  sunday: 0,
+  monday: 1,
+  wednesday: 3,
+};
+
+const NEXT_RACE_DAY_OFFSET = {
   wednesday: -4,
   thursday: -3,
   friday: -2,
   saturday: -1,
-  sunday: 0,
-  monday: 1,
 };
 
-const DAY_ORDER = ['sunday', 'monday', 'wednesday', 'thursday', 'friday', 'saturday'];
+const POST_RACE_DAY_ORDER = ['sunday', 'monday', 'wednesday'];
+const NEXT_RACE_DAY_ORDER = ['wednesday', 'thursday', 'friday', 'saturday'];
+
+const WORKFLOW_ORDER = ['postRace', 'nextRace'];
 
 export function parseMissionControlStore(raw) {
   if (!raw) return {};
@@ -181,11 +220,6 @@ export function parseMissionControlStore(raw) {
     }
   }
   return {};
-}
-
-export function getCompletedTaskIds(store, seasonId, raceNumber) {
-  const raceStore = store?.[String(seasonId)]?.[String(raceNumber)] || {};
-  return Object.keys(raceStore).filter((taskId) => raceStore[taskId]?.completedAt);
 }
 
 function easternDateKeyFromParts({ year, month, day }) {
@@ -206,17 +240,71 @@ function addCalendarDays(dateParts, deltaDays) {
   };
 }
 
-export function resolveMissionRaceNumber(progression = {}) {
-  if (progression.activeSlateRow?.race_number != null) {
-    return Number(progression.activeSlateRow.race_number);
+function getTaskDefinition(taskId) {
+  return MISSION_CONTROL_TASKS.find((task) => task.id === taskId) || null;
+}
+
+function isWorkflowBucket(value) {
+  return value === 'postRace' || value === 'nextRace';
+}
+
+export function getCompletedTaskIds(store, seasonId, raceNumber, workflow) {
+  const raceStore = store?.[String(seasonId)]?.[String(raceNumber)] || {};
+  const workflowStore = isWorkflowBucket(workflow) ? raceStore[workflow] || {} : {};
+  const completed = new Set();
+
+  for (const [key, value] of Object.entries(workflowStore)) {
+    if (value?.completedAt) completed.add(key);
   }
-  if (progression.archivedSlateRow?.race_number != null) {
-    return Number(progression.archivedSlateRow.race_number);
+
+  if (!isWorkflowBucket(workflow)) return Array.from(completed);
+
+  for (const [key, value] of Object.entries(raceStore)) {
+    if (isWorkflowBucket(key) || !value?.completedAt) continue;
+    const task = getTaskDefinition(key);
+    if (task?.workflow === workflow) completed.add(key);
   }
-  if (progression.nextRaceNumber != null) {
-    return Number(progression.nextRaceNumber);
-  }
-  return null;
+
+  return Array.from(completed);
+}
+
+export function resolveMissionControlRaces(scheduleRaces, options = {}) {
+  const progression = getEffectivePointsRaceProgression(scheduleRaces, options);
+  const completedRace = progression.latestCompletedPointsRace || null;
+  const upcomingRace =
+    progression.currentUpcomingPointsRace || progression.nextPointsRace || null;
+
+  const postRaceNumber = completedRace?.officialPointsRaceNumber ?? null;
+  const nextRaceNumber = upcomingRace?.officialPointsRaceNumber ?? null;
+
+  return {
+    postRace:
+      postRaceNumber != null
+        ? {
+            raceNumber: Number(postRaceNumber),
+            track: completedRace?.track || null,
+            date: completedRace?.date || null,
+          }
+        : null,
+    nextRace:
+      nextRaceNumber != null && nextRaceNumber !== postRaceNumber
+        ? {
+            raceNumber: Number(nextRaceNumber),
+            track: upcomingRace?.track || null,
+            date: upcomingRace?.date || null,
+          }
+        : nextRaceNumber != null
+          ? {
+              raceNumber: Number(nextRaceNumber),
+              track: upcomingRace?.track || null,
+              date: upcomingRace?.date || null,
+            }
+          : null,
+    progressionMeta: {
+      effectiveCompletedPointsCount: progression.effectiveCompletedPointsCount,
+      suggestedPointsRaceNumber: progression.suggestedPointsRaceNumber,
+    },
+  };
 }
 
 export function resolveMissionRaceDate(scheduleRaces, raceNumber) {
@@ -234,9 +322,11 @@ export function resolveFantasyPhaseLabel(progression = {}) {
   return 'Next slate needed';
 }
 
-function computeTaskDueDateKey(raceDateParts, dayKey) {
-  const offset = DAY_OFFSET_FROM_RACE[dayKey];
-  if (offset == null || !raceDateParts) return null;
+function computeTaskDueDateKey(raceDateParts, workflow, dayKey) {
+  if (!raceDateParts) return null;
+  const offsetMap = workflow === 'postRace' ? POST_RACE_DAY_OFFSET : NEXT_RACE_DAY_OFFSET;
+  const offset = offsetMap[dayKey];
+  if (offset == null) return null;
   return easternDateKeyFromParts(addCalendarDays(raceDateParts, offset));
 }
 
@@ -250,8 +340,12 @@ function computeTaskStatus({ completed, dueDateKey, todayKey, hasRaceDate }) {
 
 const STATUS_SORT = { overdue: 0, due: 1, pending: 2, upcoming: 3, done: 4 };
 
-export function buildMissionControlTasks({
-  seasonId,
+function getDayOrderForWorkflow(workflow) {
+  return workflow === 'postRace' ? POST_RACE_DAY_ORDER : NEXT_RACE_DAY_ORDER;
+}
+
+export function buildWorkflowTasks({
+  workflow,
   raceNumber,
   raceDate,
   completedTaskIds = [],
@@ -261,13 +355,16 @@ export function buildMissionControlTasks({
   const todayKey = easternDateKey(now);
   const hasRaceDate = Boolean(raceDateParts);
   const completedSet = new Set(completedTaskIds);
+  const dayOrder = getDayOrderForWorkflow(workflow);
 
-  const tasks = MISSION_CONTROL_TASKS.map((task) => {
-    const dueDateKey = computeTaskDueDateKey(raceDateParts, task.day);
+  const tasks = MISSION_CONTROL_TASKS.filter((task) => task.workflow === workflow).map((task) => {
+    const dueDateKey = computeTaskDueDateKey(raceDateParts, workflow, task.day);
     const completed = completedSet.has(task.id);
     const status = computeTaskStatus({ completed, dueDateKey, todayKey, hasRaceDate });
     return {
       ...task,
+      workflow,
+      raceNumber,
       status,
       dueDateKey,
       completed,
@@ -276,7 +373,7 @@ export function buildMissionControlTasks({
   });
 
   tasks.sort((a, b) => {
-    const dayDiff = DAY_ORDER.indexOf(a.day) - DAY_ORDER.indexOf(b.day);
+    const dayDiff = dayOrder.indexOf(a.day) - dayOrder.indexOf(b.day);
     if (dayDiff !== 0) return dayDiff;
     return STATUS_SORT[a.status] - STATUS_SORT[b.status];
   });
@@ -297,8 +394,57 @@ export function summarizeMissionControl(tasks = []) {
   return {
     remainingCount,
     nextDueTask: nextDueTask
-      ? { id: nextDueTask.id, title: nextDueTask.title, status: nextDueTask.status, dayLabel: nextDueTask.dayLabel }
+      ? {
+          id: nextDueTask.id,
+          title: nextDueTask.title,
+          status: nextDueTask.status,
+          dayLabel: nextDueTask.dayLabel,
+          workflow: nextDueTask.workflow,
+        }
       : null,
+  };
+}
+
+function buildWorkflowBucket({
+  workflow,
+  bucket,
+  scheduleRaces,
+  store,
+  seasonId,
+  now,
+}) {
+  if (!bucket?.raceNumber) {
+    return {
+      workflow,
+      raceNumber: null,
+      track: null,
+      date: null,
+      hasRaceDate: false,
+      tasks: [],
+      summary: summarizeMissionControl([]),
+      completedTaskIds: [],
+    };
+  }
+
+  const raceDate = bucket.date || resolveMissionRaceDate(scheduleRaces, bucket.raceNumber);
+  const completedTaskIds = getCompletedTaskIds(store, seasonId, bucket.raceNumber, workflow);
+  const tasks = buildWorkflowTasks({
+    workflow,
+    raceNumber: bucket.raceNumber,
+    raceDate,
+    completedTaskIds,
+    now,
+  });
+
+  return {
+    workflow,
+    raceNumber: bucket.raceNumber,
+    track: bucket.track || null,
+    date: raceDate,
+    hasRaceDate: Boolean(raceDate && parseScheduleDateParts(raceDate)),
+    tasks,
+    summary: summarizeMissionControl(tasks),
+    completedTaskIds,
   };
 }
 
@@ -315,22 +461,34 @@ export async function setMissionControlTaskComplete(options = {}) {
   const raceNumber = String(options.raceNumber);
   const taskId = String(options.taskId || '').trim();
   const completed = options.completed !== false;
+  const workflow = String(options.workflow || '').trim();
 
   if (!raceNumber || !taskId) {
     throw new Error('raceNumber and taskId are required.');
   }
-  if (!MISSION_CONTROL_TASKS.some((task) => task.id === taskId)) {
+
+  const taskDef = getTaskDefinition(taskId);
+  if (!taskDef) {
     throw new Error(`Unknown mission control task: ${taskId}`);
+  }
+
+  const resolvedWorkflow = workflow || taskDef.workflow;
+  if (resolvedWorkflow !== taskDef.workflow) {
+    throw new Error(`Task ${taskId} does not belong to workflow ${workflow}.`);
   }
 
   const store = await loadMissionControlStore();
   if (!store[seasonId]) store[seasonId] = {};
   if (!store[seasonId][raceNumber]) store[seasonId][raceNumber] = {};
+  if (!store[seasonId][raceNumber][resolvedWorkflow]) store[seasonId][raceNumber][resolvedWorkflow] = {};
 
   if (completed) {
-    store[seasonId][raceNumber][taskId] = { completedAt: new Date().toISOString() };
+    store[seasonId][raceNumber][resolvedWorkflow][taskId] = { completedAt: new Date().toISOString() };
+    if (store[seasonId][raceNumber][taskId]) {
+      delete store[seasonId][raceNumber][taskId];
+    }
   } else {
-    delete store[seasonId][raceNumber][taskId];
+    delete store[seasonId][raceNumber][resolvedWorkflow][taskId];
   }
 
   const { error } = await sb.from('site_settings').update({ adminMissionControl: store }).eq('id', 1);
@@ -344,36 +502,55 @@ export async function buildAdminMissionControlResponse(options = {}) {
   const seasonId = String(options.seasonId || settings.seasonId || '27987');
   const now = options.now || new Date();
 
-  const progression = await resolveFantasySlateProgression(seasonId, { settings, now });
-  const raceNumber = resolveMissionRaceNumber(progression);
-  const raceDate = resolveMissionRaceDate(progression.scheduleRaces, raceNumber);
+  const fantasyProgression = await resolveFantasySlateProgression(seasonId, { settings, now });
+  const scheduleRaces = fantasyProgression.scheduleRaces || [];
+  const raceBuckets = resolveMissionControlRaces(scheduleRaces, { now, settings });
   const store = await loadMissionControlStore(settings);
-  const completedTaskIds = raceNumber != null ? getCompletedTaskIds(store, seasonId, raceNumber) : [];
-  const tasks = buildMissionControlTasks({
+
+  const postRace = buildWorkflowBucket({
+    workflow: 'postRace',
+    bucket: raceBuckets.postRace,
+    scheduleRaces,
+    store,
     seasonId,
-    raceNumber,
-    raceDate,
-    completedTaskIds,
     now,
   });
-  const summary = summarizeMissionControl(tasks);
+
+  const nextRace = buildWorkflowBucket({
+    workflow: 'nextRace',
+    bucket: raceBuckets.nextRace,
+    scheduleRaces,
+    store,
+    seasonId,
+    now,
+  });
+
+  const allTasks = [...postRace.tasks, ...nextRace.tasks];
+  const summary = summarizeMissionControl(allTasks);
 
   return {
     seasonId,
-    raceNumber,
-    raceDate,
-    hasRaceDate: Boolean(raceDate),
-    fantasyPhase: resolveFantasyPhaseLabel(progression),
-    progression: buildFantasyProgressionMeta(progression),
-    nextRace: progression.nextRaceNumber
-      ? {
-          raceNumber: progression.nextRaceNumber,
-          track: progression.nextRaceTrack,
-          date: progression.nextRaceDate,
-        }
-      : null,
-    tasks,
+    fantasyPhase: resolveFantasyPhaseLabel(fantasyProgression),
+    progression: buildFantasyProgressionMeta(fantasyProgression),
+    postRace,
+    nextRace,
+    tasks: allTasks,
     summary,
-    completedTaskIds,
+    hasRaceDate: Boolean(postRace.hasRaceDate || nextRace.hasRaceDate),
+    workflows: {
+      postRace,
+      nextRace,
+    },
+    raceNumber: postRace.raceNumber ?? nextRace.raceNumber ?? null,
+    raceDate: postRace.date ?? nextRace.date ?? null,
+    completedTaskIds: [...postRace.completedTaskIds, ...nextRace.completedTaskIds],
   };
 }
+
+export {
+  POST_RACE_DAY_ORDER,
+  NEXT_RACE_DAY_ORDER,
+  WORKFLOW_ORDER,
+  POST_RACE_DAY_OFFSET,
+  NEXT_RACE_DAY_OFFSET,
+};

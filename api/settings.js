@@ -333,6 +333,7 @@ export default async function handler(req, res) {
         seasonId,
         raceNumber: body.raceNumber,
         taskId: body.taskId,
+        workflow: body.workflow,
         completed: body.completed !== false,
       });
       const missionControl = await buildAdminMissionControlResponse({ seasonId, settings });

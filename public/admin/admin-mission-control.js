@@ -3,14 +3,24 @@
   const SESSION_KEY = 'bp_admin_pw';
   const EXPANDED_KEY = 'bp_admin_mc_expanded';
 
-  const DAY_TABS = [
-    { key: 'sunday', label: 'Sunday' },
-    { key: 'monday', label: 'Monday' },
-    { key: 'wednesday', label: 'Wednesday' },
-    { key: 'thursday', label: 'Thursday' },
-    { key: 'friday', label: 'Friday' },
-    { key: 'saturday', label: 'Sat / Race Day' },
+  const WORKFLOW_TABS = [
+    { key: 'postRace', label: 'Post-Race' },
+    { key: 'nextRace', label: 'Next Race' },
   ];
+
+  const DAY_TABS = {
+    postRace: [
+      { key: 'sunday', label: 'Sunday' },
+      { key: 'monday', label: 'Monday' },
+      { key: 'wednesday', label: 'Wednesday' },
+    ],
+    nextRace: [
+      { key: 'wednesday', label: 'Wednesday' },
+      { key: 'thursday', label: 'Thursday' },
+      { key: 'friday', label: 'Friday' },
+      { key: 'saturday', label: 'Sat / Race Day' },
+    ],
+  };
 
   const STATUS_LABELS = {
     done: 'Done',
@@ -24,8 +34,7 @@
 
   let state = {
     data: null,
-    raceNumber: null,
-    seasonId: null,
+    selectedWorkflow: 'postRace',
     selectedDay: 'sunday',
     expanded: false,
     loading: false,
@@ -58,6 +67,19 @@
     return `${parts.year}-${parts.month}-${parts.day}`;
   }
 
+  function getWorkflowBucket(data, workflow) {
+    return data?.workflows?.[workflow] || data?.[workflow] || null;
+  }
+
+  function getWorkflowTasks(data, workflow) {
+    const bucket = getWorkflowBucket(data, workflow);
+    return bucket?.tasks || (data?.tasks || []).filter((task) => task.workflow === workflow);
+  }
+
+  function getDayTabs(workflow) {
+    return DAY_TABS[workflow] || [];
+  }
+
   function getDayTasks(tasks, dayKey) {
     return (tasks || []).filter((task) => task.day === dayKey);
   }
@@ -77,46 +99,72 @@
     return worst;
   }
 
-  function getTodayTabKey(tasks, todayKey) {
-    for (const tab of DAY_TABS) {
+  function getWorkflowTabStatus(data, workflow) {
+    const tasks = getWorkflowTasks(data, workflow);
+    if (!tasks.length) return 'upcoming';
+    if (tasks.every((task) => task.status === 'done')) return 'complete';
+
+    let worst = 'done';
+    for (const task of tasks) {
+      if (task.status === 'done') continue;
+      if (worst === 'done' || STATUS_PRIORITY[task.status] < STATUS_PRIORITY[worst]) {
+        worst = task.status;
+      }
+    }
+    return worst;
+  }
+
+  function getTodayTabKey(tasks, todayKey, workflow) {
+    for (const tab of getDayTabs(workflow)) {
       const dayTasks = getDayTasks(tasks, tab.key);
       if (dayTasks.some((task) => task.dueDateKey === todayKey)) return tab.key;
     }
     return null;
   }
 
-  function pickDefaultTab(tasks, todayKey) {
-    for (const tab of DAY_TABS) {
+  function pickDefaultDayTab(tasks, workflow, todayKey) {
+    for (const tab of getDayTabs(workflow)) {
       if (getDayTabStatus(tasks, tab.key) === 'overdue') return tab.key;
     }
-    for (const tab of DAY_TABS) {
+    for (const tab of getDayTabs(workflow)) {
       if (getDayTabStatus(tasks, tab.key) === 'due') return tab.key;
     }
-    const todayTab = getTodayTabKey(tasks, todayKey);
+    const todayTab = getTodayTabKey(tasks, todayKey, workflow);
     if (todayTab) return todayTab;
-    for (const tab of DAY_TABS) {
+    for (const tab of getDayTabs(workflow)) {
       const status = getDayTabStatus(tasks, tab.key);
       if (status === 'upcoming' || status === 'pending') return tab.key;
     }
-    return 'sunday';
+    return getDayTabs(workflow)[0]?.key || 'sunday';
   }
 
-  function formatRaceWeek(data) {
-    const next = data?.nextRace;
-    if (data?.raceNumber) {
-      return `Race ${data.raceNumber}${data.raceDate ? ` — ${data.raceDate}` : ''}`;
+  function pickDefaultWorkflow(data) {
+    for (const tab of WORKFLOW_TABS) {
+      if (getWorkflowTabStatus(data, tab.key) === 'overdue') return tab.key;
     }
-    if (next?.raceNumber) {
-      return `Race ${next.raceNumber}${next.date ? ` — ${next.date}` : ''}`;
+    for (const tab of WORKFLOW_TABS) {
+      if (getWorkflowTabStatus(data, tab.key) === 'due') return tab.key;
     }
-    return 'Schedule unavailable';
+    for (const tab of WORKFLOW_TABS) {
+      const status = getWorkflowTabStatus(data, tab.key);
+      if (status === 'pending' || status === 'upcoming') return tab.key;
+    }
+    return getWorkflowBucket(data, 'postRace')?.raceNumber ? 'postRace' : 'nextRace';
+  }
+
+  function formatRaceLabel(bucket, fallbackLabel) {
+    if (!bucket?.raceNumber) return fallbackLabel;
+    const track = bucket.track ? ` ${bucket.track}` : '';
+    const date = bucket.date ? ` (${bucket.date})` : '';
+    return `Race ${bucket.raceNumber}${track}${date}`;
   }
 
   function formatNextDue(data) {
     const next = data?.summary?.nextDueTask;
     if (!next) return 'All tasks complete';
     const label = STATUS_LABELS[next.status] || next.status;
-    return `${next.dayLabel}: ${next.title} (${label})`;
+    const workflowLabel = next.workflow === 'postRace' ? 'Post-race' : 'Next race';
+    return `${workflowLabel}: ${next.dayLabel} — ${next.title} (${label})`;
   }
 
   function readExpandedPreference() {
@@ -133,6 +181,15 @@
     } catch {
       /* ignore */
     }
+  }
+
+  function getActiveRaceContext(data) {
+    const bucket = getWorkflowBucket(data, state.selectedWorkflow);
+    return {
+      raceNumber: bucket?.raceNumber ?? null,
+      seasonId: data?.seasonId ?? null,
+      workflow: state.selectedWorkflow,
+    };
   }
 
   function renderTaskList(root, tasks) {
@@ -153,6 +210,7 @@
             class="admin-mission-control__check"
             type="checkbox"
             data-task-id="${escapeHtml(task.id)}"
+            data-workflow="${escapeHtml(task.workflow)}"
             ${task.completed ? 'checked' : ''}
             aria-label="Mark ${escapeHtml(task.title)} complete"
           />
@@ -178,17 +236,48 @@
 
     listEl.querySelectorAll('.admin-mission-control__check').forEach((input) => {
       input.addEventListener('change', () => {
-        toggleTask(input.dataset.taskId, input.checked);
+        toggleTask(input.dataset.taskId, input.dataset.workflow, input.checked);
       });
     });
   }
 
-  function renderTabs(root, tasks) {
-    const tabsEl = root.querySelector('[data-mc-tabs]');
+  function renderDayTabs(root, tasks) {
+    const tabsEl = root.querySelector('[data-mc-day-tabs]');
     if (!tabsEl) return;
 
-    tabsEl.innerHTML = DAY_TABS.map((tab) => {
-      const tabStatus = getDayTabStatus(tasks, tab.key);
+    const dayTabs = getDayTabs(state.selectedWorkflow);
+    tabsEl.innerHTML = dayTabs
+      .map((tab) => {
+        const tabStatus = getDayTabStatus(tasks, tab.key);
+        const statusClass =
+          tabStatus === 'complete'
+            ? 'is-complete'
+            : tabStatus === 'overdue'
+              ? 'is-overdue'
+              : tabStatus === 'due'
+                ? 'is-due'
+                : tabStatus === 'pending'
+                  ? 'is-pending'
+                  : 'is-upcoming';
+        const activeClass = tab.key === state.selectedDay ? ' is-active' : '';
+        return `<button type="button" class="admin-mission-control__tab ${statusClass}${activeClass}" data-day="${escapeHtml(tab.key)}">${escapeHtml(tab.label)}</button>`;
+      })
+      .join('');
+
+    tabsEl.querySelectorAll('[data-day]').forEach((button) => {
+      button.addEventListener('click', () => {
+        state.selectedDay = button.dataset.day;
+        render(state.data);
+      });
+    });
+  }
+
+  function renderWorkflowTabs(root, data) {
+    const tabsEl = root.querySelector('[data-mc-workflow-tabs]');
+    if (!tabsEl) return;
+
+    tabsEl.innerHTML = WORKFLOW_TABS.map((tab) => {
+      const tabStatus = getWorkflowTabStatus(data, tab.key);
       const statusClass =
         tabStatus === 'complete'
           ? 'is-complete'
@@ -196,16 +285,19 @@
             ? 'is-overdue'
             : tabStatus === 'due'
               ? 'is-due'
-              : tabStatus === 'pending'
-                ? 'is-pending'
-                : 'is-upcoming';
-      const activeClass = tab.key === state.selectedDay ? ' is-active' : '';
-      return `<button type="button" class="admin-mission-control__tab ${statusClass}${activeClass}" data-day="${escapeHtml(tab.key)}">${escapeHtml(tab.label)}</button>`;
+              : '';
+      const activeClass = tab.key === state.selectedWorkflow ? ' is-active' : '';
+      return `<button type="button" class="admin-mission-control__workflow-tab ${statusClass}${activeClass}" data-workflow="${escapeHtml(tab.key)}">${escapeHtml(tab.label)}</button>`;
     }).join('');
 
-    tabsEl.querySelectorAll('[data-day]').forEach((button) => {
+    tabsEl.querySelectorAll('[data-workflow]').forEach((button) => {
       button.addEventListener('click', () => {
-        state.selectedDay = button.dataset.day;
+        state.selectedWorkflow = button.dataset.workflow;
+        state.selectedDay = pickDefaultDayTab(
+          getWorkflowTasks(state.data, state.selectedWorkflow),
+          state.selectedWorkflow,
+          easternDateKey()
+        );
         render(state.data);
       });
     });
@@ -224,28 +316,42 @@
 
     if (data) {
       state.data = data;
-      state.raceNumber = data.raceNumber ?? null;
-      state.seasonId = data.seasonId ?? null;
-      if (!state.selectedDay || !DAY_TABS.some((tab) => tab.key === state.selectedDay)) {
-        state.selectedDay = pickDefaultTab(data.tasks || [], easternDateKey());
+      const dayTabs = getDayTabs(state.selectedWorkflow);
+      if (!dayTabs.some((tab) => tab.key === state.selectedDay)) {
+        state.selectedDay = pickDefaultDayTab(
+          getWorkflowTasks(data, state.selectedWorkflow),
+          state.selectedWorkflow,
+          easternDateKey()
+        );
       }
     }
 
-    const payload = state.data;
-    const tasks = payload?.tasks || [];
+    const payload = state.data || {};
+    const workflowTasks = getWorkflowTasks(payload, state.selectedWorkflow);
+    const postRace = getWorkflowBucket(payload, 'postRace');
+    const nextRace = getWorkflowBucket(payload, 'nextRace');
 
-    const phaseEl = root.querySelector('[data-mc-phase]');
-    const raceEl = root.querySelector('[data-mc-race]');
+    const postRaceEl = root.querySelector('[data-mc-post-race]');
+    const nextRaceEl = root.querySelector('[data-mc-next-race]');
     const remainingEl = root.querySelector('[data-mc-remaining]');
     const nextDueEl = root.querySelector('[data-mc-next-due]');
     const toggleBtn = root.querySelector('[data-mc-toggle]');
     const drawerEl = root.querySelector('[data-mc-drawer]');
     const noteEl = root.querySelector('[data-mc-note]');
+    const workflowLabelEl = root.querySelector('[data-mc-workflow-label]');
 
-    if (phaseEl) phaseEl.textContent = payload?.fantasyPhase || '—';
-    if (raceEl) raceEl.textContent = formatRaceWeek(payload || {});
+    if (postRaceEl) postRaceEl.textContent = formatRaceLabel(postRace, 'No completed race');
+    if (nextRaceEl) nextRaceEl.textContent = formatRaceLabel(nextRace, 'No upcoming race');
     if (remainingEl) remainingEl.textContent = String(payload?.summary?.remainingCount ?? '—');
-    if (nextDueEl) nextDueEl.textContent = formatNextDue(payload || {});
+    if (nextDueEl) nextDueEl.textContent = formatNextDue(payload);
+
+    if (workflowLabelEl) {
+      const bucket = getWorkflowBucket(payload, state.selectedWorkflow);
+      workflowLabelEl.textContent =
+        state.selectedWorkflow === 'postRace'
+          ? `Post-race tasks — ${formatRaceLabel(bucket, 'No completed race')}`
+          : `Next race prep — ${formatRaceLabel(bucket, 'No upcoming race')}`;
+    }
 
     if (toggleBtn) {
       toggleBtn.textContent = state.expanded ? 'Collapse' : 'Expand';
@@ -253,19 +359,21 @@
     }
     if (drawerEl) drawerEl.hidden = !state.expanded;
 
+    const activeBucket = getWorkflowBucket(payload, state.selectedWorkflow);
     if (noteEl) {
-      if (payload?.hasRaceDate === false) {
+      if (activeBucket && activeBucket.hasRaceDate === false) {
         noteEl.hidden = false;
         noteEl.textContent =
-          'Schedule race date unavailable — overdue labels disabled. Confirm schedule in Admin settings.';
+          'Schedule race date unavailable for this bucket — overdue labels disabled. Confirm schedule in Admin settings.';
       } else {
         noteEl.hidden = true;
         noteEl.textContent = '';
       }
     }
 
-    renderTabs(root, tasks);
-    renderTaskList(root, tasks);
+    renderWorkflowTabs(root, payload);
+    renderDayTabs(root, workflowTasks);
+    renderTaskList(root, workflowTasks);
   }
 
   function renderShell(root) {
@@ -274,8 +382,8 @@
         <div class="admin-mission-control__bar">
           <div class="admin-mission-control__title">Mission Control</div>
           <div class="admin-mission-control__summary">
-            <span class="admin-mission-control__chip"><strong data-mc-phase>—</strong></span>
-            <span class="admin-mission-control__chip" data-mc-race>—</span>
+            <span class="admin-mission-control__chip">Post-race: <strong data-mc-post-race>—</strong></span>
+            <span class="admin-mission-control__chip">Next race: <strong data-mc-next-race>—</strong></span>
             <span class="admin-mission-control__chip"><strong data-mc-remaining>—</strong> left</span>
             <span class="admin-mission-control__chip admin-mission-control__chip--next"><span data-mc-next-due>—</span></span>
           </div>
@@ -286,7 +394,9 @@
           </div>
         </div>
         <div class="admin-mission-control__drawer" data-mc-drawer hidden>
-          <div class="admin-mission-control__tabs" data-mc-tabs role="tablist" aria-label="Mission Control weekdays"></div>
+          <div class="admin-mission-control__workflow-tabs" data-mc-workflow-tabs role="tablist" aria-label="Mission Control workflows"></div>
+          <div class="admin-mission-control__workflow-label" data-mc-workflow-label></div>
+          <div class="admin-mission-control__tabs" data-mc-day-tabs role="tablist" aria-label="Mission Control weekdays"></div>
           <div class="admin-mission-control__tasks" data-mc-task-list></div>
           <p class="admin-mission-control__note" data-mc-note hidden></p>
         </div>
@@ -300,7 +410,7 @@
     });
 
     root.querySelector('[data-mc-reload]')?.addEventListener('click', () => {
-      load({ forceDefaultTab: false });
+      load({ forceDefaultTabs: false });
     });
   }
 
@@ -335,8 +445,13 @@
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Mission control unavailable');
 
-      if (options.forceDefaultTab !== false) {
-        state.selectedDay = pickDefaultTab(data.tasks || [], easternDateKey());
+      if (options.forceDefaultTabs !== false) {
+        state.selectedWorkflow = pickDefaultWorkflow(data);
+        state.selectedDay = pickDefaultDayTab(
+          getWorkflowTasks(data, state.selectedWorkflow),
+          state.selectedWorkflow,
+          easternDateKey()
+        );
       }
 
       render(data);
@@ -348,8 +463,12 @@
     }
   }
 
-  async function toggleTask(taskId, completed) {
-    if (!taskId || state.raceNumber == null || !getSessionPw()) return;
+  async function toggleTask(taskId, workflow, completed) {
+    const ctx = getActiveRaceContext(state.data);
+    const bucket = getWorkflowBucket(state.data, workflow || ctx.workflow);
+    const raceNumber = bucket?.raceNumber;
+
+    if (!taskId || raceNumber == null || !getSessionPw()) return;
 
     setStatus('Saving…', false);
     try {
@@ -359,8 +478,9 @@
         body: JSON.stringify({
           password: getSessionPw(),
           action: 'updateAdminMissionControlTask',
-          seasonId: state.seasonId,
-          raceNumber: state.raceNumber,
+          seasonId: state.data?.seasonId,
+          raceNumber,
+          workflow: workflow || ctx.workflow,
           taskId,
           completed,
         }),
@@ -371,7 +491,7 @@
       setStatus(completed ? 'Task marked done.' : 'Task reopened.', false);
     } catch (error) {
       setStatus(error.message || 'Save failed', true);
-      await load({ forceDefaultTab: false });
+      await load({ forceDefaultTabs: false });
     }
   }
 
@@ -387,7 +507,7 @@
       return;
     }
 
-    load({ forceDefaultTab: true });
+    load({ forceDefaultTabs: true });
 
     window.AdminMissionControl = {
       refresh(options = {}) {
@@ -396,7 +516,7 @@
           return Promise.resolve();
         }
         mount.hidden = false;
-        return load({ forceDefaultTab: options.forceDefaultTab !== false });
+        return load({ forceDefaultTabs: options.forceDefaultTab !== false });
       },
       show() {
         if (!getSessionPw()) {
@@ -404,7 +524,7 @@
           return;
         }
         mount.hidden = false;
-        load({ forceDefaultTab: false });
+        load({ forceDefaultTabs: false });
       },
       hide() {
         mount.hidden = true;
