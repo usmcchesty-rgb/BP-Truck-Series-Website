@@ -10,6 +10,44 @@ import {
   getSiteOrigin,
 } from './_share-html.js';
 import { resolveOgImageMeta } from './_share-image-meta.js';
+import { isIracingLookupConfigured, lookupIracingMember } from './_iracing-member.js';
+
+function normalizeIracingCustomerId(value) {
+  return String(value ?? '').trim().replace(/\D/g, '');
+}
+
+async function handleIracingMemberLookup(req, res) {
+  const customerId = normalizeIracingCustomerId(
+    req.query?.customerId ?? req.query?.customer_id ?? req.query?.cust_id
+  );
+
+  if (!customerId || !/^\d+$/.test(customerId)) {
+    return res.status(400).json({
+      configured: true,
+      verified: false,
+      error: 'Valid numeric Customer ID is required.',
+    });
+  }
+
+  const result = await lookupIracingMember(customerId);
+  const status = result.status || (result.ok ? 200 : 503);
+
+  if (result.ok) {
+    return res.status(200).json({
+      configured: result.configured,
+      verified: true,
+      customerId: result.customerId,
+      displayName: result.displayName,
+    });
+  }
+
+  return res.status(status).json({
+    configured: result.configured,
+    verified: false,
+    customerId: result.customerId || customerId,
+    error: result.error || 'iRacing lookup failed.',
+  });
+}
 
 function parseBody(req) {
   if (!req.body) return {};
@@ -333,6 +371,19 @@ async function handleFormSyncAction(b, res) {
 
 export default async function handler(req, res) {
   if (req.method === 'GET') {
+    const queryAction = String(req.query?.action || '').trim();
+    if (queryAction === 'iracingMember') {
+      try {
+        return await handleIracingMemberLookup(req, res);
+      } catch (error) {
+        return res.status(500).json({
+          configured: isIracingLookupConfigured(),
+          verified: false,
+          error: error.message || 'iRacing lookup failed.',
+        });
+      }
+    }
+
     const rows = await getDriverProfiles();
     const normalized = rows
       .map(normalizeDriverProfile)

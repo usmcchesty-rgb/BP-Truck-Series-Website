@@ -27,7 +27,10 @@ function normalizeCustomerId(value) {
 
 export function validateApplicationPayload(body = {}) {
   const errors = [];
-  const driverName = String(body.driver_name ?? body.driverName ?? '').trim();
+  const applicantName = String(body.driver_name ?? body.driverName ?? '').trim();
+  const iracingDisplayName = String(
+    body.iracing_display_name ?? body.iracingDisplayName ?? ''
+  ).trim();
   const iracingCustomerId = normalizeCustomerId(body.iracing_customer_id ?? body.iracingCustomerId);
   const ageConfirmed =
     body.age_confirmed === true ||
@@ -37,7 +40,7 @@ export function validateApplicationPayload(body = {}) {
     body.age_confirmed === 1 ||
     body.ageConfirmed === 1;
 
-  if (!driverName) errors.push('Driver name is required.');
+  if (!iracingDisplayName) errors.push('iRacing Display Name is required.');
   if (!iracingCustomerId) errors.push('iRacing Customer ID is required.');
   else if (!/^\d+$/.test(iracingCustomerId)) {
     errors.push('iRacing Customer ID must contain numbers only.');
@@ -51,7 +54,8 @@ export function validateApplicationPayload(body = {}) {
   return {
     ok: true,
     row: {
-      driver_name: driverName,
+      driver_name: applicantName || null,
+      iracing_display_name: iracingDisplayName,
       iracing_customer_id: iracingCustomerId,
       discord_name: normalizeOptionalText(body.discord_name ?? body.discordName),
       email: normalizeOptionalText(body.email),
@@ -135,7 +139,7 @@ export async function listDriverApplications() {
   const { data, error } = await sb
     .from('driver_applications')
     .select(
-      'id, created_at, updated_at, status, driver_name, iracing_customer_id, discord_name, email, age_confirmed, timezone, preferred_number, racing_background, why_join, referred_by, admin_notes'
+      'id, created_at, updated_at, status, driver_name, iracing_display_name, iracing_customer_id, discord_name, email, age_confirmed, timezone, preferred_number, racing_background, why_join, referred_by, admin_notes'
     )
     .order('created_at', { ascending: false });
 

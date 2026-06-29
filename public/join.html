@@ -22,19 +22,37 @@
         <form id="joinApplicationForm" class="join-form" novalidate>
           <fieldset class="join-form-section">
             <legend>Driver Info</legend>
-            <label class="join-field-label" for="driverName">Driver Name <span class="join-required">*</span></label>
-            <input id="driverName" class="join-input" name="driver_name" type="text" required autocomplete="name" />
 
             <label class="join-field-label" for="iracingCustomerId">iRacing Customer ID <span class="join-required">*</span></label>
+            <div class="join-lookup-row">
+              <input
+                id="iracingCustomerId"
+                class="join-input join-input--lookup"
+                name="iracing_customer_id"
+                type="text"
+                inputmode="numeric"
+                pattern="[0-9]+"
+                required
+              />
+              <button id="lookupDriverBtn" class="join-lookup-btn" type="button">LOOKUP DRIVER</button>
+            </div>
+
+            <label class="join-field-label" for="iracingDisplayName">iRacing Display Name <span class="join-required">*</span></label>
             <input
-              id="iracingCustomerId"
+              id="iracingDisplayName"
               class="join-input"
-              name="iracing_customer_id"
+              name="iracing_display_name"
               type="text"
-              inputmode="numeric"
-              pattern="[0-9]+"
               required
+              autocomplete="off"
             />
+            <p class="join-field-help">
+              Enter your name exactly as it appears in iRacing, including any trailing number. This may be auto-filled after lookup.
+            </p>
+            <p id="lookupStatus" class="join-form-message" hidden></p>
+
+            <label class="join-field-label" for="driverName">Applicant Name / Real Name</label>
+            <input id="driverName" class="join-input" name="driver_name" type="text" autocomplete="name" />
 
             <label class="join-field-label" for="preferredNumber">Preferred Number</label>
             <input id="preferredNumber" class="join-input" name="preferred_number" type="text" />
@@ -47,8 +65,9 @@
 
           <fieldset class="join-form-section">
             <legend>Contact Info</legend>
-            <label class="join-field-label" for="discordName">Discord Name</label>
+            <label class="join-field-label" for="discordName">Discord Username</label>
             <input id="discordName" class="join-input" name="discord_name" type="text" autocomplete="username" />
+            <p class="join-field-help">Optional. Used if staff needs to contact you.</p>
 
             <label class="join-field-label" for="email">Email</label>
             <input id="email" class="join-input" name="email" type="email" autocomplete="email" />

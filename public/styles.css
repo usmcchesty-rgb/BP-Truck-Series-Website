@@ -983,7 +983,43 @@ footer{
   font-size:13px;
   line-height:1.45;
 }
+.join-field-help{
+  margin:-8px 0 14px;
+  color:#888;
+  font-size:12px;
+  line-height:1.45;
+}
+.join-lookup-row{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  align-items:stretch;
+  margin-bottom:14px;
+}
+.join-input--lookup{
+  flex:1 1 220px;
+  margin-bottom:0;
+}
+.join-lookup-btn{
+  flex:0 0 auto;
+  border:1px solid #ff2424;
+  background:linear-gradient(#d40000,#680000);
+  color:var(--bp-text-primary);
+  padding:10px 14px;
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:.5px;
+  text-transform:uppercase;
+  cursor:pointer;
+  box-shadow:0 0 10px rgba(229,9,20,.25);
+}
+.join-lookup-btn:disabled{
+  opacity:.65;
+  cursor:not-allowed;
+}
 .join-form-message--error{color:#ff7070}
+.join-form-message--success{color:#7fd99a}
+.join-form-message--warning{color:#ffb347}
 .join-submit-btn{
   display:inline-block;
   border:1px solid #ff2424;

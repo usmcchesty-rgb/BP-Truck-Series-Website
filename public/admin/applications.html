@@ -70,8 +70,8 @@
             <thead>
               <tr>
                 <th>Date</th>
-                <th>Driver</th>
-                <th>iRacing ID</th>
+                <th>iRacing Display Name</th>
+                <th>Customer ID</th>
                 <th>Discord</th>
                 <th>Email</th>
                 <th>Status</th>
@@ -215,7 +215,7 @@
         const selected = row.id === selectedId ? ' is-selected' : '';
         return `<tr class="${selected.trim()}" data-id="${escapeHtml(row.id)}">
           <td>${escapeHtml(formatDate(row.created_at))}</td>
-          <td>${escapeHtml(row.driver_name)}</td>
+          <td>${escapeHtml(row.iracing_display_name || row.driver_name || '—')}</td>
           <td>${escapeHtml(row.iracing_customer_id)}</td>
           <td>${escapeHtml(row.discord_name || '—')}</td>
           <td>${escapeHtml(row.email || '—')}</td>
@@ -251,13 +251,14 @@
       }).join('');
 
       mount.innerHTML = `
-        <h3>${escapeHtml(row.driver_name)}</h3>
+        <h3>${escapeHtml(row.iracing_display_name || row.driver_name || 'Application')}</h3>
         <dl class="detail-grid">
           ${detailField('Submitted', formatDate(row.created_at))}
           ${detailField('Updated', formatDate(row.updated_at))}
-          ${detailField('Driver Name', row.driver_name)}
+          ${detailField('iRacing Display Name', row.iracing_display_name)}
           ${detailField('iRacing Customer ID', row.iracing_customer_id)}
-          ${detailField('Discord', row.discord_name)}
+          ${detailField('Applicant Name / Real Name', row.driver_name)}
+          ${detailField('Discord Username', row.discord_name)}
           ${detailField('Email', row.email)}
           ${detailField('Age Confirmed', row.age_confirmed ? 'Yes' : 'No')}
           ${detailField('Time Zone', row.timezone)}

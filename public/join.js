@@ -1,11 +1,14 @@
 (function () {
   const form = document.getElementById('joinApplicationForm');
   const errorEl = document.getElementById('joinFormError');
+  const lookupStatusEl = document.getElementById('lookupStatus');
   const submitBtn = document.getElementById('joinSubmitBtn');
+  const lookupBtn = document.getElementById('lookupDriverBtn');
   const formSection = document.getElementById('joinFormSection');
   const successSection = document.getElementById('joinSuccessSection');
   const successMessage = document.getElementById('joinSuccessMessage');
   const customerIdInput = document.getElementById('iracingCustomerId');
+  const displayNameInput = document.getElementById('iracingDisplayName');
 
   if (!form) return;
 
@@ -15,9 +18,18 @@
     errorEl.hidden = !message;
   }
 
+  function showLookupStatus(message, type = '') {
+    if (!lookupStatusEl) return;
+    lookupStatusEl.textContent = message;
+    lookupStatusEl.hidden = !message;
+    lookupStatusEl.classList.remove('join-form-message--success', 'join-form-message--warning');
+    if (type) lookupStatusEl.classList.add(`join-form-message--${type}`);
+  }
+
   function readFormData() {
     return {
       driver_name: form.driver_name?.value?.trim() || '',
+      iracing_display_name: form.iracing_display_name?.value?.trim() || '',
       iracing_customer_id: form.iracing_customer_id?.value?.trim() || '',
       discord_name: form.discord_name?.value?.trim() || '',
       email: form.email?.value?.trim() || '',
@@ -32,7 +44,7 @@
 
   function validateClient(payload) {
     const errors = [];
-    if (!payload.driver_name) errors.push('Driver name is required.');
+    if (!payload.iracing_display_name) errors.push('iRacing Display Name is required.');
     if (!payload.iracing_customer_id) errors.push('iRacing Customer ID is required.');
     else if (!/^\d+$/.test(payload.iracing_customer_id)) {
       errors.push('iRacing Customer ID must contain numbers only.');
@@ -43,6 +55,49 @@
 
   customerIdInput?.addEventListener('input', () => {
     customerIdInput.value = customerIdInput.value.replace(/\D/g, '');
+    showLookupStatus('');
+  });
+
+  lookupBtn?.addEventListener('click', async () => {
+    showError('');
+    const customerId = customerIdInput?.value?.trim() || '';
+    if (!customerId) {
+      showLookupStatus('Enter your iRacing Customer ID before lookup.', 'warning');
+      return;
+    }
+    if (!/^\d+$/.test(customerId)) {
+      showLookupStatus('iRacing Customer ID must contain numbers only.', 'warning');
+      return;
+    }
+
+    lookupBtn.disabled = true;
+    lookupBtn.textContent = 'LOOKING UP...';
+    showLookupStatus('Looking up driver from iRacing...', '');
+
+    try {
+      const res = await fetch(`/api/iracing/member/${encodeURIComponent(customerId)}`);
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok && data.displayName) {
+        if (displayNameInput) displayNameInput.value = data.displayName;
+        showLookupStatus('Driver verified from iRacing.', 'success');
+        return;
+      }
+
+      showLookupStatus(
+        data.error ||
+          'We could not verify this Customer ID. You may still submit, but staff will review it manually.',
+        'warning'
+      );
+    } catch (error) {
+      showLookupStatus(
+        'We could not verify this Customer ID. You may still submit, but staff will review it manually.',
+        'warning'
+      );
+    } finally {
+      lookupBtn.disabled = false;
+      lookupBtn.textContent = 'LOOKUP DRIVER';
+    }
   });
 
   form.addEventListener('submit', async (event) => {
