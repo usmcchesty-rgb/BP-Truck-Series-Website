@@ -51,6 +51,7 @@ function buildRaceControlSupplement(report) {
   if (!report) return null;
   return {
     source: 'race_control_pdf',
+    label: 'Supplemental Source',
     authoritative: false,
     supplemental: true,
     parseStatus: report.parseStatus,
@@ -59,7 +60,12 @@ function buildRaceControlSupplement(report) {
     parsedJson: report.parsedJson,
     parsedText: report.parsedText,
     summary: report.summary,
-    warnings: report.summary?.parseWarnings || [],
+    validation: report.validation || null,
+    parserHealth: report.parserHealth || null,
+    warnings: [
+      ...(report.validation?.warnings || []),
+      ...(report.summary?.parseWarnings || []),
+    ].filter((value, index, list) => list.indexOf(value) === index),
   };
 }
 
@@ -76,20 +82,48 @@ function buildTranscriptSupplement(transcript) {
   };
 }
 
-function compareOfficialVsRaceControl(scheduleRace, raceControl) {
-  const warnings = [];
-  if (!scheduleRace || !raceControl?.parsedJson) return warnings;
+function formatDriverResultsTable(results = []) {
+  return results
+    .slice()
+    .sort((a, b) => Number(a.position) - Number(b.position))
+    .map((row) => {
+      const position = row.position ?? '—';
+      const car = row.carNumber ?? '—';
+      const driver = row.driverName ?? '—';
+      const status = row.status ?? '—';
+      const incidents = row.incidents ?? '—';
+      const laps = row.laps ?? '—';
+      const gap = row.gap ?? '—';
+      const interval = row.interval ?? '—';
+      const bestLap = row.bestLap ?? '—';
+      return `P${position} #${car} ${driver} | ${status} | inc ${incidents} | laps ${laps} | gap ${gap} | int ${interval} | best ${bestLap}`;
+    })
+    .join('\n');
+}
 
-  const officialWinner = scheduleRace.winner || null;
-  const pdfWinner = raceControl.parsedJson.winner || null;
+function formatRaceEventsList(events = []) {
+  return events
+    .map((event) => {
+      const label = event.type || event.eventType || event.category || 'Event';
+      const text = event.text || event.description || '';
+      const lap = event.lap != null ? ` lap ${event.lap}` : '';
+      return `${label}${lap}: ${text}`.trim();
+    })
+    .join('\n');
+}
 
-  if (officialWinner && pdfWinner && officialWinner.toLowerCase() !== pdfWinner.toLowerCase()) {
-    warnings.push(
-      `Race Control PDF winner (${pdfWinner}) differs from official schedule winner (${officialWinner}). Official schedule results take precedence.`
-    );
-  }
-
-  return warnings;
+function formatIncidentSummaries(incidents = []) {
+  if (!incidents.length) return '';
+  return incidents
+    .map((row) => {
+      const driver = row.driverName || row.driver || 'Unknown';
+      const car = row.carNumber ?? '—';
+      const count = row.incidentCount ?? row.incidentEvents?.length ?? row.incidents ?? '—';
+      const pits = row.pitStops ?? row.pits ?? '—';
+      const bestLap = row.bestLap ?? '—';
+      return `${driver} #${car} | incidents ${count} | pits ${pits} | best lap ${bestLap}`;
+    })
+    .join('\n');
 }
 
 function buildContextForAi(payload) {
@@ -123,19 +157,39 @@ function buildContextForAi(payload) {
   if (payload.supplementalSources.raceControl) {
     const rc = payload.supplementalSources.raceControl;
     const parsed = rc.parsedJson || {};
+    const validation = rc.validation || null;
+
+    sections.push('[Race Control PDF — Supplemental Source]');
     sections.push(
-      `[Race Control PDF — supplemental] Status: ${rc.parseStatus}. Winner (PDF): ${parsed.winner || 'unknown'}. SOF: ${parsed.sof ?? 'unknown'}. Cautions: ${parsed.cautionCount ?? 'unknown'}.`
+      `Parse status: ${rc.parseStatus}. Validation confidence: ${validation?.confidence || 'unknown'}. Official schedule/results always take precedence.`
     );
+
+    sections.push(
+      `Summary (supplemental): Winner (PDF only): ${parsed.winner || 'unknown'}. SOF: ${parsed.sof ?? 'unknown'}. Cautions: ${parsed.cautionCount ?? 'unknown'}. Track (PDF): ${parsed.trackName || 'unknown'}. Drivers parsed: ${Array.isArray(parsed.results) ? parsed.results.length : 0}. Generated: ${parsed.generatedAt || parsed.reportGeneratedAt || 'unknown'}.`
+    );
+
+    if (validation?.warnings?.length) {
+      sections.push('Validation warnings (supplemental vs official):');
+      validation.warnings.forEach((warning) => sections.push(`- ${warning}`));
+    }
+
+    if (Array.isArray(parsed.results) && parsed.results.length) {
+      sections.push('Driver results (supplemental — do not replace official finishing order):');
+      sections.push(formatDriverResultsTable(parsed.results));
+    }
+
     if (Array.isArray(parsed.raceEvents) && parsed.raceEvents.length) {
-      sections.push(
-        `Race events (supplemental): ${parsed.raceEvents
-          .slice(0, 12)
-          .map((event) => event.text)
-          .join(' | ')}`
-      );
+      sections.push('Race events (supplemental):');
+      sections.push(formatRaceEventsList(parsed.raceEvents));
+    }
+
+    const incidentReports = parsed.drivers || parsed.driverIncidentReports || [];
+    if (Array.isArray(incidentReports) && incidentReports.length) {
+      sections.push('Driver incident reports (supplemental):');
+      sections.push(formatIncidentSummaries(incidentReports));
     }
   } else {
-    sections.push('[Race Control PDF — supplemental] Not available for this race.');
+    sections.push('[Race Control PDF — Supplemental Source] Not available for this race.');
   }
 
   if (payload.supplementalSources.transcript) {
@@ -158,7 +212,13 @@ function computeConfidence(payload) {
   if (payload.primarySources.scheduleRace?.hasOfficialResults) score += 40;
   if (payload.primarySources.powerRankingWeek) score += 15;
   if (payload.primarySources.newsArticles?.length) score += 10;
-  if (payload.supplementalSources.raceControl?.parseStatus === 'parsed') score += 20;
+  if (payload.supplementalSources.raceControl?.parseStatus === 'parsed') {
+    const validationConfidence = payload.supplementalSources.raceControl.validation?.confidence;
+    if (validationConfidence === 'high') score += 20;
+    else if (validationConfidence === 'medium') score += 12;
+    else if (validationConfidence === 'low') score += 5;
+    else score += 10;
+  }
   if (payload.supplementalSources.transcript) score += 15;
   return Math.min(100, score);
 }
@@ -181,7 +241,7 @@ export async function assembleRaceContext(options = {}) {
   const scheduleRace = buildScheduleRaceContext(scheduleRaceRow);
 
   const [raceControlReport, transcript, newsArticles, powerRankingWeek] = await Promise.all([
-    loadRaceControlReportForRace(seasonId, raceNumber),
+    loadRaceControlReportForRace(seasonId, raceNumber, { settings }),
     loadRaceTranscript(raceNumber),
     loadNewsArticleForRace(raceNumber),
     loadPowerRankingWeekForRace(raceNumber),
@@ -211,16 +271,16 @@ export async function assembleRaceContext(options = {}) {
     warnings.push('Race Control PDF not uploaded — analysis will use official results and other primary sources only.');
   } else if (raceControlReport.parseStatus === 'parse_failed') {
     warnings.push('Race Control PDF parse failed — supplemental lap/event detail may be unavailable.');
+  } else if (raceControlReport.validation?.warnings?.length) {
+    warnings.push(...raceControlReport.validation.warnings);
   }
-
-  warnings.push(...compareOfficialVsRaceControl(scheduleRace, supplementalSources.raceControl));
 
   const race = {
     seasonId,
     raceNumber,
     track: scheduleRace?.track || raceControlReport?.trackName || null,
     date: scheduleRace?.date || raceControlReport?.raceDate || null,
-    winner: scheduleRace?.winner || raceControlReport?.parsedJson?.winner || null,
+    winner: scheduleRace?.winner || null,
   };
 
   const payload = {

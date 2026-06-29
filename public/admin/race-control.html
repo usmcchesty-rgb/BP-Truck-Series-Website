@@ -32,6 +32,42 @@
     .warnings { margin-top: 12px; padding: 10px; border: 1px solid #663; background: rgba(80, 60, 0, 0.2); font-size: 11px; max-width: 520px; }
     .warnings.is-partial { border-color: #855; background: rgba(90, 40, 0, 0.25); color: #f5c99a; }
     .warnings ul { margin: 6px 0 0 18px; padding: 0; }
+    .validation-card { margin-top: 14px; max-width: 520px; }
+    .validation-list { list-style: none; margin: 0; padding: 0; }
+    .validation-item { display: flex; gap: 8px; align-items: flex-start; font-size: 12px; padding: 5px 0; border-bottom: 1px solid #222; }
+    .validation-item:last-child { border-bottom: 0; }
+    .validation-icon { width: 16px; flex-shrink: 0; font-weight: 900; }
+    .validation-icon.ok { color: #5fd06a; }
+    .validation-icon.warn { color: #ffb347; }
+    .validation-confidence { margin-top: 10px; font-size: 11px; color: #bbb; text-transform: uppercase; letter-spacing: 0.4px; font-weight: 900; }
+    .validation-confidence.high { color: #5fd06a; }
+    .validation-confidence.medium { color: #ffb347; }
+    .validation-confidence.low { color: #ff7070; }
+    .collapsible-section { margin-top: 14px; max-width: 900px; border: 1px solid #333; background: rgba(0,0,0,.25); }
+    .collapsible-section > summary { cursor: pointer; padding: 12px 14px; font-size: 13px; font-weight: 900; color: #ff3030; text-transform: uppercase; letter-spacing: 0.4px; list-style: none; }
+    .collapsible-section > summary::-webkit-details-marker { display: none; }
+    .collapsible-section > summary::before { content: '▸ '; color: #888; }
+    .collapsible-section[open] > summary::before { content: '▾ '; }
+    .collapsible-body { padding: 0 14px 14px; }
+    .preview-subsection { margin-top: 12px; }
+    .preview-subsection h4 { margin: 0 0 8px; font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 0.35px; }
+    .preview-grid { display: grid; grid-template-columns: 120px 1fr; gap: 6px 12px; font-size: 12px; max-width: 420px; }
+    .preview-grid dt { color: #888; font-weight: 900; text-transform: uppercase; font-size: 10px; margin: 0; }
+    .preview-grid dd { margin: 0; color: #eee; }
+    .preview-table-wrap { max-height: 280px; overflow: auto; border: 1px solid #333; }
+    .preview-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    .preview-table th, .preview-table td { padding: 6px 8px; border-bottom: 1px solid #222; text-align: left; white-space: nowrap; }
+    .preview-table th { position: sticky; top: 0; background: #111; color: #aaa; font-size: 10px; text-transform: uppercase; z-index: 1; }
+    .preview-list { max-height: 220px; overflow: auto; border: 1px solid #333; padding: 8px 10px; font-size: 11px; line-height: 1.45; color: #ddd; }
+    .preview-list-item { padding: 4px 0; border-bottom: 1px solid #222; }
+    .preview-list-item:last-child { border-bottom: 0; }
+    .parser-health-card { margin-top: 14px; max-width: 520px; }
+    .parser-health-grid { display: grid; grid-template-columns: 140px 1fr; gap: 6px 12px; font-size: 11px; }
+    .parser-health-grid dt { color: #888; text-transform: uppercase; font-size: 10px; font-weight: 900; margin: 0; }
+    .parser-health-grid dd { margin: 0; color: #ddd; }
+    .parser-warnings { margin-top: 10px; font-size: 11px; color: #ccc; }
+    .parser-warnings ul { margin: 6px 0 0 18px; padding: 0; }
+    .supplemental-note { font-size: 11px; color: #777; margin-top: 8px; line-height: 1.4; }
   </style>
 </head>
 <body>
@@ -93,6 +129,71 @@
           <div class="status-row"><dt>Cautions</dt><dd id="statusCautions">—</dd></div>
           <div class="status-row"><dt>Drivers</dt><dd id="statusDrivers">—</dd></div>
         </dl>
+      </div>
+
+      <div id="validationCard" class="status-card validation-card" hidden>
+        <h3>Race Control Validation</h3>
+        <ul id="validationList" class="validation-list"></ul>
+        <div id="validationConfidence" class="validation-confidence"></div>
+        <p class="supplemental-note">Official schedule and SimRacerHub results always take precedence over Race Control PDF data.</p>
+      </div>
+
+      <details id="parsedPreviewSection" class="collapsible-section" hidden>
+        <summary>Parsed Data Preview</summary>
+        <div class="collapsible-body">
+          <div class="preview-subsection">
+            <h4>Summary</h4>
+            <dl id="previewSummary" class="preview-grid"></dl>
+          </div>
+          <div class="preview-subsection">
+            <h4>Driver Results</h4>
+            <div class="preview-table-wrap">
+              <table class="preview-table">
+                <thead>
+                  <tr>
+                    <th>Pos</th>
+                    <th>Car</th>
+                    <th>Driver</th>
+                    <th>Status</th>
+                    <th>Inc</th>
+                    <th>Laps</th>
+                    <th>Gap</th>
+                    <th>Interval</th>
+                    <th>Best Lap</th>
+                  </tr>
+                </thead>
+                <tbody id="previewResultsBody"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="preview-subsection">
+            <h4>Race Events</h4>
+            <div id="previewEvents" class="preview-list"></div>
+          </div>
+          <div id="previewIncidentsSection" class="preview-subsection" hidden>
+            <h4>Driver Incident Reports</h4>
+            <div class="preview-table-wrap">
+              <table class="preview-table">
+                <thead>
+                  <tr>
+                    <th>Driver</th>
+                    <th>Car</th>
+                    <th>Incidents</th>
+                    <th>Pit Stops</th>
+                    <th>Best Lap</th>
+                  </tr>
+                </thead>
+                <tbody id="previewIncidentsBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <div id="parserHealthCard" class="status-card parser-health-card" hidden>
+        <h3>Parser Health</h3>
+        <dl id="parserHealthGrid" class="parser-health-grid"></dl>
+        <div id="parserHealthWarnings" class="parser-warnings" hidden></div>
       </div>
 
       <div id="partialParseWarning" class="warnings is-partial" hidden>
@@ -285,6 +386,186 @@
       if (deleteBtn) deleteBtn.disabled = !hasPdf;
     }
 
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function renderValidationCard(report) {
+      const card = $('#validationCard');
+      const list = $('#validationList');
+      const confidenceEl = $('#validationConfidence');
+      const validation = report?.validation;
+
+      if (!card || !list || !confidenceEl) return;
+
+      if (!validation || report?.parseStatus !== 'parsed') {
+        card.hidden = true;
+        list.innerHTML = '';
+        confidenceEl.textContent = '';
+        confidenceEl.className = 'validation-confidence';
+        return;
+      }
+
+      card.hidden = false;
+      list.innerHTML = validation.checks
+        .map((check) => {
+          const iconClass = check.passed ? 'ok' : 'warn';
+          const icon = check.passed ? '✓' : '⚠';
+          const detail = check.message ? `<div style="color:#999;font-size:11px;margin-top:2px;">${escapeHtml(check.message)}</div>` : '';
+          return `<li class="validation-item"><span class="validation-icon ${iconClass}">${icon}</span><span>${escapeHtml(check.label)}${detail}</span></li>`;
+        })
+        .join('');
+
+      const confidence = String(validation.confidence || 'unknown').toUpperCase();
+      confidenceEl.textContent = `AI Confidence: ${confidence}`;
+      confidenceEl.className = `validation-confidence ${validation.confidence || ''}`;
+    }
+
+    function renderPreviewSummary(parsed, summary) {
+      const grid = $('#previewSummary');
+      if (!grid) return;
+
+      const rows = [
+        ['Winner', summary.winner || parsed.winner || '—'],
+        ['SOF', summary.sof != null ? summary.sof : parsed.sof != null ? parsed.sof : '—'],
+        ['Cautions', summary.cautionCount != null ? summary.cautionCount : parsed.cautionCount != null ? parsed.cautionCount : '—'],
+        ['Track', parsed.trackName || summary.trackName || '—'],
+        ['Drivers', summary.totalDrivers ?? (Array.isArray(parsed.results) ? parsed.results.length : '—')],
+        ['Generated', parsed.generatedAt || '—'],
+      ];
+
+      grid.innerHTML = rows
+        .map(([label, value]) => `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd>`)
+        .join('');
+    }
+
+    function renderPreviewResults(parsed) {
+      const body = $('#previewResultsBody');
+      if (!body) return;
+
+      const results = Array.isArray(parsed?.results) ? parsed.results.slice() : [];
+      results.sort((a, b) => Number(a.position) - Number(b.position));
+
+      body.innerHTML = results.length
+        ? results.map((row) => `
+            <tr>
+              <td>${escapeHtml(row.position ?? '—')}</td>
+              <td>${escapeHtml(row.carNumber ?? '—')}</td>
+              <td>${escapeHtml(row.driverName ?? '—')}</td>
+              <td>${escapeHtml(row.status ?? '—')}</td>
+              <td>${escapeHtml(row.incidents ?? '—')}</td>
+              <td>${escapeHtml(row.laps ?? '—')}</td>
+              <td>${escapeHtml(row.gap ?? '—')}</td>
+              <td>${escapeHtml(row.interval ?? '—')}</td>
+              <td>${escapeHtml(row.bestLap ?? '—')}</td>
+            </tr>
+          `).join('')
+        : '<tr><td colspan="9">No driver results parsed.</td></tr>';
+    }
+
+    function renderPreviewEvents(parsed) {
+      const container = $('#previewEvents');
+      if (!container) return;
+
+      const events = Array.isArray(parsed?.raceEvents) ? parsed.raceEvents : [];
+      container.innerHTML = events.length
+        ? events.map((event) => {
+            const label = event.type || 'Event';
+            const text = event.text || '';
+            return `<div class="preview-list-item"><strong>${escapeHtml(label)}</strong> ${escapeHtml(text)}</div>`;
+          }).join('')
+        : '<div class="preview-list-item">No race events parsed.</div>';
+    }
+
+    function renderPreviewIncidents(parsed) {
+      const section = $('#previewIncidentsSection');
+      const body = $('#previewIncidentsBody');
+      if (!section || !body) return;
+
+      const drivers = Array.isArray(parsed?.drivers) ? parsed.drivers : [];
+      if (!drivers.length) {
+        section.hidden = true;
+        body.innerHTML = '';
+        return;
+      }
+
+      section.hidden = false;
+      body.innerHTML = drivers.map((row) => `
+        <tr>
+          <td>${escapeHtml(row.driverName ?? '—')}</td>
+          <td>${escapeHtml(row.carNumber ?? '—')}</td>
+          <td>${escapeHtml(row.incidentEvents?.length ?? 0)}</td>
+          <td>${escapeHtml(row.pitStops ?? '—')}</td>
+          <td>${escapeHtml(row.bestLap ?? '—')}</td>
+        </tr>
+      `).join('');
+    }
+
+    function renderParserHealth(report) {
+      const card = $('#parserHealthCard');
+      const grid = $('#parserHealthGrid');
+      const warningsEl = $('#parserHealthWarnings');
+      const health = report?.parserHealth;
+
+      if (!card || !grid || !warningsEl) return;
+
+      if (!health || report?.parseStatus !== 'parsed') {
+        card.hidden = true;
+        grid.innerHTML = '';
+        warningsEl.hidden = true;
+        warningsEl.innerHTML = '';
+        return;
+      }
+
+      card.hidden = false;
+      const parseTime =
+        health.parseTimeMs != null ? `${health.parseTimeMs} ms` : '—';
+
+      const rows = [
+        ['Parser Version', health.parserVersion || '—'],
+        ['Confidence', String(health.confidence || '—').toUpperCase()],
+        ['Rows Parsed', health.rowsParsed ?? '—'],
+        ['Rows Expected', health.rowsExpected ?? '—'],
+        ['Parse Time', parseTime],
+      ];
+
+      grid.innerHTML = rows
+        .map(([label, value]) => `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd>`)
+        .join('');
+
+      const warnings = (health.warnings || []).filter(Boolean);
+      if (warnings.length) {
+        warningsEl.hidden = false;
+        warningsEl.innerHTML = `<strong>Warnings</strong><ul>${warnings.map((w) => `<li>${escapeHtml(w)}</li>`).join('')}</ul>`;
+      } else {
+        warningsEl.hidden = true;
+        warningsEl.innerHTML = '';
+      }
+    }
+
+    function renderParsedPreview(report) {
+      const section = $('#parsedPreviewSection');
+      const parsed = report?.parsedJson;
+      const summary = report?.summary || {};
+
+      if (!section) return;
+
+      if (!parsed || report?.parseStatus !== 'parsed') {
+        section.hidden = true;
+        return;
+      }
+
+      section.hidden = false;
+      renderPreviewSummary(parsed, summary);
+      renderPreviewResults(parsed);
+      renderPreviewEvents(parsed);
+      renderPreviewIncidents(parsed);
+    }
+
     function renderStatusCard(report) {
       currentReport = report || null;
       const summary = report?.summary || {};
@@ -341,6 +622,9 @@
       }
 
       updateActionButtons(report);
+      renderValidationCard(report);
+      renderParsedPreview(report);
+      renderParserHealth(report);
     }
 
     async function loadSchedule() {

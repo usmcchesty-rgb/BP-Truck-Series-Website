@@ -1,6 +1,7 @@
 import { getSettings, supabase } from './_lib.js';
 import { getPointsRaceByNumber } from './_schedule-points-races.js';
 import { parseRaceControlPdfBuffer } from './_race-control-pdf-parser.js';
+import { enrichRaceControlReport } from './_race-control-validation.js';
 
 // iRaceControl Race Report PDFs — supplemental enrichment, not required for site operation.
 
@@ -126,7 +127,7 @@ async function resolveRaceMeta(seasonId, raceNumber, scheduleRaces = null) {
   };
 }
 
-export async function getRaceControlReport(seasonId, raceNumber) {
+export async function getRaceControlReport(seasonId, raceNumber, options = {}) {
   const sb = supabase();
   if (!sb) return null;
 
@@ -138,7 +139,11 @@ export async function getRaceControlReport(seasonId, raceNumber) {
     .maybeSingle();
 
   if (error) throw new Error(error.message);
-  return normalizeReportRow(data);
+  const report = normalizeReportRow(data);
+  if (!report || options.enrich === false) return report;
+
+  const settings = options.settings || (await getSettings());
+  return enrichRaceControlReport(report, { settings });
 }
 
 export async function listRaceControlReports(seasonId) {
@@ -153,6 +158,12 @@ export async function listRaceControlReports(seasonId) {
 
   if (error) throw new Error(error.message);
   return (data || []).map(normalizeReportRow);
+}
+
+async function enrichReportIfParsed(report, options = {}) {
+  if (!report || report.parseStatus !== PARSE_STATUS.PARSED) return report;
+  const settings = options.settings || (await getSettings());
+  return enrichRaceControlReport(report, { settings });
 }
 
 async function uploadPdfToStorage(filePath, buffer) {
@@ -181,10 +192,12 @@ async function runParseAndPersist(reportRow, buffer, options = {}) {
   const now = new Date().toISOString();
 
   try {
+    const parseStarted = Date.now();
     const { parsedText, parsedJson } = await parseRaceControlPdfBuffer(buffer, {
       raceNumber: reportRow.race_number,
       trackName: reportRow.track_name || options.trackName || null,
     });
+    parsedJson.parseTimingMs = Date.now() - parseStarted;
 
     const { data, error } = await sb
       .from('race_control_reports')
@@ -201,7 +214,7 @@ async function runParseAndPersist(reportRow, buffer, options = {}) {
       .single();
 
     if (error) throw new Error(error.message);
-    return normalizeReportRow(data);
+    return enrichReportIfParsed(normalizeReportRow(data), options);
   } catch (parseError) {
     const message = parseError.message || 'PDF parse failed.';
     const { data, error } = await sb
@@ -266,6 +279,7 @@ export async function uploadRaceControlReport(body, options = {}) {
 
   return runParseAndPersist(data, buffer, {
     trackName: upsertRow.track_name,
+    settings,
   });
 }
 
@@ -301,7 +315,7 @@ export async function reparseRaceControlReport(body, options = {}) {
       track_name: report.trackName,
     },
     buffer,
-    { trackName: report.trackName }
+    { trackName: report.trackName, settings }
   );
 }
 
@@ -335,9 +349,9 @@ export async function deleteRaceControlReport(body, options = {}) {
   return { ok: true, deleted: true, raceNumber };
 }
 
-export async function loadRaceControlReportForRace(seasonId, raceNumber) {
+export async function loadRaceControlReportForRace(seasonId, raceNumber, options = {}) {
   try {
-    return await getRaceControlReport(seasonId, raceNumber);
+    return await getRaceControlReport(seasonId, raceNumber, options);
   } catch {
     return null;
   }
