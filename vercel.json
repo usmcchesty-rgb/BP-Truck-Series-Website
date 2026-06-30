@@ -1,6 +1,10 @@
 {
   "rewrites": [
     { "source": "/admin", "destination": "/admin/index.html" },
+    { "source": "/admin/content", "destination": "/admin/content.html" },
+    { "source": "/admin/competition", "destination": "/admin/competition.html" },
+    { "source": "/admin/race-operations", "destination": "/admin/race-operations.html" },
+    { "source": "/admin/analytics", "destination": "/admin/analytics.html" },
     { "source": "/admin/track-images", "destination": "/admin/track-images.html" },
     { "source": "/admin/driver-photos", "destination": "/admin/driver-photos.html" },
     { "source": "/admin/standing-driver-photos", "destination": "/admin/standing-driver-photos.html" },

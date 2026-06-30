@@ -3,18 +3,11 @@
   const SESSION_KEY = "bp_admin_pw";
 
   const NAV_ITEMS = [
-    { id: "dashboard", label: "Dashboard / Settings", href: "/admin" },
-    { id: "drivers", label: "Drivers", href: "/admin#drivers" },
-    { id: "track-images", label: "Track Images", href: "/admin/track-images" },
-    { id: "driver-photos", label: "Driver Photos", href: "/admin/driver-photos" },
-    { id: "power-rankings", label: "Power Rankings", href: "/admin/power-rankings" },
-    { id: "fantasy", label: "Fantasy", href: "/admin/fantasy.html" },
-    { id: "news", label: "News", href: "/admin/news" },
-    { id: "social-sharing", label: "Social Sharing", href: "/admin/social-sharing" },
-    { id: "transcripts", label: "Transcripts", href: "/admin/transcripts" },
-    { id: "race-control", label: "Race Control", href: "/admin/race-control.html" },
-    { id: "applications", label: "Applications", href: "/admin/applications.html" },
-    { id: "iracing-test", label: "iRacing Test", href: "/admin/iracing-test.html" },
+    { id: "dashboard", label: "Dashboard", href: "/admin" },
+    { id: "content", label: "Content Center", href: "/admin/content" },
+    { id: "competition", label: "Competition", href: "/admin/competition" },
+    { id: "race-operations", label: "Race Operations", href: "/admin/race-operations" },
+    { id: "analytics", label: "Analytics", href: "/admin/analytics" },
   ];
 
   const STYLE_ID = "admin-shell-nav-styles";
@@ -200,19 +193,52 @@
     const path = normalizeAdminPath(location.pathname);
     const hash = String(location.hash || "").toLowerCase();
 
+    if (path.endsWith("/content") || path.endsWith("/content.html")) return "content";
+    if (path.endsWith("/competition") || path.endsWith("/competition.html")) return "competition";
+    if (path.endsWith("/race-operations") || path.endsWith("/race-operations.html")) return "race-operations";
+    if (path.endsWith("/analytics") || path.endsWith("/analytics.html")) return "analytics";
+
     if (path === "/admin" || path.endsWith("/admin")) {
-      return hash === "#drivers" ? "drivers" : "dashboard";
+      if (hash === "#drivers") return "competition";
+      return "dashboard";
     }
-    if (path.endsWith("/driver-photos")) return "driver-photos";
-    if (path.endsWith("/power-rankings")) return "power-rankings";
-    if (path.endsWith("/fantasy.html")) return "fantasy";
-    if (path.endsWith("/news")) return "news";
-    if (path.endsWith("/social-sharing")) return "social-sharing";
-    if (path.endsWith("/transcripts")) return "transcripts";
-    if (path.endsWith("/track-images")) return "track-images";
-    if (path.endsWith("/race-control.html") || path.endsWith("/race-control")) return "race-control";
-    if (path.endsWith("/applications.html") || path.endsWith("/applications")) return "applications";
-    if (path.endsWith("/iracing-test.html") || path.endsWith("/iracing-test")) return "iracing-test";
+
+    if (
+      path.endsWith("/news") ||
+      path.endsWith("/news.html") ||
+      path.endsWith("/social-sharing") ||
+      path.endsWith("/social-sharing.html") ||
+      path.endsWith("/track-images") ||
+      path.endsWith("/track-images.html") ||
+      path.endsWith("/driver-photos") ||
+      path.endsWith("/driver-photos.html")
+    ) {
+      return "content";
+    }
+
+    if (
+      path.endsWith("/power-rankings") ||
+      path.endsWith("/power-rankings.html") ||
+      path.endsWith("/fantasy.html") ||
+      path.endsWith("/applications") ||
+      path.endsWith("/applications.html") ||
+      path.endsWith("/iracing-test") ||
+      path.endsWith("/iracing-test.html")
+    ) {
+      return "competition";
+    }
+
+    if (
+      path.endsWith("/transcripts") ||
+      path.endsWith("/transcripts.html") ||
+      path.endsWith("/race-control.html") ||
+      path.endsWith("/race-control") ||
+      path.endsWith("/parser-tests") ||
+      path.endsWith("/parser-tests.html")
+    ) {
+      return "race-operations";
+    }
+
     return "";
   }
 

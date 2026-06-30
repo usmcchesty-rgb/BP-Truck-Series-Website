@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Content Center — BP Admin</title>
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/admin/admin-layout.css">
+  <link rel="stylesheet" href="/admin/admin-group-shell.css">
+  <style>
+    .sub { color: var(--bp-text-secondary); font-size: 12px; margin-bottom: 16px; line-height: 1.45; }
+    .pw-row { max-width: 320px; margin-bottom: 14px; }
+    .input { width: 100%; padding: 8px; background: #090909; color: #fff; border: 1px solid #555; border-radius: 4px; font-size: 12px; }
+    #loginMsg { margin-top: 10px; font-size: 12px; color: #ccc; white-space: pre-wrap; }
+    #loginMsg.error { color: #ff6060; }
+  </style>
+</head>
+<body class="admin-group-page">
+  <div id="admin-nav-root"></div>
+  <script src="/admin/admin-nav.js"></script>
+
+  <main id="loginView" class="wrap" hidden>
+    <h1>Content Center</h1>
+    <p class="sub">Enter the admin password to manage news, sharing, and media assets.</p>
+    <div class="pw-row">
+      <input id="loginPw" class="input" type="password" placeholder="Admin password" autocomplete="current-password">
+      <button class="btn" type="button" onclick="login()">Unlock</button>
+      <pre id="loginMsg"></pre>
+    </div>
+  </main>
+
+  <main id="adminView" class="wrap" hidden>
+    <div class="admin-group-header">
+      <h1 id="groupTitle">Content Center</h1>
+      <p id="groupSubtitle" class="sub">News, social sharing, track images, and driver photos.</p>
+    </div>
+    <nav id="groupTabBar" class="admin-group-tabs" aria-label="Content Center sections"></nav>
+    <div class="admin-group-frame-wrap">
+      <iframe id="groupFrame" class="admin-group-frame" title="Content Center tool" loading="lazy"></iframe>
+    </div>
+  </main>
+
+  <script src="/admin/admin-group-shell.js"></script>
+  <script>
+    AdminGroupShell.initGroupPage({
+      title: "Content Center",
+      subtitle: "News, social sharing, track images, and driver photos.",
+      defaultTab: "news",
+      tabs: [
+        { id: "news", label: "News", src: "/admin/news.html?embed=1" },
+        { id: "social-sharing", label: "Social Sharing", src: "/admin/social-sharing.html?embed=1" },
+        { id: "track-images", label: "Track Images", src: "/admin/track-images.html?embed=1" },
+        { id: "driver-photos", label: "Driver Photos", src: "/admin/driver-photos.html?embed=1" },
+      ],
+    });
+  </script>
+</body>
+</html>

@@ -63,6 +63,14 @@ import {
   submitDriverApplication,
   updateDriverApplication,
 } from './_driver-applications.js';
+import {
+  getAnalyticsDailyTraffic,
+  getAnalyticsDevices,
+  getAnalyticsOverview,
+  getAnalyticsPages,
+  getAnalyticsReferrers,
+  trackPageView,
+} from './_site-analytics.js';
 
 function parseRequestBody(req) {
   if (!req.body) return {};
@@ -319,6 +327,32 @@ export default async function handler(req, res) {
         return res.status(500).json({ error: error.message || 'Failed to load fantasy standings.' });
       }
     }
+    if (
+      queryAction === 'getAnalyticsOverview' ||
+      queryAction === 'getAnalyticsPages' ||
+      queryAction === 'getAnalyticsReferrers' ||
+      queryAction === 'getAnalyticsDevices' ||
+      queryAction === 'getAnalyticsDailyTraffic'
+    ) {
+      if (!isAdminPasswordValid(req)) return res.status(401).json({ error: 'Bad password' });
+      try {
+        if (queryAction === 'getAnalyticsOverview') {
+          return res.status(200).json(await getAnalyticsOverview(req));
+        }
+        if (queryAction === 'getAnalyticsPages') {
+          return res.status(200).json(await getAnalyticsPages(req));
+        }
+        if (queryAction === 'getAnalyticsReferrers') {
+          return res.status(200).json(await getAnalyticsReferrers(req));
+        }
+        if (queryAction === 'getAnalyticsDevices') {
+          return res.status(200).json(await getAnalyticsDevices(req));
+        }
+        return res.status(200).json(await getAnalyticsDailyTraffic(req));
+      } catch (error) {
+        return res.status(error.status || 500).json({ error: error.message || 'Analytics request failed.' });
+      }
+    }
     return res.status(200).json(await getSettings());
   }
 
@@ -326,6 +360,15 @@ export default async function handler(req, res) {
 
   const body = req.body || {};
   const action = String(body.action || req.query?.action || '').trim();
+
+  if (action === 'trackPageView') {
+    try {
+      const result = await trackPageView(body, req);
+      return res.status(200).json(result);
+    } catch (error) {
+      return res.status(error.status || 500).json({ error: error.message || 'Failed to track page view.' });
+    }
+  }
 
   if (action === 'submitLineup') {
     const user = await getUserFromBearerToken(req);
@@ -340,6 +383,42 @@ export default async function handler(req, res) {
 
   if (body.password !== process.env.ADMIN_PASSWORD) return res.status(401).json({ error: 'Bad password' });
   if (body.verifyOnly) return res.status(200).json({ ok: true });
+
+  if (action === 'getAnalyticsOverview') {
+    try {
+      return res.status(200).json(await getAnalyticsOverview(req, body));
+    } catch (error) {
+      return res.status(error.status || 500).json({ error: error.message || 'Analytics request failed.' });
+    }
+  }
+  if (action === 'getAnalyticsPages') {
+    try {
+      return res.status(200).json(await getAnalyticsPages(req, body));
+    } catch (error) {
+      return res.status(error.status || 500).json({ error: error.message || 'Analytics request failed.' });
+    }
+  }
+  if (action === 'getAnalyticsReferrers') {
+    try {
+      return res.status(200).json(await getAnalyticsReferrers(req, body));
+    } catch (error) {
+      return res.status(error.status || 500).json({ error: error.message || 'Analytics request failed.' });
+    }
+  }
+  if (action === 'getAnalyticsDevices') {
+    try {
+      return res.status(200).json(await getAnalyticsDevices(req, body));
+    } catch (error) {
+      return res.status(error.status || 500).json({ error: error.message || 'Analytics request failed.' });
+    }
+  }
+  if (action === 'getAnalyticsDailyTraffic') {
+    try {
+      return res.status(200).json(await getAnalyticsDailyTraffic(req, body));
+    } catch (error) {
+      return res.status(error.status || 500).json({ error: error.message || 'Analytics request failed.' });
+    }
+  }
 
   if (action === 'generateFantasySlate') {
     try {

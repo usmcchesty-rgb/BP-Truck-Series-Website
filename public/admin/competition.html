@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Competition — BP Admin</title>
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/admin/admin-layout.css">
+  <link rel="stylesheet" href="/admin/admin-group-shell.css">
+  <style>
+    .sub { color: var(--bp-text-secondary); font-size: 12px; margin-bottom: 16px; line-height: 1.45; }
+    .pw-row { max-width: 320px; margin-bottom: 14px; }
+    .input { width: 100%; padding: 8px; background: #090909; color: #fff; border: 1px solid #555; border-radius: 4px; font-size: 12px; }
+    #loginMsg { margin-top: 10px; font-size: 12px; color: #ccc; white-space: pre-wrap; }
+    #loginMsg.error { color: #ff6060; }
+  </style>
+</head>
+<body class="admin-group-page">
+  <div id="admin-nav-root"></div>
+  <script src="/admin/admin-nav.js"></script>
+
+  <main id="loginView" class="wrap" hidden>
+    <h1>Competition</h1>
+    <p class="sub">Enter the admin password to manage drivers, power rankings, and fantasy.</p>
+    <div class="pw-row">
+      <input id="loginPw" class="input" type="password" placeholder="Admin password" autocomplete="current-password">
+      <button class="btn" type="button" onclick="login()">Unlock</button>
+      <pre id="loginMsg"></pre>
+    </div>
+  </main>
+
+  <main id="adminView" class="wrap" hidden>
+    <div class="admin-group-header">
+      <h1 id="groupTitle">Competition</h1>
+      <p id="groupSubtitle" class="sub">Drivers, power rankings, and BP Fantasy administration.</p>
+    </div>
+    <div id="groupTools" class="admin-group-tools" hidden></div>
+    <nav id="groupTabBar" class="admin-group-tabs" aria-label="Competition sections"></nav>
+    <div class="admin-group-frame-wrap">
+      <iframe id="groupFrame" class="admin-group-frame" title="Competition tool" loading="lazy"></iframe>
+    </div>
+  </main>
+
+  <script src="/admin/admin-group-shell.js"></script>
+  <script>
+    AdminGroupShell.initGroupPage({
+      title: "Competition",
+      subtitle: "Drivers, power rankings, and BP Fantasy administration.",
+      defaultTab: "drivers",
+      tools: [
+        { label: "Driver Applications", href: "/admin/applications.html" },
+        { label: "iRacing Test", href: "/admin/iracing-test.html" },
+      ],
+      tabs: [
+        { id: "drivers", label: "Drivers", src: "/admin/index.html?embed=1#drivers" },
+        { id: "power-rankings", label: "Power Rankings", src: "/admin/power-rankings.html?embed=1" },
+        { id: "fantasy", label: "Fantasy", src: "/admin/fantasy.html?embed=1" },
+      ],
+    });
+  </script>
+</body>
+</html>

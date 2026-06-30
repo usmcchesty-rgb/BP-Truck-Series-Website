@@ -94,6 +94,7 @@
   </style>
 </head>
 <body>
+  <script src="/admin/admin-embed.js"></script>
   <div id="admin-nav-root"></div>
   <script src="/admin/admin-nav.js"></script>
 
@@ -108,8 +109,8 @@
   </main>
 
   <main id="adminView" class="wrap" hidden>
-    <h1>Admin</h1>
-    <p class="sub">Password is checked by the server. Settings and driver profiles save to Supabase after you add Supabase keys in Vercel.</p>
+    <h1 class="admin-embed-hide">Admin</h1>
+    <p class="sub admin-embed-hide">Password is checked by the server. Settings and driver profiles save to Supabase after you add Supabase keys in Vercel.</p>
 
     <div id="settingsSection" class="admin-section active">
       <div class="panel">
@@ -269,7 +270,8 @@
     }
 
     function applyAdminHash() {
-      const isDrivers = location.hash === '#drivers';
+      const isEmbed = new URLSearchParams(location.search).get('embed') === '1';
+      const isDrivers = location.hash === '#drivers' || isEmbed;
       const settingsSection = $('#settingsSection');
       const driversSection = $('#driversSection');
       if (!settingsSection || !driversSection) return;

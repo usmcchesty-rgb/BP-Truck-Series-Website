@@ -241,9 +241,30 @@
     }
     #formulaImageMsg { margin-top: 10px; font-size: 12px; color: #ccc; white-space: pre-wrap; }
     #formulaImageMsg.error { color: #ff6060; }
+    .pr-subtabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
+    .pr-subtab {
+      padding: 8px 16px;
+      font-size: 11px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      color: #bbb;
+      background: linear-gradient(#1c1c1c, #080808);
+      border: 1px solid #444;
+      cursor: pointer;
+    }
+    .pr-subtab:hover { color: #fff; border-color: #666; }
+    .pr-subtab.is-active {
+      color: #fff;
+      background: linear-gradient(#d40000, #680000);
+      border-color: #ff2424;
+    }
+    .pr-tab-panel { display: none; }
+    .pr-tab-panel.is-active { display: block; }
   </style>
 </head>
 <body>
+  <script src="/admin/admin-embed.js"></script>
   <div id="admin-nav-root"></div>
   <script src="/admin/admin-nav.js"></script>
 
@@ -258,22 +279,15 @@
   </main>
 
   <main id="adminView" class="wrap" hidden>
-    <h1>Power Rankings</h1>
-    <p class="sub">Create and publish weekly Top 10 power rankings with custom subtitles and writeups. Honorable mentions are optional (0–3).</p>
+    <h1 class="admin-embed-hide">Power Rankings</h1>
+    <p class="sub admin-embed-hide">Create and publish weekly Top 10 power rankings with custom subtitles and writeups. Honorable mentions are optional (0?3).</p>
 
-    <div class="panel formula-image-panel">
-      <h2>Formula Image</h2>
-      <p class="sub">Displayed on the public Power Rankings <strong>How It Works</strong> tab. Falls back to <code>/assets/power-rankings/formula.png</code> when no custom image is uploaded.</p>
-      <div id="formulaImagePreview" class="formula-preview-wrap is-empty">No formula image</div>
-      <label class="field-label" for="formulaImageFile">Upload Formula Image (PNG)</label>
-      <div class="btn-row" style="margin-top:0;">
-        <input id="formulaImageFile" type="file" accept="image/png,.png">
-        <button id="uploadFormulaImageBtn" class="btn btn-secondary" type="button" disabled>Upload Formula Image</button>
-        <button id="removeFormulaImageBtn" class="btn btn-danger" type="button" disabled>Remove Formula Image</button>
-      </div>
-      <pre id="formulaImageMsg"></pre>
+    <div class="pr-subtabs" role="tablist" aria-label="Power Rankings sections">
+      <button id="prTabBtnRankings" class="pr-subtab is-active" type="button" onclick="switchPrTab('rankings')">Rankings</button>
+      <button id="prTabBtnFormula" class="pr-subtab" type="button" onclick="switchPrTab('formula')">Formula</button>
     </div>
 
+    <div id="prTabRankings" class="pr-tab-panel is-active">
     <div class="panel">
       <h2>Saved Weeks</h2>
       <div id="weekList" class="week-list"></div>
@@ -310,7 +324,7 @@
 
       <div class="manual-notes-box prophet-take-editor">
         <label class="field-label" for="prophetTake">The Pedal Prophet's Take</label>
-        <p class="sub">Weekly columnist article (150–300 words). Generated with the draft; edit before saving or publishing.</p>
+        <p class="sub">Weekly columnist article (150?300 words). Generated with the draft; edit before saving or publishing.</p>
         <textarea id="prophetTake" class="textarea" placeholder="The Pedal Prophet's weekly take will appear here after generation..."></textarea>
       </div>
 
@@ -362,6 +376,22 @@
         <pre id="transcriptDiagnostics"></pre>
       </div>
     </div>
+    </div>
+
+    <div id="prTabFormula" class="pr-tab-panel">
+    <div class="panel formula-image-panel">
+      <h2>Formula Image</h2>
+      <p class="sub">Displayed on the public Power Rankings <strong>How It Works</strong> tab. Falls back to <code>/assets/power-rankings/formula.png</code> when no custom image is uploaded.</p>
+      <div id="formulaImagePreview" class="formula-preview-wrap is-empty">No formula image</div>
+      <label class="field-label" for="formulaImageFile">Upload Formula Image (PNG)</label>
+      <div class="btn-row" style="margin-top:0;">
+        <input id="formulaImageFile" type="file" accept="image/png,.png">
+        <button id="uploadFormulaImageBtn" class="btn btn-secondary" type="button" disabled>Upload Formula Image</button>
+        <button id="removeFormulaImageBtn" class="btn btn-danger" type="button" disabled>Remove Formula Image</button>
+      </div>
+      <pre id="formulaImageMsg"></pre>
+    </div>
+    </div>
   </main>
 
   <script>
@@ -373,6 +403,16 @@
     let savedWeeks = [];
     let suggestedRaceNumber = 1;
     let currentWriteupWarnings = {};
+    let activePrTab = 'rankings';
+
+    function switchPrTab(tabId) {
+      activePrTab = tabId === 'formula' ? 'formula' : 'rankings';
+      $('#prTabRankings')?.classList.toggle('is-active', activePrTab === 'rankings');
+      $('#prTabFormula')?.classList.toggle('is-active', activePrTab === 'formula');
+      $('#prTabBtnRankings')?.classList.toggle('is-active', activePrTab === 'rankings');
+      $('#prTabBtnFormula')?.classList.toggle('is-active', activePrTab === 'formula');
+    }
+    window.switchPrTab = switchPrTab;
 
     function readRaceNumberInput() {
       const input = $('#raceNumber');
@@ -426,7 +466,7 @@
           status.textContent =
             `Saved transcript found for Race ${raceNumber}` +
             `${data.transcript.raceName ? ` (${data.transcript.raceName})` : ''}` +
-            ` — ${String(data.transcript.transcript).length} characters.` +
+            ` ? ${String(data.transcript.transcript).length} characters.` +
             ` Last updated ${new Date(data.transcript.updatedAt).toLocaleString()}.`;
           link.hidden = true;
           return;
@@ -810,7 +850,7 @@
 
       for (const row of diagnostics.top10 || []) {
         lines.push(
-          `  #${row.rank} ${row.driverName} — score ${row.powerScore} (prev PR #${row.previousRank ?? 'NEW'})`,
+          `  #${row.rank} ${row.driverName} ? score ${row.powerScore} (prev PR #${row.previousRank ?? 'NEW'})`,
           `    breakdown: ${formatScoreBreakdown(row.scoreBreakdown)}`,
           `    retentionBonus: ${row.retentionBonus ?? 0}, dropProtection: ${row.dropProtectionApplied ? 'yes' : 'no'}`,
           row.dropReasons?.length ? `    dropReasons: ${row.dropReasons.join('; ')}` : '',
@@ -828,7 +868,7 @@
         lines.push('', 'Dropped from previous Top 10:');
         for (const row of diagnostics.droppedFromPreviousTop10) {
           lines.push(
-            `  ${row.driverName} (was #${row.previousRank}) — score ${row.powerScore ?? 'n/a'}`,
+            `  ${row.driverName} (was #${row.previousRank}) ? score ${row.powerScore ?? 'n/a'}`,
             row.replacedByProtection
               ? `    bumped by drop protection for ${row.replacedFor}`
               : row.canDropOut === false
@@ -843,14 +883,14 @@
       if (diagnostics.honorableMentionCandidates?.length) {
         lines.push('', 'Honorable mention candidates (by score):');
         for (const row of diagnostics.honorableMentionCandidates) {
-          lines.push(`  ${row.driverName} — score ${row.powerScore}`);
+          lines.push(`  ${row.driverName} ? score ${row.powerScore}`);
         }
       }
 
       lines.push('', 'All candidates (by score):');
       for (const row of diagnostics.allCandidates || []) {
         lines.push(
-          `  ${row.scoreRank}. ${row.driverName} — ${row.powerScore} [${formatScoreBreakdown(row.scoreBreakdown)}] prev PR #${row.previousRank ?? '—'}${row.protectedFromDropout ? ' (protected)' : ''}`
+          `  ${row.scoreRank}. ${row.driverName} ? ${row.powerScore} [${formatScoreBreakdown(row.scoreBreakdown)}] prev PR #${row.previousRank ?? '?'}${row.protectedFromDropout ? ' (protected)' : ''}`
         );
       }
 
@@ -908,7 +948,7 @@
         const facts = (verifiedFactsUsed?.[rank] || [])
           .map((fact) => fact.label || fact.type)
           .join('; ');
-        return `  ${rank}: ${count} fact(s)${facts ? ` — ${facts}` : ''}`;
+        return `  ${rank}: ${count} fact(s)${facts ? ` ? ${facts}` : ''}`;
       });
     }
 
@@ -1503,7 +1543,7 @@
         return `<div class="week-item">
           <div>
             <strong>${escapeHtml(week.label || `Race ${week.raceNumber}`)}</strong>
-            <span>${status} · ${escapeHtml(date)}</span>
+            <span>${status} ? ${escapeHtml(date)}</span>
           </div>
           <div class="week-item-actions">
             <button class="btn btn-secondary" type="button" onclick="loadWeek(${week.id})">Edit</button>
@@ -1727,7 +1767,7 @@
         const diagnostics = buildTranscriptDiagnosticsView(data);
         const previousNote = data.previousRaceNumber
           ? ` Movement compared to Race ${data.previousRaceNumber} rankings.`
-          : ' No previous rankings found — movement defaults applied.';
+          : ' No previous rankings found ? movement defaults applied.';
         const transcriptNote =
           diagnostics.transcriptSource === 'saved'
             ? ` Saved broadcast transcript used (${diagnostics.savedTranscriptLength || 0} characters).`
@@ -1735,9 +1775,9 @@
             ? ` Manual race notes used (${diagnostics.manualRaceNotesLength || 0} characters).`
             : diagnostics.transcriptUsed
           ? ` Green Flag TV transcript used${diagnostics.selectedVideoTitle ? `: ${diagnostics.selectedVideoTitle}` : ''}.`
-          : ` No saved transcript available — draft used standings/results only.${diagnostics.transcriptDebugReason ? ` Debug: ${diagnostics.transcriptDebugReason}.` : ''}`;
+          : ` No saved transcript available ? draft used standings/results only.${diagnostics.transcriptDebugReason ? ` Debug: ${diagnostics.transcriptDebugReason}.` : ''}`;
         const existingNote = weekId
-          ? ' Updated existing Race week in the form — save to overwrite the draft.'
+          ? ' Updated existing Race week in the form ? save to overwrite the draft.'
           : ' Review and edit before saving or publishing.';
         const sources = buildGenerationSourcesView(data);
         const confidenceNote = sources.confidenceScore
@@ -1751,7 +1791,7 @@
           .filter(([key, items]) => String(key).match(/^\d+$/) && Array.isArray(items) && items.length)
           .map(([key]) => key);
         const writeupWarningNote = writeupWarningRanks.length
-          ? ` Writeup warnings at rank(s): ${writeupWarningRanks.join(', ')} — review or regenerate.`
+          ? ` Writeup warnings at rank(s): ${writeupWarningRanks.join(', ')} ? review or regenerate.`
           : '';
         const prophetTakeNote = data.prophetTakeValidationError
           ? ` Prophet's Take validation: ${data.prophetTakeValidationError}`
@@ -2072,7 +2112,7 @@
 
     async function exportDiscordImage() {
       setDiscordExportBusy(true);
-      setDiscordExportStatus('Preparing Discord PNG…');
+      setDiscordExportStatus('Preparing Discord PNG?');
 
       try {
         const week = await buildAdminExportWeek();
@@ -2087,7 +2127,7 @@
 
     async function copyDiscordText() {
       setDiscordExportBusy(true);
-      setDiscordExportStatus('Copying Discord text…');
+      setDiscordExportStatus('Copying Discord text?');
 
       try {
         const week = await buildAdminExportWeek();
@@ -2102,7 +2142,7 @@
 
     async function downloadDiscordText() {
       setDiscordExportBusy(true);
-      setDiscordExportStatus('Preparing Discord text file…');
+      setDiscordExportStatus('Preparing Discord text file?');
 
       try {
         const week = await buildAdminExportWeek();

@@ -143,6 +143,16 @@
     if (!header) return;
     header.innerHTML = renderHeader(options);
     loadHeaderLogoFromSettings();
+    ensureAnalyticsTracking();
+  }
+
+  function ensureAnalyticsTracking() {
+    if (document.querySelector('script[data-bp-analytics="1"]')) return;
+    const script = document.createElement("script");
+    script.src = "/analytics-track.js";
+    script.defer = true;
+    script.dataset.bpAnalytics = "1";
+    document.body.appendChild(script);
   }
 
   function initFooter() {

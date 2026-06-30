@@ -24,10 +24,54 @@
     .field-hint { font-size: 11px; color: #888; margin: -4px 0 8px; line-height: 1.4; }
     .field-disabled .input { opacity: 0.55; pointer-events: none; }
     .article-list { display: grid; gap: 8px; margin-bottom: 16px; }
-    .article-item { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid #333; background: rgba(0,0,0,.25); }
-    .article-item strong { font-size: 13px; }
-    .article-item span { color: #888; font-size: 11px; display: block; margin-top: 2px; }
-    .article-item-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .article-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: stretch;
+      gap: 12px;
+      padding: 12px 14px 12px 16px;
+      border: 1px solid #333;
+      background: rgba(0,0,0,.25);
+      border-left: 3px solid #888;
+    }
+    .article-item--race-recap { border-left-color: #e50914; }
+    .article-item--weekend-preview { border-left-color: #3b82f6; }
+    .article-item--driver-spotlight { border-left-color: #e8c547; }
+    .article-item--championship-watch { border-left-color: #9333ea; }
+    .article-item--breaking-news { border-left-color: #f97316; }
+    .article-item--league-announcement { border-left-color: #22c55e; }
+    .article-item--news { border-left-color: #888; }
+    .article-item__main { flex: 1; min-width: 0; }
+    .article-item__title { font-size: 14px; margin: 0 0 6px; color: #fff; line-height: 1.35; }
+    .article-item__meta { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin-bottom: 6px; }
+    .article-type-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      font-size: 9px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border: 1px solid currentColor;
+      border-radius: 3px;
+    }
+    .article-type-badge--race-recap { color: #e50914; }
+    .article-type-badge--weekend-preview { color: #3b82f6; }
+    .article-type-badge--driver-spotlight { color: #e8c547; }
+    .article-type-badge--championship-watch { color: #9333ea; }
+    .article-type-badge--breaking-news { color: #f97316; }
+    .article-type-badge--league-announcement { color: #22c55e; }
+    .article-type-badge--news { color: #aaa; }
+    .article-status-badge {
+      font-size: 9px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #ccc;
+    }
+    .article-status-badge.is-published { color: #7fd99a; }
+    .article-item__dates { display: grid; gap: 2px; font-size: 11px; color: #888; line-height: 1.45; }
+    .article-item__dates strong { color: #bbb; font-weight: 700; }
+    .article-item-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start; }
     .article-item-actions button { padding: 4px 10px; font-size: 9px; }
     .generate-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 14px 0 4px; }
     .generate-status { display: inline-flex; align-items: center; gap: 8px; color: var(--gold); font-size: 12px; font-weight: 900; }
@@ -95,6 +139,7 @@
   </style>
 </head>
 <body>
+  <script src="/admin/admin-embed.js"></script>
   <div id="admin-nav-root"></div>
   <script src="/admin/admin-nav.js"></script>
 
@@ -1114,6 +1159,17 @@
       } catch {}
     }
 
+    function formatArticleDateTime(value) {
+      if (!value) return null;
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
+    }
+
+    function articleTypeClass(type) {
+      const safe = String(type || 'news').trim().toLowerCase();
+      return safe.replace(/[^a-z0-9-]/g, '-') || 'news';
+    }
+
     async function loadArticles() {
       const list = $('#articleList');
       list.innerHTML = '<span class="sub">Loading...</span>';
@@ -1125,17 +1181,33 @@
           list.innerHTML = '<span class="sub">No saved articles yet.</span>';
           return;
         }
-        list.innerHTML = articles.map((a) => `
-          <div class="article-item">
-            <div>
-              <strong>${escapeHtml(a.headline)}</strong>
-              <span>${escapeHtml(a.articleTypeLabel || a.articleType)} · ${a.published ? 'Published' : 'Draft'} · Race ${a.raceNumber ?? '—'}</span>
+        list.innerHTML = articles.map((a) => {
+          const typeClass = articleTypeClass(a.articleType);
+          const publishedLabel = a.published ? 'Published' : 'Draft';
+          const publishedAt = a.published ? formatArticleDateTime(a.publishedAt) : null;
+          const createdAt = formatArticleDateTime(a.createdAt);
+          const updatedAt = formatArticleDateTime(a.updatedAt);
+          const raceLine = a.raceNumber != null && a.raceNumber !== '' ? `Race ${a.raceNumber}` : '';
+          return `
+          <div class="article-item article-item--${typeClass}">
+            <div class="article-item__main">
+              <h3 class="article-item__title">${escapeHtml(a.headline || 'Untitled')}</h3>
+              <div class="article-item__meta">
+                <span class="article-type-badge article-type-badge--${typeClass}">${escapeHtml(a.articleTypeLabel || a.articleType || 'News')}</span>
+                <span class="article-status-badge${a.published ? ' is-published' : ''}">${publishedLabel}</span>
+                ${raceLine ? `<span class="sub" style="margin:0;">${escapeHtml(raceLine)}</span>` : ''}
+              </div>
+              <div class="article-item__dates">
+                ${publishedAt ? `<div><strong>Published:</strong> ${escapeHtml(publishedAt)}</div>` : ''}
+                ${createdAt ? `<div><strong>Created:</strong> ${escapeHtml(createdAt)}</div>` : ''}
+                ${updatedAt ? `<div><strong>Updated:</strong> ${escapeHtml(updatedAt)}</div>` : ''}
+              </div>
             </div>
             <div class="article-item-actions">
               <button class="btn btn-secondary" type="button" onclick="loadArticle(${a.id})">Edit</button>
             </div>
-          </div>
-        `).join('');
+          </div>`;
+        }).join('');
       } catch (e) {
         list.innerHTML = `<span class="sub">${escapeHtml(e.message)}</span>`;
       }

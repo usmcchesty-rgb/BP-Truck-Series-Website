@@ -1,0 +1,105 @@
+html.admin-embed #admin-nav-root,
+html.admin-embed #admin-mission-control-root,
+html.admin-embed .admin-embed-hide {
+  display: none !important;
+}
+
+html.admin-embed body {
+  background: #050505;
+}
+
+html.admin-embed .wrap {
+  padding-top: 10px;
+}
+
+.admin-group-page .wrap {
+  max-width: 1800px;
+}
+
+.admin-group-header {
+  margin-bottom: 4px;
+}
+
+.admin-group-header h1 {
+  margin: 0 0 6px;
+  font-size: 22px;
+  color: #fff;
+}
+
+.admin-group-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 14px;
+}
+
+.admin-group-tab {
+  padding: 8px 16px;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: #bbb;
+  background: linear-gradient(#1c1c1c, #080808);
+  border: 1px solid #444;
+  cursor: pointer;
+  text-decoration: none;
+  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+}
+
+.admin-group-tab:hover {
+  color: #fff;
+  border-color: #666;
+}
+
+.admin-group-tab.is-active {
+  color: #fff;
+  background: linear-gradient(#d40000, #680000);
+  border-color: #ff2424;
+  box-shadow: 0 0 10px rgba(229, 9, 20, 0.25);
+}
+
+.admin-group-frame-wrap {
+  border: 1px solid #333;
+  background: #050505;
+  min-height: 720px;
+  overflow: hidden;
+}
+
+.admin-group-frame {
+  display: block;
+  width: 100%;
+  min-height: 720px;
+  border: 0;
+  background: #050505;
+}
+
+.admin-group-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.admin-group-tools a {
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #8fd3ff;
+  text-decoration: none;
+  padding: 4px 8px;
+  border: 1px solid #334;
+}
+
+.admin-group-tools a:hover {
+  color: #fff;
+  border-color: #666;
+}
+
+@media (max-width: 640px) {
+  .admin-group-frame-wrap,
+  .admin-group-frame {
+    min-height: 560px;
+  }
+}
