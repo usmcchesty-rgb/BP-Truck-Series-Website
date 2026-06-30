@@ -1,0 +1,31 @@
+{
+  "failedAtPosition": 20,
+  "reason": "No row anchor found for position 20 at or after char index 2113.",
+  "lastSuccessfulPosition": 19,
+  "remainingTokens": [
+    "19",
+    "32",
+    "Brian",
+    "Roush",
+    "United",
+    "States",
+    "Ford",
+    "F150",
+    "A",
+    "3.02",
+    "2107",
+    "15",
+    "4",
+    "41",
+    "0:24:52.251",
+    "159",
+    "LAPS",
+    "19",
+    "LAPS",
+    "00:27.807",
+    "11",
+    "Disco"
+  ],
+  "sectionPreviewBeforeFailure": "92 0:53:47.116 108 LAPS 13 LAPS 00:27.521 10 Disco 18 18 51 Caleb Elswick United States RAM A 3.43 2145 4 4 60 0:36:01.550 140 LAPS 32 LAPS 00:27.335 9 Disco 1",
+  "sectionPreviewAfterFailure": "9 19 32 Brian Roush United States Ford F150 A 3.02 2107 15 4 41 0:24:52.251 159 LAPS 19 LAPS 00:27.807 11 Disco"
+}

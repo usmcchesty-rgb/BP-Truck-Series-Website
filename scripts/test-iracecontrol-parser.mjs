@@ -226,11 +226,20 @@ function buildTalladegaSample() {
   );
 }
 
-function loadInputText(argvPath) {
+async function loadInputText(argvPath) {
   if (argvPath) {
+    if (/^https?:\/\//i.test(argvPath)) {
+      const res = await fetch(argvPath);
+      if (!res.ok) throw new Error(`Failed to fetch ${argvPath} (${res.status})`);
+      const { parseRaceControlPdfBuffer } = await import('../api/_race-control-pdf-parser.js');
+      const { parsedText } = await parseRaceControlPdfBuffer(Buffer.from(await res.arrayBuffer()), {
+        collectParserDebug: false,
+      });
+      return normalizeWhitespace(parsedText);
+    }
     return normalizeWhitespace(fs.readFileSync(argvPath, 'utf8'));
   }
-  const debugPath = path.join(process.cwd(), 'data', 'race-control-debug.txt');
+  const debugPath = path.join(process.cwd(), 'data', 'race-control-debug-full.txt');
   if (fs.existsSync(debugPath) && fs.statSync(debugPath).size > 10000) {
     return normalizeWhitespace(fs.readFileSync(debugPath, 'utf8'));
   }
@@ -238,8 +247,8 @@ function loadInputText(argvPath) {
 }
 
 const inputPath = process.argv[2] || null;
-const text = loadInputText(inputPath);
-const parsed = parseRaceControlPdfText(text, { raceNumber: 14 });
+const text = await loadInputText(inputPath);
+const parsed = parseRaceControlPdfText(text, { raceNumber: inputPath?.includes('race-1') ? 1 : 14 });
 
 const markArthur = parsed.results.find((row) => row.position === 18);
 const aaron = parsed.results.find((row) => row.position === 35);
@@ -302,3 +311,59 @@ const pass =
   !checks.hasFirstIterationWarning;
 
 console.log(pass ? '\nACCEPTANCE: PASS' : '\nACCEPTANCE: CHECK OUTPUT');
+
+async function runDaytonaAcceptance() {
+  const url =
+    'https://oxwgzeyvbjdqveaxzoxs.supabase.co/storage/v1/object/public/race-control-pdfs/season-27987/race-1/race-control.pdf';
+  try {
+    const { parseRaceControlPdfBuffer } = await import('../api/_race-control-pdf-parser.js');
+    const res = await fetch(url);
+    if (!res.ok) return;
+    const parsed = (
+      await parseRaceControlPdfBuffer(Buffer.from(await res.arrayBuffer()), {
+        raceNumber: 1,
+        trackName: 'Daytona',
+        collectParserDebug: false,
+      })
+    ).parsedJson;
+
+    const stage1 = parsed.stages?.find((stage) => stage.stageNumber === 1);
+    const daytonaPass =
+      parsed.results.length === 35 &&
+      parsed.generatedAt != null &&
+      /daytona/i.test(parsed.trackName || '') &&
+      parsed.sof === 2427 &&
+      parsed.raceEvents.length > 0 &&
+      parsed.cautionCount >= 1 &&
+      stage1?.lap === 18 &&
+      (stage1?.results?.length || 0) >= 10 &&
+      parsed.parserDiagnostics?.resultParseConfidence === 'high';
+
+    console.log(
+      JSON.stringify(
+        {
+          daytona: {
+            resultsLength: parsed.results.length,
+            generatedAt: parsed.generatedAt,
+            trackName: parsed.trackName,
+            sof: parsed.sof,
+            cautionCount: parsed.cautionCount,
+            raceEvents: parsed.raceEvents.length,
+            stage1Lap: stage1?.lap,
+            stage1Results: stage1?.results?.length,
+            compatibilityFixesApplied: parsed.parserDebug?.compatibilityFixesApplied,
+            layoutNotes: parsed.parserDebug?.layoutNotes,
+            parseWarnings: parsed.parseWarnings,
+          },
+        },
+        null,
+        2
+      )
+    );
+    console.log(daytonaPass ? '\nDAYTONA ACCEPTANCE: PASS' : '\nDAYTONA ACCEPTANCE: CHECK OUTPUT');
+  } catch (error) {
+    console.log('\nDAYTONA ACCEPTANCE: SKIPPED', error.message);
+  }
+}
+
+await runDaytonaAcceptance();
