@@ -1,5 +1,13 @@
+/* Grouped admin content — full width with comfortable side gutters */
 .admin-group-page .wrap {
-  max-width: 1800px;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding-top: 18px;
+  padding-bottom: 18px;
+  padding-left: 16px;
+  padding-right: 16px;
+  box-sizing: border-box;
 }
 
 .admin-group-page #adminView {
@@ -92,9 +100,28 @@
   border-color: #666;
 }
 
+@media (min-width: 1024px) {
+  .admin-group-page .wrap {
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+}
+
+@media (min-width: 1400px) {
+  .admin-group-page .wrap {
+    padding-left: 32px;
+    padding-right: 32px;
+  }
+}
+
 @media (max-width: 640px) {
   .admin-group-frame-wrap,
   .admin-group-frame {
     min-height: 420px;
+  }
+
+  .admin-group-page .wrap {
+    padding-left: 12px;
+    padding-right: 12px;
   }
 }
