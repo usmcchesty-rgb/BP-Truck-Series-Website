@@ -118,15 +118,7 @@
 
     <main class="wrap">
       <h1>Track Map Processor</h1>
-      <p class="sub">
-        Upload a PNG track map with a white background. The tool removes
-        white/near-white pixels (RGB > 235), keeps dark track lines, adds a
-        1px white outer stroke, and saves to
-        <code>public/assets/tracks/</code> using the selected track output filename.
-        Run <code>npm run start</code>, then use this page on the same dev server.
-        File save works in local <code>vercel dev</code> only — commit generated
-        PNGs before deploy.
-      </p>
+      <p id="storageStatus" class="sub">Checking storage configuration...</p>
 
       <div class="panel">
         <h2>Upload PNG</h2>
@@ -177,8 +169,10 @@
       const trackSelect = $("#trackSelect");
       const beforeStage = $("#beforeStage");
       const afterStage = $("#afterStage");
+      const storageStatus = $("#storageStatus");
 
       let beforeUrl = "";
+      let storageConfigured = false;
 
       // Shared with /admin/ — password held in sessionStorage for this tab's session only.
       const SESSION_KEY = "bp_admin_pw";
@@ -191,9 +185,43 @@
         AdminNav.setLoggedIn(true);
       }
 
+      function setStorageStatus(configured) {
+        storageConfigured = configured === true;
+        if (!storageStatus) return;
+        if (storageConfigured) {
+          storageStatus.textContent =
+            "Track images save to Supabase storage and appear on the public site after upload.";
+        } else {
+          storageStatus.textContent =
+            "Supabase storage is not configured. Local dev save only.";
+        }
+      }
+
+      async function loadStorageStatus() {
+        try {
+          const res = await fetch("/api/settings");
+          const data = await res.json();
+          setStorageStatus(data.trackImagesStorageConfigured === true);
+        } catch {
+          setStorageStatus(false);
+        }
+      }
+
       function setMsg(text, type = "") {
         msg.textContent = text;
         msg.className = type;
+      }
+
+      function formatSaveMessage(data) {
+        const lines = [];
+        if (data.replaced) lines.push("Replaced existing track image.");
+        if (data.filename) lines.push(`Saved: ${data.filename}`);
+        if (data.storagePath) lines.push(`Path: ${data.storagePath}`);
+        if (data.savedTo) lines.push(`Location: ${data.savedTo}`);
+        if (data.publicUrlStored) lines.push(`Stable URL: ${data.publicUrlStored}`);
+        if (data.publicUrl) lines.push(`Public URL: ${data.publicUrl}`);
+        if (data.cacheVersion) lines.push(`Cache version: ${data.cacheVersion}`);
+        return lines.join("\n");
       }
 
       function setPreview(stage, src, alt) {
@@ -378,7 +406,7 @@
 
           const savedName = data.filename || outputFilename;
           if (data.success) {
-            setMsg(`Saved: ${savedName}\nPath: ${data.savedTo}`, "success");
+            setMsg(formatSaveMessage(data), "success");
           } else if (data.after) {
             setMsg(
               (data.error || "Processed preview only.") +
@@ -395,6 +423,7 @@
         }
       });
 
+      loadStorageStatus();
       loadDropdownFromSchedule();
     </script>
   </body>

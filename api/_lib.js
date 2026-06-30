@@ -39,14 +39,48 @@ export function supabase() {
   return createClient(url, key, { auth: { persistSession: false } });
 }
 
+export function buildTrackImagesSettings() {
+  const base = String(process.env.SUPABASE_URL || "").replace(/\/$/, "");
+  const configured = Boolean(base && process.env.SUPABASE_SERVICE_ROLE_KEY);
+  return {
+    trackImagesStorageConfigured: configured,
+    trackImagesPublicBaseUrl: configured
+      ? `${base}/storage/v1/object/public/track-images/tracks`
+      : null,
+    trackImageVersions: {},
+  };
+}
+
+export async function buildTrackImagesSettingsAsync() {
+  const baseSettings = buildTrackImagesSettings();
+  if (!baseSettings.trackImagesStorageConfigured) {
+    return baseSettings;
+  }
+  const { loadTrackImageVersions } = await import('./_track-image-versions.js');
+  const trackImageVersions = await loadTrackImageVersions();
+  return { ...baseSettings, trackImageVersions };
+}
+
 export async function getSettings() {
   const { SOCIAL_SHARE_DEFAULTS } = await import('./_social-share-settings.js');
-  const base = { ...DEFAULTS, ...SOCIAL_SHARE_DEFAULTS };
+  const trackImages = await buildTrackImagesSettingsAsync();
+  const base = { ...DEFAULTS, ...SOCIAL_SHARE_DEFAULTS, ...trackImages };
   const sb = supabase();
   if (!sb) return base;
   const { data, error } = await sb.from('site_settings').select('*').eq('id', 1).maybeSingle();
   if (error || !data) return base;
-  return { ...base, ...data };
+  const mergedVersions = {
+    ...(trackImages.trackImageVersions || {}),
+    ...(data.trackImageVersions && typeof data.trackImageVersions === 'object'
+      ? data.trackImageVersions
+      : {}),
+  };
+  return {
+    ...base,
+    ...data,
+    ...buildTrackImagesSettings(),
+    trackImageVersions: mergedVersions,
+  };
 }
 
 export async function getDriverProfiles() {

@@ -125,14 +125,20 @@ function countDifferentWinners(rows) {
 }
 
 function trackSlug(track) {
+  if (window.BPTrackImages?.normalizeTrackSlug) {
+    return window.BPTrackImages.normalizeTrackSlug(track);
+  }
   return String(track || "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
 }
 
-// Slug-based filename first; aliases are fallbacks tried only if the slug 404s.
+// Slug-based filename first; Supabase URL when configured; aliases as fallbacks.
 function trackImageCandidates(track) {
+  if (window.BPTrackImages?.trackImageCandidates) {
+    return window.BPTrackImages.trackImageCandidates(track);
+  }
   const slug = trackSlug(track);
   if (!slug) return [];
   const candidates = [`/assets/tracks/${slug}.png`];
@@ -373,10 +379,18 @@ function render() {
 
 async function load(force = false) {
   try {
+    if (window.BPTrackImages?.loadConfig) {
+      await window.BPTrackImages.loadConfig();
+    }
+
     $("#lastUpdated").textContent = "Updating...";
 
     const res = await fetch(`/api/standings${force ? "?force=1" : ""}`);
     const data = await res.json();
+
+    if (window.BPTrackImages?.applySettings) {
+      window.BPTrackImages.applySettings(data.settings || {});
+    }
 
     const rows = data.rows || [];
     const leaderPoints = rows[0]?.points || 0;

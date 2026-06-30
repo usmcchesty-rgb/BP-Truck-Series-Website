@@ -114,6 +114,7 @@
       });
     </script>
 
+    <script src="/track-images.js"></script>
     <script src="/season-summary.js"></script>
   <script>
 
@@ -142,14 +143,21 @@
         indianapolis: '/assets/tracks/indianapolis-motor-speedway-nascar-oval.png',
       };
 
-      const trackSlug = (track) =>
-        String(track ?? '')
+      const trackSlug = (track) => {
+        if (window.BPTrackImages?.normalizeTrackSlug) {
+          return window.BPTrackImages.normalizeTrackSlug(track);
+        }
+        return String(track ?? '')
           .toLowerCase()
           .replace(/[^a-z0-9]+/g, '-')
           .replace(/^-|-$/g, '');
+      };
 
-      // Slug-based filename first; aliases tried only if the slug 404s.
+      // Supabase URL first when configured; slug asset; aliases last.
       const trackImageCandidates = (track) => {
+        if (window.BPTrackImages?.trackImageCandidates) {
+          return window.BPTrackImages.trackImageCandidates(track);
+        }
         const slug = trackSlug(track);
         if (!slug) return [];
         const candidates = [`/assets/tracks/${slug}.png`];
@@ -380,9 +388,17 @@
       (async function loadSchedule() {
         summaryEl.textContent = 'Loading...';
         try {
+          if (window.BPTrackImages?.loadConfig) {
+            await window.BPTrackImages.loadConfig();
+          }
+
           const res = await fetch('/api/schedule');
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           const data = await res.json();
+
+          if (window.BPTrackImages?.applySettings) {
+            window.BPTrackImages.applySettings(data.settings || {});
+          }
 
           // Update season labels from API settings when available.
           if (data?.settings?.seasonName) {

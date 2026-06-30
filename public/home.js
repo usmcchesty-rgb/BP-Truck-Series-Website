@@ -34,13 +34,16 @@ function renderHomeSponsors() {
   }).join("");
 }
 
-const TRACK_IMAGE_ALIASES = {
+const TRACK_IMAGE_ALIASES = window.BPTrackImages?.TRACK_IMAGE_ALIASES || {
   "charlotte-motor-speedway-oval": "/assets/tracks/charlotte-motor-speedway-oval-night.png",
   "charlotte-oval": "/assets/tracks/charlotte-motor-speedway-oval-night.png",
   indianapolis: "/assets/tracks/indianapolis-motor-speedway-nascar-oval.png",
 };
 
 function trackSlug(track) {
+  if (window.BPTrackImages?.normalizeTrackSlug) {
+    return window.BPTrackImages.normalizeTrackSlug(track);
+  }
   return String(track || "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
@@ -48,6 +51,9 @@ function trackSlug(track) {
 }
 
 function trackImageCandidates(track) {
+  if (window.BPTrackImages?.trackImageCandidates) {
+    return window.BPTrackImages.trackImageCandidates(track);
+  }
   const slug = trackSlug(track);
   if (!slug) return [];
   const candidates = [`/assets/tracks/${slug}.png`];
@@ -637,6 +643,10 @@ async function loadHomeLeagueUpdates() {
 }
 
 async function loadHome() {
+  if (window.BPTrackImages?.loadConfig) {
+    await window.BPTrackImages.loadConfig();
+  }
+
   let leader = null;
   let rows = [];
 
@@ -671,6 +681,9 @@ async function loadHome() {
   try {
     const scheduleRes = await fetch("/api/schedule");
     const scheduleData = await scheduleRes.json();
+    if (window.BPTrackImages?.applySettings) {
+      window.BPTrackImages.applySettings(scheduleData.settings || {});
+    }
     const races = scheduleData.races || [];
     const completed = races.filter((r) => r.winner);
     const lastRace = completed[completed.length - 1] || null;
