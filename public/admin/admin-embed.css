@@ -1,0 +1,53 @@
+/* Embedded admin tools (?embed=1) — hide standalone shell; show tool content only */
+
+html.admin-embed #admin-nav-root,
+html.admin-embed #admin-mission-control-root,
+html.admin-embed .admin-shell-sticky,
+html.admin-embed .admin-embed-hide {
+  display: none !important;
+}
+
+html.admin-embed,
+html.admin-embed body {
+  background: #050505;
+  min-height: 0;
+  overflow-x: hidden;
+}
+
+html.admin-embed body {
+  margin: 0;
+}
+
+/* Full-width tool content inside grouped tabs */
+html.admin-embed .wrap {
+  max-width: none !important;
+  width: 100% !important;
+  margin: 0 !important;
+  padding: 12px 14px !important;
+  box-sizing: border-box;
+}
+
+/* Hide standalone page chrome (grouped shell provides section context) */
+html.admin-embed #adminView > h1,
+html.admin-embed #adminView > .sub,
+html.admin-embed #loginView > h1,
+html.admin-embed #loginView > .sub,
+html.admin-embed main.wrap > h1,
+html.admin-embed main.wrap > p.sub,
+html.admin-embed main.wrap > #loginStatus {
+  display: none !important;
+}
+
+/* Compact login when session missing inside iframe */
+html.admin-embed #loginView {
+  padding-top: 8px;
+}
+
+html.admin-embed #loginView .pw-row {
+  max-width: 100%;
+}
+
+/* Avoid nested scroll feel — page grows with content */
+html.admin-embed {
+  overflow-y: auto;
+}

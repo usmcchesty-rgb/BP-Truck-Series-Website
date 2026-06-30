@@ -35,6 +35,40 @@
     return src;
   }
 
+  function resizeFrame(frame, height) {
+    if (!frame) return;
+    const next = Math.max(480, Math.ceil(Number(height) || 0));
+    frame.style.height = `${next}px`;
+    const wrap = frame.closest(".admin-group-frame-wrap");
+    if (wrap) wrap.style.minHeight = `${next}px`;
+  }
+
+  function bindFrameResize(frame) {
+    if (!frame || frame.dataset.resizeBound === "1") return;
+    frame.dataset.resizeBound = "1";
+
+    window.addEventListener("message", (event) => {
+      if (event.origin !== location.origin) return;
+      if (event.source !== frame.contentWindow) return;
+      if (event.data?.type !== "bp-admin-embed-height") return;
+      resizeFrame(frame, event.data.height);
+    });
+
+    frame.addEventListener("load", () => {
+      resizeFrame(frame, 480);
+      try {
+        const doc = frame.contentDocument;
+        if (doc) {
+          const height = Math.max(
+            doc.documentElement.scrollHeight,
+            doc.body?.scrollHeight || 0
+          );
+          if (height > 0) resizeFrame(frame, height);
+        }
+      } catch {}
+    });
+  }
+
   function initGroupPage(config) {
     const tabs = config.tabs || [];
     const defaultTabId = config.defaultTab || tabs[0]?.id || "";
@@ -52,6 +86,8 @@
 
     if (pageTitle) pageTitle.textContent = title;
     if (pageSub) pageSub.textContent = subtitle;
+
+    if (frame) bindFrameResize(frame);
 
     if (toolsRow && tools.length) {
       toolsRow.innerHTML = tools

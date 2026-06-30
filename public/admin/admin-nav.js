@@ -296,9 +296,21 @@
     });
   }
 
+  function isEmbedMode() {
+    if (window.AdminEmbed && typeof AdminEmbed.isEmbedMode === "function") {
+      return AdminEmbed.isEmbedMode();
+    }
+    return new URLSearchParams(location.search).get("embed") === "1";
+  }
+
   async function init() {
     const mount = document.getElementById(ROOT_ID);
     if (!mount) return;
+    if (isEmbedMode()) {
+      mount.innerHTML = "";
+      mount.hidden = true;
+      return;
+    }
 
     injectStyles();
     injectMissionControlAssets();

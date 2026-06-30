@@ -1,19 +1,10 @@
-html.admin-embed #admin-nav-root,
-html.admin-embed #admin-mission-control-root,
-html.admin-embed .admin-embed-hide {
-  display: none !important;
-}
-
-html.admin-embed body {
-  background: #050505;
-}
-
-html.admin-embed .wrap {
-  padding-top: 10px;
-}
-
 .admin-group-page .wrap {
   max-width: 1800px;
+}
+
+.admin-group-page #adminView {
+  max-width: none;
+  width: 100%;
 }
 
 .admin-group-header {
@@ -62,16 +53,20 @@ html.admin-embed .wrap {
 .admin-group-frame-wrap {
   border: 1px solid #333;
   background: #050505;
-  min-height: 720px;
-  overflow: hidden;
+  min-height: 480px;
+  width: 100%;
+  overflow: visible;
 }
 
 .admin-group-frame {
   display: block;
-  width: 100%;
-  min-height: 720px;
+  width: 100% !important;
+  max-width: none !important;
+  min-height: 480px;
+  height: 480px;
   border: 0;
   background: #050505;
+  overflow: hidden;
 }
 
 .admin-group-tools {
@@ -100,6 +95,6 @@ html.admin-embed .wrap {
 @media (max-width: 640px) {
   .admin-group-frame-wrap,
   .admin-group-frame {
-    min-height: 560px;
+    min-height: 420px;
   }
 }
