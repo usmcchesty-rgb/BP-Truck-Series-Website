@@ -12,7 +12,10 @@ create table if not exists iracing_lookup_jobs (
   worker_name text,
   started_at timestamptz,
   completed_at timestamptz,
-  error text
+  error text,
+  constraint iracing_lookup_jobs_status_check check (
+    status in ('queued', 'processing', 'completed', 'failed', 'needs_login')
+  )
 );
 
 create index if not exists iracing_lookup_jobs_status_idx
