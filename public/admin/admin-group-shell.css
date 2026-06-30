@@ -1,18 +1,15 @@
-/* Grouped admin content — full width with comfortable side gutters */
-.admin-group-page .wrap {
+/* Grouped admin shell — gutters on the main content column (not the iframe) */
+
+body.admin-group-page main.admin-group-content.wrap {
+  display: block;
   width: 100%;
   max-width: none;
   margin: 0;
   padding-top: 18px;
   padding-bottom: 18px;
-  padding-left: 16px;
-  padding-right: 16px;
+  padding-left: 40px;
+  padding-right: 40px;
   box-sizing: border-box;
-}
-
-.admin-group-page #adminView {
-  max-width: none;
-  width: 100%;
 }
 
 .admin-group-header {
@@ -101,16 +98,16 @@
 }
 
 @media (min-width: 1024px) {
-  .admin-group-page .wrap {
-    padding-left: 24px;
-    padding-right: 24px;
+  body.admin-group-page main.admin-group-content.wrap {
+    padding-left: 72px;
+    padding-right: 72px;
   }
 }
 
 @media (min-width: 1400px) {
-  .admin-group-page .wrap {
-    padding-left: 32px;
-    padding-right: 32px;
+  body.admin-group-page main.admin-group-content.wrap {
+    padding-left: 96px;
+    padding-right: 96px;
   }
 }
 
@@ -120,7 +117,7 @@
     min-height: 420px;
   }
 
-  .admin-group-page .wrap {
+  body.admin-group-page main.admin-group-content.wrap {
     padding-left: 12px;
     padding-right: 12px;
   }
