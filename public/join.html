@@ -55,7 +55,12 @@
             <input id="driverName" class="join-input" name="driver_name" type="text" autocomplete="name" />
 
             <label class="join-field-label" for="preferredNumber">Preferred Number</label>
-            <input id="preferredNumber" class="join-input" name="preferred_number" type="text" />
+            <select id="preferredNumber" class="join-input join-select" name="preferred_number" required>
+              <option value="" selected disabled hidden>Loading available numbers</option>
+            </select>
+            <p class="join-field-help" id="preferredNumberHelp">
+              Available numbers are based on the current active drivers list. Number 0 is reserved for the pace car.
+            </p>
 
             <label class="join-checkbox-label">
               <input id="ageConfirmed" name="age_confirmed" type="checkbox" value="true" required />

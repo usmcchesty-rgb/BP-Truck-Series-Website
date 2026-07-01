@@ -213,7 +213,11 @@ async function handleDriverApplicationRoutes(req, res) {
         res.status(result.status).json({ error: result.error });
         return true;
       }
-      res.status(result.status).json({ ok: true, application: result.application });
+      res.status(result.status).json({
+        ok: true,
+        application: result.application,
+        driver_profile: result.driver_profile || null,
+      });
       return true;
     } catch (error) {
       res.status(500).json({ error: error.message || 'Failed to update application.' });

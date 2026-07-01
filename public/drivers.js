@@ -182,7 +182,13 @@ function getVisibleDrivers() {
     const name = driverDisplayName(driver).toLowerCase();
     const iracing = String(driver.iracing_name || "").toLowerCase();
     const carNumber = String(driver.car_number || "").toLowerCase();
-    return name.includes(query) || iracing.includes(query) || carNumber.includes(query);
+    const iracingCustomerId = String(driver.iracing_customer_id || driver.iracingCustomerId || "").toLowerCase();
+    return (
+      name.includes(query) ||
+      iracing.includes(query) ||
+      carNumber.includes(query) ||
+      iracingCustomerId.includes(query)
+    );
   });
 }
 
@@ -226,6 +232,7 @@ function renderDriverGrid(drivers) {
       const inactive = isRecentlyInactive(activity);
       const inactiveBadge = inactiveBadgeHtml(activity);
       const profileUrl = driverProfileUrl(d.driver_id);
+      const iracingCustomerId = d.iracing_customer_id || d.iracingCustomerId || "";
 
       return `<article class="driver-card${showStreamerBadge ? " is-streamer" : ""}${inactive ? " is-inactive-driver" : ""}">
         ${badge}
@@ -237,6 +244,7 @@ function renderDriverGrid(drivers) {
           <div class="driver-card-body">
             <h2>${number}${escapeHtml(name)}</h2>
             ${d.iracing_name && d.iracing_name !== name ? `<p class="muted">${escapeHtml(d.iracing_name)}</p>` : ""}
+            ${iracingCustomerId ? `<p class="muted">iRacing ID: ${escapeHtml(iracingCustomerId)}</p>` : ""}
           </div>
         </a>
       </article>`;

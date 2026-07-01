@@ -1,4 +1,4 @@
-import { supabase } from './_lib.js';
+import { slugify, supabase } from './_lib.js';
 import { createSrhCareerSnapshotForApplication } from './_driver-application-srh-career-snapshots.js';
 
 export const OPEN_APPLICATION_STATUSES = [
@@ -35,9 +35,124 @@ function normalizeCustomerId(value) {
   return String(value ?? '').trim().replace(/\D/g, '');
 }
 
+function normalizeCarNumber(value) {
+  const text = String(value ?? '').trim();
+  if (!text) return '';
+  if (!/^\d{1,2}$/.test(text)) return '';
+  if (text === '0') return '';
+  return text;
+}
+
 function normalizeLookupReason(value) {
   const reason = String(value || '').trim();
   return IRACING_LOOKUP_REASONS.includes(reason) ? reason : 'manual_refresh';
+}
+
+async function assertPreferredNumberAvailable(sb, preferredNumber, customerId = '') {
+  const carNumber = normalizeCarNumber(preferredNumber);
+  if (!preferredNumber) return { ok: true, carNumber: '' };
+  if (!carNumber) {
+    return {
+      ok: false,
+      status: 400,
+      error: 'Preferred number must be 00 or 1 through 99. Number 0 is reserved for the pace car.',
+    };
+  }
+
+  let { data, error } = await sb
+    .from('driver_profiles')
+    .select('driver_id, iracing_customer_id, display_name, iracing_name, car_number, active')
+    .eq('car_number', carNumber)
+    .neq('active', false)
+    .limit(1)
+    .maybeSingle();
+
+  if (error && (error.code === '42703' || /iracing_customer_id/i.test(error.message || ''))) {
+    const fallback = await sb
+      .from('driver_profiles')
+      .select('driver_id, display_name, iracing_name, car_number, active')
+      .eq('car_number', carNumber)
+      .neq('active', false)
+      .limit(1)
+      .maybeSingle();
+    data = fallback.data;
+    error = fallback.error;
+  }
+
+  if (error) {
+    if (error.code === '42P01' || /does not exist/i.test(error.message || '')) {
+      return { ok: true, carNumber };
+    }
+    return { ok: false, status: 500, error: error.message || 'Failed to check number availability.' };
+  }
+
+  const normalizedCustomerId = normalizeCustomerId(customerId);
+  if (
+    data &&
+    (!normalizedCustomerId ||
+      (normalizeCustomerId(data.iracing_customer_id) !== normalizedCustomerId &&
+        String(data.driver_id || '') !== normalizedCustomerId))
+  ) {
+    const name = data.display_name || data.iracing_name || 'another driver';
+    return {
+      ok: false,
+      status: 409,
+      error: `Number ${carNumber} is already taken by ${name}. Please choose another number.`,
+    };
+  }
+
+  return { ok: true, carNumber };
+}
+
+async function promoteApprovedApplicationToDriverProfile(sb, application) {
+  const customerId = normalizeCustomerId(application?.iracing_customer_id);
+  if (!customerId) {
+    return { ok: false, status: 400, error: 'Approved application is missing an iRacing Customer ID.' };
+  }
+
+  const displayName = String(
+    application.iracing_display_name || application.driver_name || `Driver ${customerId}`
+  ).trim();
+  const numberCheck = await assertPreferredNumberAvailable(
+    sb,
+    application.preferred_number,
+    customerId
+  );
+  if (!numberCheck.ok) return numberCheck;
+
+  const now = new Date().toISOString();
+  const row = {
+    driver_id: customerId,
+    iracing_customer_id: customerId,
+    iracing_name: displayName,
+    display_name: displayName,
+    driver_name: displayName,
+    slug: slugify(displayName || customerId),
+    car_number: numberCheck.carNumber,
+    truck_number: numberCheck.carNumber,
+    active: true,
+    form_email: normalizeOptionalText(application.email),
+    form_submitted_at: application.created_at || null,
+    source_application_id: application.id,
+    approved_application_at: now,
+    updated_at: now,
+  };
+
+  const { data, error } = await sb
+    .from('driver_profiles')
+    .upsert(row, { onConflict: 'driver_id' })
+    .select('*')
+    .single();
+
+  if (error) {
+    return {
+      ok: false,
+      status: 500,
+      error: error.message || 'Application approved, but driver profile creation failed.',
+    };
+  }
+
+  return { ok: true, driverProfile: data };
 }
 
 export function validateApplicationPayload(body = {}) {
@@ -61,6 +176,10 @@ export function validateApplicationPayload(body = {}) {
     errors.push('iRacing Customer ID must contain numbers only.');
   }
   if (!ageConfirmed) errors.push('Age confirmation is required.');
+  const preferredNumber = normalizeOptionalText(body.preferred_number ?? body.preferredNumber);
+  if (preferredNumber && !normalizeCarNumber(preferredNumber)) {
+    errors.push('Preferred number must be 00 or 1 through 99. Number 0 is reserved for the pace car.');
+  }
 
   if (errors.length) {
     return { ok: false, errors };
@@ -76,7 +195,7 @@ export function validateApplicationPayload(body = {}) {
       email: normalizeOptionalText(body.email),
       age_confirmed: true,
       timezone: normalizeOptionalText(body.timezone ?? body.timeZone),
-      preferred_number: normalizeOptionalText(body.preferred_number ?? body.preferredNumber),
+      preferred_number: preferredNumber ? normalizeCarNumber(preferredNumber) : null,
       racing_background: normalizeOptionalText(body.racing_background ?? body.racingBackground),
       why_join: normalizeOptionalText(body.why_join ?? body.whyJoin),
       referred_by: normalizeOptionalText(body.referred_by ?? body.referredBy),
@@ -125,6 +244,13 @@ export async function submitDriverApplication(body) {
         'An application for this iRacing Customer ID is already on file and under review. Please contact league staff if you need to update your submission.',
     };
   }
+
+  const numberCheck = await assertPreferredNumberAvailable(
+    sb,
+    validation.row.preferred_number,
+    validation.row.iracing_customer_id
+  );
+  if (!numberCheck.ok) return numberCheck;
 
   const { data, error } = await sb
     .from('driver_applications')
@@ -239,6 +365,19 @@ export async function updateDriverApplication(id, patch = {}) {
     return { ok: false, status: 400, error: 'No valid fields to update.' };
   }
 
+  if (update.status === 'approved') {
+    const existing = await getDriverApplicationById(applicationId);
+    if (!existing) {
+      return { ok: false, status: 404, error: 'Application not found.' };
+    }
+    const numberCheck = await assertPreferredNumberAvailable(
+      sb,
+      existing.preferred_number,
+      existing.iracing_customer_id
+    );
+    if (!numberCheck.ok) return numberCheck;
+  }
+
   const { data, error } = await sb
     .from('driver_applications')
     .update(update)
@@ -248,6 +387,17 @@ export async function updateDriverApplication(id, patch = {}) {
 
   if (error) {
     return { ok: false, status: 500, error: error.message || 'Failed to update application.' };
+  }
+
+  if (data.status === 'approved') {
+    const promoteResult = await promoteApprovedApplicationToDriverProfile(sb, data);
+    if (!promoteResult.ok) return promoteResult;
+    return {
+      ok: true,
+      status: 200,
+      application: data,
+      driver_profile: promoteResult.driverProfile,
+    };
   }
 
   return { ok: true, status: 200, application: data };

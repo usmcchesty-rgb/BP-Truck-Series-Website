@@ -213,6 +213,7 @@
             <thead>
               <tr>
                 <th>Driver ID</th>
+                <th>iRacing ID</th>
                 <th>iRacing Name</th>
                 <th>Display Name</th>
                 <th>Car #</th>
@@ -476,6 +477,7 @@
         const profile = byId[String(row.driverId)] || null;
         return {
           driver_id: String(row.driverId),
+          iracing_customer_id: profile?.iracing_customer_id || profile?.iracingCustomerId || String(row.driverId || ''),
           iracing_name: row.driver,
           display_name: profile?.display_name || row.driver,
           car_number: profile?.car_number || '',
@@ -498,6 +500,7 @@
       return {
         password: getSessionPw(),
         driver_id: rowEl.dataset.driverId,
+        iracing_customer_id: rowInput(rowEl, 'iracing_customer_id')?.value ?? '',
         iracing_name: rowEl.querySelector('.iracing-name')?.textContent.trim() || '',
         display_name: rowInput(rowEl, 'display_name')?.value ?? '',
         car_number: rowInput(rowEl, 'car_number')?.value ?? '',
@@ -569,6 +572,7 @@
         const id = escapeAttr(d.driver_id);
         return `<tr data-driver-id="${id}">
           <td class="readonly">${escapeHtml(d.driver_id)}</td>
+          <td><input type="text" name="iracing_customer_id" value="${escapeAttr(d.iracing_customer_id || d.iracingCustomerId || '')}"></td>
           <td class="readonly iracing-name">${escapeHtml(d.iracing_name)}</td>
           <td><input type="text" name="display_name" value="${escapeAttr(d.display_name || '')}"></td>
           <td><input type="text" name="car_number" value="${escapeAttr(d.car_number || '')}"></td>

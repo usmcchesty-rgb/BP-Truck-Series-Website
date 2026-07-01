@@ -13,6 +13,8 @@
   const displayNameInput = document.getElementById('iracingDisplayName');
   const displayNameHelpEl = document.getElementById('iracingDisplayNameHelp');
   const lookupRowEl = document.querySelector('.join-lookup-row');
+  const preferredNumberInput = document.getElementById('preferredNumber');
+  const preferredNumberHelpEl = document.getElementById('preferredNumberHelp');
 
   if (!form) return;
 
@@ -78,10 +80,54 @@
       errors.push('iRacing Customer ID must contain numbers only.');
     }
     if (!payload.age_confirmed) errors.push('Age confirmation is required.');
+    if (!payload.preferred_number) errors.push('Preferred number is required.');
     return errors;
   }
 
+  function renderAvailableNumbers(numbers) {
+    if (!preferredNumberInput) return;
+    const available = Array.isArray(numbers) ? numbers : [];
+    if (!available.length) {
+      preferredNumberInput.innerHTML = '<option value="">No numbers available</option>';
+      preferredNumberInput.disabled = true;
+      if (preferredNumberHelpEl) {
+        preferredNumberHelpEl.textContent =
+          'No available numbers could be loaded. Please contact league staff.';
+      }
+      return;
+    }
+
+    preferredNumberInput.disabled = false;
+    preferredNumberInput.innerHTML = [
+      '<option value="" selected disabled hidden>Select available number</option>',
+      ...available.map((number) => `<option value="${number}">${number}</option>`),
+    ].join('');
+    if (preferredNumberHelpEl) {
+      preferredNumberHelpEl.textContent =
+        'Available numbers are based on the current active drivers list. Number 0 is reserved for the pace car.';
+    }
+  }
+
+  async function loadAvailableNumbers() {
+    if (!preferredNumberInput) return;
+    preferredNumberInput.disabled = true;
+    try {
+      const res = await fetch('/api/drivers?action=availableNumbers');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Unable to load available numbers.');
+      renderAvailableNumbers(data.available || []);
+    } catch (error) {
+      preferredNumberInput.innerHTML = '<option value="">Numbers unavailable</option>';
+      preferredNumberInput.disabled = true;
+      if (preferredNumberHelpEl) {
+        preferredNumberHelpEl.textContent =
+          'Available numbers could not be loaded. Please refresh or contact league staff.';
+      }
+    }
+  }
+
   configureLookupUi();
+  loadAvailableNumbers();
 
   customerIdInput?.addEventListener('input', () => {
     customerIdInput.value = customerIdInput.value.replace(/\D/g, '');

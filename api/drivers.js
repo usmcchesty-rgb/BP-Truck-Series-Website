@@ -83,6 +83,29 @@ function normalizeOptionalText(value) {
   return text || null;
 }
 
+function normalizeCarNumber(value) {
+  const text = String(value ?? '').trim();
+  if (!text) return '';
+  if (!/^\d{1,2}$/.test(text)) return '';
+  if (text === '0') return '';
+  return text;
+}
+
+function buildAvailableNumberSummary(profiles = []) {
+  const allowed = ['00', ...Array.from({ length: 99 }, (_, index) => String(index + 1))];
+  const taken = new Set(
+    profiles
+      .filter((row) => row?.active !== false)
+      .map((row) => normalizeCarNumber(row.car_number || row.truck_number))
+      .filter(Boolean)
+  );
+  return {
+    numbers: allowed,
+    taken: allowed.filter((number) => taken.has(number)),
+    available: allowed.filter((number) => !taken.has(number)),
+  };
+}
+
 function normalizeLookupName(value) {
   return String(value || '')
     .toLowerCase()
@@ -170,6 +193,8 @@ function normalizeDriverProfile(row) {
   const standingUpdated = row.standing_photo_updated_at || null;
   return {
     driver_id,
+    iracing_customer_id: normalizeOptionalText(row.iracing_customer_id) || '',
+    iracingCustomerId: normalizeOptionalText(row.iracing_customer_id) || '',
     iracing_name: row.iracing_name || row.driver_name || '',
     display_name: row.display_name || row.driver_name || '',
     car_number: row.car_number || row.truck_number || '',
@@ -238,7 +263,7 @@ function normalizeDriverProfile(row) {
 
 function buildUpsertRow(b) {
   const displayName = b.display_name || b.iracing_name;
-  const carNumber = b.car_number || '';
+  const carNumber = normalizeCarNumber(b.car_number);
   const standingCrop = normalizeStandingCrop(b);
   const hasStandingUrl =
     b.standing_photo_url !== undefined || b.standingPhotoUrl !== undefined;
@@ -287,6 +312,7 @@ function buildUpsertRow(b) {
     twitch_url: normalizeOptionalText(b.twitch_url ?? b.twitchUrl),
     tiktok_url: normalizeOptionalText(b.tiktok_url ?? b.tiktokUrl),
     car_image_url: stripPhotoUrlQuery(b.car_image_url ?? b.carImageUrl ?? ''),
+    iracing_customer_id: normalizeCustomerId(b.iracing_customer_id ?? b.iracingCustomerId),
     form_email: normalizeOptionalText(b.form_email ?? b.formEmail),
     form_submitted_at: b.form_submitted_at ?? b.formSubmittedAt ?? null,
     form_permission_granted: normalizeBoolean(b.form_permission_granted ?? b.formPermissionGranted),
@@ -397,6 +423,10 @@ export default async function handler(req, res) {
       .filter(Boolean)
       .sort((a, b) => a.iracing_name.localeCompare(b.iracing_name));
 
+    if (queryAction === 'availableNumbers') {
+      return res.status(200).json(buildAvailableNumberSummary(rows));
+    }
+
     const driverId = String(req.query?.driver_id ?? req.query?.id ?? '').trim();
     const format = String(req.query?.format || '').trim().toLowerCase();
     if (driverId) {
@@ -472,6 +502,12 @@ export default async function handler(req, res) {
 
   if (!b.iracing_name) {
     return res.status(400).json({ error: 'iracing_name is required.' });
+  }
+
+  if ((b.car_number ?? '') !== '' && !normalizeCarNumber(b.car_number)) {
+    return res.status(400).json({
+      error: 'Car number must be 00 or 1 through 99. Number 0 is reserved for the pace car.',
+    });
   }
 
   const row = buildUpsertRow(b);

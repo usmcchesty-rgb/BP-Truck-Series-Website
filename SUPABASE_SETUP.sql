@@ -144,6 +144,14 @@ alter table driver_profiles add column if not exists standing_photo_x numeric de
 alter table driver_profiles add column if not exists standing_photo_y numeric default 50;
 alter table driver_profiles add column if not exists standing_photo_updated_at timestamptz;
 alter table driver_profiles add column if not exists standing_photo_enabled boolean default true;
+alter table driver_profiles add column if not exists iracing_customer_id text;
+alter table driver_profiles add column if not exists source_application_id uuid;
+alter table driver_profiles add column if not exists approved_application_at timestamptz;
+create unique index if not exists driver_profiles_iracing_customer_id_uidx
+  on driver_profiles (iracing_customer_id)
+  where iracing_customer_id is not null and iracing_customer_id <> '';
+create index if not exists driver_profiles_source_application_id_idx
+  on driver_profiles (source_application_id);
 
 -- Power Rankings (weekly Top 10 + optional honorable mentions)
 create table if not exists power_rankings_weeks (
