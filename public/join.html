@@ -73,7 +73,15 @@
             <input id="email" class="join-input" name="email" type="email" autocomplete="email" />
 
             <label class="join-field-label" for="timezone">Time Zone</label>
-            <input id="timezone" class="join-input" name="timezone" type="text" placeholder="e.g. US/Eastern" />
+            <select id="timezone" class="join-input join-select" name="timezone">
+              <option value="" selected disabled hidden>Select your time zone</option>
+              <option value="Eastern">Eastern Time</option>
+              <option value="Central">Central Time</option>
+              <option value="Mountain">Mountain Time</option>
+              <option value="Pacific">Pacific Time</option>
+              <option value="Alaska">Alaska Time</option>
+              <option value="Hawaii">Hawaii Time</option>
+            </select>
           </fieldset>
 
           <fieldset class="join-form-section">

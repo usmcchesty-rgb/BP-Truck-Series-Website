@@ -970,7 +970,8 @@ footer{
   text-transform:uppercase;
 }
 .join-input,
-.join-textarea{
+.join-textarea,
+.join-select{
   width:100%;
   margin:0 0 14px;
   padding:10px 12px;
