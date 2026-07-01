@@ -7,8 +7,15 @@
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/admin/admin-layout.css">
   <style>
+    body.admin-applications-page main.wrap {
+      width: 100%;
+      max-width: none;
+      margin: 0;
+      padding: 18px 40px 28px;
+      box-sizing: border-box;
+    }
     .sub { color: var(--bp-text-secondary); font-size: 12px; margin-bottom: 16px; line-height: 1.45; }
-    .panel { padding: 14px; margin-bottom: 14px; }
+    .panel { width: 100%; padding: 16px; margin-bottom: 14px; }
     .panel h2 { margin: 0 0 12px; font-size: 18px; color: #ff3030; }
     .field-label { display: block; font-size: 11px; color: #999; font-weight: 900; text-transform: uppercase; margin: 10px 0 4px; }
     .input, .textarea, .select { width: 100%; margin-bottom: 8px; padding: 8px; background: #090909; color: #fff; border: 1px solid #555; border-radius: 4px; font-size: 12px; box-sizing: border-box; }
@@ -34,16 +41,17 @@
     .status-pill.waitlist { color: #9ec5ff; border-color: #456; }
     .status-pill.recruiting_race { color: #ffb347; border-color: #864; }
     .application-detail-panel[hidden] { display: none; }
-    .detail-card { border: 1px solid #333; background: rgba(0,0,0,.25); padding: 16px; min-height: 240px; }
-    .detail-card h3 { margin: 0; font-size: 20px; color: #fff; }
-    .detail-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 14px; }
-    .detail-kicker { margin: 4px 0 0; color: #aaa; font-size: 12px; }
-    .detail-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; border-bottom: 1px solid #333; padding-bottom: 10px; }
-    .tab-btn { padding: 8px 12px; border: 1px solid #444; border-radius: 4px; background: #101010; color: #ddd; font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; cursor: pointer; }
+    .application-detail-panel > .btn-row { margin: 0 0 12px; }
+    .detail-card { width: 100%; border: 1px solid #333; background: linear-gradient(180deg, rgba(18,18,18,.96), rgba(5,5,5,.96)); padding: 18px; min-height: 240px; box-shadow: inset 0 1px 0 rgba(255,255,255,.04); }
+    .detail-card h3 { margin: 0; font-size: 24px; line-height: 1.05; color: #fff; }
+    .detail-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 16px; padding-bottom: 14px; border-bottom: 1px solid #2a2a2a; }
+    .detail-kicker { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 7px 0 0; color: #aaa; font-size: 12px; }
+    .detail-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 18px; border-bottom: 1px solid #333; padding-bottom: 12px; }
+    .tab-btn { padding: 9px 16px; border: 1px solid #444; border-radius: 0; background: linear-gradient(#1c1c1c, #080808); color: #ddd; font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; cursor: pointer; clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%); }
     .tab-btn:hover { border-color: #777; color: #fff; }
-    .tab-btn.is-active { border-color: #c00; background: rgba(229,9,20,.18); color: #fff; }
+    .tab-btn.is-active { border-color: #ff2424; background: linear-gradient(#d40000, #680000); color: #fff; box-shadow: 0 0 10px rgba(229,9,20,.25); }
     .tab-panel[hidden] { display: none; }
-    .detail-grid { display: grid; grid-template-columns: minmax(140px, 210px) minmax(0, 1fr); gap: 10px 16px; font-size: 12px; margin-bottom: 14px; }
+    .detail-grid { display: grid; grid-template-columns: minmax(150px, 220px) minmax(0, 1fr); gap: 10px 16px; font-size: 12px; margin-bottom: 14px; max-width: 1100px; }
     .detail-grid dt { color: #888; font-weight: 900; text-transform: uppercase; font-size: 10px; margin: 0; }
     .detail-grid dd { margin: 0; color: #eee; line-height: 1.45; white-space: pre-wrap; }
     .detail-empty { color: #888; font-size: 12px; line-height: 1.5; }
@@ -53,23 +61,45 @@
     .snapshot-status { display: inline-block; margin-bottom: 10px; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; color: #bbb; }
     .snapshot-status.completed { color: #7fd99a; }
     .snapshot-status.needs_manual_review { color: #ffd27a; }
-    .snapshot-table { width: 100%; border-collapse: collapse; font-size: 11px; margin: 8px 0 12px; }
-    .snapshot-table th, .snapshot-table td { padding: 6px 8px; border-bottom: 1px solid #222; text-align: left; }
+    .snapshot-table-wrap { width: 100%; overflow-x: auto; border: 1px solid #2c2c2c; background: rgba(0,0,0,.22); margin: 8px 0 14px; }
+    .snapshot-table { width: 100%; min-width: 720px; border-collapse: collapse; font-size: 12px; margin: 0; }
+    .snapshot-table th, .snapshot-table td { padding: 9px 10px; border-bottom: 1px solid #222; text-align: left; }
     .snapshot-table th { color: #888; font-size: 10px; text-transform: uppercase; }
     .snapshot-table tr.is-primary td { color: #fff; background: rgba(229,9,20,.08); }
     .snapshot-subhead { margin: 12px 0 6px; font-size: 11px; color: #aaa; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; }
-    .stats-category-select { max-width: 280px; margin-bottom: 10px; }
+    .stats-controls { display: flex; flex-wrap: wrap; gap: 14px; align-items: end; margin: 12px 0 14px; }
+    .stats-controls .field-label { margin-top: 0; }
+    .stats-control { min-width: 220px; max-width: 320px; flex: 0 1 280px; }
+    .stats-category-select { margin-bottom: 0; }
+    .stats-metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 12px 0 18px; }
+    .stat-metric { min-height: 76px; padding: 12px; border: 1px solid #333; background: linear-gradient(180deg, #111, #090909); box-shadow: inset 0 1px 0 rgba(255,255,255,.035); }
+    .stat-metric dt { margin: 0 0 7px; color: #9a9a9a; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; }
+    .stat-metric dd { margin: 0; color: #fff; font-size: 22px; font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; }
+    .stat-metric.is-green, .stat-badge.is-green { border-color: #2c8f46; background: linear-gradient(180deg, rgba(28,90,45,.36), rgba(8,28,15,.45)); color: #8dff9d; }
+    .stat-metric.is-yellow, .stat-badge.is-yellow { border-color: #9a8129; background: linear-gradient(180deg, rgba(110,86,18,.36), rgba(38,29,7,.45)); color: #ffe680; }
+    .stat-metric.is-orange, .stat-badge.is-orange { border-color: #a35f1f; background: linear-gradient(180deg, rgba(122,63,18,.38), rgba(42,20,5,.45)); color: #ffb15f; }
+    .stat-metric.is-red, .stat-badge.is-red { border-color: #9e2f2f; background: linear-gradient(180deg, rgba(115,24,24,.42), rgba(43,7,7,.48)); color: #ff7878; }
+    .stat-metric.is-green dd, .stat-metric.is-yellow dd, .stat-metric.is-orange dd, .stat-metric.is-red dd { color: inherit; }
+    .stat-badge { display: inline-block; min-width: 56px; padding: 4px 8px; border: 1px solid #444; font-weight: 900; font-variant-numeric: tabular-nums; text-align: center; }
     .lookup-status-card { margin: 12px 0 16px; padding: 12px; border: 1px solid #333; background: rgba(255,255,255,.03); }
     .lookup-status-card .btn-row { margin-top: 10px; }
     .section-heading { margin: 0 0 10px; font-size: 13px; color: #aaa; text-transform: uppercase; letter-spacing: .04em; }
+    @media (min-width: 1024px) {
+      body.admin-applications-page main.wrap { padding-left: 72px; padding-right: 72px; }
+    }
+    @media (min-width: 1400px) {
+      body.admin-applications-page main.wrap { padding-left: 96px; padding-right: 96px; }
+      .stats-metric-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+    }
     @media (max-width: 980px) {
+      body.admin-applications-page main.wrap { padding-left: 12px; padding-right: 12px; }
       .detail-header { display: block; }
       .detail-header .btn-row { margin-top: 12px; }
       .detail-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
-<body>
+<body class="admin-applications-page">
   <div id="admin-nav-root"></div>
   <script src="/admin/admin-nav.js"></script>
 
@@ -298,6 +328,36 @@
       return `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(display)}</dd>`;
     }
 
+    function numericValue(value) {
+      if (value == null || value === '') return null;
+      const number = Number.parseFloat(String(value).replace(/,/g, ''));
+      return Number.isFinite(number) ? number : null;
+    }
+
+    function incidentToneClass(value) {
+      const number = numericValue(value);
+      if (number == null) return '';
+      if (number < 4) return 'is-green';
+      if (number < 5) return 'is-yellow';
+      if (number < 6) return 'is-orange';
+      return 'is-red';
+    }
+
+    function statMetric(label, value, toneClass = '') {
+      const display = value == null || value === '' ? '—' : value;
+      return `
+        <dl class="stat-metric ${escapeHtml(toneClass)}">
+          <dt>${escapeHtml(label)}</dt>
+          <dd>${escapeHtml(display)}</dd>
+        </dl>
+      `;
+    }
+
+    function statBadge(value, toneClass = '') {
+      const display = value == null || value === '' ? '—' : value;
+      return `<span class="stat-badge ${escapeHtml(toneClass)}">${escapeHtml(display)}</span>`;
+    }
+
     function normalizeLicenseCategories(snapshot) {
       const raw = snapshot?.licenses_json;
       if (!raw) return [];
@@ -344,37 +404,40 @@
 
       return `
         <div class="snapshot-subhead">All License Categories</div>
-        <table class="snapshot-table">
-          <thead>
-            <tr>
-              <th>Category</th>
-              <th>Class</th>
-              <th>SR</th>
-              <th>iRating</th>
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
+        <div class="snapshot-table-wrap">
+          <table class="snapshot-table">
+            <thead>
+              <tr>
+                <th>Category</th>
+                <th>Class</th>
+                <th>SR</th>
+                <th>iRating</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
       `;
     }
 
     function renderStatsCategoryFields(statsJson, categoryName) {
       const row = statsJson?.[categoryName] || {};
+      const incidentTone = incidentToneClass(row.incidentsPerRace);
       return `
-        <dl class="detail-grid stats-grid" id="statsCategoryFields">
-          ${detailField('Starts', row.starts)}
-          ${detailField('Wins', row.wins)}
-          ${detailField('Top 5', row.top5)}
-          ${detailField('Poles', row.poles)}
-          ${detailField('Avg Start', row.avgStart)}
-          ${detailField('Avg Finish', row.avgFinish)}
-          ${detailField('Total Laps', row.totalLaps)}
-          ${detailField('Laps Led', row.lapsLed)}
-          ${detailField('Inc/Race', row.incidentsPerRace)}
-          ${detailField('Pts/Race', row.pointsPerRace)}
-          ${detailField('Win %', row.winPercentage)}
-          ${detailField('Top 5 %', row.top5Percentage)}
-        </dl>
+        <div class="stats-metric-grid" id="statsCategoryFields">
+          ${statMetric('Starts', row.starts)}
+          ${statMetric('Wins', row.wins)}
+          ${statMetric('Top 5', row.top5)}
+          ${statMetric('Poles', row.poles)}
+          ${statMetric('Avg Start', row.avgStart)}
+          ${statMetric('Avg Finish', row.avgFinish)}
+          ${statMetric('Total Laps', row.totalLaps)}
+          ${statMetric('Laps Led', row.lapsLed)}
+          ${statMetric('Inc/Race', row.incidentsPerRace, incidentTone)}
+          ${statMetric('Pts/Race', row.pointsPerRace)}
+          ${statMetric('Win %', row.winPercentage)}
+          ${statMetric('Top 5 %', row.top5Percentage)}
+        </div>
       `;
     }
 
@@ -382,17 +445,20 @@
       const rows = yearly
         .filter((entry) => selectedClass === '__all__' || yearlyClassName(entry) === selectedClass)
         .sort((a, b) => String(b.year || '').localeCompare(String(a.year || ''), undefined, { numeric: true }))
-        .map((entry) => `
-          <tr>
-            <td>${escapeHtml(entry.year)}</td>
-            <td>${escapeHtml(yearlyClassName(entry))}</td>
-            <td>${escapeHtml(entry.starts)}</td>
-            <td>${escapeHtml(entry.wins)}</td>
-            <td>${escapeHtml(entry.top5)}</td>
-            <td>${escapeHtml(entry.avg_finish ?? entry.avgFinish)}</td>
-            <td>${escapeHtml(entry.incidents_per_race ?? entry.incidentsPerRace)}</td>
-          </tr>
-        `)
+        .map((entry) => {
+          const incidents = entry.incidents_per_race ?? entry.incidentsPerRace;
+          return `
+            <tr>
+              <td>${escapeHtml(entry.year)}</td>
+              <td>${escapeHtml(yearlyClassName(entry))}</td>
+              <td>${escapeHtml(entry.starts)}</td>
+              <td>${escapeHtml(entry.wins)}</td>
+              <td>${escapeHtml(entry.top5)}</td>
+              <td>${escapeHtml(entry.avg_finish ?? entry.avgFinish)}</td>
+              <td>${statBadge(incidents, incidentToneClass(incidents))}</td>
+            </tr>
+          `;
+        })
         .join('');
 
       return rows || '<tr><td colspan="7">No yearly rows match this selection.</td></tr>';
@@ -422,22 +488,28 @@
       return `
         <div class="snapshot-subhead">Yearly Progression</div>
         <div class="snapshot-status ${escapeHtml(status)}">${escapeHtml(String(status).replace(/_/g, ' '))}</div>
-        <label class="field-label" for="yearlyStatsClassSelect">Yearly Stats</label>
-        <select id="yearlyStatsClassSelect" class="select stats-category-select">${options}</select>
-        <table class="snapshot-table">
-          <thead>
-            <tr>
-              <th>Year</th>
-              <th>Class</th>
-              <th>Starts</th>
-              <th>Wins</th>
-              <th>Top 5</th>
-              <th>Avg Finish</th>
-              <th>Inc/Race</th>
-            </tr>
-          </thead>
-          <tbody id="yearlyStatsRows">${renderYearlyRows(yearly, '__all__')}</tbody>
-        </table>
+        <div class="stats-controls">
+          <div class="stats-control">
+            <label class="field-label" for="yearlyStatsClassSelect">Yearly Stats</label>
+            <select id="yearlyStatsClassSelect" class="select stats-category-select">${options}</select>
+          </div>
+        </div>
+        <div class="snapshot-table-wrap">
+          <table class="snapshot-table">
+            <thead>
+              <tr>
+                <th>Year</th>
+                <th>Class</th>
+                <th>Starts</th>
+                <th>Wins</th>
+                <th>Top 5</th>
+                <th>Avg Finish</th>
+                <th>Inc/Race</th>
+              </tr>
+            </thead>
+            <tbody id="yearlyStatsRows">${renderYearlyRows(yearly, '__all__')}</tbody>
+          </table>
+        </div>
       `;
     }
 
@@ -545,8 +617,12 @@
             ${detailField('Primary Category', snapshot.category || 'Oval')}
             ${detailField('Review Note', snapshot.scrape_error)}
           </dl>
-          <label class="field-label" for="statsCategorySelect">Lifetime Stats Category</label>
-          <select id="statsCategorySelect" class="select stats-category-select">${categoryOptions}</select>
+          <div class="stats-controls">
+            <div class="stats-control">
+              <label class="field-label" for="statsCategorySelect">Lifetime Stats Category</label>
+              <select id="statsCategorySelect" class="select stats-category-select">${categoryOptions}</select>
+            </div>
+          </div>
           <div id="statsCategoryMount"></div>
           ${renderYearlyProgressionSection(snapshot)}
         </div>
