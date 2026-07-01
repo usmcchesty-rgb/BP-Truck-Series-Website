@@ -63,6 +63,8 @@ import {
   submitDriverApplication,
   updateDriverApplication,
 } from './_driver-applications.js';
+import { getLatestIracingSnapshotForApplication } from './_driver-application-iracing-snapshots.js';
+import { getLatestIracingStatsSnapshotForApplication } from './_driver-application-iracing-stats-snapshots.js';
 import {
   getAnalyticsDailyTraffic,
   getAnalyticsDevices,
@@ -162,7 +164,9 @@ async function handleDriverApplicationRoutes(req, res) {
         res.status(404).json({ error: 'Application not found.' });
         return true;
       }
-      res.status(200).json({ application });
+      const latest_snapshot = await getLatestIracingSnapshotForApplication(applicationId);
+      const latest_stats_snapshot = await getLatestIracingStatsSnapshotForApplication(applicationId);
+      res.status(200).json({ application, latest_snapshot, latest_stats_snapshot });
       return true;
     } catch (error) {
       res.status(500).json({ error: error.message || 'Failed to load application.' });

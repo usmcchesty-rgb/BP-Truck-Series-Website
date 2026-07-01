@@ -39,6 +39,11 @@
     .detail-grid dt { color: #888; font-weight: 900; text-transform: uppercase; font-size: 10px; margin: 0; }
     .detail-grid dd { margin: 0; color: #eee; line-height: 1.45; white-space: pre-wrap; }
     .detail-empty { color: #888; font-size: 12px; line-height: 1.5; }
+    .snapshot-card { margin-top: 16px; padding-top: 14px; border-top: 1px solid #333; }
+    .snapshot-card h4 { margin: 0 0 10px; font-size: 13px; color: #ff3030; text-transform: uppercase; letter-spacing: .04em; }
+    .snapshot-status { display: inline-block; margin-bottom: 10px; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; color: #bbb; }
+    .snapshot-status.completed { color: #7fd99a; }
+    .snapshot-status.needs_manual_review { color: #ffd27a; }
     @media (max-width: 980px) {
       .applications-layout { grid-template-columns: 1fr; }
     }
@@ -204,6 +209,15 @@
       return data.application;
     }
 
+    async function apiGetApplicationDetail(id) {
+      const res = await fetch(`/api/admin/driver-applications/${encodeURIComponent(id)}`, {
+        headers: { 'X-Admin-Password': getSessionPw() }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to load application detail.');
+      return data;
+    }
+
     function renderApplicationsTable() {
       const body = $('#applicationsBody');
       if (!applications.length) {
@@ -227,7 +241,7 @@
         row.addEventListener('click', () => {
           selectedId = row.dataset.id;
           renderApplicationsTable();
-          renderApplicationDetail();
+          void loadApplicationDetail();
         });
       });
     }
@@ -237,9 +251,71 @@
       return `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(display)}</dd>`;
     }
 
-    function renderApplicationDetail() {
+    function renderSnapshotSection(snapshot) {
+      if (!snapshot) {
+        return `
+          <div class="snapshot-card">
+            <h4>Latest iRacing License Snapshot</h4>
+            <p class="detail-empty">No license snapshot saved yet for this application.</p>
+          </div>
+        `;
+      }
+
+      const statusClass = escapeHtml(snapshot.scrape_status || 'unknown');
+      return `
+        <div class="snapshot-card">
+          <h4>Latest iRacing License Snapshot</h4>
+          <div class="snapshot-status ${statusClass}">${statusClass.replace(/_/g, ' ')}</div>
+          <dl class="detail-grid">
+            ${detailField('Snapshot Date', formatDate(snapshot.created_at))}
+            ${detailField('Scraped Display Name', snapshot.display_name)}
+            ${detailField('Oval License Class', snapshot.oval_license_class)}
+            ${detailField('Oval Safety Rating', snapshot.oval_safety_rating)}
+            ${detailField('Oval iRating', snapshot.oval_irating)}
+            ${detailField('Review Note', snapshot.scrape_error)}
+          </dl>
+        </div>
+      `;
+    }
+
+    function renderStatsSnapshotSection(snapshot) {
+      if (!snapshot) {
+        return `
+          <div class="snapshot-card">
+            <h4>Latest iRacing Stats Snapshot</h4>
+            <p class="detail-empty">No stats snapshot yet.</p>
+          </div>
+        `;
+      }
+
+      const statusClass = escapeHtml(snapshot.scrape_status || 'unknown');
+      return `
+        <div class="snapshot-card">
+          <h4>Latest iRacing Stats Snapshot</h4>
+          <div class="snapshot-status ${statusClass}">${statusClass.replace(/_/g, ' ')}</div>
+          <dl class="detail-grid stats-grid">
+            ${detailField('Snapshot Date', formatDate(snapshot.created_at))}
+            ${detailField('Category', snapshot.category)}
+            ${detailField('Starts', snapshot.starts)}
+            ${detailField('Wins', snapshot.wins)}
+            ${detailField('Top 5', snapshot.top5)}
+            ${detailField('Poles', snapshot.poles)}
+            ${detailField('Avg Start', snapshot.avg_start)}
+            ${detailField('Avg Finish', snapshot.avg_finish)}
+            ${detailField('Total Laps', snapshot.total_laps)}
+            ${detailField('Laps Led', snapshot.laps_led)}
+            ${detailField('Inc/Race', snapshot.incidents_per_race)}
+            ${detailField('Pts/Race', snapshot.points_per_race)}
+            ${detailField('Win %', snapshot.win_percentage)}
+            ${detailField('Top 5 %', snapshot.top5_percentage)}
+            ${detailField('Review Note', snapshot.scrape_error)}
+          </dl>
+        </div>
+      `;
+    }
+
+    function renderApplicationDetail(row, latestSnapshot = null, latestStatsSnapshot = null) {
       const mount = $('#applicationDetail');
-      const row = applications.find((item) => item.id === selectedId);
       if (!row) {
         mount.innerHTML = '<p class="detail-empty">Select an application from the list to view full details.</p>';
         return;
@@ -267,6 +343,8 @@
           ${detailField('Racing Background', row.racing_background)}
           ${detailField('Why Join', row.why_join)}
         </dl>
+        ${renderSnapshotSection(latestSnapshot)}
+        ${renderStatsSnapshotSection(latestStatsSnapshot)}
         <label class="field-label" for="detailStatus">Status</label>
         <select id="detailStatus" class="select">${statusOptions}</select>
         <label class="field-label" for="detailNotes">Admin Notes</label>
@@ -279,6 +357,25 @@
       $('#saveApplicationBtn').addEventListener('click', saveSelectedApplication);
     }
 
+    async function loadApplicationDetail() {
+      const mount = $('#applicationDetail');
+      const row = applications.find((item) => item.id === selectedId);
+      if (!row) {
+        renderApplicationDetail(null);
+        return;
+      }
+
+      mount.innerHTML = '<p class="detail-empty">Loading application detail...</p>';
+      try {
+        const data = await apiGetApplicationDetail(selectedId);
+        const application = data.application || row;
+        applications = applications.map((item) => (item.id === application.id ? application : item));
+        renderApplicationDetail(application, data.latest_snapshot || null, data.latest_stats_snapshot || null);
+      } catch (error) {
+        mount.innerHTML = `<p class="detail-empty">${escapeHtml(error.message)}</p>`;
+      }
+    }
+
     async function saveSelectedApplication() {
       if (!selectedId) return;
       setMsg('Saving...');
@@ -289,7 +386,7 @@
         });
         applications = applications.map((row) => (row.id === updated.id ? updated : row));
         renderApplicationsTable();
-        renderApplicationDetail();
+        await loadApplicationDetail();
         setMsg('Application updated.');
       } catch (error) {
         setMsg(error.message, true);
@@ -304,7 +401,7 @@
           selectedId = '';
         }
         renderApplicationsTable();
-        renderApplicationDetail();
+        await loadApplicationDetail();
         setMsg('');
       } catch (error) {
         if (String(error.message || '').toLowerCase().includes('password')) {

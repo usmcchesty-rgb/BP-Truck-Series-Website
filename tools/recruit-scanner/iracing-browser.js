@@ -1,149 +1,217 @@
-import { chromium } from 'playwright';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { getBrowserAdapter } from './browser-adapter.js';
+import { logError, logMessage } from './logger.js';
+import {
+  buildLicenseProfileUrl,
+  buildStatsProfileUrl,
+  IRACING_LOGIN_URL,
+  LOGIN_POLL_MS,
+  verifyProfilePageUrl,
+} from './iracing-urls.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const BROWSER_PROFILE_DIR = path.join(__dirname, 'browser-profile');
-const PROFILE_BASE_URL =
-  'https://members-ng.iracing.com/web/racing/home/dashboard?cust_id={CUSTOMER_ID}&tab=licenses';
-const NAVIGATION_TIMEOUT_MS = 60_000;
-const PAGE_SETTLE_MS = 2_500;
+export {
+  buildLicenseProfileUrl,
+  buildStatsProfileUrl,
+  verifyProfilePageUrl,
+} from './iracing-urls.js';
 
-let browserContext = null;
+export {
+  resolveChromeExecutable,
+  getBrowserProfileDir,
+} from './iracing-browser-playwright.js';
 
-function isHeadless() {
-  return process.env.HEADLESS === 'true';
-}
+async function navigateProfileTab(customerId, profileUrl, tabLabel) {
+  const adapter = getBrowserAdapter();
+  const isStatsTab = tabLabel === 'stats';
+  logMessage(`Opening ${tabLabel} page...`);
 
-function buildProfileUrl(customerId) {
-  const id = String(customerId ?? '').trim();
-  return PROFILE_BASE_URL.replace('{CUSTOMER_ID}', encodeURIComponent(id));
-}
+  await adapter.navigate(profileUrl);
 
-function urlLooksLikeLogin(url) {
-  const lower = String(url ?? '').toLowerCase();
-  return (
-    lower.includes('/login') ||
-    lower.includes('/signin') ||
-    lower.includes('/sign-in') ||
-    lower.includes('/auth/') ||
-    lower.includes('login.iracing.com') ||
-    lower.includes('oauth') ||
-    lower.includes('openid')
-  );
-}
-
-async function pageLooksLikeLogin(page) {
-  if (urlLooksLikeLogin(page.url())) {
-    return true;
+  if (await adapter.looksLikeLogin()) {
+    return {
+      outcome: 'needs_login',
+      message: 'iRacing login page detected.',
+    };
   }
 
-  const passwordInput = page.locator('input[type="password"]').first();
-  const hasPasswordField = await passwordInput
-    .isVisible({ timeout: 2_000 })
-    .catch(() => false);
-
-  if (!hasPasswordField) {
-    return false;
+  const finalUrl = await adapter.getCurrentUrl();
+  const urlCheck = verifyProfilePageUrl(finalUrl, customerId);
+  if (!urlCheck.ok) {
+    logError(`Wrong page: ${urlCheck.reason} (${finalUrl})`);
+    return {
+      outcome: 'wrong_page',
+      message: urlCheck.reason,
+      finalUrl,
+    };
   }
 
-  const signInControl = page
-    .locator('button, input[type="submit"], a')
-    .filter({ hasText: /sign in|log in|login/i })
-    .first();
+  logMessage('Page loaded');
+  await adapter.waitForTabContent(tabLabel);
 
-  return signInControl.isVisible({ timeout: 1_000 }).catch(() => true);
-}
+  const domExtraction = isStatsTab
+    ? await adapter.extractStatsDom?.()
+    : await adapter.extractProfileDom?.();
+  const rawText = domExtraction?.rawText || (await adapter.captureVisibleText());
 
-async function pageLooksLikeProfile(page, customerId) {
-  const url = page.url();
-  const id = String(customerId ?? '').trim();
-
-  if (!url.includes('members-ng.iracing.com')) {
-    return false;
+  if (isStatsTab) {
+    if (!rawText && !domExtraction?.data?.category) {
+      return {
+        outcome: 'failed',
+        message: 'Stats tab loaded but career stats DOM could not be extracted.',
+        finalUrl,
+      };
+    }
+    logMessage('Stats DOM extracted');
+  } else if (!rawText && !domExtraction?.data?.displayName) {
+    return {
+      outcome: 'failed',
+      message: `${tabLabel} tab loaded but profile DOM could not be extracted.`,
+      finalUrl,
+    };
+  } else {
+    logMessage('Profile DOM extracted');
   }
 
-  if (!url.includes('dashboard')) {
-    return false;
-  }
-
-  if (id && url.includes(`cust_id=${encodeURIComponent(id)}`)) {
-    return true;
-  }
-
-  if (url.includes('tab=licenses')) {
-    return true;
-  }
-
-  const licensesHint = page.locator('text=/licenses/i').first();
-  return licensesHint.isVisible({ timeout: 3_000 }).catch(() => false);
+  return {
+    outcome: 'scraped',
+    rawText,
+    domExtraction,
+    finalUrl,
+    tab: isStatsTab ? 'stats' : 'license',
+  };
 }
 
 export async function initBrowser() {
-  if (browserContext) {
-    return browserContext;
-  }
-
-  browserContext = await chromium.launchPersistentContext(BROWSER_PROFILE_DIR, {
-    headless: isHeadless(),
-    viewport: null,
-  });
-
-  if (isHeadless()) {
-    console.log('Browser started (headless mode)');
-  } else {
-    console.log('Browser started (headed — log into iRacing manually if prompted)');
-  }
-
-  return browserContext;
-}
-
-export async function checkProfileAccess(customerId) {
-  const context = await initBrowser();
-  const page = context.pages()[0] ?? (await context.newPage());
-
-  try {
-    const profileUrl = buildProfileUrl(customerId);
-    console.log('Opening iRacing profile page...');
-
-    await page.goto(profileUrl, {
-      waitUntil: 'domcontentloaded',
-      timeout: NAVIGATION_TIMEOUT_MS,
-    });
-
-    await page.waitForTimeout(PAGE_SETTLE_MS);
-
-    if (await pageLooksLikeLogin(page)) {
-      return {
-        outcome: 'needs_login',
-        message: 'iRacing login page detected.',
-      };
-    }
-
-    if (await pageLooksLikeProfile(page, customerId)) {
-      return {
-        outcome: 'completed',
-        message: 'Profile page loaded successfully. Scraping not implemented yet.',
-      };
-    }
-
-    return {
-      outcome: 'failed',
-      message: 'Profile page did not load — could not confirm dashboard access.',
-    };
-  } catch (err) {
-    return {
-      outcome: 'failed',
-      message: err instanceof Error ? err.message : 'Unexpected error opening profile page.',
-    };
-  }
+  await getBrowserAdapter().init();
 }
 
 export async function closeBrowser() {
-  if (!browserContext) {
+  await getBrowserAdapter().close();
+}
+
+export async function clearBrowserProfile() {
+  await getBrowserAdapter().clearSession();
+}
+
+export async function openIracingLoginPage() {
+  logMessage('Opening iRacing login page...');
+  await getBrowserAdapter().openLoginPage();
+}
+
+export async function isLoggedIn() {
+  return getBrowserAdapter().checkLoggedIn();
+}
+
+export async function waitForIracingLogin({ label = 'iRacing login' } = {}) {
+  const adapter = getBrowserAdapter();
+  logMessage(`Waiting for ${label} — complete sign-in in the browser window.`);
+
+  while (true) {
+    if (!(await adapter.looksLikeLogin())) {
+      const loggedIn = await adapter.checkLoggedIn();
+      if (loggedIn) {
+        logMessage('iRacing session ready.');
+        return true;
+      }
+    }
+
+    await adapter.sleep(LOGIN_POLL_MS);
+  }
+}
+
+export async function prepareScannerSession({ blocking = true } = {}) {
+  const adapter = getBrowserAdapter();
+  await initBrowser();
+
+  const hasStoredSession = await adapter.hasStoredSession();
+  const sessionLabel = adapter.getSessionLabel();
+
+  if (!hasStoredSession) {
+    logMessage(`First run — log into iRacing to save a session in ${sessionLabel}`);
+    await openIracingLoginPage();
+    if (blocking) {
+      await waitForIracingLogin({ label: 'first-run iRacing login' });
+    }
     return;
   }
 
-  await browserContext.close();
-  browserContext = null;
+  const loggedIn = await adapter.checkLoggedIn();
+  if (loggedIn) {
+    logMessage(`Reusing saved iRacing session from ${sessionLabel}`);
+    return;
+  }
+
+  logMessage('Saved session expired — opening iRacing login page.');
+  await openIracingLoginPage();
+  if (blocking) {
+    await waitForIracingLogin({ label: 'iRacing re-login' });
+  }
 }
+
+export async function watchForLoginAndRetry(callback) {
+  const adapter = getBrowserAdapter();
+
+  while (true) {
+    await adapter.sleep(LOGIN_POLL_MS);
+
+    if (await adapter.looksLikeLogin()) {
+      continue;
+    }
+
+    const loggedIn = await adapter.checkLoggedIn();
+    if (!loggedIn) {
+      continue;
+    }
+
+    logMessage('Login detected — continuing scanner.');
+    await callback();
+    return;
+  }
+}
+
+export async function scrapeProfileLicenses(customerId) {
+  try {
+    return await navigateProfileTab(
+      customerId,
+      buildLicenseProfileUrl(customerId),
+      'license'
+    );
+  } catch (err) {
+    return {
+      outcome: 'failed',
+      message: err instanceof Error ? err.message : 'Unexpected error scraping license page.',
+    };
+  }
+}
+
+export async function scrapeProfileStats(customerId) {
+  try {
+    return await navigateProfileTab(
+      customerId,
+      buildStatsProfileUrl(customerId),
+      'stats'
+    );
+  } catch (err) {
+    return {
+      outcome: 'failed',
+      message: err instanceof Error ? err.message : 'Unexpected error scraping stats page.',
+    };
+  }
+}
+
+export async function scrapeCustomerProfile(customerId) {
+  const licenseResult = await scrapeProfileLicenses(customerId);
+  if (licenseResult.outcome !== 'scraped') {
+    return {
+      license: licenseResult,
+      stats: null,
+    };
+  }
+
+  const statsResult = await scrapeProfileStats(customerId);
+  return {
+    license: licenseResult,
+    stats: statsResult,
+  };
+}
+
+export { IRACING_LOGIN_URL };

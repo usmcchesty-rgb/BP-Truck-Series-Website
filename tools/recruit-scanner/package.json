@@ -1,13 +1,12 @@
 {
   "name": "bp-recruit-scanner",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "private": true,
   "description": "Local BP Recruit Scanner — processes driver application lookup jobs via Supabase Realtime and Playwright",
   "type": "module",
   "scripts": {
     "start": "node index.js",
-    "dev": "node --watch index.js",
-    "postinstall": "playwright install chromium"
+    "dev": "node --watch index.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",

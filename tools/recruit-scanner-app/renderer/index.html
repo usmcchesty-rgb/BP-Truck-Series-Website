@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'">
+  <title>BP Recruit Scanner</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body class="app-shell">
+  <header class="app-header">
+    <div>
+      <h1>BP Recruit Scanner</h1>
+      <p class="subtitle">Local desktop control for iRacing profile lookups</p>
+    </div>
+    <div class="status-pill" id="scannerStatus">Stopped</div>
+  </header>
+
+  <main class="layout">
+    <section class="panel controls-panel">
+      <h2>Controls</h2>
+      <div class="button-grid">
+        <button type="button" id="btnStart">Start Scanner</button>
+        <button type="button" id="btnStop">Stop Scanner</button>
+        <button type="button" id="btnLogin">Open iRacing Login</button>
+        <button type="button" id="btnProcess">Process Queued Jobs</button>
+        <button type="button" id="btnClear">Clear Saved iRacing Session</button>
+        <button type="button" id="btnSupabase">Open Supabase Project</button>
+      </div>
+
+      <div class="test-block">
+        <label for="customerIdInput">Test Customer ID</label>
+        <div class="test-row">
+          <input id="customerIdInput" type="text" inputmode="numeric" placeholder="91227">
+          <button type="button" id="btnTest" class="primary">Test Customer ID</button>
+        </div>
+      </div>
+
+      <div class="preview-block">
+        <h3>Test Preview</h3>
+        <pre id="testPreview" class="preview-box">Run a test to preview license and stats text.</pre>
+      </div>
+    </section>
+
+    <section class="panel right-column">
+      <div class="settings-block">
+        <h2>Settings</h2>
+        <p class="hint">Saved locally to <code>tools/recruit-scanner/.env</code> (never committed).</p>
+
+        <label class="checkbox-row" for="useEmbeddedBrowser">
+          <input id="useEmbeddedBrowser" type="checkbox" checked>
+          <span>Open iRacing Browser in App</span>
+        </label>
+        <p class="hint">When disabled, the scanner falls back to the external Playwright Chrome window.</p>
+
+        <label for="supabaseUrl">SUPABASE_URL</label>
+        <input id="supabaseUrl" type="url" autocomplete="off" spellcheck="false">
+
+        <label for="supabaseKey">SUPABASE_SERVICE_ROLE_KEY</label>
+        <input id="supabaseKey" type="password" autocomplete="off" spellcheck="false">
+
+        <label for="chromePath">CHROME_EXECUTABLE_PATH (optional, external mode only)</label>
+        <input id="chromePath" type="text" autocomplete="off" spellcheck="false" placeholder="C:\Program Files\Google\Chrome\Application\chrome.exe">
+
+        <button type="button" id="btnSaveSettings" class="primary">Save Settings</button>
+        <p id="settingsMsg" class="inline-msg"></p>
+      </div>
+
+      <div class="browser-block" id="browserBlock">
+        <div class="browser-block-header">
+          <h2>iRacing Browser</h2>
+          <div class="browser-toolbar">
+            <div class="zoom-controls" aria-label="Browser zoom controls">
+              <button type="button" id="btnFitPanel" class="ghost">Fit to Panel</button>
+              <button type="button" id="btnActualSize" class="ghost">Actual Size</button>
+              <button type="button" id="btnZoomOut" class="ghost" title="Zoom out">Zoom −</button>
+              <span id="zoomPercent" class="zoom-percent">125%</span>
+              <button type="button" id="btnZoomIn" class="ghost" title="Zoom in">Zoom +</button>
+            </div>
+            <button type="button" id="btnFocusBrowser" class="ghost">Focus iRacing Browser</button>
+            <button type="button" id="btnSeparateWindow" class="ghost">Open Browser in Separate Window</button>
+          </div>
+        </div>
+        <p class="hint">Embedded panel uses a dedicated app session. Log in here — not your personal Chrome profile.</p>
+        <div id="iracingBrowserHost" class="browser-host">
+          <div class="browser-host-placeholder">iRacing pages appear in this panel when embedded mode is enabled.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel logs-panel">
+      <div class="logs-header">
+        <h2>Live Logs</h2>
+        <button type="button" id="btnClearLogs" class="ghost">Clear Logs</button>
+      </div>
+      <pre id="logOutput" class="log-box"></pre>
+    </section>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>
