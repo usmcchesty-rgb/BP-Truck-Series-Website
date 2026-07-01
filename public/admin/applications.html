@@ -18,7 +18,7 @@
     #adminMsg, #loginMsg { margin-top: 10px; font-size: 12px; color: #ccc; white-space: pre-wrap; }
     #adminMsg.error, #loginMsg.error { color: #ff6060; }
     .pw-row { max-width: 320px; margin-bottom: 14px; }
-    .applications-layout { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.9fr); gap: 14px; align-items: start; }
+    .applications-layout { display: block; }
     .table-wrap { overflow: auto; border: 1px solid #333; }
     .applications-table { width: 100%; border-collapse: collapse; font-size: 11px; min-width: 720px; }
     .applications-table th, .applications-table td { padding: 8px 10px; border-bottom: 1px solid #222; text-align: left; vertical-align: top; }
@@ -33,13 +33,22 @@
     .status-pill.rejected { color: #ff8080; border-color: #733; }
     .status-pill.waitlist { color: #9ec5ff; border-color: #456; }
     .status-pill.recruiting_race { color: #ffb347; border-color: #864; }
-    .detail-card { border: 1px solid #333; background: rgba(0,0,0,.25); padding: 14px; min-height: 240px; }
-    .detail-card h3 { margin: 0 0 12px; font-size: 15px; color: #fff; }
-    .detail-grid { display: grid; grid-template-columns: 120px 1fr; gap: 8px 12px; font-size: 12px; margin-bottom: 14px; }
+    .application-detail-panel[hidden] { display: none; }
+    .detail-card { border: 1px solid #333; background: rgba(0,0,0,.25); padding: 16px; min-height: 240px; }
+    .detail-card h3 { margin: 0; font-size: 20px; color: #fff; }
+    .detail-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 14px; }
+    .detail-kicker { margin: 4px 0 0; color: #aaa; font-size: 12px; }
+    .detail-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; border-bottom: 1px solid #333; padding-bottom: 10px; }
+    .tab-btn { padding: 8px 12px; border: 1px solid #444; border-radius: 4px; background: #101010; color: #ddd; font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; cursor: pointer; }
+    .tab-btn:hover { border-color: #777; color: #fff; }
+    .tab-btn.is-active { border-color: #c00; background: rgba(229,9,20,.18); color: #fff; }
+    .tab-panel[hidden] { display: none; }
+    .detail-grid { display: grid; grid-template-columns: minmax(140px, 210px) minmax(0, 1fr); gap: 10px 16px; font-size: 12px; margin-bottom: 14px; }
     .detail-grid dt { color: #888; font-weight: 900; text-transform: uppercase; font-size: 10px; margin: 0; }
     .detail-grid dd { margin: 0; color: #eee; line-height: 1.45; white-space: pre-wrap; }
     .detail-empty { color: #888; font-size: 12px; line-height: 1.5; }
     .snapshot-card { margin-top: 16px; padding-top: 14px; border-top: 1px solid #333; }
+    .tab-panel .snapshot-card:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
     .snapshot-card h4 { margin: 0 0 10px; font-size: 13px; color: #ff3030; text-transform: uppercase; letter-spacing: .04em; }
     .snapshot-status { display: inline-block; margin-bottom: 10px; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; color: #bbb; }
     .snapshot-status.completed { color: #7fd99a; }
@@ -49,9 +58,14 @@
     .snapshot-table th { color: #888; font-size: 10px; text-transform: uppercase; }
     .snapshot-table tr.is-primary td { color: #fff; background: rgba(229,9,20,.08); }
     .snapshot-subhead { margin: 12px 0 6px; font-size: 11px; color: #aaa; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; }
-    .stats-category-select { max-width: 240px; margin-bottom: 10px; }
+    .stats-category-select { max-width: 280px; margin-bottom: 10px; }
+    .lookup-status-card { margin: 12px 0 16px; padding: 12px; border: 1px solid #333; background: rgba(255,255,255,.03); }
+    .lookup-status-card .btn-row { margin-top: 10px; }
+    .section-heading { margin: 0 0 10px; font-size: 13px; color: #aaa; text-transform: uppercase; letter-spacing: .04em; }
     @media (max-width: 980px) {
-      .applications-layout { grid-template-columns: 1fr; }
+      .detail-header { display: block; }
+      .detail-header .btn-row { margin-top: 12px; }
+      .detail-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -74,7 +88,7 @@
     <p class="sub">Review submitted Join Blazing Pedals applications, update status, and leave internal admin notes.</p>
 
     <div class="applications-layout">
-      <section class="panel">
+      <section id="applicationsListPanel" class="panel">
         <h2>Applications</h2>
         <div class="table-wrap">
           <table class="applications-table">
@@ -95,8 +109,10 @@
         </div>
       </section>
 
-      <section class="panel">
-        <h2>Application Detail</h2>
+      <section id="applicationDetailPanel" class="panel application-detail-panel" hidden>
+        <div class="btn-row">
+          <button id="backToApplicationsBtn" class="btn btn-secondary" type="button">Back to Applications</button>
+        </div>
         <div id="applicationDetail" class="detail-card">
           <p class="detail-empty">Select an application from the list to view full details.</p>
         </div>
@@ -111,6 +127,7 @@
     const STATUS_OPTIONS = ['pending', 'reviewing', 'approved', 'rejected', 'waitlist', 'recruiting_race'];
     let applications = [];
     let selectedId = '';
+    let activeDetailTab = 'application';
 
     function $(sel) { return document.querySelector(sel); }
 
@@ -176,6 +193,17 @@
       msg.classList.toggle('error', isError);
     }
 
+    function showApplicationsList() {
+      $('#applicationsListPanel').hidden = false;
+      $('#applicationDetailPanel').hidden = true;
+    }
+
+    function showApplicationDetailPage() {
+      $('#applicationsListPanel').hidden = true;
+      $('#applicationDetailPanel').hidden = false;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
     function formatDate(value) {
       if (!value) return '—';
       const date = new Date(value);
@@ -224,6 +252,17 @@
       return data;
     }
 
+    async function apiRefreshIracingData(id) {
+      const res = await fetch(`/api/admin/driver-applications/${encodeURIComponent(id)}/refresh-iracing`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: getSessionPw(), reason: 'manual_refresh' })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to refresh iRacing data.');
+      return data.job;
+    }
+
     function renderApplicationsTable() {
       const body = $('#applicationsBody');
       if (!applications.length) {
@@ -246,7 +285,9 @@
       body.querySelectorAll('tr[data-id]').forEach((row) => {
         row.addEventListener('click', () => {
           selectedId = row.dataset.id;
+          activeDetailTab = 'application';
           renderApplicationsTable();
+          showApplicationDetailPage();
           void loadApplicationDetail();
         });
       });
@@ -275,6 +316,10 @@
       const raw = snapshot?.yearly_stats_json;
       if (!raw) return [];
       return Array.isArray(raw) ? raw : [];
+    }
+
+    function yearlyClassName(entry) {
+      return String(entry?.category || entry?.class || entry?.license_class || entry?.licenseClass || 'Uncategorized').trim() || 'Uncategorized';
     }
 
     function renderLicenseCategoriesTable(snapshot) {
@@ -333,6 +378,26 @@
       `;
     }
 
+    function renderYearlyRows(yearly, selectedClass) {
+      const rows = yearly
+        .filter((entry) => selectedClass === '__all__' || yearlyClassName(entry) === selectedClass)
+        .sort((a, b) => String(b.year || '').localeCompare(String(a.year || ''), undefined, { numeric: true }))
+        .map((entry) => `
+          <tr>
+            <td>${escapeHtml(entry.year)}</td>
+            <td>${escapeHtml(yearlyClassName(entry))}</td>
+            <td>${escapeHtml(entry.starts)}</td>
+            <td>${escapeHtml(entry.wins)}</td>
+            <td>${escapeHtml(entry.top5)}</td>
+            <td>${escapeHtml(entry.avg_finish ?? entry.avgFinish)}</td>
+            <td>${escapeHtml(entry.incidents_per_race ?? entry.incidentsPerRace)}</td>
+          </tr>
+        `)
+        .join('');
+
+      return rows || '<tr><td colspan="7">No yearly rows match this selection.</td></tr>';
+    }
+
     function renderYearlyProgressionSection(snapshot) {
       const yearly = normalizeYearlyStats(snapshot);
       const status = snapshot?.yearly_parse_status || 'unknown';
@@ -347,29 +412,23 @@
         `;
       }
 
-      const rows = yearly
-        .slice(0, 40)
-        .map((entry) => `
-          <tr>
-            <td>${escapeHtml(entry.year)}</td>
-            <td>${escapeHtml(entry.category)}</td>
-            <td>${escapeHtml(entry.starts)}</td>
-            <td>${escapeHtml(entry.wins)}</td>
-            <td>${escapeHtml(entry.top5)}</td>
-            <td>${escapeHtml(entry.avg_finish ?? entry.avgFinish)}</td>
-            <td>${escapeHtml(entry.incidents_per_race ?? entry.incidentsPerRace)}</td>
-          </tr>
-        `)
+      const classes = [...new Set(yearly.map(yearlyClassName))].sort((a, b) => a.localeCompare(b));
+      const options = [
+        '<option value="__all__" selected>All yearly stats</option>',
+        ...classes.map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`)
+      ]
         .join('');
 
       return `
         <div class="snapshot-subhead">Yearly Progression</div>
         <div class="snapshot-status ${escapeHtml(status)}">${escapeHtml(String(status).replace(/_/g, ' '))}</div>
+        <label class="field-label" for="yearlyStatsClassSelect">Yearly Stats</label>
+        <select id="yearlyStatsClassSelect" class="select stats-category-select">${options}</select>
         <table class="snapshot-table">
           <thead>
             <tr>
               <th>Year</th>
-              <th>Category</th>
+              <th>Class</th>
               <th>Starts</th>
               <th>Wins</th>
               <th>Top 5</th>
@@ -377,7 +436,7 @@
               <th>Inc/Race</th>
             </tr>
           </thead>
-          <tbody>${rows}</tbody>
+          <tbody id="yearlyStatsRows">${renderYearlyRows(yearly, '__all__')}</tbody>
         </table>
       `;
     }
@@ -394,6 +453,31 @@
 
       select.addEventListener('change', update);
       update();
+    }
+
+    function bindYearlyStatsSelector(snapshot) {
+      const select = document.getElementById('yearlyStatsClassSelect');
+      const body = document.getElementById('yearlyStatsRows');
+      if (!select || !body) return;
+
+      const yearly = normalizeYearlyStats(snapshot);
+      select.addEventListener('change', () => {
+        body.innerHTML = renderYearlyRows(yearly, select.value);
+      });
+    }
+
+    function bindDetailTabs() {
+      document.querySelectorAll('.tab-btn[data-tab]').forEach((button) => {
+        button.addEventListener('click', () => {
+          activeDetailTab = button.dataset.tab;
+          document.querySelectorAll('.tab-btn[data-tab]').forEach((item) => {
+            item.classList.toggle('is-active', item.dataset.tab === activeDetailTab);
+          });
+          document.querySelectorAll('.tab-panel[data-tab-panel]').forEach((panel) => {
+            panel.hidden = panel.dataset.tabPanel !== activeDetailTab;
+          });
+        });
+      });
     }
 
     function renderSnapshotSection(snapshot) {
@@ -461,7 +545,7 @@
             ${detailField('Primary Category', snapshot.category || 'Oval')}
             ${detailField('Review Note', snapshot.scrape_error)}
           </dl>
-          <label class="field-label" for="statsCategorySelect">Select Category</label>
+          <label class="field-label" for="statsCategorySelect">Lifetime Stats Category</label>
           <select id="statsCategorySelect" class="select stats-category-select">${categoryOptions}</select>
           <div id="statsCategoryMount"></div>
           ${renderYearlyProgressionSection(snapshot)}
@@ -469,7 +553,45 @@
       `;
     }
 
-    function renderApplicationDetail(row, latestSnapshot = null, latestStatsSnapshot = null) {
+    function lookupStatusLabel(job) {
+      if (!job) return 'Not checked';
+      const labels = {
+        queued: 'Queued',
+        processing: 'Processing',
+        needs_login: 'Needs login',
+        completed: 'Completed',
+        failed: 'Failed'
+      };
+      return labels[job.status] || 'Not checked';
+    }
+
+    function latestRefreshTimestamp(latestSnapshot, latestStatsSnapshot) {
+      const values = [
+        latestSnapshot?.created_at,
+        latestStatsSnapshot?.created_at
+      ].filter(Boolean);
+      if (!values.length) return null;
+      return values
+        .map((value) => ({ value, time: new Date(value).getTime() }))
+        .filter((entry) => Number.isFinite(entry.time))
+        .sort((a, b) => b.time - a.time)[0]?.value || values[0];
+    }
+
+    function renderLookupStatusSection(job, latestSnapshot, latestStatsSnapshot) {
+      const status = lookupStatusLabel(job);
+      const refreshedAt = latestRefreshTimestamp(latestSnapshot, latestStatsSnapshot);
+      return `
+        <div class="lookup-status-card">
+          <dl class="detail-grid">
+            ${detailField('Latest Lookup Status', status)}
+            ${detailField('Last Refreshed', refreshedAt ? formatDate(refreshedAt) : 'Not checked')}
+            ${detailField('Lookup Note', job?.error || '')}
+          </dl>
+        </div>
+      `;
+    }
+
+    function renderApplicationDetail(row, latestSnapshot = null, latestStatsSnapshot = null, latestLookupJob = null) {
       const mount = $('#applicationDetail');
       if (!row) {
         mount.innerHTML = '<p class="detail-empty">Select an application from the list to view full details.</p>';
@@ -482,36 +604,63 @@
       }).join('');
 
       mount.innerHTML = `
-        <h3>${escapeHtml(row.iracing_display_name || row.driver_name || 'Application')}</h3>
-        <dl class="detail-grid">
-          ${detailField('Submitted', formatDate(row.created_at))}
-          ${detailField('Updated', formatDate(row.updated_at))}
-          ${detailField('iRacing Display Name', row.iracing_display_name)}
-          ${detailField('iRacing Customer ID', row.iracing_customer_id)}
-          ${detailField('Applicant Name / Real Name', row.driver_name)}
-          ${detailField('Discord Username', row.discord_name)}
-          ${detailField('Email', row.email)}
-          ${detailField('Age Confirmed', row.age_confirmed ? 'Yes' : 'No')}
-          ${detailField('Time Zone', row.timezone)}
-          ${detailField('Preferred Number', row.preferred_number)}
-          ${detailField('Referred By', row.referred_by)}
-          ${detailField('Racing Background', row.racing_background)}
-          ${detailField('Why Join', row.why_join)}
-        </dl>
-        ${renderSnapshotSection(latestSnapshot)}
-        ${renderStatsSnapshotSection(latestStatsSnapshot)}
-        <label class="field-label" for="detailStatus">Status</label>
-        <select id="detailStatus" class="select">${statusOptions}</select>
-        <label class="field-label" for="detailNotes">Admin Notes</label>
-        <textarea id="detailNotes" class="textarea">${escapeHtml(row.admin_notes || '')}</textarea>
-        <div class="btn-row">
-          <button id="saveApplicationBtn" class="btn" type="button">Save Changes</button>
+        <div class="detail-header">
+          <div>
+            <h3>${escapeHtml(row.iracing_display_name || row.driver_name || 'Application')}</h3>
+            <p class="detail-kicker">${escapeHtml(row.iracing_customer_id || 'No customer ID')} &bull; ${escapeHtml(row.email || 'No email')} &bull; ${statusPill(row.status)}</p>
+          </div>
+          <div class="btn-row">
+            <button id="refreshIracingBtn" class="btn btn-secondary" type="button">Refresh iRacing Data</button>
+          </div>
         </div>
+        <div class="detail-tabs" role="tablist" aria-label="Application detail sections">
+          <button class="tab-btn ${activeDetailTab === 'application' ? 'is-active' : ''}" type="button" data-tab="application">Application</button>
+          <button class="tab-btn ${activeDetailTab === 'licenses' ? 'is-active' : ''}" type="button" data-tab="licenses">Licenses</button>
+          <button class="tab-btn ${activeDetailTab === 'stats' ? 'is-active' : ''}" type="button" data-tab="stats">Stats</button>
+          <button class="tab-btn ${activeDetailTab === 'admin' ? 'is-active' : ''}" type="button" data-tab="admin">Admin</button>
+        </div>
+        <section class="tab-panel" data-tab-panel="application" ${activeDetailTab === 'application' ? '' : 'hidden'}>
+          <h4 class="section-heading">Applicant Info</h4>
+          <dl class="detail-grid">
+            ${detailField('Submitted', formatDate(row.created_at))}
+            ${detailField('Updated', formatDate(row.updated_at))}
+            ${detailField('iRacing Display Name', row.iracing_display_name)}
+            ${detailField('iRacing Customer ID', row.iracing_customer_id)}
+            ${detailField('Applicant Name / Real Name', row.driver_name)}
+            ${detailField('Discord Username', row.discord_name)}
+            ${detailField('Email', row.email)}
+            ${detailField('Age Confirmed', row.age_confirmed ? 'Yes' : 'No')}
+            ${detailField('Time Zone', row.timezone)}
+            ${detailField('Preferred Number', row.preferred_number)}
+            ${detailField('Referred By', row.referred_by)}
+            ${detailField('Racing Background', row.racing_background)}
+            ${detailField('Why Join', row.why_join)}
+          </dl>
+          ${renderLookupStatusSection(latestLookupJob, latestSnapshot, latestStatsSnapshot)}
+        </section>
+        <section class="tab-panel" data-tab-panel="licenses" ${activeDetailTab === 'licenses' ? '' : 'hidden'}>
+          ${renderSnapshotSection(latestSnapshot)}
+        </section>
+        <section class="tab-panel" data-tab-panel="stats" ${activeDetailTab === 'stats' ? '' : 'hidden'}>
+          ${renderStatsSnapshotSection(latestStatsSnapshot)}
+        </section>
+        <section class="tab-panel" data-tab-panel="admin" ${activeDetailTab === 'admin' ? '' : 'hidden'}>
+          <label class="field-label" for="detailStatus">Status</label>
+          <select id="detailStatus" class="select">${statusOptions}</select>
+          <label class="field-label" for="detailNotes">Admin Notes</label>
+          <textarea id="detailNotes" class="textarea">${escapeHtml(row.admin_notes || '')}</textarea>
+          <div class="btn-row">
+            <button id="saveApplicationBtn" class="btn" type="button">Save Changes</button>
+          </div>
+        </section>
       `;
 
-      $('#saveApplicationBtn').addEventListener('click', saveSelectedApplication);
+      $('#saveApplicationBtn')?.addEventListener('click', saveSelectedApplication);
+      $('#refreshIracingBtn').addEventListener('click', refreshSelectedIracingData);
+      bindDetailTabs();
       if (latestStatsSnapshot) {
         bindStatsCategorySelector(latestStatsSnapshot);
+        bindYearlyStatsSelector(latestStatsSnapshot);
       }
     }
 
@@ -528,9 +677,27 @@
         const data = await apiGetApplicationDetail(selectedId);
         const application = data.application || row;
         applications = applications.map((item) => (item.id === application.id ? application : item));
-        renderApplicationDetail(application, data.latest_snapshot || null, data.latest_stats_snapshot || null);
+        renderApplicationDetail(
+          application,
+          data.latest_snapshot || null,
+          data.latest_stats_snapshot || null,
+          data.latest_lookup_job || null
+        );
       } catch (error) {
         mount.innerHTML = `<p class="detail-empty">${escapeHtml(error.message)}</p>`;
+      }
+    }
+
+    async function refreshSelectedIracingData() {
+      if (!selectedId) return;
+      setMsg('Queueing iRacing refresh...');
+      try {
+        const job = await apiRefreshIracingData(selectedId);
+        setMsg(`iRacing refresh queued. Job status: ${job.status}.`);
+        await loadApplicationDetail();
+      } catch (error) {
+        setMsg(error.message, true);
+        await loadApplicationDetail();
       }
     }
 
@@ -574,6 +741,7 @@
     $('#loginPw')?.addEventListener('keydown', (event) => {
       if (event.key === 'Enter') login();
     });
+    $('#backToApplicationsBtn')?.addEventListener('click', showApplicationsList);
 
     initSession();
   </script>
