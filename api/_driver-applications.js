@@ -1,4 +1,5 @@
 import { supabase } from './_lib.js';
+import { createSrhCareerSnapshotForApplication } from './_driver-application-srh-career-snapshots.js';
 
 export const OPEN_APPLICATION_STATUSES = [
   'pending',
@@ -16,6 +17,15 @@ export const APPLICATION_STATUSES = [
   'recruiting_race',
 ];
 
+export const IRACING_LOOKUP_ACTIVE_STATUSES = ['queued', 'processing', 'needs_login'];
+
+export const IRACING_LOOKUP_REASONS = [
+  'application_submitted',
+  'manual_refresh',
+  'scheduled_refresh',
+  'retry_failed',
+];
+
 function normalizeOptionalText(value) {
   const text = String(value ?? '').trim();
   return text || null;
@@ -23,6 +33,11 @@ function normalizeOptionalText(value) {
 
 function normalizeCustomerId(value) {
   return String(value ?? '').trim().replace(/\D/g, '');
+}
+
+function normalizeLookupReason(value) {
+  const reason = String(value || '').trim();
+  return IRACING_LOOKUP_REASONS.includes(reason) ? reason : 'manual_refresh';
 }
 
 export function validateApplicationPayload(body = {}) {
@@ -129,7 +144,23 @@ export async function submitDriverApplication(body) {
     return { ok: false, status: 500, error: error.message || 'Failed to save application.' };
   }
 
-  return { ok: true, status: 201, application: data };
+  let srh_career_snapshot = null;
+  let srh_career_snapshot_error = null;
+  try {
+    const srhResult = await createSrhCareerSnapshotForApplication(data);
+    srh_career_snapshot = srhResult.snapshot || null;
+  } catch (snapshotError) {
+    srh_career_snapshot_error =
+      snapshotError?.message || 'Application saved, but SRH career lookup failed.';
+  }
+
+  return {
+    ok: true,
+    status: 201,
+    application: data,
+    srh_career_snapshot,
+    srh_career_snapshot_error,
+  };
 }
 
 export async function listDriverApplications() {
@@ -145,6 +176,25 @@ export async function listDriverApplications() {
 
   if (error) throw new Error(error.message);
   return data || [];
+}
+
+export async function getLatestIracingLookupJobForApplication(id) {
+  const sb = supabase();
+  if (!sb) throw new Error('Supabase not configured yet.');
+
+  const applicationId = String(id || '').trim();
+  if (!applicationId) return null;
+
+  const { data, error } = await sb
+    .from('iracing_lookup_jobs')
+    .select('id, created_at, updated_at, application_id, customer_id, status, reason, attempts, worker_name, started_at, completed_at, error')
+    .eq('application_id', applicationId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  return data;
 }
 
 export async function getDriverApplicationById(id) {
@@ -201,4 +251,66 @@ export async function updateDriverApplication(id, patch = {}) {
   }
 
   return { ok: true, status: 200, application: data };
+}
+
+export async function enqueueIracingLookupJob(applicationId, customerId, reason = 'manual_refresh') {
+  const sb = supabase();
+  if (!sb) throw new Error('Supabase not configured yet.');
+
+  const normalizedApplicationId = String(applicationId || '').trim();
+  const normalizedCustomerId = normalizeCustomerId(customerId);
+  if (!normalizedApplicationId) {
+    return { ok: false, status: 400, error: 'Application id is required.' };
+  }
+  if (!normalizedCustomerId) {
+    return { ok: false, status: 400, error: 'iRacing Customer ID is required.' };
+  }
+
+  const lookupReason = normalizeLookupReason(reason);
+
+  const { data: activeJob, error: activeError } = await sb
+    .from('iracing_lookup_jobs')
+    .select('id, status, created_at, updated_at')
+    .eq('application_id', normalizedApplicationId)
+    .in('status', IRACING_LOOKUP_ACTIVE_STATUSES)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (activeError) {
+    return { ok: false, status: 500, error: activeError.message || 'Failed to check active lookup jobs.' };
+  }
+
+  if (activeJob) {
+    return {
+      ok: false,
+      status: 409,
+      error: 'Lookup already queued or processing.',
+      job: activeJob,
+    };
+  }
+
+  const { data: job, error } = await sb
+    .from('iracing_lookup_jobs')
+    .insert({
+      application_id: normalizedApplicationId,
+      customer_id: normalizedCustomerId,
+      status: 'queued',
+      reason: lookupReason,
+    })
+    .select('id, created_at, updated_at, application_id, customer_id, status, reason, attempts, worker_name, started_at, completed_at, error')
+    .single();
+
+  if (error) {
+    if (error.code === '23505') {
+      return {
+        ok: false,
+        status: 409,
+        error: 'Lookup already queued or processing.',
+      };
+    }
+    return { ok: false, status: 500, error: error.message || 'Failed to enqueue lookup job.' };
+  }
+
+  return { ok: true, status: 201, job };
 }

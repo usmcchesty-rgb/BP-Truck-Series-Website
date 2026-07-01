@@ -58,13 +58,19 @@ import {
 } from './_fantasy-slate-progression.js';
 import { getFantasyAuthConfig, getUserFromBearerToken } from './_fantasy-auth.js';
 import {
+  enqueueIracingLookupJob,
   getDriverApplicationById,
+  getLatestIracingLookupJobForApplication,
   listDriverApplications,
   submitDriverApplication,
   updateDriverApplication,
 } from './_driver-applications.js';
 import { getLatestIracingSnapshotForApplication } from './_driver-application-iracing-snapshots.js';
 import { getLatestIracingStatsSnapshotForApplication } from './_driver-application-iracing-stats-snapshots.js';
+import {
+  createSrhCareerSnapshotForApplication,
+  getLatestSrhCareerSnapshotForApplication,
+} from './_driver-application-srh-career-snapshots.js';
 import {
   getAnalyticsDailyTraffic,
   getAnalyticsDevices,
@@ -118,6 +124,8 @@ async function handleDriverApplicationRoutes(req, res) {
       res.status(result.status).json({
         ok: true,
         application: result.application,
+        srh_career_snapshot: result.srh_career_snapshot || null,
+        srh_career_snapshot_error: result.srh_career_snapshot_error || null,
         message:
           'Application received. Our staff will review your information and contact you if we need anything else.',
       });
@@ -166,7 +174,16 @@ async function handleDriverApplicationRoutes(req, res) {
       }
       const latest_snapshot = await getLatestIracingSnapshotForApplication(applicationId);
       const latest_stats_snapshot = await getLatestIracingStatsSnapshotForApplication(applicationId);
-      res.status(200).json({ application, latest_snapshot, latest_stats_snapshot });
+      const latest_lookup_job = await getLatestIracingLookupJobForApplication(applicationId);
+      const latest_srh_career_snapshot =
+        await getLatestSrhCareerSnapshotForApplication(applicationId);
+      res.status(200).json({
+        application,
+        latest_snapshot,
+        latest_stats_snapshot,
+        latest_lookup_job,
+        latest_srh_career_snapshot,
+      });
       return true;
     } catch (error) {
       res.status(500).json({ error: error.message || 'Failed to load application.' });
@@ -200,6 +217,70 @@ async function handleDriverApplicationRoutes(req, res) {
       return true;
     } catch (error) {
       res.status(500).json({ error: error.message || 'Failed to update application.' });
+      return true;
+    }
+  }
+
+  const isIracingRefresh =
+    req.method === 'POST' &&
+    applicationId &&
+    (action === 'refreshIracingLookup' ||
+      queryAction === 'refreshIracingLookup' ||
+      queryAction === 'refreshDriverApplicationIracing');
+  if (isIracingRefresh) {
+    if (!isAdminPasswordValid(req, body)) {
+      res.status(401).json({ error: 'Bad password' });
+      return true;
+    }
+    try {
+      const application = await getDriverApplicationById(applicationId);
+      if (!application) {
+        res.status(404).json({ error: 'Application not found.' });
+        return true;
+      }
+      const result = await enqueueIracingLookupJob(
+        application.id,
+        application.iracing_customer_id,
+        body.reason || 'manual_refresh'
+      );
+      if (!result.ok) {
+        res.status(result.status).json({ error: result.error, job: result.job || null });
+        return true;
+      }
+      res.status(result.status).json({ ok: true, job: result.job });
+      return true;
+    } catch (error) {
+      res.status(500).json({ error: error.message || 'Failed to refresh iRacing data.' });
+      return true;
+    }
+  }
+
+  const isSrhRefresh =
+    req.method === 'POST' &&
+    applicationId &&
+    (action === 'refreshDriverApplicationSrh' ||
+      action === 'refreshSrhCareerStats' ||
+      queryAction === 'refreshDriverApplicationSrh' ||
+      queryAction === 'refreshSrhCareerStats');
+  if (isSrhRefresh) {
+    if (!isAdminPasswordValid(req, body)) {
+      res.status(401).json({ error: 'Bad password' });
+      return true;
+    }
+    try {
+      const application = await getDriverApplicationById(applicationId);
+      if (!application) {
+        res.status(404).json({ error: 'Application not found.' });
+        return true;
+      }
+      const result = await createSrhCareerSnapshotForApplication(application);
+      res.status(result.ok ? 201 : 200).json({
+        ok: result.ok,
+        snapshot: result.snapshot || null,
+      });
+      return true;
+    } catch (error) {
+      res.status(500).json({ error: error.message || 'Failed to refresh SRH career stats.' });
       return true;
     }
   }
