@@ -1023,6 +1023,13 @@ footer{
   flex:1 1 220px;
   margin-bottom:0;
 }
+.join-lookup-row--manual .join-input--lookup{
+  flex:1 1 100%;
+  width:100%;
+}
+.join-lookup-btn[hidden]{
+  display:none;
+}
 .join-lookup-btn{
   flex:0 0 auto;
   border:1px solid #ff2424;

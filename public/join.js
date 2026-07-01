@@ -1,4 +1,6 @@
 (function () {
+  const ENABLE_IRACING_LOOKUP_UI = false;
+
   const form = document.getElementById('joinApplicationForm');
   const errorEl = document.getElementById('joinFormError');
   const lookupStatusEl = document.getElementById('lookupStatus');
@@ -9,8 +11,34 @@
   const successMessage = document.getElementById('joinSuccessMessage');
   const customerIdInput = document.getElementById('iracingCustomerId');
   const displayNameInput = document.getElementById('iracingDisplayName');
+  const displayNameHelpEl = document.getElementById('iracingDisplayNameHelp');
+  const lookupRowEl = document.querySelector('.join-lookup-row');
 
   if (!form) return;
+
+  function configureLookupUi() {
+    if (ENABLE_IRACING_LOOKUP_UI) {
+      if (lookupBtn) lookupBtn.hidden = false;
+      if (lookupStatusEl) lookupStatusEl.hidden = true;
+      if (displayNameHelpEl) {
+        displayNameHelpEl.textContent =
+          'Enter your name exactly as it appears in iRacing, including any trailing number. This may be auto-filled after lookup.';
+      }
+      lookupRowEl?.classList.remove('join-lookup-row--manual');
+      return;
+    }
+
+    if (lookupBtn) lookupBtn.hidden = true;
+    if (lookupStatusEl) {
+      lookupStatusEl.textContent = '';
+      lookupStatusEl.hidden = true;
+    }
+    if (displayNameHelpEl) {
+      displayNameHelpEl.textContent =
+        'Enter your name exactly as it appears in iRacing, including any trailing number.';
+    }
+    lookupRowEl?.classList.add('join-lookup-row--manual');
+  }
 
   function showError(message) {
     if (!errorEl) return;
@@ -19,7 +47,7 @@
   }
 
   function showLookupStatus(message, type = '') {
-    if (!lookupStatusEl) return;
+    if (!ENABLE_IRACING_LOOKUP_UI || !lookupStatusEl) return;
     lookupStatusEl.textContent = message;
     lookupStatusEl.hidden = !message;
     lookupStatusEl.classList.remove('join-form-message--success', 'join-form-message--warning');
@@ -53,12 +81,18 @@
     return errors;
   }
 
+  configureLookupUi();
+
   customerIdInput?.addEventListener('input', () => {
     customerIdInput.value = customerIdInput.value.replace(/\D/g, '');
-    showLookupStatus('');
+    if (ENABLE_IRACING_LOOKUP_UI) {
+      showLookupStatus('');
+    }
   });
 
   lookupBtn?.addEventListener('click', async () => {
+    if (!ENABLE_IRACING_LOOKUP_UI) return;
+
     showError('');
     const customerId = customerIdInput?.value?.trim() || '';
     if (!customerId) {
