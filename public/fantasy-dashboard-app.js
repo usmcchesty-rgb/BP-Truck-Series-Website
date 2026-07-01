@@ -98,7 +98,12 @@
           : 'Edit Lineup'
         : playable
           ? 'Build Lineup'
-          : 'View Race Slate';
+          : 'Driver Outlook';
+
+    const lineupActionHref =
+      playable || lineup?.drivers?.length || raceComplete
+        ? '/fantasy/lineup.html'
+        : '/fantasy/slate.html';
 
     const notSubmittedCopy = raceComplete
       ? `Race ${escapeHtml(slate?.raceNumber ?? '—')} is complete. Fantasy scoring is pending.`
@@ -107,7 +112,7 @@
         : 'The next BP Fantasy slate has not been published yet.';
 
     return `
-      <section class="fantasy-app-section fantasy-dashboard-auth-panel fantasy-glass-panel">
+      <section class="fantasy-app-section fantasy-dashboard-auth-panel fantasy-glass-panel" id="fantasyDashboardProfile">
         <h2 class="fantasy-app-section-title">Welcome, ${escapeHtml(profile.displayName || profile.email || 'Player')}</h2>
         <div class="fantasy-slate-meta-grid">
           <div><span>Email</span><strong>${escapeHtml(profile.email || '—')}</strong></div>
@@ -125,8 +130,60 @@
             : `<p class="fantasy-app-copy">${notSubmittedCopy}</p>`
         }
         <div class="fantasy-cta-actions">
-          <a class="fantasy-btn fantasy-btn--primary" href="/fantasy/lineup.html">${escapeHtml(lineupActionLabel)}</a>
+          <a class="fantasy-btn fantasy-btn--primary" href="${escapeHtml(lineupActionHref)}">${escapeHtml(lineupActionLabel)}</a>
           <button type="button" id="fantasyLogoutBtn" class="fantasy-btn fantasy-btn--secondary">Log Out</button>
+        </div>
+      </section>`;
+  }
+
+  function formatCountdown(nextRaceDate) {
+    if (!nextRaceDate) return null;
+    const target = new Date(nextRaceDate);
+    if (Number.isNaN(target.getTime())) return null;
+
+    const diffMs = target.getTime() - Date.now();
+    if (diffMs <= 0) return 'Next race is underway or recently completed.';
+
+    const days = Math.floor(diffMs / 86400000);
+    const hours = Math.floor((diffMs % 86400000) / 3600000);
+    const minutes = Math.floor((diffMs % 3600000) / 60000);
+
+    if (days > 0) return `${days} day${days === 1 ? '' : 's'}, ${hours} hour${hours === 1 ? '' : 's'} until next race`;
+    if (hours > 0) return `${hours} hour${hours === 1 ? '' : 's'}, ${minutes} minute${minutes === 1 ? '' : 's'} until next race`;
+    return `${minutes} minute${minutes === 1 ? '' : 's'} until next race`;
+  }
+
+  function renderNoActiveSlatePanel(progression, slate) {
+    const countdown = formatCountdown(progression?.nextRaceDate);
+    const nextRaceLabel = progression?.nextRaceNumber
+      ? `Race ${progression.nextRaceNumber}${progression.nextRaceTrack ? ` — ${progression.nextRaceTrack}` : ''}`
+      : null;
+    const hasPreviousResults = Boolean(
+      progression?.isArchived ||
+      progression?.slatePhase === 'race-complete' ||
+      (slate?.raceNumber && slate?.raceComplete)
+    );
+
+    return `
+      <section class="fantasy-app-section fantasy-dashboard-idle-panel fantasy-glass-panel">
+        <h2 class="fantasy-app-section-title">No Active Fantasy Slate</h2>
+        <p class="fantasy-app-copy">There is no active fantasy slate right now. Check back when the next race slate is published.</p>
+        ${
+          nextRaceLabel
+            ? `<div class="fantasy-slate-meta-grid">
+                <div><span>Next Race</span><strong>${escapeHtml(nextRaceLabel)}</strong></div>
+                ${countdown ? `<div><span>Countdown</span><strong>${escapeHtml(countdown)}</strong></div>` : ''}
+              </div>`
+            : ''
+        }
+        <div class="fantasy-cta-actions">
+          <a class="fantasy-btn fantasy-btn--primary" href="/fantasy/slate.html">Driver Outlook</a>
+          <a class="fantasy-btn fantasy-btn--secondary" href="/fantasy/rules.html">View Rules</a>
+          ${
+            hasPreviousResults
+              ? `<a class="fantasy-btn fantasy-btn--secondary" href="/fantasy/standings.html">Previous Results</a>`
+              : ''
+          }
         </div>
       </section>`;
   }
@@ -144,29 +201,31 @@
     const hasPublishedSlate = Boolean(slate?.raceNumber);
     const raceComplete = Boolean(slate?.raceComplete || progression?.slatePhase === 'race-complete');
     const playable = progression?.isPlayable !== false && slate?.playable !== false;
+    const hasActiveSlate = playable && hasPublishedSlate && !raceComplete;
 
     return `
       <section class="fantasy-app-hero-panel fantasy-glass-panel fantasy-dashboard-hero">
         <p class="fantasy-app-eyebrow">BP Fantasy Central</p>
-        <h1 class="fantasy-app-page-title">${hasPublishedSlate ? `Race ${escapeHtml(slate.raceNumber)} — ${escapeHtml(slate.track || 'TBD')}` : 'BP Fantasy Central'}</h1>
+        <h1 class="fantasy-app-page-title">${hasActiveSlate ? `Race ${escapeHtml(slate.raceNumber)} — ${escapeHtml(slate.track || 'TBD')}` : 'BP Fantasy Dashboard'}</h1>
         ${
-          hasPublishedSlate
+          hasActiveSlate
             ? `<div class="fantasy-slate-meta-grid">
                 <div><span>Current Race</span><strong>Race ${escapeHtml(slate.raceNumber)}</strong></div>
                 <div><span>Lock</span><strong>${escapeHtml(slate.lockTime || lock.lockMessage || 'TBD')}</strong></div>
-                <div><span>Slate</span><strong>${escapeHtml(raceComplete ? 'Race complete' : playable ? 'Active' : 'Archived')}</strong></div>
+                <div><span>Slate</span><strong>${escapeHtml(raceComplete ? 'Race complete' : 'Active')}</strong></div>
                 <div><span>Salary Cap</span><strong>${formatMoney(slate.salaryCap ?? 50000)}</strong></div>
               </div>
-              ${raceComplete ? '<p class="fantasy-app-copy">This race has results posted. Fantasy scoring is pending for this slate.</p>' : ''}
-              ${!playable && !raceComplete && progression?.nextRaceNumber ? `<p class="fantasy-app-copy">Next race: Race ${escapeHtml(progression.nextRaceNumber)}${progression.nextRaceTrack ? ` — ${escapeHtml(progression.nextRaceTrack)}` : ''}. Slate coming soon.</p>` : ''}`
-            : `<p class="fantasy-app-copy">The next BP Fantasy slate has not been published yet. Check back soon.</p>`
+              ${raceComplete ? '<p class="fantasy-app-copy">This race has results posted. Fantasy scoring is pending for this slate.</p>' : ''}`
+            : `<p class="fantasy-app-copy"><strong>No active fantasy slate.</strong> The next BP Fantasy slate has not been published yet.</p>`
         }
       </section>
+
+      ${hasActiveSlate ? '' : renderNoActiveSlatePanel(progression, slate)}
 
       ${lineupStatusCard(profile, slate, lineup, lock, progression)}
 
       ${
-        hasPublishedSlate
+        hasActiveSlate
           ? `<section class="fantasy-app-section">
               <h2 class="fantasy-app-section-title">This Week at a Glance</h2>
               <div class="fantasy-dashboard-stat-grid">
@@ -190,11 +249,12 @@
       <section class="fantasy-app-section">
         <h2 class="fantasy-app-section-title">Explore BP Fantasy</h2>
         <div class="fantasy-dashboard-link-grid">
-          ${quickLink('/fantasy/lineup.html', 'Lineup Builder', 'Pick and submit your 5-driver lineup')}
-          ${quickLink('/fantasy/slate.html', 'Race Slate', 'Salaries, rankings, ownership, and tiers')}
-          ${quickLink('/fantasy/standings.html', 'Standings', 'See submitted fantasy lineups')}
-          ${quickLink('/fantasy/compare.html', 'Compare Drivers', 'Side-by-side fantasy matchup')}
+          ${quickLink('/fantasy/slate.html', 'Current Slate', 'Salaries, rankings, ownership, and tiers')}
+          ${quickLink('/fantasy/lineup.html', 'My Lineups', 'Pick and submit your 5-driver lineup')}
+          ${quickLink('/fantasy/standings.html', 'Leaderboards', 'See submitted fantasy lineups')}
+          ${quickLink('/fantasy/slate.html', 'Driver Outlook', 'Explore driver salaries and outlook')}
           ${quickLink('/fantasy/rules.html', 'Rules & Guide', 'How BP Fantasy works')}
+          ${quickLink('#fantasyDashboardProfile', 'Profile', 'Your account and lineup status')}
         </div>
       </section>`;
   }

@@ -71,17 +71,6 @@ async function renderLandingCta() {
     // Default to logged-out CTA when slate cannot be loaded.
   }
 
-  if (!slatePublished) {
-    titleEl.textContent = 'Next BP Fantasy Slate Coming Soon';
-    copyEl.textContent =
-      'The next BP Fantasy slate has not been published yet. Check back soon for driver salaries and lineup building.';
-    renderCtaButtons(actionsEl, [
-      { label: 'View Rules', href: '/fantasy/rules.html', variant: 'primary' },
-      { label: 'Driver Outlook', href: '/fantasy/slate.html', variant: 'secondary' },
-    ]);
-    return;
-  }
-
   let loggedIn = false;
   let profile = null;
   let hasLineup = false;
@@ -103,6 +92,36 @@ async function renderLandingCta() {
     }
   } catch {
     loggedIn = false;
+  }
+
+  const comingSoonTitle = 'Next BP Fantasy Slate Coming Soon';
+  const comingSoonCopy =
+    'The next BP Fantasy slate has not been published yet. You can still create an account, log in, view the rules, explore driver outlooks, and prepare for the next race.';
+
+  if (!slatePublished) {
+    titleEl.textContent = comingSoonTitle;
+    copyEl.textContent = comingSoonCopy;
+
+    if (!loggedIn) {
+      renderCtaButtons(actionsEl, [
+        { label: 'Create Account', href: '/fantasy/signup.html', variant: 'primary' },
+        { label: 'Login', href: '/fantasy/login.html', variant: 'secondary' },
+        { label: 'View Rules', href: '/fantasy/rules.html', variant: 'secondary' },
+        { label: 'Driver Outlook', href: '/fantasy/slate.html', variant: 'secondary' },
+      ]);
+      return;
+    }
+
+    const loggedInButtons = [
+      { label: 'Fantasy Dashboard', href: '/fantasy/dashboard.html', variant: 'primary' },
+      { label: 'View Rules', href: '/fantasy/rules.html', variant: 'secondary' },
+      { label: 'Driver Outlook', href: '/fantasy/slate.html', variant: 'secondary' },
+    ];
+    if (hasLineup) {
+      loggedInButtons.push({ label: 'View My Lineup', href: '/fantasy/lineup.html', variant: 'secondary' });
+    }
+    renderCtaButtons(actionsEl, loggedInButtons);
+    return;
   }
 
   if (!loggedIn) {

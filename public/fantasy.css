@@ -737,8 +737,23 @@ body.fantasy-page .topbar{
   justify-content:center;
 }
 
+.fantasy-cta-actions .fantasy-btn--primary{
+  flex:1 1 100%;
+  max-width:100%;
+}
+
 .fantasy-cta-actions .fantasy-btn{
   min-width:min(200px, 100%);
+}
+
+.fantasy-dashboard-idle-panel .fantasy-cta-actions{
+  justify-content:flex-start;
+  margin-top:12px;
+}
+
+.fantasy-dashboard-idle-panel .fantasy-cta-actions .fantasy-btn--primary{
+  flex:0 1 auto;
+  max-width:none;
 }
 
 /* ── Fantasy app placeholder pages (post-login shell) ── */
