@@ -180,6 +180,30 @@ ipcMain.handle('adjust-browser-zoom', async (_event, delta) => {
   return { ok: true, browserZoomFactor };
 });
 
+ipcMain.handle('fit-browser-width', async () => {
+  if (!embeddedBrowser || !readAppSettings().useEmbeddedBrowser) {
+    return { ok: false };
+  }
+
+  requestBrowserBoundsUpdate();
+  await new Promise((resolve) => setTimeout(resolve, 80));
+  const browserZoomFactor = await embeddedBrowser.fitZoomWidth();
+  await persistBrowserZoom(browserZoomFactor);
+  return { ok: true, browserZoomFactor };
+});
+
+ipcMain.handle('fit-browser-height', async () => {
+  if (!embeddedBrowser || !readAppSettings().useEmbeddedBrowser) {
+    return { ok: false };
+  }
+
+  requestBrowserBoundsUpdate();
+  await new Promise((resolve) => setTimeout(resolve, 80));
+  const browserZoomFactor = await embeddedBrowser.fitZoomHeight();
+  await persistBrowserZoom(browserZoomFactor);
+  return { ok: true, browserZoomFactor };
+});
+
 ipcMain.handle('fit-browser-to-panel', async () => {
   if (!embeddedBrowser || !readAppSettings().useEmbeddedBrowser) {
     return { ok: false };

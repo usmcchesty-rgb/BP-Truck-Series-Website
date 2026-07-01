@@ -100,6 +100,122 @@ export const EXTRACT_STATS_DOM_SCRIPT = `
     return Number.isFinite(num) ? num : null;
   }
 
+  function buildHeaderIndex(headers) {
+    const headerIndex = {};
+    headers.forEach((header, index) => {
+      const key = headerMap[normalizeHeader(header)];
+      if (key) headerIndex[key] = index;
+    });
+    return headerIndex;
+  }
+
+  function rowToStats(cells, headerIndex, categoryName) {
+    return {
+      category: categoryName || cells[headerIndex.category ?? 0] || null,
+      starts: parseInteger(cells[headerIndex.starts]),
+      wins: parseInteger(cells[headerIndex.wins]),
+      top5: parseInteger(cells[headerIndex.top5]),
+      poles: parseInteger(cells[headerIndex.poles]),
+      avgStart: parseDecimal(cells[headerIndex.avgStart]),
+      avgFinish: parseDecimal(cells[headerIndex.avgFinish]),
+      totalLaps: parseInteger(cells[headerIndex.totalLaps]),
+      lapsLed: parseInteger(cells[headerIndex.lapsLed]),
+      incidentsPerRace: parseDecimal(cells[headerIndex.incidentsPerRace]),
+      pointsPerRace: parseDecimal(cells[headerIndex.pointsPerRace]),
+      winPercentage: parseDecimal(cells[headerIndex.winPercentage]),
+      top5Percentage: parseDecimal(cells[headerIndex.top5Percentage]),
+    };
+  }
+
+  function extractAllCareerRows(table) {
+    const headerCells = [...table.querySelectorAll('thead th, tr:first-child th')];
+    const headers = headerCells.length
+      ? headerCells.map((cell) => cleanText(cell.textContent))
+      : [...table.querySelectorAll('tr')][0]
+        ? [...[...table.querySelectorAll('tr')][0].querySelectorAll('th, td')].map((cell) =>
+            cleanText(cell.textContent)
+          )
+        : [];
+    const headerIndex = buildHeaderIndex(headers);
+    const rows = [...table.querySelectorAll('tr')];
+    const categories = {};
+
+    for (const row of rows) {
+      const firstCell = row.querySelector('td, th');
+      const label = cleanText(firstCell?.textContent || '');
+      if (!label || /^category$/i.test(label)) continue;
+      const cells = [...row.querySelectorAll('td, th')].map((cell) => cleanText(cell.textContent));
+      if (!cells.length) continue;
+      categories[label] = rowToStats(cells, headerIndex, label);
+    }
+
+    return { headers, headerIndex, categories };
+  }
+
+  function findYearlyStatsTable() {
+    const roots = [
+      document.querySelector('#member-profile-yearly-stats'),
+      document.querySelector('#member-profile-yearly-stats-card'),
+    ].filter(Boolean);
+
+    for (const root of roots) {
+      for (const table of root.querySelectorAll('table')) {
+        const headers = [...table.querySelectorAll('th')].map((th) => cleanText(th.textContent));
+        if (headers.some((h) => /^year$/i.test(h)) && headers.some((h) => /^category$/i.test(h))) {
+          return { table, selector: '#member-profile-yearly-stats table (Year + Category headers)' };
+        }
+      }
+    }
+
+    return { table: null, selector: null };
+  }
+
+  function extractYearlyRows(table) {
+    const headerCells = [...table.querySelectorAll('thead th, tr:first-child th')];
+    const headers = headerCells.length
+      ? headerCells.map((cell) => cleanText(cell.textContent))
+      : [...table.querySelectorAll('tr')][0]
+        ? [...[...table.querySelectorAll('tr')][0].querySelectorAll('th, td')].map((cell) =>
+            cleanText(cell.textContent)
+          )
+        : [];
+
+    const headerIndex = {};
+    headers.forEach((header, index) => {
+      const normalized = normalizeHeader(header);
+      if (normalized === 'year') headerIndex.year = index;
+      const mapped = headerMap[normalized];
+      if (mapped) headerIndex[mapped] = index;
+    });
+
+    const yearly = [];
+    for (const row of [...table.querySelectorAll('tr')]) {
+      const cells = [...row.querySelectorAll('td, th')].map((cell) => cleanText(cell.textContent));
+      if (!cells.length) continue;
+      const year = parseInteger(cells[headerIndex.year ?? 0]);
+      const category = cells[headerIndex.category ?? 1] || null;
+      if (!year || !category || /^year$/i.test(category)) continue;
+      yearly.push({
+        year,
+        category,
+        starts: parseInteger(cells[headerIndex.starts]),
+        wins: parseInteger(cells[headerIndex.wins]),
+        top5: parseInteger(cells[headerIndex.top5]),
+        poles: parseInteger(cells[headerIndex.poles]),
+        avgStart: parseDecimal(cells[headerIndex.avgStart]),
+        avgFinish: parseDecimal(cells[headerIndex.avgFinish]),
+        totalLaps: parseInteger(cells[headerIndex.totalLaps]),
+        lapsLed: parseInteger(cells[headerIndex.lapsLed]),
+        incidentsPerRace: parseDecimal(cells[headerIndex.incidentsPerRace]),
+        pointsPerRace: parseDecimal(cells[headerIndex.pointsPerRace]),
+        winPercentage: parseDecimal(cells[headerIndex.winPercentage]),
+        top5Percentage: parseDecimal(cells[headerIndex.top5Percentage]),
+      });
+    }
+
+    return { headers, yearly };
+  }
+
   function findCareerStatsTable() {
     const roots = [
       document.querySelector('#member-profile-career-stats'),
@@ -124,58 +240,6 @@ export const EXTRACT_STATS_DOM_SCRIPT = `
     }
 
     return { table: null, selector: null };
-  }
-
-  function extractOvalRow(table) {
-    const headerCells = [...table.querySelectorAll('thead th, tr:first-child th')];
-    const headers = headerCells.length
-      ? headerCells.map((cell) => cleanText(cell.textContent))
-      : [...table.querySelectorAll('tr')][0]
-        ? [...[...table.querySelectorAll('tr')][0].querySelectorAll('th, td')].map((cell) =>
-            cleanText(cell.textContent)
-          )
-        : [];
-
-    const headerIndex = {};
-    headers.forEach((header, index) => {
-      const key = headerMap[normalizeHeader(header)];
-      if (key) headerIndex[key] = index;
-    });
-
-    const rows = [...table.querySelectorAll('tr')];
-    const ovalRow = rows.find((row) => {
-      const firstCell = row.querySelector('td, th');
-      return /^Oval$/i.test(cleanText(firstCell?.textContent || ''));
-    });
-
-    if (!ovalRow) {
-      return { values: null, headers, headerIndex, selector: null };
-    }
-
-    const cells = [...ovalRow.querySelectorAll('td, th')].map((cell) => cleanText(cell.textContent));
-    const values = {
-      category: cells[headerIndex.category ?? 0] || 'Oval',
-      starts: parseInteger(cells[headerIndex.starts]),
-      wins: parseInteger(cells[headerIndex.wins]),
-      top5: parseInteger(cells[headerIndex.top5]),
-      poles: parseInteger(cells[headerIndex.poles]),
-      avgStart: parseDecimal(cells[headerIndex.avgStart]),
-      avgFinish: parseDecimal(cells[headerIndex.avgFinish]),
-      totalLaps: parseInteger(cells[headerIndex.totalLaps]),
-      lapsLed: parseInteger(cells[headerIndex.lapsLed]),
-      incidentsPerRace: parseDecimal(cells[headerIndex.incidentsPerRace]),
-      pointsPerRace: parseDecimal(cells[headerIndex.pointsPerRace]),
-      winPercentage: parseDecimal(cells[headerIndex.winPercentage]),
-      top5Percentage: parseDecimal(cells[headerIndex.top5Percentage]),
-    };
-
-    return {
-      values,
-      headers,
-      headerIndex,
-      cells,
-      selector: '#member-profile-career-stats table tr:has(td:first-child:text("Oval"))',
-    };
   }
 
   const discovered = {};
@@ -210,51 +274,69 @@ export const EXTRACT_STATS_DOM_SCRIPT = `
     recordSuccess('careerStatsTable', tableHit.selector, true);
   }
 
-  const ovalExtract = tableHit.table ? extractOvalRow(tableHit.table) : { values: null, selector: null };
-  if (!ovalExtract.values) {
-    recordFailure('ovalCategoryRow', selectorCatalog.ovalCategoryRow.selectors, 'Oval category row not found');
+  const careerExtract = tableHit.table
+    ? extractAllCareerRows(tableHit.table)
+    : { headers: [], categories: {} };
+  const categoryNames = Object.keys(careerExtract.categories || {});
+
+  if (!categoryNames.length) {
+    recordFailure('careerCategoryRows', selectorCatalog.careerStatsTable.selectors, 'No career category rows found');
   } else {
-    recordSuccess('ovalCategoryRow', ovalExtract.selector, ovalExtract.values.category);
-    for (const [field, value] of Object.entries(ovalExtract.values)) {
-      if (field === 'category') continue;
-      discovered['stats.' + field] = {
-        selector: ovalExtract.selector,
-        value,
+    recordSuccess('careerCategoryRows', tableHit.selector, categoryNames.length);
+    for (const name of categoryNames) {
+      discovered['stats.' + name] = {
+        selector: tableHit.selector,
+        value: careerExtract.categories[name],
       };
     }
   }
 
-  const data = ovalExtract.values
-    ? {
-        category: ovalExtract.values.category,
-        starts: ovalExtract.values.starts,
-        wins: ovalExtract.values.wins,
-        top5: ovalExtract.values.top5,
-        poles: ovalExtract.values.poles,
-        avgStart: ovalExtract.values.avgStart,
-        avgFinish: ovalExtract.values.avgFinish,
-        totalLaps: ovalExtract.values.totalLaps,
-        lapsLed: ovalExtract.values.lapsLed,
-        incidentsPerRace: ovalExtract.values.incidentsPerRace,
-        pointsPerRace: ovalExtract.values.pointsPerRace,
-        winPercentage: ovalExtract.values.winPercentage,
-        top5Percentage: ovalExtract.values.top5Percentage,
-      }
-    : {
-        category: null,
-        starts: null,
-        wins: null,
-        top5: null,
-        poles: null,
-        avgStart: null,
-        avgFinish: null,
-        totalLaps: null,
-        lapsLed: null,
-        incidentsPerRace: null,
-        pointsPerRace: null,
-        winPercentage: null,
-        top5Percentage: null,
-      };
+  const ovalStats = careerExtract.categories?.Oval || null;
+  if (!ovalStats) {
+    recordFailure('ovalCategoryRow', selectorCatalog.ovalCategoryRow.selectors, 'Oval category row not found');
+  } else {
+    recordSuccess('ovalCategoryRow', tableHit.selector, 'Oval');
+  }
+
+  const yearlyHit = findYearlyStatsTable();
+  let yearlyStats = [];
+  let yearlyParseStatus = 'needs_manual_review';
+  let yearlyParseError = 'Yearly stats table not found';
+
+  if (!yearlyHit.table) {
+    recordFailure('yearlyStatsTable', ['#member-profile-yearly-stats table'], yearlyParseError);
+  } else {
+    const yearlyExtract = extractYearlyRows(yearlyHit.table);
+    yearlyStats = yearlyExtract.yearly || [];
+    if (yearlyStats.length) {
+      yearlyParseStatus = 'completed';
+      yearlyParseError = null;
+      recordSuccess('yearlyStatsTable', yearlyHit.selector, yearlyStats.length);
+    } else {
+      yearlyParseError = 'Yearly stats table found but no rows parsed';
+      recordFailure('yearlyStatsRows', ['#member-profile-yearly-stats table tr'], yearlyParseError);
+    }
+  }
+
+  const data = {
+    category: ovalStats?.category || 'Oval',
+    starts: ovalStats?.starts ?? null,
+    wins: ovalStats?.wins ?? null,
+    top5: ovalStats?.top5 ?? null,
+    poles: ovalStats?.poles ?? null,
+    avgStart: ovalStats?.avgStart ?? null,
+    avgFinish: ovalStats?.avgFinish ?? null,
+    totalLaps: ovalStats?.totalLaps ?? null,
+    lapsLed: ovalStats?.lapsLed ?? null,
+    incidentsPerRace: ovalStats?.incidentsPerRace ?? null,
+    pointsPerRace: ovalStats?.pointsPerRace ?? null,
+    winPercentage: ovalStats?.winPercentage ?? null,
+    top5Percentage: ovalStats?.top5Percentage ?? null,
+    statsByCategory: careerExtract.categories || {},
+    yearlyStats,
+    yearlyParseStatus,
+    yearlyParseError,
+  };
 
   return {
     data,
@@ -262,8 +344,8 @@ export const EXTRACT_STATS_DOM_SCRIPT = `
     failures,
     selectorCatalog,
     rawText: document.body?.innerText?.trim() || '',
-    tableHeaders: ovalExtract.headers || [],
-    tableCells: ovalExtract.cells || [],
+    careerCategories: categoryNames,
+    yearlyRowCount: yearlyStats.length,
   };
 })()
 `;

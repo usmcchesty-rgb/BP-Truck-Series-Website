@@ -7,6 +7,8 @@ contextBridge.exposeInMainWorld('scannerApp', {
   setBrowserZoom: (factor) => ipcRenderer.invoke('set-browser-zoom', factor),
   adjustBrowserZoom: (delta) => ipcRenderer.invoke('adjust-browser-zoom', delta),
   fitBrowserToPanel: () => ipcRenderer.invoke('fit-browser-to-panel'),
+  fitBrowserWidth: () => ipcRenderer.invoke('fit-browser-width'),
+  fitBrowserHeight: () => ipcRenderer.invoke('fit-browser-height'),
   setBrowserActualSize: () => ipcRenderer.invoke('set-browser-actual-size'),
   getBrowserZoom: () => ipcRenderer.invoke('get-browser-zoom'),
   startScanner: () => ipcRenderer.invoke('start-scanner'),

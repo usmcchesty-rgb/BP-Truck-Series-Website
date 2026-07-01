@@ -152,6 +152,7 @@ export class RecruitScannerService {
       oval_license_class: parsed.oval_license_class,
       oval_safety_rating: parsed.oval_safety_rating,
       oval_irating: parsed.oval_irating,
+      licenses_json: parsed.licenses_json || null,
       raw_text: rawText,
     };
 
@@ -195,6 +196,10 @@ export class RecruitScannerService {
       top5_percentage: parsed.top5_percentage,
       raw_text: rawText,
       raw_json: parsed.raw_json || parsed.statsJson || null,
+      stats_json: parsed.stats_json || parsed.statsJson || null,
+      yearly_stats_json: parsed.yearly_stats_json || [],
+      yearly_parse_status: parsed.yearly_parse_status || null,
+      yearly_parse_error: parsed.yearly_parse_error || null,
     };
 
     if (!row.application_id) {
@@ -220,6 +225,11 @@ export class RecruitScannerService {
     this.log(`  Oval License Class: ${parsed.oval_license_class ?? '(missing)'}`);
     this.log(`  Oval Safety Rating: ${parsed.oval_safety_rating ?? '(missing)'}`);
     this.log(`  Oval iRating: ${parsed.oval_irating ?? '(missing)'}`);
+
+    const licenseCategories = parsed.licenses_json?.categories || [];
+    if (licenseCategories.length) {
+      this.log(`  License categories (${licenseCategories.length}): ${licenseCategories.map((c) => c.category).join(', ')}`);
+    }
 
     if (parsed.profileJson) {
       this.log(`  Country: ${parsed.profileJson.country ?? '(missing)'}`);
@@ -267,7 +277,8 @@ export class RecruitScannerService {
   }
 
   logStatsParsedValues(parsed) {
-    this.log('Parsed stats values:');
+    logStatsParseResult((message) => this.log(message), parsed);
+    this.log('Parsed stats values (Oval primary):');
     this.log(`  Category: ${parsed.category ?? '(missing)'}`);
     this.log(`  Starts: ${parsed.starts ?? '(missing)'}`);
     this.log(`  Wins: ${parsed.wins ?? '(missing)'}`);

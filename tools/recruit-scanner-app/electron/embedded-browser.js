@@ -18,20 +18,23 @@ import {
 
 export const IRACING_SESSION_PARTITION = 'persist:bp-recruit-scanner';
 
-const ESTIMATE_PAGE_CONTENT_WIDTH_SCRIPT = `
+const ESTIMATE_PAGE_CONTENT_SIZE_SCRIPT = `
 (() => {
-  const candidates = [
-    document.querySelector('#modal-as-screen'),
-    document.querySelector('#modal-profile'),
-    document.querySelector('main'),
-    document.body,
-  ];
-  let maxWidth = 0;
-  for (const element of candidates) {
-    if (!element) continue;
-    maxWidth = Math.max(maxWidth, element.scrollWidth || 0, element.clientWidth || 0);
+  const modal = document.querySelector('#modal-as-screen') || document.querySelector('#modal-profile');
+  if (modal) {
+    const rect = modal.getBoundingClientRect();
+    return {
+      width: Math.max(modal.scrollWidth || 0, modal.clientWidth || 0, rect.width || 0),
+      height: Math.max(modal.scrollHeight || 0, modal.clientHeight || 0, rect.height || 0),
+    };
   }
-  return Math.max(maxWidth, document.documentElement?.scrollWidth || 0, 1100);
+
+  const root = document.documentElement;
+  const body = document.body;
+  return {
+    width: Math.max(root?.scrollWidth || 0, body?.scrollWidth || 0, 1100),
+    height: Math.max(root?.scrollHeight || 0, body?.scrollHeight || 0, 800),
+  };
 })()
 `;
 function sleep(ms) {
@@ -71,29 +74,58 @@ export function createEmbeddedBrowserManager(mainWindow) {
     return currentZoomFactor;
   }
 
-  async function estimatePageContentWidth() {
+  async function estimatePageContentSize() {
     const webContents = getActiveWebContents();
     if (!webContents || webContents.isDestroyed()) {
-      return 1100;
+      return { width: 1100, height: 800 };
     }
 
     try {
-      const width = await webContents.executeJavaScript(ESTIMATE_PAGE_CONTENT_WIDTH_SCRIPT, true);
-      return Number.isFinite(width) && width > 0 ? width : 1100;
+      const size = await webContents.executeJavaScript(ESTIMATE_PAGE_CONTENT_SIZE_SCRIPT, true);
+      const width = Number(size?.width);
+      const height = Number(size?.height);
+      return {
+        width: Number.isFinite(width) && width > 0 ? width : 1100,
+        height: Number.isFinite(height) && height > 0 ? height : 800,
+      };
     } catch {
-      return 1100;
+      return { width: 1100, height: 800 };
     }
   }
 
-  async function fitZoomToPanel() {
+  async function fitZoomWidth() {
     const panelWidth = currentBounds.width;
     if (panelWidth <= 0) {
       return currentZoomFactor;
     }
 
-    const contentWidth = await estimatePageContentWidth();
-    const fitFactor = clampBrowserZoomFactor(panelWidth / contentWidth);
-    applyZoomToAllActive(fitFactor);
+    const { width: contentWidth } = await estimatePageContentSize();
+    applyZoomToAllActive(clampBrowserZoomFactor(panelWidth / contentWidth));
+    return currentZoomFactor;
+  }
+
+  async function fitZoomHeight() {
+    const panelHeight = currentBounds.height;
+    if (panelHeight <= 0) {
+      return currentZoomFactor;
+    }
+
+    const { height: contentHeight } = await estimatePageContentSize();
+    applyZoomToAllActive(clampBrowserZoomFactor(panelHeight / contentHeight));
+    return currentZoomFactor;
+  }
+
+  async function fitZoomToPanel() {
+    const panelWidth = currentBounds.width;
+    const panelHeight = currentBounds.height;
+    if (panelWidth <= 0 || panelHeight <= 0) {
+      return currentZoomFactor;
+    }
+
+    const { width: contentWidth, height: contentHeight } = await estimatePageContentSize();
+    const widthFit = panelWidth / contentWidth;
+    const heightFit = panelHeight / contentHeight;
+    applyZoomToAllActive(clampBrowserZoomFactor(Math.min(widthFit, heightFit)));
     return currentZoomFactor;
   }
 
@@ -414,6 +446,8 @@ export function createEmbeddedBrowserManager(mainWindow) {
     getZoomFactor,
     adjustZoom,
     fitZoomToPanel,
+    fitZoomWidth,
+    fitZoomHeight,
     setActualSizeZoom,
   };
 }

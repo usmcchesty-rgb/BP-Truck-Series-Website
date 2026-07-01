@@ -12,7 +12,7 @@ const customerIdInput = document.getElementById('customerIdInput');
 const useEmbeddedBrowser = document.getElementById('useEmbeddedBrowser');
 const zoomPercent = document.getElementById('zoomPercent');
 
-const ZOOM_STEP = 0.1;
+const ZOOM_STEP = 0.05;
 
 let boundsFrame = null;
 let currentZoomFactor = 1.25;
@@ -177,6 +177,52 @@ async function adjustBrowserZoom(delta) {
   }
 }
 
+function formatLicenseCategoriesPreview(parsed) {
+  const categories = parsed?.licenses_json?.categories || parsed?.profileJson?.licenses?.categories || [];
+  if (!categories.length) {
+    return ['  License Categories: (none parsed)'].join('\n');
+  }
+
+  const lines = ['  License Categories:'];
+  for (const entry of categories) {
+    const primary = /^Oval$/i.test(entry.category || '') ? ' *primary*' : '';
+    lines.push(
+      `    ${entry.category || '?'} — Class ${entry.license_class ?? entry.class ?? '?'}, SR ${entry.safety_rating ?? entry.safetyRating ?? '?'}, iR ${entry.irating ?? '?'}${primary}`
+    );
+  }
+  return lines.join('\n');
+}
+
+function formatAllStatsCategoriesPreview(statsParsed) {
+  const statsJson = statsParsed?.stats_json || statsParsed?.statsJson || {};
+  const categories = Object.keys(statsJson);
+  if (!categories.length) {
+    return '';
+  }
+
+  const lines = ['  Career Stats Categories:'];
+  for (const name of categories) {
+    const row = statsJson[name] || {};
+    const primary = name === 'Oval' ? ' *primary*' : '';
+    lines.push(
+      `    ${name} — Starts ${row.starts ?? '?'}, Wins ${row.wins ?? '?'}, Top 5 ${row.top5 ?? '?'}${primary}`
+    );
+  }
+  return lines.join('\n');
+}
+
+function formatYearlyProgressPreview(statsParsed) {
+  const status = statsParsed?.yearly_parse_status || 'unknown';
+  const yearly = statsParsed?.yearly_stats_json || [];
+  if (status === 'completed' && yearly.length) {
+    return `  Yearly Progression: ${yearly.length} row(s) parsed ✔`;
+  }
+  if (statsParsed?.yearly_parse_error) {
+    return `  Yearly Progression: ${status} (${statsParsed.yearly_parse_error})`;
+  }
+  return `  Yearly Progression: ${status}`;
+}
+
 function formatStatsPreview(statsParsed, stats) {
   if (!statsParsed) {
     if (stats?.outcome === 'scraped') {
@@ -187,7 +233,7 @@ function formatStatsPreview(statsParsed, stats) {
 
   const lines = [
     statsParsed.scrape_status === 'completed' ? 'Stats Complete ✔' : 'Stats need manual review',
-    `  Category: ${statsParsed.category ?? '(missing)'}`,
+    `  Primary Category (Oval): ${statsParsed.category ?? '(missing)'}`,
     `  Starts: ${statsParsed.starts ?? '(missing)'}`,
     `  Wins: ${statsParsed.wins ?? '(missing)'}`,
     `  Top 5: ${statsParsed.top5 ?? '(missing)'}`,
@@ -200,7 +246,9 @@ function formatStatsPreview(statsParsed, stats) {
     `  Pts/Race: ${statsParsed.points_per_race ?? '(missing)'}`,
     `  Win %: ${statsParsed.win_percentage ?? '(missing)'}`,
     `  Top 5 %: ${statsParsed.top5_percentage ?? '(missing)'}`,
-  ];
+    formatAllStatsCategoriesPreview(statsParsed),
+    formatYearlyProgressPreview(statsParsed),
+  ].filter(Boolean);
 
   if (statsParsed.scrape_status !== 'completed') {
     lines.push('', 'Stats excerpt:', stats?.excerpt || '(none)');
@@ -231,6 +279,7 @@ function formatPreview(result) {
           `  Oval License Class: ${preview.parsed.oval_license_class ?? '(missing)'}`,
           `  Oval Safety Rating: ${preview.parsed.oval_safety_rating ?? '(missing)'}`,
           `  Oval iRating: ${preview.parsed.oval_irating ?? '(missing)'}`,
+          formatLicenseCategoriesPreview(preview.parsed),
           preview.parsed.scrape_status === 'completed'
             ? 'Profile Complete ✔'
             : `Scrape Status: ${preview.parsed.scrape_status}`,
@@ -367,6 +416,30 @@ document.getElementById('btnFitPanel').addEventListener('click', async () => {
   try {
     await focusBrowserPanel();
     const result = await window.scannerApp.fitBrowserToPanel();
+    if (result?.browserZoomFactor != null) {
+      updateZoomDisplay(result.browserZoomFactor);
+    }
+  } catch (error) {
+    appendLog(error.message, true);
+  }
+});
+
+document.getElementById('btnFitWidth').addEventListener('click', async () => {
+  try {
+    await focusBrowserPanel();
+    const result = await window.scannerApp.fitBrowserWidth();
+    if (result?.browserZoomFactor != null) {
+      updateZoomDisplay(result.browserZoomFactor);
+    }
+  } catch (error) {
+    appendLog(error.message, true);
+  }
+});
+
+document.getElementById('btnFitHeight').addEventListener('click', async () => {
+  try {
+    await focusBrowserPanel();
+    const result = await window.scannerApp.fitBrowserHeight();
     if (result?.browserZoomFactor != null) {
       updateZoomDisplay(result.browserZoomFactor);
     }

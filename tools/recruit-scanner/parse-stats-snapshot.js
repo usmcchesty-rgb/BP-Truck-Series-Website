@@ -28,51 +28,6 @@ function parseDecimal(value) {
 
 function extractOvalRowFromText(rawText) {
   const text = normalizeWhitespace(rawText);
-  const lines = text.split('\n').map((line) => line.trim()).filter(Boolean);
-
-  for (let i = 0; i < lines.length; i += 1) {
-    if (!/^Oval$/i.test(lines[i])) continue;
-
-    const values = lines[i + 1]?.split(/\s+/).filter(Boolean);
-    if (!values || values.length < 10) {
-      const inline = lines[i].match(
-        /^Oval\s+([\d,]+)\s+([\d,]+)\s+([\d,]+)\s+([\d,]+)\s+([\d.]+)\s+([\d.]+)\s+([\d,]+)\s+([\d,]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)/i
-      );
-      if (!inline) return null;
-      return {
-        category: 'Oval',
-        starts: parseInteger(inline[1]),
-        wins: parseInteger(inline[2]),
-        top5: parseInteger(inline[3]),
-        poles: parseInteger(inline[4]),
-        avgStart: parseDecimal(inline[5]),
-        avgFinish: parseDecimal(inline[6]),
-        totalLaps: parseInteger(inline[7]),
-        lapsLed: parseInteger(inline[8]),
-        incidentsPerRace: parseDecimal(inline[9]),
-        pointsPerRace: parseDecimal(inline[10]),
-        winPercentage: parseDecimal(inline[11]),
-        top5Percentage: parseDecimal(inline[12]),
-      };
-    }
-
-    return {
-      category: 'Oval',
-      starts: parseInteger(values[0]),
-      wins: parseInteger(values[1]),
-      top5: parseInteger(values[2]),
-      poles: parseInteger(values[3]),
-      avgStart: parseDecimal(values[4]),
-      avgFinish: parseDecimal(values[5]),
-      totalLaps: parseInteger(values[6]),
-      lapsLed: parseInteger(values[7]),
-      incidentsPerRace: parseDecimal(values[8]),
-      pointsPerRace: parseDecimal(values[9]),
-      winPercentage: parseDecimal(values[10]),
-      top5Percentage: parseDecimal(values[11]),
-    };
-  }
-
   const tableMatch = text.match(
     /Oval[\s,]+([\d,]+)[\s,]+([\d,]+)[\s,]+([\d,]+)[\s,]+([\d,]+)[\s,]+([\d.]+)[\s,]+([\d.]+)[\s,]+([\d,]+)[\s,]+([\d,]+)[\s,]+([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/i
   );
@@ -95,30 +50,72 @@ function extractOvalRowFromText(rawText) {
   };
 }
 
+function buildStatsJsonFromDom(data) {
+  if (data?.statsByCategory && Object.keys(data.statsByCategory).length) {
+    return data.statsByCategory;
+  }
+  if (data?.category) {
+    return { [data.category]: data };
+  }
+  return {};
+}
+
+function buildFlatOvalFields(data, statsJson) {
+  const oval = data?.statsByCategory?.Oval || statsJson?.Oval || data || {};
+  return {
+    category: oval.category || 'Oval',
+    starts: oval.starts ?? null,
+    wins: oval.wins ?? null,
+    top5: oval.top5 ?? null,
+    poles: oval.poles ?? null,
+    avgStart: oval.avgStart ?? null,
+    avgFinish: oval.avgFinish ?? null,
+    totalLaps: oval.totalLaps ?? null,
+    lapsLed: oval.lapsLed ?? null,
+    incidentsPerRace: oval.incidentsPerRace ?? null,
+    pointsPerRace: oval.pointsPerRace ?? null,
+    winPercentage: oval.winPercentage ?? null,
+    top5Percentage: oval.top5Percentage ?? null,
+  };
+}
+
 function mergeStatsWithTextFallback(domResult) {
   const data = { ...(domResult?.data || {}) };
   const fallbackUsed = [];
 
-  const missingBefore = getMissingRequiredStatsFields(data);
-  if (missingBefore.length === 0) {
-    return { data, fallbackUsed, rawText: domResult?.rawText || '' };
-  }
-
-  const fromText = extractOvalRowFromText(domResult?.rawText || '');
-  if (!fromText) {
-    return { data, fallbackUsed, rawText: domResult?.rawText || '' };
-  }
-
-  for (const field of getMissingRequiredStatsFields(data)) {
-    if (fromText[field] != null && String(fromText[field]).trim() !== '') {
-      data[field] = fromText[field];
-      fallbackUsed.push(`${field}:text`);
+  if (!data.statsByCategory || !Object.keys(data.statsByCategory).length) {
+    const fromText = extractOvalRowFromText(domResult?.rawText || '');
+    if (fromText) {
+      data.statsByCategory = { Oval: fromText };
+      fallbackUsed.push('statsByCategory:text');
     }
   }
 
-  if (!data.category && fromText.category) {
-    data.category = fromText.category;
-    fallbackUsed.push('category:text');
+  const flat = buildFlatOvalFields(data, data.statsByCategory);
+  Object.assign(data, flat);
+
+  const missingBefore = getMissingRequiredStatsFields(data);
+  if (missingBefore.length) {
+    const fromText = extractOvalRowFromText(domResult?.rawText || '');
+    if (fromText) {
+      for (const field of missingBefore) {
+        if (fromText[field] != null && String(fromText[field]).trim() !== '') {
+          data[field] = fromText[field];
+          fallbackUsed.push(`${field}:text`);
+        }
+      }
+      if (!data.category && fromText.category) {
+        data.category = fromText.category;
+        fallbackUsed.push('category:text');
+      }
+    }
+  }
+
+  if (!Array.isArray(data.yearlyStats)) {
+    data.yearlyStats = [];
+  }
+  if (!data.yearlyParseStatus) {
+    data.yearlyParseStatus = data.yearlyStats.length ? 'completed' : 'needs_manual_review';
   }
 
   return { data, fallbackUsed, rawText: domResult?.rawText || '' };
@@ -127,6 +124,7 @@ function mergeStatsWithTextFallback(domResult) {
 export function parseStatsDomSnapshot(domExtraction) {
   const merged = mergeStatsWithTextFallback(domExtraction);
   const completion = evaluateStatsCompletion(merged.data);
+  const statsJson = buildStatsJsonFromDom(merged.data);
 
   return {
     ...completion,
@@ -143,8 +141,13 @@ export function parseStatsDomSnapshot(domExtraction) {
     points_per_race: merged.data.pointsPerRace,
     win_percentage: merged.data.winPercentage,
     top5_percentage: merged.data.top5Percentage,
-    statsJson: merged.data,
-    raw_json: merged.data,
+    statsJson,
+    stats_json: statsJson,
+    raw_json: statsJson,
+    yearly_stats_json: merged.data.yearlyStats || [],
+    yearly_parse_status: merged.data.yearlyParseStatus || 'needs_manual_review',
+    yearly_parse_error: merged.data.yearlyParseError || null,
+    careerCategories: Object.keys(statsJson),
     discoveredSelectors: domExtraction?.discovered || {},
     selectorFailures: domExtraction?.failures || [],
     textFallbacksUsed: merged.fallbackUsed,
@@ -153,7 +156,8 @@ export function parseStatsDomSnapshot(domExtraction) {
 }
 
 export function parseStatsTextSnapshot(rawText) {
-  const data = extractOvalRowFromText(rawText) || {
+  const fromText = extractOvalRowFromText(rawText);
+  const data = fromText || {
     category: null,
     starts: null,
     wins: null,
@@ -169,6 +173,7 @@ export function parseStatsTextSnapshot(rawText) {
     top5Percentage: null,
   };
   const completion = evaluateStatsCompletion(data);
+  const statsJson = fromText ? { Oval: fromText } : {};
 
   return {
     ...completion,
@@ -185,13 +190,22 @@ export function parseStatsTextSnapshot(rawText) {
     points_per_race: data.pointsPerRace,
     win_percentage: data.winPercentage,
     top5_percentage: data.top5Percentage,
-    statsJson: data,
-    raw_json: data,
+    statsJson,
+    stats_json: statsJson,
+    raw_json: statsJson,
+    yearly_stats_json: [],
+    yearly_parse_status: 'needs_manual_review',
+    yearly_parse_error: 'Yearly stats not available from text fallback',
+    careerCategories: Object.keys(statsJson),
   };
 }
 
 export function logStatsParseResult(logger, parsed) {
   logMissingRequiredStatsFields(logger, parsed.missingFields);
+  if (parsed.careerCategories?.length) {
+    logger(`Stats categories parsed: ${parsed.careerCategories.join(', ')}`);
+  }
+  logger(`Yearly progression: ${parsed.yearly_parse_status || 'unknown'}`);
   for (const field of parsed.textFallbacksUsed || []) {
     logger(`Stats text fallback used: ${field}`);
   }

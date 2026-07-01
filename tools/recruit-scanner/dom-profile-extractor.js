@@ -187,6 +187,51 @@ export const EXTRACT_PROFILE_DOM_SCRIPT = `
     return { elements: [], selector: null, tried: selectors };
   }
 
+  function normalizeCategoryLabel(headerText) {
+    return cleanText(headerText).replace(/\\s+Racing$/i, '').trim();
+  }
+
+  function isLicenseCategoryHeader(text) {
+    const cleaned = cleanText(text);
+    if (!cleaned || /^Racing$/i.test(cleaned)) return false;
+    return /\\s+Racing$/i.test(cleaned) || /Retired/i.test(cleaned);
+  }
+
+  function extractFromLicenseSection(section) {
+    if (!section) {
+      return { license_class: null, safety_rating: null, irating: null };
+    }
+
+    const texts = [...section.querySelectorAll('p.chakra-text')].map((el) => cleanText(el.textContent));
+    const licenseClass = texts.find((text) => /^Class (?:Pro|[A-Z])$/i.test(text)) || null;
+    const safetyRating = texts.find((text) => /^\\d\\.\\d{2}$/.test(text)) || null;
+    const iratingText = texts.find((text) => /^\\d{3,5}$/.test(text) && !/ttRating/i.test(text));
+    return {
+      license_class: licenseClass,
+      safety_rating: safetyRating,
+      irating: iratingText ? Number.parseInt(iratingText, 10) : null,
+    };
+  }
+
+  function extractAllLicenseCategories(pane) {
+    const root = pane || document;
+    const headers = [...root.querySelectorAll('p.chakra-text')].filter((el) =>
+      isLicenseCategoryHeader(el.textContent)
+    );
+
+    return headers.map((header) => {
+      const section = header.closest('.chakra-stack') || header.parentElement;
+      const category = normalizeCategoryLabel(header.textContent);
+      const values = extractFromLicenseSection(section);
+      return {
+        category,
+        license_class: values.license_class,
+        safety_rating: values.safety_rating,
+        irating: values.irating,
+      };
+    });
+  }
+
   function findOvalSection(pane) {
     const root = pane || document;
     const headers = [...root.querySelectorAll('p.chakra-text')].filter((el) =>
@@ -199,43 +244,12 @@ export const EXTRACT_PROFILE_DOM_SCRIPT = `
   }
 
   function extractFromOvalSection(section) {
-    if (!section) {
-      return {
-        class: null,
-        safetyRating: null,
-        irating: null,
-        selectors: {},
-      };
-    }
-
-    const texts = [...section.querySelectorAll('p.chakra-text')].map((el) => ({
-      el,
-      text: cleanText(el.textContent),
-    }));
-
-    const classEntry = texts.find(({ text }) => /^Class (?:Pro|[A-Z])$/i.test(text));
-    const srEntry = texts.find(({ text }) => /^\\d\\.\\d{2}$/.test(text));
-    const irEntry = texts.find(
-      ({ text }) => /^\\d{3,5}$/.test(text) && !/ttRating/i.test(text)
-    );
-
-    const describe = (entry) =>
-      entry
-        ? {
-            selector: 'ovalSection p.chakra-text (text match)',
-            matchedText: entry.text,
-            path: entry.el.tagName.toLowerCase() + (entry.el.className ? '.' + String(entry.el.className).split(' ').slice(0, 2).join('.') : ''),
-          }
-        : null;
-
+    const values = extractFromLicenseSection(section);
     return {
-      class: classEntry?.text || null,
-      safetyRating: srEntry?.text || null,
-      irating: irEntry ? Number.parseInt(irEntry.text, 10) : null,
+      class: values.license_class,
+      safetyRating: values.safety_rating,
+      irating: values.irating,
       selectors: {
-        class: describe(classEntry),
-        safetyRating: describe(srEntry),
-        irating: describe(irEntry),
         sectionRoot: {
           selector: 'p.chakra-text:text("Oval Racing") → closest(.chakra-stack)',
         },
@@ -323,6 +337,19 @@ export const EXTRACT_PROFILE_DOM_SCRIPT = `
     recordSuccess('licensesPane', licensesPaneHit.selector, true);
   }
 
+  const allLicenses = licensesPane ? extractAllLicenseCategories(licensesPane) : [];
+  if (!allLicenses.length) {
+    recordFailure('licenses.categories', selectorCatalog.licensesPane.selectors, 'No license categories found');
+  } else {
+    recordSuccess('licenses.categories', 'p.chakra-text:Racing|Retired', allLicenses.length);
+    for (const entry of allLicenses) {
+      discovered['licenses.' + entry.category] = {
+        selector: 'p.chakra-text section card',
+        value: entry,
+      };
+    }
+  }
+
   const ovalSection = findOvalSection(licensesPane);
   if (!ovalSection) {
     recordFailure('ovalSectionHeader', selectorCatalog.ovalSectionHeader.selectors, 'Oval Racing section not found');
@@ -330,7 +357,16 @@ export const EXTRACT_PROFILE_DOM_SCRIPT = `
     recordSuccess('ovalSectionHeader', 'p.chakra-text:text("Oval Racing")', 'Oval Racing');
   }
 
-  const ovalDom = extractFromOvalSection(ovalSection);
+  const ovalFromList = allLicenses.find((entry) => /^Oval$/i.test(entry.category)) || null;
+  const ovalDom = ovalFromList
+    ? {
+        class: ovalFromList.license_class,
+        safetyRating: ovalFromList.safety_rating,
+        irating: ovalFromList.irating,
+        selectors: {},
+      }
+    : extractFromOvalSection(ovalSection);
+
   if (!ovalDom.class) {
     recordFailure('licenses.oval.class', selectorCatalog.ovalLicenseClass.selectors, 'Oval class not found in section');
   } else {
@@ -372,6 +408,7 @@ export const EXTRACT_PROFILE_DOM_SCRIPT = `
     country,
     memberSince,
     licenses: {
+      categories: allLicenses,
       oval: {
         class: ovalDom.class,
         safetyRating: ovalDom.safetyRating,
@@ -415,6 +452,7 @@ export function mergeProfileWithTextFallbacks(domResult, textParsers = {}) {
     country: domResult?.data?.country ?? null,
     memberSince: domResult?.data?.memberSince ?? null,
     licenses: {
+      categories: domResult?.data?.licenses?.categories ?? [],
       oval: {
         class: domResult?.data?.licenses?.oval?.class ?? null,
         safetyRating: domResult?.data?.licenses?.oval?.safetyRating ?? null,
@@ -538,12 +576,52 @@ export function evaluateProfileCompletion(profileData) {
   };
 }
 
+function normalizeLicenseCategoryName(value) {
+  return String(value ?? '')
+    .replace(/\s+Racing$/i, '')
+    .trim();
+}
+
+export function buildLicensesJson(profileData) {
+  const categories = Array.isArray(profileData?.licenses?.categories)
+    ? profileData.licenses.categories
+        .map((entry) => ({
+          category: normalizeLicenseCategoryName(entry.category),
+          license_class: normalizeLicenseClass(entry.license_class || entry.class),
+          safety_rating: normalizeSafetyRating(entry.safety_rating || entry.safetyRating),
+          irating: normalizeIrating(entry.irating),
+        }))
+        .filter((entry) => entry.category && !/^Racing$/i.test(entry.category))
+    : [];
+
+  if (categories.length) {
+    return { categories };
+  }
+
+  const oval = profileData?.licenses?.oval;
+  if (!oval?.class && oval?.irating == null) {
+    return { categories: [] };
+  }
+
+  return {
+    categories: [
+      {
+        category: 'Oval',
+        license_class: normalizeLicenseClass(oval.class),
+        safety_rating: normalizeSafetyRating(oval.safetyRating),
+        irating: normalizeIrating(oval.irating),
+      },
+    ],
+  };
+}
+
 export function profileDomToSnapshotFields(merged) {
   const displayName = merged.data.displayName || null;
   const ovalLicenseClass = normalizeLicenseClass(merged.data.licenses?.oval?.class);
   const ovalSafetyRating = normalizeSafetyRating(merged.data.licenses?.oval?.safetyRating);
   const ovalIrating = normalizeIrating(merged.data.licenses?.oval?.irating);
   const completion = evaluateProfileCompletion(merged.data);
+  const licensesJson = buildLicensesJson(merged.data);
 
   return {
     ...completion,
@@ -551,6 +629,7 @@ export function profileDomToSnapshotFields(merged) {
     oval_license_class: ovalLicenseClass,
     oval_safety_rating: ovalSafetyRating,
     oval_irating: ovalIrating,
+    licenses_json: licensesJson,
     profileJson: merged.data,
     discoveredSelectors: merged.discovered,
     selectorFailures: merged.failures,

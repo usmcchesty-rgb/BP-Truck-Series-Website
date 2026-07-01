@@ -44,6 +44,12 @@
     .snapshot-status { display: inline-block; margin-bottom: 10px; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; color: #bbb; }
     .snapshot-status.completed { color: #7fd99a; }
     .snapshot-status.needs_manual_review { color: #ffd27a; }
+    .snapshot-table { width: 100%; border-collapse: collapse; font-size: 11px; margin: 8px 0 12px; }
+    .snapshot-table th, .snapshot-table td { padding: 6px 8px; border-bottom: 1px solid #222; text-align: left; }
+    .snapshot-table th { color: #888; font-size: 10px; text-transform: uppercase; }
+    .snapshot-table tr.is-primary td { color: #fff; background: rgba(229,9,20,.08); }
+    .snapshot-subhead { margin: 12px 0 6px; font-size: 11px; color: #aaa; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; }
+    .stats-category-select { max-width: 240px; margin-bottom: 10px; }
     @media (max-width: 980px) {
       .applications-layout { grid-template-columns: 1fr; }
     }
@@ -251,6 +257,145 @@
       return `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(display)}</dd>`;
     }
 
+    function normalizeLicenseCategories(snapshot) {
+      const raw = snapshot?.licenses_json;
+      if (!raw) return [];
+      if (Array.isArray(raw)) return raw;
+      if (Array.isArray(raw.categories)) return raw.categories;
+      return [];
+    }
+
+    function normalizeStatsJson(snapshot) {
+      const raw = snapshot?.stats_json;
+      if (!raw || typeof raw !== 'object') return {};
+      return raw;
+    }
+
+    function normalizeYearlyStats(snapshot) {
+      const raw = snapshot?.yearly_stats_json;
+      if (!raw) return [];
+      return Array.isArray(raw) ? raw : [];
+    }
+
+    function renderLicenseCategoriesTable(snapshot) {
+      const categories = normalizeLicenseCategories(snapshot);
+      if (!categories.length) {
+        return '<p class="detail-empty">No license categories parsed.</p>';
+      }
+
+      const rows = categories
+        .map((entry) => {
+          const isPrimary = /^Oval$/i.test(entry.category || '');
+          return `
+            <tr class="${isPrimary ? 'is-primary' : ''}">
+              <td>${escapeHtml(entry.category)}</td>
+              <td>${escapeHtml(entry.license_class)}</td>
+              <td>${escapeHtml(entry.safety_rating)}</td>
+              <td>${escapeHtml(entry.irating)}</td>
+            </tr>
+          `;
+        })
+        .join('');
+
+      return `
+        <div class="snapshot-subhead">All License Categories</div>
+        <table class="snapshot-table">
+          <thead>
+            <tr>
+              <th>Category</th>
+              <th>Class</th>
+              <th>SR</th>
+              <th>iRating</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+    }
+
+    function renderStatsCategoryFields(statsJson, categoryName) {
+      const row = statsJson?.[categoryName] || {};
+      return `
+        <dl class="detail-grid stats-grid" id="statsCategoryFields">
+          ${detailField('Starts', row.starts)}
+          ${detailField('Wins', row.wins)}
+          ${detailField('Top 5', row.top5)}
+          ${detailField('Poles', row.poles)}
+          ${detailField('Avg Start', row.avgStart)}
+          ${detailField('Avg Finish', row.avgFinish)}
+          ${detailField('Total Laps', row.totalLaps)}
+          ${detailField('Laps Led', row.lapsLed)}
+          ${detailField('Inc/Race', row.incidentsPerRace)}
+          ${detailField('Pts/Race', row.pointsPerRace)}
+          ${detailField('Win %', row.winPercentage)}
+          ${detailField('Top 5 %', row.top5Percentage)}
+        </dl>
+      `;
+    }
+
+    function renderYearlyProgressionSection(snapshot) {
+      const yearly = normalizeYearlyStats(snapshot);
+      const status = snapshot?.yearly_parse_status || 'unknown';
+
+      if (!yearly.length) {
+        return `
+          <div class="snapshot-subhead">Yearly Progression</div>
+          <p class="detail-empty">Yearly progression not available yet.</p>
+          ${status !== 'completed' && snapshot?.yearly_parse_error
+            ? `<p class="detail-empty">${escapeHtml(snapshot.yearly_parse_error)}</p>`
+            : ''}
+        `;
+      }
+
+      const rows = yearly
+        .slice(0, 40)
+        .map((entry) => `
+          <tr>
+            <td>${escapeHtml(entry.year)}</td>
+            <td>${escapeHtml(entry.category)}</td>
+            <td>${escapeHtml(entry.starts)}</td>
+            <td>${escapeHtml(entry.wins)}</td>
+            <td>${escapeHtml(entry.top5)}</td>
+            <td>${escapeHtml(entry.avg_finish ?? entry.avgFinish)}</td>
+            <td>${escapeHtml(entry.incidents_per_race ?? entry.incidentsPerRace)}</td>
+          </tr>
+        `)
+        .join('');
+
+      return `
+        <div class="snapshot-subhead">Yearly Progression</div>
+        <div class="snapshot-status ${escapeHtml(status)}">${escapeHtml(String(status).replace(/_/g, ' '))}</div>
+        <table class="snapshot-table">
+          <thead>
+            <tr>
+              <th>Year</th>
+              <th>Category</th>
+              <th>Starts</th>
+              <th>Wins</th>
+              <th>Top 5</th>
+              <th>Avg Finish</th>
+              <th>Inc/Race</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+    }
+
+    function bindStatsCategorySelector(snapshot) {
+      const select = document.getElementById('statsCategorySelect');
+      const mount = document.getElementById('statsCategoryMount');
+      if (!select || !mount) return;
+
+      const statsJson = normalizeStatsJson(snapshot);
+      const update = () => {
+        mount.innerHTML = renderStatsCategoryFields(statsJson, select.value);
+      };
+
+      select.addEventListener('change', update);
+      update();
+    }
+
     function renderSnapshotSection(snapshot) {
       if (!snapshot) {
         return `
@@ -274,6 +419,7 @@
             ${detailField('Oval iRating', snapshot.oval_irating)}
             ${detailField('Review Note', snapshot.scrape_error)}
           </dl>
+          ${renderLicenseCategoriesTable(snapshot)}
         </div>
       `;
     }
@@ -289,27 +435,36 @@
       }
 
       const statusClass = escapeHtml(snapshot.scrape_status || 'unknown');
+      const statsJson = normalizeStatsJson(snapshot);
+      const categories = Object.keys(statsJson);
+      const defaultCategory = categories.includes('Oval')
+        ? 'Oval'
+        : snapshot.category && statsJson[snapshot.category]
+          ? snapshot.category
+          : categories[0] || snapshot.category || 'Oval';
+
+      const categoryOptions = categories.length
+        ? categories
+            .map((name) => {
+              const selected = name === defaultCategory ? ' selected' : '';
+              return `<option value="${escapeHtml(name)}"${selected}>${escapeHtml(name)}</option>`;
+            })
+            .join('')
+        : `<option value="${escapeHtml(defaultCategory)}" selected>${escapeHtml(defaultCategory)}</option>`;
+
       return `
         <div class="snapshot-card">
           <h4>Latest iRacing Stats Snapshot</h4>
           <div class="snapshot-status ${statusClass}">${statusClass.replace(/_/g, ' ')}</div>
           <dl class="detail-grid stats-grid">
             ${detailField('Snapshot Date', formatDate(snapshot.created_at))}
-            ${detailField('Category', snapshot.category)}
-            ${detailField('Starts', snapshot.starts)}
-            ${detailField('Wins', snapshot.wins)}
-            ${detailField('Top 5', snapshot.top5)}
-            ${detailField('Poles', snapshot.poles)}
-            ${detailField('Avg Start', snapshot.avg_start)}
-            ${detailField('Avg Finish', snapshot.avg_finish)}
-            ${detailField('Total Laps', snapshot.total_laps)}
-            ${detailField('Laps Led', snapshot.laps_led)}
-            ${detailField('Inc/Race', snapshot.incidents_per_race)}
-            ${detailField('Pts/Race', snapshot.points_per_race)}
-            ${detailField('Win %', snapshot.win_percentage)}
-            ${detailField('Top 5 %', snapshot.top5_percentage)}
+            ${detailField('Primary Category', snapshot.category || 'Oval')}
             ${detailField('Review Note', snapshot.scrape_error)}
           </dl>
+          <label class="field-label" for="statsCategorySelect">Select Category</label>
+          <select id="statsCategorySelect" class="select stats-category-select">${categoryOptions}</select>
+          <div id="statsCategoryMount"></div>
+          ${renderYearlyProgressionSection(snapshot)}
         </div>
       `;
     }
@@ -355,6 +510,9 @@
       `;
 
       $('#saveApplicationBtn').addEventListener('click', saveSelectedApplication);
+      if (latestStatsSnapshot) {
+        bindStatsCategorySelector(latestStatsSnapshot);
+      }
     }
 
     async function loadApplicationDetail() {
