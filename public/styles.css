@@ -3437,6 +3437,19 @@ a.home-news-item:hover h4{color:#fff}
 .news-article-subheadline{margin:0 0 6px;font-size:19px;color:#d6d6d6;line-height:1.35;font-weight:700}
 .news-article-body{display:grid;gap:16px;line-height:1.7;font-size:16px;color:#ececec;margin-top:8px}
 .news-article-body p{margin:0}
+.news-article-heading{margin:0;font-size:clamp(22px,3vw,28px);line-height:1.15;font-weight:900;color:#fff;text-transform:uppercase;letter-spacing:.02em}
+.news-article-subheading{margin:0;font-size:20px;line-height:1.25;font-weight:800;color:#f0f0f0}
+.news-article-quote{margin:0;padding:12px 14px;border-left:3px solid #666;background:rgba(255,255,255,.03);color:#ddd}
+.news-article-quote p{margin:0}
+.news-article-quote p + p{margin-top:8px}
+.news-article-list{margin:0;padding-left:22px;display:grid;gap:8px}
+.news-article-list li{margin:0}
+.news-article-body a{color:#8fd3ff;text-decoration:underline;text-underline-offset:2px}
+.news-article-body a:hover{color:#fff}
+.news-callout{margin:0;padding:14px 16px;border:1px solid #333;border-left:4px solid var(--red);background:linear-gradient(180deg,rgba(24,24,24,.98),rgba(10,10,10,.98));display:grid;gap:8px}
+.news-callout-label{display:block;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;color:var(--red)}
+.news-callout-body{display:grid;gap:10px;color:#ececec;font-size:15px;line-height:1.6}
+.news-callout-body p{margin:0}
 .news-author-card{margin-top:26px;padding-top:18px;border-top:1px solid #333;display:flex;gap:14px;align-items:flex-start}
 .news-author-card-copy{display:grid;gap:6px}
 .news-author-card-copy strong{font-size:16px;color:#fff}

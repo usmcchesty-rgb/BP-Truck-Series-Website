@@ -13,7 +13,60 @@
     .field-label { display: block; font-size: 11px; color: #999; font-weight: 900; text-transform: uppercase; margin: 10px 0 4px; }
     .input, .textarea, .select { width: 100%; margin-bottom: 8px; padding: 8px; background: #090909; color: #fff; border: 1px solid #555; border-radius: 4px; font-size: 12px; }
     .textarea { min-height: 72px; resize: vertical; font-family: inherit; }
-    .textarea.body { min-height: 320px; line-height: 1.55; }
+    .textarea.body { min-height: 320px; line-height: 1.55; font-family: Consolas, "Courier New", monospace; }
+    .editor-format-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 0 0 8px;
+      padding: 8px;
+      border: 1px solid #333;
+      background: #0a0a0a;
+    }
+    .editor-format-btn {
+      padding: 5px 10px;
+      font-size: 10px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      color: #ddd;
+      background: linear-gradient(#1c1c1c, #080808);
+      border: 1px solid #444;
+      cursor: pointer;
+    }
+    .editor-format-btn:hover {
+      color: #fff;
+      border-color: #888;
+    }
+    .editor-format-btn.is-accent {
+      color: #ffb4b4;
+      border-color: #733;
+    }
+    .editor-format-btn.is-accent:hover {
+      border-color: #ff3030;
+      color: #fff;
+    }
+    .editor-body-toolbar-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .editor-body-toolbar-row .field-label { margin: 0; }
+    .editor-body-preview {
+      margin: 0 0 8px;
+      padding: 14px;
+      border: 1px solid #333;
+      background: linear-gradient(180deg, #101010, #070707);
+      max-height: 420px;
+      overflow: auto;
+    }
+    .editor-body-preview .news-article-body {
+      margin-top: 0;
+      font-size: 14px;
+    }
     .btn-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
     .btn-secondary { background: linear-gradient(#1c1c1c, #080808); }
     .btn-danger { background: linear-gradient(#5a1010, #2a0505); border-color: #733; }
@@ -317,6 +370,23 @@
       <textarea id="summary" class="textarea"></textarea>
 
       <label class="field-label" for="body">Article Body</label>
+      <div class="editor-body-toolbar-row">
+        <span class="field-label">Formatting</span>
+        <button id="bodyPreviewToggle" class="editor-format-btn" type="button">Show Preview</button>
+      </div>
+      <div class="editor-format-toolbar" aria-label="Article body formatting">
+        <button class="editor-format-btn" type="button" data-body-format="bold" title="Bold">Bold</button>
+        <button class="editor-format-btn" type="button" data-body-format="italic" title="Italic">Italic</button>
+        <button class="editor-format-btn" type="button" data-body-format="heading" title="Heading">Heading</button>
+        <button class="editor-format-btn" type="button" data-body-format="quote" title="Quote">Quote</button>
+        <button class="editor-format-btn" type="button" data-body-format="bullet" title="Bullet list">Bullet List</button>
+        <button class="editor-format-btn" type="button" data-body-format="numbered" title="Numbered list">Numbered List</button>
+        <button class="editor-format-btn" type="button" data-body-format="link" title="Link">Link</button>
+        <button class="editor-format-btn is-accent" type="button" data-body-format="callout" title="Emphasis bar / callout">Emphasis Bar</button>
+      </div>
+      <div id="bodyPreviewPanel" class="editor-body-preview" hidden>
+        <div id="bodyPreview"></div>
+      </div>
       <textarea id="body" class="textarea body"></textarea>
 
       <div class="btn-row">
@@ -342,6 +412,8 @@
   <script src="/driver-standing-photo.js"></script>
   <script src="/news-article-image.js"></script>
   <script src="/spotlight-image.js"></script>
+  <script src="/news-article-body.js"></script>
+  <script src="/admin/news-body-editor.js"></script>
   <script>
     const $ = (s) => document.querySelector(s);
     const SESSION_KEY = 'bp_admin_pw';
@@ -689,6 +761,7 @@
       loadDrivers();
       loadArticles();
       syncArticleTypeFields();
+      if (window.NewsBodyEditor) NewsBodyEditor.init();
     }
 
     function readReporterCropFromForm() {
@@ -1219,6 +1292,7 @@
       $('#subheadline').value = '';
       $('#summary').value = '';
       $('#body').value = '';
+      if (window.NewsBodyEditor) NewsBodyEditor.updatePreview();
       $('#headlineOverride').value = '';
       $('#newsTopic').value = '';
       resetArticleImageFields();
@@ -1247,6 +1321,7 @@
         $('#subheadline').value = a.subheadline || '';
         $('#summary').value = a.summary || '';
         $('#body').value = a.body || '';
+        if (window.NewsBodyEditor) NewsBodyEditor.updatePreview();
         loadArticleImageFields(a);
         loadSpotlightImageFields(a);
         const preview = $('#previewLink');
@@ -1436,6 +1511,7 @@
         $('#subheadline').value = article.subheadline || '';
         $('#summary').value = article.summary || '';
         $('#body').value = article.body || '';
+        if (window.NewsBodyEditor) NewsBodyEditor.updatePreview();
         renderDiagnostics(data);
 
         const warnings = (data.validation?.errors || []).length;

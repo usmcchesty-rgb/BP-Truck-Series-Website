@@ -24,6 +24,9 @@ function getSlugFromPath() {
 }
 
 function renderBody(body) {
+  if (window.NewsArticleBody?.render) {
+    return NewsArticleBody.render(body);
+  }
   return String(body || "")
     .split(/\n\s*\n/)
     .map((paragraph) => `<p>${escapeHtml(paragraph.trim())}</p>`)
