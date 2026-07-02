@@ -55,23 +55,20 @@
     .review-card--decision .select, .review-card--decision .textarea { margin-bottom: 10px; }
     .decision-status-line { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #2a2a2a; }
     .decision-status-line span:first-child { color: #999; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; }
-    .review-overview-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
-    .overview-tile.decision-card-wide { grid-column: span 2; }
-    .decision-wide-body { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
-    .decision-wide-irating { min-width: 0; flex: 1 1 auto; }
-    .decision-wide-irating b { font-size: clamp(16px, 1.8vw, 22px); line-height: 1.1; color: #fff; }
-    .decision-wide-irating em { display: block; margin-top: 6px; color: #888; font-style: normal; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; }
-    .decision-license-pill { display: inline-flex; align-items: center; justify-content: center; min-width: 88px; padding: 6px 12px; border-radius: 999px; border: 1px solid #444; font-size: clamp(14px, 1.5vw, 18px); font-weight: 900; font-variant-numeric: tabular-nums; white-space: nowrap; flex: 0 0 auto; }
+    .review-overview-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; align-items: stretch; }
+    .overview-tile { border: 1px solid #333; background: linear-gradient(180deg, #111, #080808); padding: 8px 10px; min-height: 86px; display: flex; flex-direction: column; justify-content: space-between; min-width: 0; overflow: hidden; }
+    .overview-tile b { display: block; font-size: clamp(15px, 1.6vw, 20px); color: #fff; font-variant-numeric: tabular-nums; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .overview-tile span { display: block; margin-top: 4px; color: #999; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .overview-tile small { display: block; margin-top: 3px; color: #888; font-size: 10px; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .overview-tile-pill-wrap { display: flex; align-items: center; min-height: 24px; }
+    .decision-license-pill { display: inline-flex; align-items: center; justify-content: center; max-width: 100%; padding: 3px 9px; border-radius: 999px; border: 1px solid #444; font-size: clamp(13px, 1.4vw, 16px); font-weight: 900; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .decision-license-pill.is-blue { border-color: #355; background: linear-gradient(180deg, rgba(18,42,58,.42), rgba(6,14,20,.5)); color: #bfe8ff; }
     .decision-license-pill.is-green { border-color: #2c8f46; background: linear-gradient(180deg, rgba(28,90,45,.36), rgba(8,28,15,.45)); color: #8dff9d; }
     .decision-license-pill.is-yellow { border-color: #9a8129; background: linear-gradient(180deg, rgba(110,86,18,.36), rgba(38,29,7,.45)); color: #ffe680; }
     .decision-license-pill.is-orange { border-color: #a35f1f; background: linear-gradient(180deg, rgba(122,63,18,.38), rgba(42,20,5,.45)); color: #ffb15f; }
     .decision-license-pill.is-red { border-color: #9e2f2f; background: linear-gradient(180deg, rgba(115,24,24,.42), rgba(43,7,7,.48)); color: #ff7878; }
     .decision-license-pill.is-neutral { border-color: #444; background: linear-gradient(180deg, rgba(28,28,28,.96), rgba(12,12,12,.96)); color: #bbb; }
-    .overview-tile { border: 1px solid #333; background: linear-gradient(180deg, #111, #080808); padding: 12px; min-height: 88px; display: flex; flex-direction: column; justify-content: space-between; min-width: 0; }
-    .overview-tile b { display: block; font-size: clamp(16px, 1.8vw, 22px); color: #fff; font-variant-numeric: tabular-nums; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .overview-tile span { display: block; margin-top: 7px; color: #999; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .overview-tile small { display: block; margin-top: 7px; color: #bbb; font-size: 11px; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .overview-dnf-rate { font-weight: 900; font-variant-numeric: tabular-nums; }
     .overview-tile.is-blue { border-color: #355; background: linear-gradient(180deg, rgba(18,42,58,.42), rgba(6,14,20,.5)); }
     .overview-tile.is-blue b { color: #bfe8ff; }
     .overview-tile.is-green { border-color: #2c8f46; background: linear-gradient(180deg, rgba(28,90,45,.36), rgba(8,28,15,.45)); }
@@ -84,19 +81,11 @@
     .overview-tile.is-red b { color: #ff7878; }
     .overview-tile.is-neutral { border-color: #444; background: linear-gradient(180deg, rgba(28,28,28,.96), rgba(12,12,12,.96)); }
     .overview-tile.is-neutral b { color: #bbb; }
-    .overview-tile--srh-dnfs { gap: 0; }
-    .overview-tile--srh-dnfs > span:first-child { margin-top: 0; margin-bottom: 8px; }
-    .overview-dnf-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-top: 2px; }
-    .overview-dnf-stat { min-width: 0; flex: 1 1 0; }
-    .overview-dnf-stat b { font-size: clamp(16px, 1.8vw, 22px); }
-    .overview-dnf-stat em { display: block; margin-top: 4px; color: #888; font-style: normal; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; }
-    .overview-dnf-rate { display: block; margin-top: 8px; font-size: clamp(16px, 1.8vw, 22px); font-weight: 900; line-height: 1.1; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .overview-dnf-rate.is-green { color: #8dff9d; }
     .overview-dnf-rate.is-yellow { color: #ffe680; }
     .overview-dnf-rate.is-orange { color: #ffb15f; }
     .overview-dnf-rate.is-red { color: #ff7878; }
     .overview-dnf-rate.is-neutral { color: #bbb; }
-    .overview-dnf-rate-label { display: block; margin-top: 6px; color: #999; font-style: normal; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; }
     .number-status-pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; border: 1px solid #444; color: #ddd; }
     .number-status-pill.available { color: #7fd99a; border-color: #385; }
     .number-status-pill.pending { color: #ffd27a; border-color: #865; }
@@ -458,21 +447,17 @@
       return '—';
     }
 
-    function renderIracingLicenseRatingTile(licenseSnapshot) {
-      const irating = licenseSnapshot?.oval_irating ?? '—';
+    function renderLicenseSrTile(licenseSnapshot) {
       const pillText = formatLicensePill(licenseSnapshot);
       const pillTone = licensePillToneClass(licenseSnapshot);
 
       return `
-        <div class="overview-tile decision-card-wide">
-          <div class="decision-wide-body">
-            <div class="decision-wide-irating">
-              <b>${escapeHtml(irating)}</b>
-              <em>iRating</em>
-            </div>
-            <div class="decision-license-pill ${escapeHtml(pillTone)}">${escapeHtml(pillText)}</div>
+        <div class="overview-tile">
+          <div class="overview-tile-pill-wrap">
+            <span class="decision-license-pill ${escapeHtml(pillTone)}">${escapeHtml(pillText)}</span>
           </div>
-          <span>IRACING LICENSE / RATING</span>
+          <span>License / SR</span>
+          <small>Oval license snapshot</small>
         </div>
       `;
     }
@@ -517,34 +502,17 @@
       const { normalized, dataReady, helper } = getSrhDisconnectState(snapshot);
 
       if (!dataReady || !normalized) {
-        return `
-        <div class="overview-tile overview-tile--srh-dnfs decision-card-wide is-neutral">
-          <span>SRH Starts / DNFs</span>
-          <b>Not available</b>
-          <small>${escapeHtml(helper)}</small>
-        </div>
-      `;
+        return overviewTile('SRH Starts / DNFs', 'Not available', helper);
       }
 
       const toneClass = disconnectRateToneClass(normalized.career_disconnect_rate);
       const rateLabel = formatDisconnectRate(normalized.career_disconnect_rate);
 
       return `
-        <div class="overview-tile overview-tile--srh-dnfs decision-card-wide is-neutral">
+        <div class="overview-tile">
+          <b>${escapeHtml(normalized.career_starts)} / ${escapeHtml(normalized.career_disconnects)}</b>
           <span>SRH Starts / DNFs</span>
-          <div class="overview-dnf-row">
-            <div class="overview-dnf-stat">
-              <b>${escapeHtml(normalized.career_starts)}</b>
-              <em>Starts</em>
-            </div>
-            <div class="overview-dnf-stat">
-              <b>${escapeHtml(normalized.career_disconnects)}</b>
-              <em>DNFs</em>
-            </div>
-          </div>
-          <strong class="overview-dnf-rate ${escapeHtml(toneClass)}">${escapeHtml(rateLabel)}</strong>
-          <em class="overview-dnf-rate-label">SRH Disconnect Rate</em>
-          <small>${escapeHtml(helper)}</small>
+          <small><span class="overview-dnf-rate ${escapeHtml(toneClass)}">${escapeHtml(rateLabel)}</span> disconnect rate</small>
         </div>
       `;
     }
@@ -1092,7 +1060,8 @@
         <div class="review-overview-grid">
           ${overviewTile('iRacing Oval Starts', ovalStats.starts, latestStatsSnapshot?.category || 'Oval profile stats')}
           ${overviewTile('iRacing Inc/Race', ovalStats.incidentsPerRace, 'Oval lifetime snapshot', incidentToneClass(ovalStats.incidentsPerRace))}
-          ${renderIracingLicenseRatingTile(latestSnapshot)}
+          ${overviewTile('iRating', latestSnapshot?.oval_irating ?? '—', 'Oval license snapshot')}
+          ${renderLicenseSrTile(latestSnapshot)}
           ${overviewTile('SRH Inc/Start', srhIncidents, srhIncSubtext, incidentToneClass(srhIncidents))}
           ${renderSrhStartsDnfsOverviewTile(latestSrhSnapshot)}
         </div>
