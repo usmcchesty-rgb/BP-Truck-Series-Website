@@ -70,6 +70,21 @@
     .overview-tile.is-orange b { color: #ffb15f; }
     .overview-tile.is-red { border-color: #9e2f2f; background: linear-gradient(180deg, rgba(115,24,24,.42), rgba(43,7,7,.48)); }
     .overview-tile.is-red b { color: #ff7878; }
+    .overview-tile.is-neutral { border-color: #444; background: linear-gradient(180deg, rgba(28,28,28,.96), rgba(12,12,12,.96)); }
+    .overview-tile.is-neutral b { color: #bbb; }
+    .overview-tile--srh-dnfs { min-height: 108px; gap: 0; }
+    .overview-tile--srh-dnfs > span:first-child { margin-top: 0; margin-bottom: 8px; }
+    .overview-dnf-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-top: 2px; }
+    .overview-dnf-stat { min-width: 0; flex: 1 1 0; }
+    .overview-dnf-stat b { font-size: clamp(16px, 1.8vw, 22px); }
+    .overview-dnf-stat em { display: block; margin-top: 4px; color: #888; font-style: normal; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; }
+    .overview-dnf-rate { display: block; margin-top: 10px; font-size: clamp(24px, 2.6vw, 32px); font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .overview-tile.is-green .overview-dnf-rate { color: #8dff9d; }
+    .overview-tile.is-yellow .overview-dnf-rate { color: #ffe680; }
+    .overview-tile.is-orange .overview-dnf-rate { color: #ffb15f; }
+    .overview-tile.is-red .overview-dnf-rate { color: #ff7878; }
+    .overview-tile.is-neutral .overview-dnf-rate { color: #bbb; }
+    .overview-dnf-rate-label { display: block; margin-top: 6px; color: #999; font-style: normal; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; }
     .number-status-pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; border: 1px solid #444; color: #ddd; }
     .number-status-pill.available { color: #7fd99a; border-color: #385; }
     .number-status-pill.pending { color: #ffd27a; border-color: #865; }
@@ -105,7 +120,8 @@
     .stat-metric.is-yellow, .stat-badge.is-yellow { border-color: #9a8129; background: linear-gradient(180deg, rgba(110,86,18,.36), rgba(38,29,7,.45)); color: #ffe680; }
     .stat-metric.is-orange, .stat-badge.is-orange { border-color: #a35f1f; background: linear-gradient(180deg, rgba(122,63,18,.38), rgba(42,20,5,.45)); color: #ffb15f; }
     .stat-metric.is-red, .stat-badge.is-red { border-color: #9e2f2f; background: linear-gradient(180deg, rgba(115,24,24,.42), rgba(43,7,7,.48)); color: #ff7878; }
-    .stat-metric.is-green dd, .stat-metric.is-yellow dd, .stat-metric.is-orange dd, .stat-metric.is-red dd { color: inherit; }
+    .stat-metric.is-neutral, .stat-badge.is-neutral { border-color: #444; background: linear-gradient(180deg, rgba(28,28,28,.96), rgba(12,12,12,.96)); color: #bbb; }
+    .stat-metric.is-green dd, .stat-metric.is-yellow dd, .stat-metric.is-orange dd, .stat-metric.is-red dd, .stat-metric.is-neutral dd { color: inherit; }
     .stat-badge { display: inline-block; min-width: 56px; padding: 4px 8px; border: 1px solid #444; font-weight: 900; font-variant-numeric: tabular-nums; text-align: center; }
     .snapshot-status.not_found, .snapshot-status.ambiguous { color: #ffd27a; }
     .snapshot-status.failed { color: #ff8080; }
@@ -403,13 +419,71 @@
       return '';
     }
 
-    function dnfToneClass(value) {
+    function disconnectRateToneClass(value) {
       const number = numericValue(value);
-      if (number == null) return '';
-      if (number <= 2) return 'is-green';
-      if (number <= 5) return 'is-yellow';
-      if (number <= 10) return 'is-orange';
+      if (number == null) return 'is-neutral';
+      const pct = number <= 1 ? number * 100 : number;
+      if (pct < 5) return 'is-green';
+      if (pct < 10) return 'is-yellow';
+      if (pct < 15) return 'is-orange';
       return 'is-red';
+    }
+
+    function hasSrhDisconnectData(snapshot) {
+      return (
+        snapshot?.scrape_status === 'completed' &&
+        snapshot?.career_starts != null &&
+        snapshot?.career_disconnects != null &&
+        snapshot?.career_disconnect_rate != null
+      );
+    }
+
+    function formatDisconnectRate(value) {
+      const number = numericValue(value);
+      if (number == null) return null;
+      const pct = number <= 1 ? number * 100 : number;
+      return `${pct.toFixed(1)}%`;
+    }
+
+    function formatSrhIncPerStart(snapshot) {
+      const value =
+        snapshot?.career_incidents_per_start ?? snapshot?.career_incidents_per_race ?? null;
+      if (value == null || value === '') return '—';
+      return value;
+    }
+
+    function renderSrhStartsDnfsOverviewTile(snapshot) {
+      if (!hasSrhDisconnectData(snapshot)) {
+        return `
+          <div class="overview-tile overview-tile--srh-dnfs is-neutral">
+            <b>Not available</b>
+            <span>SRH Starts / DNFs</span>
+            <small>Refresh SRH Career to populate disconnect stats.</small>
+          </div>
+        `;
+      }
+
+      const toneClass = disconnectRateToneClass(snapshot.career_disconnect_rate);
+      const rateLabel = formatDisconnectRate(snapshot.career_disconnect_rate);
+
+      return `
+        <div class="overview-tile overview-tile--srh-dnfs ${escapeHtml(toneClass)}">
+          <span>SRH Starts / DNFs</span>
+          <div class="overview-dnf-row">
+            <div class="overview-dnf-stat">
+              <b>${escapeHtml(snapshot.career_starts)}</b>
+              <em>Starts</em>
+            </div>
+            <div class="overview-dnf-stat">
+              <b>${escapeHtml(snapshot.career_disconnects)}</b>
+              <em>DNFs</em>
+            </div>
+          </div>
+          <strong class="overview-dnf-rate">${escapeHtml(rateLabel)}</strong>
+          <em class="overview-dnf-rate-label">SRH Disconnect Rate</em>
+          <small>Counted from SRH rows with status "Disconnected".</small>
+        </div>
+      `;
     }
 
     function overviewTile(label, value, subtext = '', toneClass = '') {
@@ -555,6 +629,16 @@
         return '<p class="detail-empty">No verified SRH all-leagues career stats yet.</p>';
       }
 
+      const disconnectMetrics = hasSrhDisconnectData(snapshot)
+        ? `
+          ${statMetric('DISCONNECTS', snapshot.career_disconnects)}
+          ${statMetric('DISCONNECT %', formatDisconnectRate(snapshot.career_disconnect_rate), disconnectRateToneClass(snapshot.career_disconnect_rate))}
+        `
+        : `
+          ${statMetric('DISCONNECTS', 'Not available', 'is-neutral')}
+          ${statMetric('DISCONNECT %', 'Not available', 'is-neutral')}
+        `;
+
       return `
         <div class="stats-metric-grid">
           ${statMetric('STARTS', snapshot.career_starts)}
@@ -564,8 +648,12 @@
           ${statMetric('AVG FINISH', snapshot.career_average_finish)}
           ${statMetric('POLES', snapshot.career_poles)}
           ${statMetric('LAPS LED', snapshot.career_laps_led)}
-          ${statMetric('INC/START', snapshot.career_incidents_per_race, incidentToneClass(snapshot.career_incidents_per_race))}
+          ${statMetric('INC/START', formatSrhIncPerStart(snapshot), incidentToneClass(formatSrhIncPerStart(snapshot)))}
+          ${disconnectMetrics}
         </div>
+        ${hasSrhDisconnectData(snapshot)
+          ? ''
+          : '<p class="detail-empty">Refresh SRH Career to populate disconnect stats.</p>'}
       `;
     }
 
@@ -837,7 +925,7 @@
 
     function renderReviewOverview(latestSnapshot, latestStatsSnapshot, latestSrhSnapshot) {
       const ovalStats = pickOvalStats(latestStatsSnapshot);
-      const srhIncidents = latestSrhSnapshot?.career_incidents_per_race;
+      const srhIncidents = formatSrhIncPerStart(latestSrhSnapshot);
 
       return `
         <div class="review-overview-grid">
@@ -845,9 +933,8 @@
           ${overviewTile('iRacing Inc/Race', ovalStats.incidentsPerRace, 'Oval lifetime snapshot', incidentToneClass(ovalStats.incidentsPerRace))}
           ${overviewTile('iRating', latestSnapshot?.oval_irating ?? '—', latestSnapshot?.oval_license_class || 'No license snapshot', 'is-blue')}
           ${overviewTile('License / SR', formatLicenseSr(latestSnapshot), 'Oval license snapshot', licenseOverviewTone(latestSnapshot))}
-          ${overviewTile('SRH Career Starts', latestSrhSnapshot?.career_starts ?? '—', latestSrhSnapshot?.matched_driver_name || 'All SimRacerHub leagues')}
-          ${overviewTile('SRH Inc/Start', srhIncidents ?? '—', 'All SimRacerHub leagues', incidentToneClass(srhIncidents))}
-          ${overviewTile('SRH DNF', 'Not available', 'SRH parser does not expose DNF totals yet')}
+          ${overviewTile('SRH Inc/Start', srhIncidents, 'All SimRacerHub leagues', incidentToneClass(srhIncidents))}
+          ${renderSrhStartsDnfsOverviewTile(latestSrhSnapshot)}
         </div>
       `;
     }
