@@ -84,10 +84,10 @@
     return errors;
   }
 
-  function renderAvailableNumbers(numbers) {
+  function renderAvailableNumbers(numberRows) {
     if (!preferredNumberInput) return;
-    const available = Array.isArray(numbers) ? numbers : [];
-    if (!available.length) {
+    const rows = Array.isArray(numberRows) ? numberRows : [];
+    if (!rows.length) {
       preferredNumberInput.innerHTML = '<option value="">No numbers available</option>';
       preferredNumberInput.disabled = true;
       if (preferredNumberHelpEl) {
@@ -97,14 +97,36 @@
       return;
     }
 
-    preferredNumberInput.disabled = false;
+    const statusLabel = {
+      available: 'Available',
+      pending: 'Pending',
+      assigned: 'Unavailable',
+      reserved: 'Reserved',
+    };
+
+    const options = rows.map((entry) => {
+      const number = typeof entry === 'string' ? entry : entry?.number;
+      const status = typeof entry === 'string' ? 'available' : String(entry?.status || 'available');
+      const label = statusLabel[status] || status;
+      const disabled = status !== 'available' ? ' disabled' : '';
+      return `<option value="${number}"${disabled}>#${number} — ${label}</option>`;
+    });
+
+    const hasAvailable = rows.some((entry) => {
+      const status = typeof entry === 'string' ? 'available' : String(entry?.status || 'available');
+      return status === 'available';
+    });
+
+    preferredNumberInput.disabled = !hasAvailable;
     preferredNumberInput.innerHTML = [
       '<option value="" selected disabled hidden>Select available number</option>',
-      ...available.map((number) => `<option value="${number}">${number}</option>`),
+      ...options,
     ].join('');
+
     if (preferredNumberHelpEl) {
-      preferredNumberHelpEl.textContent =
-        'Available numbers are based on the current active drivers list. Number 0 is reserved for the pace car.';
+      preferredNumberHelpEl.textContent = hasAvailable
+        ? 'Only numbers marked Available can be selected. Pending numbers are held by other applicants under review. Number 0 is reserved for the pace car.'
+        : 'All numbers are currently pending, assigned, or reserved. Please contact league staff.';
     }
   }
 
@@ -115,7 +137,10 @@
       const res = await fetch('/api/drivers?action=availableNumbers');
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Unable to load available numbers.');
-      renderAvailableNumbers(data.available || []);
+      const rows = Array.isArray(data.numbers)
+        ? data.numbers
+        : (data.available || []).map((number) => ({ number, status: 'available' }));
+      renderAvailableNumbers(rows);
     } catch (error) {
       preferredNumberInput.innerHTML = '<option value="">Numbers unavailable</option>';
       preferredNumberInput.disabled = true;

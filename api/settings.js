@@ -68,6 +68,11 @@ import {
 import { getLatestIracingSnapshotForApplication } from './_driver-application-iracing-snapshots.js';
 import { getLatestIracingStatsSnapshotForApplication } from './_driver-application-iracing-stats-snapshots.js';
 import {
+  assignApplicationNumber,
+  getReservationForApplication,
+  releaseApplicationNumber,
+} from './_driver-number-reservations.js';
+import {
   createSrhCareerSnapshotForApplication,
   getLatestSrhCareerSnapshotForApplication,
 } from './_driver-application-srh-career-snapshots.js';
@@ -177,12 +182,16 @@ async function handleDriverApplicationRoutes(req, res) {
       const latest_lookup_job = await getLatestIracingLookupJobForApplication(applicationId);
       const latest_srh_career_snapshot =
         await getLatestSrhCareerSnapshotForApplication(applicationId);
+      const number_reservation = supabase()
+        ? await getReservationForApplication(supabase(), applicationId)
+        : null;
       res.status(200).json({
         application,
         latest_snapshot,
         latest_stats_snapshot,
         latest_lookup_job,
         latest_srh_career_snapshot,
+        number_reservation,
       });
       return true;
     } catch (error) {
@@ -217,6 +226,7 @@ async function handleDriverApplicationRoutes(req, res) {
         ok: true,
         application: result.application,
         driver_profile: result.driver_profile || null,
+        number_reservation: result.number_reservation || null,
       });
       return true;
     } catch (error) {
@@ -285,6 +295,55 @@ async function handleDriverApplicationRoutes(req, res) {
       return true;
     } catch (error) {
       res.status(500).json({ error: error.message || 'Failed to refresh SRH career stats.' });
+      return true;
+    }
+  }
+
+  const isReleaseNumber =
+    req.method === 'POST' &&
+    applicationId &&
+    (action === 'releaseApplicationNumber' || queryAction === 'releaseApplicationNumber');
+  if (isReleaseNumber) {
+    if (!isAdminPasswordValid(req, body)) {
+      res.status(401).json({ error: 'Bad password' });
+      return true;
+    }
+    try {
+      const result = await releaseApplicationNumber(
+        applicationId,
+        body.note || 'released_by_staff'
+      );
+      if (!result.ok) {
+        res.status(result.status).json({ error: result.error });
+        return true;
+      }
+      res.status(200).json({ ok: true, number_reservation: result.reservation || null });
+      return true;
+    } catch (error) {
+      res.status(500).json({ error: error.message || 'Failed to release number.' });
+      return true;
+    }
+  }
+
+  const isAssignNumber =
+    req.method === 'POST' &&
+    applicationId &&
+    (action === 'assignApplicationNumber' || queryAction === 'assignApplicationNumber');
+  if (isAssignNumber) {
+    if (!isAdminPasswordValid(req, body)) {
+      res.status(401).json({ error: 'Bad password' });
+      return true;
+    }
+    try {
+      const result = await assignApplicationNumber(applicationId);
+      if (!result.ok) {
+        res.status(result.status).json({ error: result.error });
+        return true;
+      }
+      res.status(200).json({ ok: true, number_reservation: result.reservation || null });
+      return true;
+    } catch (error) {
+      res.status(500).json({ error: error.message || 'Failed to assign number.' });
       return true;
     }
   }

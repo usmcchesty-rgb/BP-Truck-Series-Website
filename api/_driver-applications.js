@@ -1,5 +1,15 @@
 import { slugify, supabase } from './_lib.js';
 import { createSrhCareerSnapshotForApplication } from './_driver-application-srh-career-snapshots.js';
+import {
+  assertNumberAvailableForApplication,
+  assignReservationForApplication,
+  createPendingReservation,
+  getReservationForApplication,
+  normalizeCarNumber,
+  normalizeCustomerId,
+  releaseReservationForApplication,
+  syncReservationForApplicationStatus,
+} from './_driver-number-reservations.js';
 
 export const OPEN_APPLICATION_STATUSES = [
   'pending',
@@ -31,77 +41,9 @@ function normalizeOptionalText(value) {
   return text || null;
 }
 
-function normalizeCustomerId(value) {
-  return String(value ?? '').trim().replace(/\D/g, '');
-}
-
-function normalizeCarNumber(value) {
-  const text = String(value ?? '').trim();
-  if (!text) return '';
-  if (!/^\d{1,2}$/.test(text)) return '';
-  if (text === '0') return '';
-  return text;
-}
-
 function normalizeLookupReason(value) {
   const reason = String(value || '').trim();
   return IRACING_LOOKUP_REASONS.includes(reason) ? reason : 'manual_refresh';
-}
-
-async function assertPreferredNumberAvailable(sb, preferredNumber, customerId = '') {
-  const carNumber = normalizeCarNumber(preferredNumber);
-  if (!preferredNumber) return { ok: true, carNumber: '' };
-  if (!carNumber) {
-    return {
-      ok: false,
-      status: 400,
-      error: 'Preferred number must be 00 or 1 through 99. Number 0 is reserved for the pace car.',
-    };
-  }
-
-  let { data, error } = await sb
-    .from('driver_profiles')
-    .select('driver_id, iracing_customer_id, display_name, iracing_name, car_number, active')
-    .eq('car_number', carNumber)
-    .neq('active', false)
-    .limit(1)
-    .maybeSingle();
-
-  if (error && (error.code === '42703' || /iracing_customer_id/i.test(error.message || ''))) {
-    const fallback = await sb
-      .from('driver_profiles')
-      .select('driver_id, display_name, iracing_name, car_number, active')
-      .eq('car_number', carNumber)
-      .neq('active', false)
-      .limit(1)
-      .maybeSingle();
-    data = fallback.data;
-    error = fallback.error;
-  }
-
-  if (error) {
-    if (error.code === '42P01' || /does not exist/i.test(error.message || '')) {
-      return { ok: true, carNumber };
-    }
-    return { ok: false, status: 500, error: error.message || 'Failed to check number availability.' };
-  }
-
-  const normalizedCustomerId = normalizeCustomerId(customerId);
-  if (
-    data &&
-    (!normalizedCustomerId ||
-      (normalizeCustomerId(data.iracing_customer_id) !== normalizedCustomerId &&
-        String(data.driver_id || '') !== normalizedCustomerId))
-  ) {
-    const name = data.display_name || data.iracing_name || 'another driver';
-    return {
-      ok: false,
-      status: 409,
-      error: `Number ${carNumber} is already taken by ${name}. Please choose another number.`,
-    };
-  }
-
-  return { ok: true, carNumber };
 }
 
 async function promoteApprovedApplicationToDriverProfile(sb, application) {
@@ -113,10 +55,11 @@ async function promoteApprovedApplicationToDriverProfile(sb, application) {
   const displayName = String(
     application.iracing_display_name || application.driver_name || `Driver ${customerId}`
   ).trim();
-  const numberCheck = await assertPreferredNumberAvailable(
+  const numberCheck = await assertNumberAvailableForApplication(
     sb,
     application.preferred_number,
-    customerId
+    customerId,
+    application.id
   );
   if (!numberCheck.ok) return numberCheck;
 
@@ -245,7 +188,7 @@ export async function submitDriverApplication(body) {
     };
   }
 
-  const numberCheck = await assertPreferredNumberAvailable(
+  const numberCheck = await assertNumberAvailableForApplication(
     sb,
     validation.row.preferred_number,
     validation.row.iracing_customer_id
@@ -268,6 +211,19 @@ export async function submitDriverApplication(body) {
       };
     }
     return { ok: false, status: 500, error: error.message || 'Failed to save application.' };
+  }
+
+  if (validation.row.preferred_number) {
+    const reservationResult = await createPendingReservation(sb, {
+      number: validation.row.preferred_number,
+      applicationId: data.id,
+      iracingCustomerId: validation.row.iracing_customer_id,
+      note: 'application_submitted',
+    });
+    if (!reservationResult.ok) {
+      await sb.from('driver_applications').delete().eq('id', data.id);
+      return reservationResult;
+    }
   }
 
   let srh_career_snapshot = null;
@@ -365,15 +321,17 @@ export async function updateDriverApplication(id, patch = {}) {
     return { ok: false, status: 400, error: 'No valid fields to update.' };
   }
 
+  const existing = await getDriverApplicationById(applicationId);
+  if (!existing) {
+    return { ok: false, status: 404, error: 'Application not found.' };
+  }
+
   if (update.status === 'approved') {
-    const existing = await getDriverApplicationById(applicationId);
-    if (!existing) {
-      return { ok: false, status: 404, error: 'Application not found.' };
-    }
-    const numberCheck = await assertPreferredNumberAvailable(
+    const numberCheck = await assertNumberAvailableForApplication(
       sb,
       existing.preferred_number,
-      existing.iracing_customer_id
+      existing.iracing_customer_id,
+      existing.id
     );
     if (!numberCheck.ok) return numberCheck;
   }
@@ -389,18 +347,37 @@ export async function updateDriverApplication(id, patch = {}) {
     return { ok: false, status: 500, error: error.message || 'Failed to update application.' };
   }
 
+  const reservationSync = await syncReservationForApplicationStatus(sb, data, existing.status);
+  if (!reservationSync.ok) return reservationSync;
+
   if (data.status === 'approved') {
     const promoteResult = await promoteApprovedApplicationToDriverProfile(sb, data);
-    if (!promoteResult.ok) return promoteResult;
+    if (!promoteResult.ok) {
+      await releaseReservationForApplication(sb, data.id, 'approval_rollback');
+      return promoteResult;
+    }
+    const assignResult = await assignReservationForApplication(
+      sb,
+      data,
+      normalizeCustomerId(data.iracing_customer_id)
+    );
+    if (!assignResult.ok) return assignResult;
     return {
       ok: true,
       status: 200,
       application: data,
       driver_profile: promoteResult.driverProfile,
+      number_reservation: assignResult.reservation || null,
     };
   }
 
-  return { ok: true, status: 200, application: data };
+  const numberReservation = await getReservationForApplication(sb, data.id);
+  return {
+    ok: true,
+    status: 200,
+    application: data,
+    number_reservation: numberReservation,
+  };
 }
 
 export async function enqueueIracingLookupJob(applicationId, customerId, reason = 'manual_refresh') {

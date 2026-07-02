@@ -55,11 +55,27 @@
     .review-card--decision .select, .review-card--decision .textarea { margin-bottom: 10px; }
     .decision-status-line { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #2a2a2a; }
     .decision-status-line span:first-child { color: #999; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; }
-    .review-overview-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-    .overview-tile { border: 1px solid #333; background: linear-gradient(180deg, #111, #080808); padding: 12px; min-height: 88px; }
-    .overview-tile b { display: block; font-size: 22px; color: #fff; font-variant-numeric: tabular-nums; line-height: 1; }
-    .overview-tile span { display: block; margin-top: 7px; color: #999; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; line-height: 1.25; }
-    .overview-tile small { display: block; margin-top: 7px; color: #bbb; font-size: 11px; line-height: 1.35; }
+    .review-overview-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+    .overview-tile { border: 1px solid #333; background: linear-gradient(180deg, #111, #080808); padding: 12px; min-height: 88px; display: flex; flex-direction: column; justify-content: space-between; min-width: 0; }
+    .overview-tile b { display: block; font-size: clamp(16px, 1.8vw, 22px); color: #fff; font-variant-numeric: tabular-nums; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .overview-tile span { display: block; margin-top: 7px; color: #999; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .overview-tile small { display: block; margin-top: 7px; color: #bbb; font-size: 11px; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .overview-tile.is-blue { border-color: #355; background: linear-gradient(180deg, rgba(18,42,58,.42), rgba(6,14,20,.5)); }
+    .overview-tile.is-blue b { color: #bfe8ff; }
+    .overview-tile.is-green { border-color: #2c8f46; background: linear-gradient(180deg, rgba(28,90,45,.36), rgba(8,28,15,.45)); }
+    .overview-tile.is-green b { color: #8dff9d; }
+    .overview-tile.is-yellow { border-color: #9a8129; background: linear-gradient(180deg, rgba(110,86,18,.36), rgba(38,29,7,.45)); }
+    .overview-tile.is-yellow b { color: #ffe680; }
+    .overview-tile.is-orange { border-color: #a35f1f; background: linear-gradient(180deg, rgba(122,63,18,.38), rgba(42,20,5,.45)); }
+    .overview-tile.is-orange b { color: #ffb15f; }
+    .overview-tile.is-red { border-color: #9e2f2f; background: linear-gradient(180deg, rgba(115,24,24,.42), rgba(43,7,7,.48)); }
+    .overview-tile.is-red b { color: #ff7878; }
+    .number-status-pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; border: 1px solid #444; color: #ddd; }
+    .number-status-pill.available { color: #7fd99a; border-color: #385; }
+    .number-status-pill.pending { color: #ffd27a; border-color: #865; }
+    .number-status-pill.assigned { color: #ff8080; border-color: #733; }
+    .number-status-pill.reserved { color: #9ec5ff; border-color: #456; }
+    .number-status-pill.released { color: #aaa; border-color: #555; }
     .evidence-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
     .detail-grid { display: grid; grid-template-columns: minmax(150px, 220px) minmax(0, 1fr); gap: 10px 16px; font-size: 12px; margin-bottom: 14px; max-width: 1100px; }
     .detail-grid dt { color: #888; font-weight: 900; text-transform: uppercase; font-size: 10px; margin: 0; }
@@ -81,10 +97,10 @@
     .stats-controls .field-label { margin-top: 0; }
     .stats-control { min-width: 220px; max-width: 320px; flex: 0 1 280px; }
     .stats-category-select { margin-bottom: 0; }
-    .stats-metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 12px 0 18px; }
-    .stat-metric { min-height: 76px; padding: 12px; border: 1px solid #333; background: linear-gradient(180deg, #111, #090909); box-shadow: inset 0 1px 0 rgba(255,255,255,.035); }
-    .stat-metric dt { margin: 0 0 7px; color: #9a9a9a; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; }
-    .stat-metric dd { margin: 0; color: #fff; font-size: 22px; font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; }
+    .stats-metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); gap: 10px; margin: 12px 0 18px; }
+    .stat-metric { min-height: 76px; padding: 12px; border: 1px solid #333; background: linear-gradient(180deg, #111, #090909); box-shadow: inset 0 1px 0 rgba(255,255,255,.035); display: flex; flex-direction: column; justify-content: space-between; min-width: 0; }
+    .stat-metric dt { margin: 0 0 7px; color: #9a9a9a; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .stat-metric dd { margin: 0; color: #fff; font-size: clamp(18px, 1.8vw, 22px); font-weight: 900; line-height: 1.1; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .stat-metric.is-green, .stat-badge.is-green { border-color: #2c8f46; background: linear-gradient(180deg, rgba(28,90,45,.36), rgba(8,28,15,.45)); color: #8dff9d; }
     .stat-metric.is-yellow, .stat-badge.is-yellow { border-color: #9a8129; background: linear-gradient(180deg, rgba(110,86,18,.36), rgba(38,29,7,.45)); color: #ffe680; }
     .stat-metric.is-orange, .stat-badge.is-orange { border-color: #a35f1f; background: linear-gradient(180deg, rgba(122,63,18,.38), rgba(42,20,5,.45)); color: #ffb15f; }
@@ -109,6 +125,7 @@
       .detail-header .btn-row { margin-top: 12px; }
       .detail-grid { grid-template-columns: 1fr; }
       .review-shell, .evidence-grid, .review-overview-grid { grid-template-columns: 1fr; }
+      .review-overview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .review-sidebar { position: static; }
     }
   </style>
@@ -366,6 +383,75 @@
       return 'is-red';
     }
 
+    function safetyRatingToneClass(value) {
+      const number = numericValue(value);
+      if (number == null) return '';
+      if (number >= 3.5) return 'is-green';
+      if (number >= 2.5) return 'is-yellow';
+      if (number >= 1.5) return 'is-orange';
+      return 'is-red';
+    }
+
+    function licenseClassToneClass(value) {
+      const text = String(value || '').trim().toUpperCase();
+      if (!text) return '';
+      if (text.startsWith('S') || text.startsWith('P')) return 'is-blue';
+      if (text.startsWith('A')) return 'is-green';
+      if (text.startsWith('B')) return 'is-yellow';
+      if (text.startsWith('C')) return 'is-orange';
+      if (text.startsWith('D') || text.startsWith('R')) return 'is-red';
+      return '';
+    }
+
+    function dnfToneClass(value) {
+      const number = numericValue(value);
+      if (number == null) return '';
+      if (number <= 2) return 'is-green';
+      if (number <= 5) return 'is-yellow';
+      if (number <= 10) return 'is-orange';
+      return 'is-red';
+    }
+
+    function overviewTile(label, value, subtext = '', toneClass = '') {
+      const display = value == null || value === '' ? '—' : value;
+      return `
+        <div class="overview-tile ${escapeHtml(toneClass)}">
+          <b>${escapeHtml(display)}</b>
+          <span>${escapeHtml(label)}</span>
+          ${subtext ? `<small>${escapeHtml(subtext)}</small>` : ''}
+        </div>
+      `;
+    }
+
+    function numberStatusPill(status) {
+      const safe = escapeHtml(String(status || 'none').toLowerCase());
+      return `<span class="number-status-pill ${safe}">${safe.replace(/_/g, ' ')}</span>`;
+    }
+
+    function pickOvalStats(statsSnapshot) {
+      const statsJson = normalizeStatsJson(statsSnapshot);
+      const oval = statsJson?.Oval || statsJson?.oval || {};
+      return {
+        starts: oval.starts ?? statsSnapshot?.starts ?? null,
+        incidentsPerRace: oval.incidentsPerRace ?? statsSnapshot?.incidents_per_race ?? null,
+      };
+    }
+
+    function formatLicenseSr(licenseSnapshot) {
+      const licenseClass = licenseSnapshot?.oval_license_class || '';
+      const sr = licenseSnapshot?.oval_safety_rating;
+      if (licenseClass && sr != null && sr !== '') return `${licenseClass} / ${sr}`;
+      if (licenseClass) return licenseClass;
+      if (sr != null && sr !== '') return String(sr);
+      return '—';
+    }
+
+    function licenseOverviewTone(licenseSnapshot) {
+      const srTone = safetyRatingToneClass(licenseSnapshot?.oval_safety_rating);
+      const classTone = licenseClassToneClass(licenseSnapshot?.oval_license_class);
+      return srTone || classTone;
+    }
+
     function statMetric(label, value, toneClass = '') {
       const display = value == null || value === '' ? '—' : value;
       return `
@@ -448,18 +534,18 @@
       const incidentTone = incidentToneClass(row.incidentsPerRace);
       return `
         <div class="stats-metric-grid" id="statsCategoryFields">
-          ${statMetric('Starts', row.starts)}
-          ${statMetric('Wins', row.wins)}
-          ${statMetric('Top 5', row.top5)}
-          ${statMetric('Poles', row.poles)}
-          ${statMetric('Avg Start', row.avgStart)}
-          ${statMetric('Avg Finish', row.avgFinish)}
-          ${statMetric('Total Laps', row.totalLaps)}
-          ${statMetric('Laps Led', row.lapsLed)}
-          ${statMetric('Inc/Race', row.incidentsPerRace, incidentTone)}
-          ${statMetric('Pts/Race', row.pointsPerRace)}
-          ${statMetric('Win %', row.winPercentage)}
-          ${statMetric('Top 5 %', row.top5Percentage)}
+          ${statMetric('STARTS', row.starts)}
+          ${statMetric('WINS', row.wins)}
+          ${statMetric('TOP 5', row.top5)}
+          ${statMetric('POLES', row.poles)}
+          ${statMetric('AVG START', row.avgStart)}
+          ${statMetric('AVG FINISH', row.avgFinish)}
+          ${statMetric('TOTAL LAPS', row.totalLaps)}
+          ${statMetric('LAPS LED', row.lapsLed)}
+          ${statMetric('INC/RACE', row.incidentsPerRace, incidentTone)}
+          ${statMetric('PTS/RACE', row.pointsPerRace)}
+          ${statMetric('WIN %', row.winPercentage)}
+          ${statMetric('TOP 5 %', row.top5Percentage)}
         </div>
       `;
     }
@@ -471,14 +557,14 @@
 
       return `
         <div class="stats-metric-grid">
-          ${statMetric('Career Starts', snapshot.career_starts)}
-          ${statMetric('Wins', snapshot.career_wins)}
-          ${statMetric('Top 5', snapshot.career_top5s)}
-          ${statMetric('Top 10', snapshot.career_top10s)}
-          ${statMetric('Avg Finish', snapshot.career_average_finish)}
-          ${statMetric('Poles', snapshot.career_poles)}
-          ${statMetric('Laps Led', snapshot.career_laps_led)}
-          ${statMetric('Inc/Race', snapshot.career_incidents_per_race, incidentToneClass(snapshot.career_incidents_per_race))}
+          ${statMetric('STARTS', snapshot.career_starts)}
+          ${statMetric('WINS', snapshot.career_wins)}
+          ${statMetric('TOP 5', snapshot.career_top5s)}
+          ${statMetric('TOP 10', snapshot.career_top10s)}
+          ${statMetric('AVG FINISH', snapshot.career_average_finish)}
+          ${statMetric('POLES', snapshot.career_poles)}
+          ${statMetric('LAPS LED', snapshot.career_laps_led)}
+          ${statMetric('INC/START', snapshot.career_incidents_per_race, incidentToneClass(snapshot.career_incidents_per_race))}
         </div>
       `;
     }
@@ -749,44 +835,71 @@
       `;
     }
 
-    function renderReviewOverview(row, latestSnapshot, latestStatsSnapshot, latestSrhSnapshot) {
+    function renderReviewOverview(latestSnapshot, latestStatsSnapshot, latestSrhSnapshot) {
+      const ovalStats = pickOvalStats(latestStatsSnapshot);
+      const srhIncidents = latestSrhSnapshot?.career_incidents_per_race;
+
       return `
         <div class="review-overview-grid">
-          <div class="overview-tile">
-            <b>${escapeHtml(latestSrhSnapshot?.career_starts ?? '—')}</b>
-            <span>SRH Career Starts</span>
-            <small>All leagues on SimRacerHub</small>
-          </div>
-          <div class="overview-tile">
-            <b>${escapeHtml(latestSrhSnapshot?.career_average_finish ?? '—')}</b>
-            <span>SRH Avg Finish</span>
-            <small>${escapeHtml(latestSrhSnapshot?.matched_driver_name || 'No SRH match')}</small>
-          </div>
-          <div class="overview-tile">
-            <b>${escapeHtml(latestSnapshot?.oval_irating ?? '—')}</b>
-            <span>Oval iRating</span>
-            <small>${escapeHtml(latestSnapshot?.oval_license_class || 'No license snapshot')}</small>
-          </div>
-          <div class="overview-tile">
-            <b>${escapeHtml(latestStatsSnapshot?.starts ?? '—')}</b>
-            <span>iRacing Oval Starts</span>
-            <small>${escapeHtml(latestStatsSnapshot?.category || 'Profile stats')}</small>
-          </div>
-          <div class="overview-tile">
-            <b>${escapeHtml(latestStatsSnapshot?.incidents_per_race ?? '—')}</b>
-            <span>iRacing Inc/Race</span>
-            <small>Profile category snapshot</small>
-          </div>
-          <div class="overview-tile">
-            <b>${escapeHtml(row.preferred_number || '—')}</b>
-            <span>Preferred Number</span>
-            <small>${escapeHtml(row.timezone || 'No time zone')}</small>
-          </div>
+          ${overviewTile('iRacing Oval Starts', ovalStats.starts, latestStatsSnapshot?.category || 'Oval profile stats')}
+          ${overviewTile('iRacing Inc/Race', ovalStats.incidentsPerRace, 'Oval lifetime snapshot', incidentToneClass(ovalStats.incidentsPerRace))}
+          ${overviewTile('iRating', latestSnapshot?.oval_irating ?? '—', latestSnapshot?.oval_license_class || 'No license snapshot', 'is-blue')}
+          ${overviewTile('License / SR', formatLicenseSr(latestSnapshot), 'Oval license snapshot', licenseOverviewTone(latestSnapshot))}
+          ${overviewTile('SRH Career Starts', latestSrhSnapshot?.career_starts ?? '—', latestSrhSnapshot?.matched_driver_name || 'All SimRacerHub leagues')}
+          ${overviewTile('SRH Inc/Start', srhIncidents ?? '—', 'All SimRacerHub leagues', incidentToneClass(srhIncidents))}
+          ${overviewTile('SRH DNF', 'Not available', 'SRH parser does not expose DNF totals yet')}
         </div>
       `;
     }
 
-    function renderApplicationDetail(row, latestSnapshot = null, latestStatsSnapshot = null, latestLookupJob = null, latestSrhSnapshot = null) {
+    function renderPreferredNumberSection(row, numberReservation) {
+      const number = row?.preferred_number || '—';
+      const reservationStatus = numberReservation?.status || (number !== '—' ? 'none' : 'none');
+      const canRelease = ['pending', 'reserved'].includes(String(reservationStatus).toLowerCase());
+      const canAssign =
+        String(row?.status || '').toLowerCase() === 'approved' &&
+        String(reservationStatus).toLowerCase() !== 'assigned';
+
+      return `
+        <section class="review-card">
+          <h4>Preferred Number</h4>
+          <dl class="detail-grid">
+            ${detailField('Selected Number', number)}
+            ${detailField('Number Status', numberStatusPill(reservationStatus))}
+            ${detailField('Reservation Updated', formatDate(numberReservation?.updated_at))}
+            ${detailField('Reservation Note', numberReservation?.note || '—')}
+          </dl>
+          <div class="btn-row">
+            <button id="releaseNumberBtn" class="btn btn-secondary" type="button"${canRelease ? '' : ' disabled'}>Release Number</button>
+            <button id="assignNumberBtn" class="btn btn-secondary" type="button"${canAssign ? '' : ' disabled'}>Assign Number</button>
+          </div>
+        </section>
+      `;
+    }
+
+    async function apiReleaseApplicationNumber(id) {
+      const res = await fetch(`/api/settings?action=releaseApplicationNumber&id=${encodeURIComponent(id)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: getSessionPw() })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to release number.');
+      return data;
+    }
+
+    async function apiAssignApplicationNumber(id) {
+      const res = await fetch(`/api/settings?action=assignApplicationNumber&id=${encodeURIComponent(id)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: getSessionPw() })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to assign number.');
+      return data;
+    }
+
+    function renderApplicationDetail(row, latestSnapshot = null, latestStatsSnapshot = null, latestLookupJob = null, latestSrhSnapshot = null, numberReservation = null) {
       const mount = $('#applicationDetail');
       if (!row) {
         mount.innerHTML = '<p class="detail-empty">Select an application from the list to view full details.</p>';
@@ -811,10 +924,11 @@
         </div>
         <div class="review-shell">
           <div class="review-main">
-            <section class="review-card">
+            <section class="review-card review-card--decision">
               <h4>Decision Overview</h4>
-              ${renderReviewOverview(row, latestSnapshot, latestStatsSnapshot, latestSrhSnapshot)}
+              ${renderReviewOverview(latestSnapshot, latestStatsSnapshot, latestSrhSnapshot)}
             </section>
+            ${renderPreferredNumberSection(row, numberReservation)}
             ${renderSrhCareerSection(latestSrhSnapshot)}
             <section class="evidence-grid">
               ${renderSnapshotSection(latestSnapshot)}
@@ -832,7 +946,6 @@
                 ${detailField('Email', row.email)}
                 ${detailField('Age Confirmed', row.age_confirmed ? 'Yes' : 'No')}
                 ${detailField('Time Zone', row.timezone)}
-                ${detailField('Preferred Number', row.preferred_number)}
                 ${detailField('Referred By', row.referred_by)}
                 ${detailField('Racing Background', row.racing_background)}
                 ${detailField('Why Join', row.why_join)}
@@ -865,6 +978,8 @@
       $('#saveApplicationBtn')?.addEventListener('click', saveSelectedApplication);
       $('#refreshIracingBtn').addEventListener('click', refreshSelectedIracingData);
       $('#refreshSrhBtn').addEventListener('click', refreshSelectedSrhCareerData);
+      $('#releaseNumberBtn')?.addEventListener('click', releaseSelectedApplicationNumber);
+      $('#assignNumberBtn')?.addEventListener('click', assignSelectedApplicationNumber);
       if (latestStatsSnapshot) {
         bindStatsCategorySelector(latestStatsSnapshot);
         bindYearlyStatsSelector(latestStatsSnapshot);
@@ -889,7 +1004,8 @@
           data.latest_snapshot || null,
           data.latest_stats_snapshot || null,
           data.latest_lookup_job || null,
-          data.latest_srh_career_snapshot || null
+          data.latest_srh_career_snapshot || null,
+          data.number_reservation || null
         );
       } catch (error) {
         mount.innerHTML = `<p class="detail-empty">${escapeHtml(error.message)}</p>`;
@@ -919,6 +1035,32 @@
       } catch (error) {
         setMsg(error.message, true);
         await loadApplicationDetail();
+      }
+    }
+
+    async function releaseSelectedApplicationNumber() {
+      if (!selectedId) return;
+      if (!window.confirm('Release this pending number back to the available pool?')) return;
+      setMsg('Releasing number...');
+      try {
+        await apiReleaseApplicationNumber(selectedId);
+        setMsg('Number released.');
+        await loadApplicationDetail();
+      } catch (error) {
+        setMsg(error.message, true);
+      }
+    }
+
+    async function assignSelectedApplicationNumber() {
+      if (!selectedId) return;
+      if (!window.confirm('Mark this number as assigned for this applicant?')) return;
+      setMsg('Assigning number...');
+      try {
+        await apiAssignApplicationNumber(selectedId);
+        setMsg('Number assigned.');
+        await loadApplicationDetail();
+      } catch (error) {
+        setMsg(error.message, true);
       }
     }
 

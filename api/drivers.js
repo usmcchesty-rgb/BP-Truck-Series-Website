@@ -1,4 +1,5 @@
 import { getDriverProfiles, supabase, slugify, stripPhotoUrlQuery, withPhotoCacheBust, photoCacheVersion } from './_lib.js';
+import { buildAvailableNumberSummaryFromDb } from './_driver-number-reservations.js';
 import {
   fetchGoogleFormResponses,
   buildFormSyncPreview,
@@ -89,21 +90,6 @@ function normalizeCarNumber(value) {
   if (!/^\d{1,2}$/.test(text)) return '';
   if (text === '0') return '';
   return text;
-}
-
-function buildAvailableNumberSummary(profiles = []) {
-  const allowed = ['00', ...Array.from({ length: 99 }, (_, index) => String(index + 1))];
-  const taken = new Set(
-    profiles
-      .filter((row) => row?.active !== false)
-      .map((row) => normalizeCarNumber(row.car_number || row.truck_number))
-      .filter(Boolean)
-  );
-  return {
-    numbers: allowed,
-    taken: allowed.filter((number) => taken.has(number)),
-    available: allowed.filter((number) => !taken.has(number)),
-  };
 }
 
 function normalizeLookupName(value) {
@@ -424,7 +410,17 @@ export default async function handler(req, res) {
       .sort((a, b) => a.iracing_name.localeCompare(b.iracing_name));
 
     if (queryAction === 'availableNumbers') {
-      return res.status(200).json(buildAvailableNumberSummary(rows));
+      const sb = supabase();
+      if (sb) {
+        try {
+          const summary = await buildAvailableNumberSummaryFromDb(sb);
+          return res.status(200).json(summary);
+        } catch (error) {
+          return res.status(500).json({ error: error.message || 'Failed to load available numbers.' });
+        }
+      }
+      const { buildNumberStatusSummary } = await import('./_driver-number-reservations.js');
+      return res.status(200).json(buildNumberStatusSummary(rows, []));
     }
 
     const driverId = String(req.query?.driver_id ?? req.query?.id ?? '').trim();
