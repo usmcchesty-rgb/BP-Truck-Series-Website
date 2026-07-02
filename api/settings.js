@@ -226,6 +226,8 @@ async function handleDriverApplicationRoutes(req, res) {
         ok: true,
         application: result.application,
         driver_profile: result.driver_profile || null,
+        driver_profile_action: result.driver_profile_action || null,
+        message: result.message || null,
         number_reservation: result.number_reservation || null,
       });
       return true;

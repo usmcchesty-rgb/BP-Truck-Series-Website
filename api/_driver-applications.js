@@ -48,33 +48,71 @@ function normalizeLookupReason(value) {
   return IRACING_LOOKUP_REASONS.includes(reason) ? reason : 'manual_refresh';
 }
 
-async function promoteApprovedApplicationToDriverProfile(sb, application) {
+function normalizeExactDisplayName(value) {
+  return String(value ?? '').trim();
+}
+
+async function findProfileByExactField(sb, field, value) {
+  const exact = normalizeExactDisplayName(value);
+  if (!exact) return null;
+
+  const { data, error } = await sb.from('driver_profiles').select('*').eq(field, exact).limit(1);
+  if (error) throw new Error(error.message || `Failed to look up driver profile by ${field}.`);
+  return data?.[0] || null;
+}
+
+async function findExistingDriverProfileForApplication(sb, application) {
   const customerId = normalizeCustomerId(application?.iracing_customer_id);
-  if (!customerId) {
-    return { ok: false, status: 400, error: 'Approved application is missing an iRacing Customer ID.' };
+  const applicationId = String(application?.id || '').trim();
+  const displayName = normalizeExactDisplayName(application?.iracing_display_name);
+
+  if (customerId) {
+    const byCustomerId = await findProfileByExactField(sb, 'iracing_customer_id', customerId);
+    if (byCustomerId) return byCustomerId;
+
+    const byDriverId = await findProfileByExactField(sb, 'driver_id', customerId);
+    if (byDriverId) return byDriverId;
   }
 
+  if (displayName) {
+    const byIracingName = await findProfileByExactField(sb, 'iracing_name', displayName);
+    if (byIracingName) return byIracingName;
+
+    const byDisplayName = await findProfileByExactField(sb, 'display_name', displayName);
+    if (byDisplayName) return byDisplayName;
+  }
+
+  if (applicationId) {
+    const byApplicationId = await findProfileByExactField(sb, 'source_application_id', applicationId);
+    if (byApplicationId) return byApplicationId;
+  }
+
+  return null;
+}
+
+async function resolveApprovedCarNumber(sb, application) {
+  const reservation = await getReservationForApplication(sb, application?.id);
+  const reservationStatus = String(reservation?.status || '').trim().toLowerCase();
+  if (reservation && ['assigned', 'pending', 'reserved'].includes(reservationStatus)) {
+    const fromReservation = normalizeCarNumber(reservation.number);
+    if (fromReservation) return fromReservation;
+  }
+
+  if (isAnyPreferredNumber(application?.preferred_number)) return '';
+  return normalizeCarNumber(application?.preferred_number);
+}
+
+function buildApplicationDriverProfilePatch(application, carNumber, now) {
+  const customerId = normalizeCustomerId(application?.iracing_customer_id);
   const displayName = String(
     application.iracing_display_name || application.driver_name || `Driver ${customerId}`
   ).trim();
-  const numberCheck = await assertNumberAvailableForApplication(
-    sb,
-    application.preferred_number,
-    customerId,
-    application.id
-  );
-  if (!numberCheck.ok) return numberCheck;
 
-  const now = new Date().toISOString();
-  const row = {
-    driver_id: customerId,
-    iracing_customer_id: customerId,
+  const patch = {
     iracing_name: displayName,
     display_name: displayName,
     driver_name: displayName,
     slug: slugify(displayName || customerId),
-    car_number: numberCheck.carNumber,
-    truck_number: numberCheck.carNumber,
     active: true,
     form_email: normalizeOptionalText(application.email),
     form_submitted_at: application.created_at || null,
@@ -83,13 +121,76 @@ async function promoteApprovedApplicationToDriverProfile(sb, application) {
     updated_at: now,
   };
 
+  if (customerId) patch.iracing_customer_id = customerId;
+
+  const discordName = normalizeOptionalText(application.discord_name);
+  if (discordName) patch.discord_name = discordName;
+
+  const timezone = normalizeOptionalText(application.timezone);
+  if (timezone) patch.timezone = timezone;
+
+  if (carNumber) {
+    patch.car_number = carNumber;
+    patch.truck_number = carNumber;
+  }
+
+  return patch;
+}
+
+async function updateExistingDriverProfileFromApplication(sb, existing, application, carNumber, now) {
+  const patch = buildApplicationDriverProfilePatch(application, carNumber, now);
   const { data, error } = await sb
     .from('driver_profiles')
-    .upsert(row, { onConflict: 'driver_id' })
+    .update(patch)
+    .eq('driver_id', existing.driver_id)
     .select('*')
     .single();
 
   if (error) {
+    if (error.code === '23505') {
+      return {
+        ok: false,
+        status: 409,
+        error:
+          'Cannot link this iRacing Customer ID — it is already assigned to another driver profile.',
+      };
+    }
+    return {
+      ok: false,
+      status: 500,
+      error: error.message || 'Application approved, but driver profile update failed.',
+    };
+  }
+
+  return {
+    ok: true,
+    driverProfile: data,
+    driverProfileAction: 'updated',
+    message: 'Existing driver updated',
+  };
+}
+
+async function createDriverProfileFromApplication(sb, application, carNumber, now) {
+  const customerId = normalizeCustomerId(application?.iracing_customer_id);
+  const row = {
+    driver_id: customerId,
+    ...buildApplicationDriverProfilePatch(application, carNumber, now),
+  };
+
+  const { data, error } = await sb.from('driver_profiles').insert(row).select('*').single();
+
+  if (error) {
+    if (error.code === '23505') {
+      const existing = await findExistingDriverProfileForApplication(sb, application);
+      if (existing) {
+        return updateExistingDriverProfileFromApplication(sb, existing, application, carNumber, now);
+      }
+      return {
+        ok: false,
+        status: 409,
+        error: 'Driver profile already exists for this iRacing Customer ID.',
+      };
+    }
     return {
       ok: false,
       status: 500,
@@ -97,7 +198,38 @@ async function promoteApprovedApplicationToDriverProfile(sb, application) {
     };
   }
 
-  return { ok: true, driverProfile: data };
+  return {
+    ok: true,
+    driverProfile: data,
+    driverProfileAction: 'created',
+    message: 'Driver created',
+  };
+}
+
+async function promoteApprovedApplicationToDriverProfile(sb, application) {
+  const customerId = normalizeCustomerId(application?.iracing_customer_id);
+  if (!customerId) {
+    return { ok: false, status: 400, error: 'Approved application is missing an iRacing Customer ID.' };
+  }
+
+  const carNumber = await resolveApprovedCarNumber(sb, application);
+  if (carNumber) {
+    const numberCheck = await assertNumberAvailableForApplication(
+      sb,
+      carNumber,
+      customerId,
+      application.id
+    );
+    if (!numberCheck.ok) return numberCheck;
+  }
+
+  const now = new Date().toISOString();
+  const existing = await findExistingDriverProfileForApplication(sb, application);
+  if (existing) {
+    return updateExistingDriverProfileFromApplication(sb, existing, application, carNumber, now);
+  }
+
+  return createDriverProfileFromApplication(sb, application, carNumber, now);
 }
 
 function isValidApplicationEmail(value) {
@@ -347,13 +479,16 @@ export async function updateDriverApplication(id, patch = {}) {
   }
 
   if (update.status === 'approved') {
-    const numberCheck = await assertNumberAvailableForApplication(
-      sb,
-      existing.preferred_number,
-      existing.iracing_customer_id,
-      existing.id
-    );
-    if (!numberCheck.ok) return numberCheck;
+    const approvedCarNumber = await resolveApprovedCarNumber(sb, existing);
+    if (approvedCarNumber) {
+      const numberCheck = await assertNumberAvailableForApplication(
+        sb,
+        approvedCarNumber,
+        existing.iracing_customer_id,
+        existing.id
+      );
+      if (!numberCheck.ok) return numberCheck;
+    }
   }
 
   const { data, error } = await sb
@@ -387,6 +522,8 @@ export async function updateDriverApplication(id, patch = {}) {
       status: 200,
       application: data,
       driver_profile: promoteResult.driverProfile,
+      driver_profile_action: promoteResult.driverProfileAction || null,
+      message: promoteResult.message || null,
       number_reservation: assignResult.reservation || null,
     };
   }

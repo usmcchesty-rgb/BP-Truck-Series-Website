@@ -147,6 +147,8 @@ alter table driver_profiles add column if not exists standing_photo_enabled bool
 alter table driver_profiles add column if not exists iracing_customer_id text;
 alter table driver_profiles add column if not exists source_application_id uuid;
 alter table driver_profiles add column if not exists approved_application_at timestamptz;
+alter table driver_profiles add column if not exists discord_name text;
+alter table driver_profiles add column if not exists timezone text;
 create unique index if not exists driver_profiles_iracing_customer_id_uidx
   on driver_profiles (iracing_customer_id)
   where iracing_customer_id is not null and iracing_customer_id <> '';

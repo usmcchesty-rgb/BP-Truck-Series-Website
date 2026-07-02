@@ -366,7 +366,7 @@
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to update application.');
-      return data.application;
+      return data;
     }
 
     async function apiGetApplicationDetail(id) {
@@ -1505,16 +1505,16 @@
       if (!selectedId) return;
       setMsg('Saving...');
       try {
-        const updated = await apiPatchApplication(selectedId, {
+        const result = await apiPatchApplication(selectedId, {
           status: $('#detailStatus').value,
           admin_notes: $('#detailNotes').value
         });
-        applications = applications.map((row) => (row.id === updated.id ? updated : row));
+        applications = applications.map((row) => (row.id === result.application.id ? result.application : row));
         renderStatusTabs();
         renderApplicationsTable();
         syncAdminAttention();
         await loadApplicationDetail();
-        setMsg('Application updated.');
+        setMsg(result.message || 'Application updated.');
       } catch (error) {
         setMsg(error.message, true);
       }
