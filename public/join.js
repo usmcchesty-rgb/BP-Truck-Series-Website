@@ -56,6 +56,12 @@
     if (type) lookupStatusEl.classList.add(`join-form-message--${type}`);
   }
 
+  function isValidEmail(value) {
+    const email = String(value || '').trim();
+    if (!email) return false;
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  }
+
   function readFormData() {
     return {
       driver_name: form.driver_name?.value?.trim() || '',
@@ -81,6 +87,7 @@
     }
     if (!payload.age_confirmed) errors.push('Age confirmation is required.');
     if (!payload.preferred_number) errors.push('Preferred number is required.');
+    if (!isValidEmail(payload.email)) errors.push('Please enter a valid email address.');
     return errors;
   }
 

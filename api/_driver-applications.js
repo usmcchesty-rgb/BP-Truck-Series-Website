@@ -98,6 +98,12 @@ async function promoteApprovedApplicationToDriverProfile(sb, application) {
   return { ok: true, driverProfile: data };
 }
 
+function isValidApplicationEmail(value) {
+  const email = normalizeOptionalText(value);
+  if (!email) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
 export function validateApplicationPayload(body = {}) {
   const errors = [];
   const applicantName = String(body.driver_name ?? body.driverName ?? '').trim();
@@ -119,6 +125,10 @@ export function validateApplicationPayload(body = {}) {
     errors.push('iRacing Customer ID must contain numbers only.');
   }
   if (!ageConfirmed) errors.push('Age confirmation is required.');
+  const email = normalizeOptionalText(body.email);
+  if (!isValidApplicationEmail(email)) {
+    errors.push('Please enter a valid email address.');
+  }
   const preferredNumber = normalizeOptionalText(body.preferred_number ?? body.preferredNumber);
   if (preferredNumber && !normalizeCarNumber(preferredNumber)) {
     errors.push('Preferred number must be 00 or 1 through 99. Number 0 is reserved for the pace car.');
@@ -135,7 +145,7 @@ export function validateApplicationPayload(body = {}) {
       iracing_display_name: iracingDisplayName,
       iracing_customer_id: iracingCustomerId,
       discord_name: normalizeOptionalText(body.discord_name ?? body.discordName),
-      email: normalizeOptionalText(body.email),
+      email,
       age_confirmed: true,
       timezone: normalizeOptionalText(body.timezone ?? body.timeZone),
       preferred_number: preferredNumber ? normalizeCarNumber(preferredNumber) : null,
