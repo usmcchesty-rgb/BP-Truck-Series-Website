@@ -181,6 +181,7 @@
         <h2>Driver Profiles</h2>
         <p class="sub">Drivers load from current standings. Save a row or use Sync All to write profiles to Supabase.</p>
         <p class="sub">Driver ID = SimRacerHub Driver ID. Car Numbers are managed by BP and do not come from SimRacerHub.</p>
+        <p class="sub">Email is a private admin-only contact field for announcements. It is never shown on public driver pages.</p>
         <div class="drivers-actions">
           <button class="btn" type="button" onclick="syncAllDrivers()">Sync All Drivers</button>
           <button class="btn btn-secondary" type="button" onclick="previewFormSync()">Sync Driver Bios From Google Form</button>
@@ -216,6 +217,7 @@
                 <th>iRacing ID</th>
                 <th>iRacing Name</th>
                 <th>Display Name</th>
+                <th>Email</th>
                 <th>Car #</th>
                 <th>Photo URL</th>
                 <th>Date of Birth</th>
@@ -480,6 +482,7 @@
           iracing_customer_id: profile?.iracing_customer_id || profile?.iracingCustomerId || String(row.driverId || ''),
           iracing_name: row.driver,
           display_name: profile?.display_name || row.driver,
+          form_email: profile?.form_email || profile?.formEmail || '',
           car_number: profile?.car_number || '',
           photo_url: profile?.photo_url || row.photoUrl || '',
           date_of_birth: profile?.date_of_birth || profile?.dateOfBirth || '',
@@ -503,6 +506,7 @@
         iracing_customer_id: rowInput(rowEl, 'iracing_customer_id')?.value ?? '',
         iracing_name: rowEl.querySelector('.iracing-name')?.textContent.trim() || '',
         display_name: rowInput(rowEl, 'display_name')?.value ?? '',
+        form_email: rowInput(rowEl, 'form_email')?.value ?? '',
         car_number: rowInput(rowEl, 'car_number')?.value ?? '',
         photo_url: rowInput(rowEl, 'photo_url')?.value ?? '',
         date_of_birth: rowInput(rowEl, 'date_of_birth')?.value ?? '',
@@ -543,7 +547,9 @@
     }
 
     async function confirmSavedCarNumber(driverId, expectedCarNumber) {
-      const res = await fetch('/api/drivers');
+      const res = await fetch('/api/drivers', {
+        headers: { 'X-Admin-Password': getSessionPw() }
+      });
       const profiles = await res.json();
       if (!res.ok) {
         throw new Error(formatDriverError(res, profiles));
@@ -575,6 +581,7 @@
           <td><input type="text" name="iracing_customer_id" value="${escapeAttr(d.iracing_customer_id || d.iracingCustomerId || '')}"></td>
           <td class="readonly iracing-name">${escapeHtml(d.iracing_name)}</td>
           <td><input type="text" name="display_name" value="${escapeAttr(d.display_name || '')}"></td>
+          <td><input type="email" name="form_email" value="${escapeAttr(d.form_email || d.formEmail || '')}" placeholder="Private admin contact" title="Private admin-only contact email. Not shown publicly."></td>
           <td><input type="text" name="car_number" value="${escapeAttr(d.car_number || '')}"></td>
           <td><input type="text" name="photo_url" value="${escapeAttr(d.photo_url || '')}"></td>
           <td><input type="text" name="date_of_birth" value="${escapeAttr(d.date_of_birth || d.dateOfBirth || '')}" placeholder="e.g. March 14, 1990"></td>
@@ -612,7 +619,9 @@
       try {
         const [standingsRes, driversRes] = await Promise.all([
           fetch('/api/standings'),
-          fetch('/api/drivers')
+          fetch('/api/drivers', {
+            headers: { 'X-Admin-Password': getSessionPw() }
+          })
         ]);
         const standingsData = await standingsRes.json();
         const profiles = await driversRes.json();

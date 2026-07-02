@@ -169,7 +169,20 @@ function normalizeStandingCrop(row = {}) {
   };
 }
 
-function normalizeDriverProfile(row) {
+function adminPasswordFromRequest(req, body = {}) {
+  const header =
+    req.headers['x-admin-password'] ||
+    req.headers['X-Admin-Password'] ||
+    req.headers['x-admin-password'.toLowerCase()];
+  return String(header || body.password || req.query?.password || '').trim();
+}
+
+function isAdminDriversRequest(req, body = {}) {
+  return adminPasswordFromRequest(req, body) === process.env.ADMIN_PASSWORD;
+}
+
+function normalizeDriverProfile(row, options = {}) {
+  const includePrivateFields = options.includePrivateFields === true;
   if (!row) return null;
   const photo_url = stripPhotoUrlQuery(row.photo_url || '');
   const car_image_url = stripPhotoUrlQuery(row.car_image_url || '');
@@ -177,7 +190,7 @@ function normalizeDriverProfile(row) {
   const standingCrop = normalizeStandingCrop(row);
   const driver_id = String(row.driver_id ?? '').trim();
   const standingUpdated = row.standing_photo_updated_at || null;
-  return {
+  const profile = {
     driver_id,
     iracing_customer_id: normalizeOptionalText(row.iracing_customer_id) || '',
     iracingCustomerId: normalizeOptionalText(row.iracing_customer_id) || '',
@@ -238,13 +251,26 @@ function normalizeDriverProfile(row) {
     twitchUrl: normalizeOptionalText(row.twitch_url) || '',
     tiktok_url: normalizeOptionalText(row.tiktok_url) || '',
     tiktokUrl: normalizeOptionalText(row.tiktok_url) || '',
-    form_email: normalizeOptionalText(row.form_email) || '',
-    formEmail: normalizeOptionalText(row.form_email) || '',
-    form_submitted_at: row.form_submitted_at || null,
-    formSubmittedAt: row.form_submitted_at || null,
-    form_permission_granted: normalizeBoolean(row.form_permission_granted, false),
-    formPermissionGranted: normalizeBoolean(row.form_permission_granted, false),
   };
+
+  if (includePrivateFields) {
+    profile.form_email = normalizeOptionalText(row.form_email) || '';
+    profile.formEmail = normalizeOptionalText(row.form_email) || '';
+    profile.form_submitted_at = row.form_submitted_at || null;
+    profile.formSubmittedAt = row.form_submitted_at || null;
+    profile.form_permission_granted = normalizeBoolean(row.form_permission_granted, false);
+    profile.formPermissionGranted = normalizeBoolean(row.form_permission_granted, false);
+  }
+
+  return profile;
+}
+
+function buildPublicDriverProfile(row) {
+  return normalizeDriverProfile(row, { includePrivateFields: false });
+}
+
+function buildAdminDriverProfile(row) {
+  return normalizeDriverProfile(row, { includePrivateFields: true });
 }
 
 function buildUpsertRow(b) {
@@ -299,11 +325,18 @@ function buildUpsertRow(b) {
     tiktok_url: normalizeOptionalText(b.tiktok_url ?? b.tiktokUrl),
     car_image_url: stripPhotoUrlQuery(b.car_image_url ?? b.carImageUrl ?? ''),
     iracing_customer_id: normalizeCustomerId(b.iracing_customer_id ?? b.iracingCustomerId),
-    form_email: normalizeOptionalText(b.form_email ?? b.formEmail),
-    form_submitted_at: b.form_submitted_at ?? b.formSubmittedAt ?? null,
-    form_permission_granted: normalizeBoolean(b.form_permission_granted ?? b.formPermissionGranted),
     updated_at: new Date().toISOString(),
   };
+
+  if (b.form_email !== undefined || b.formEmail !== undefined) {
+    row.form_email = normalizeOptionalText(b.form_email ?? b.formEmail);
+  }
+  if (b.form_submitted_at !== undefined || b.formSubmittedAt !== undefined) {
+    row.form_submitted_at = b.form_submitted_at ?? b.formSubmittedAt ?? null;
+  }
+  if (b.form_permission_granted !== undefined || b.formPermissionGranted !== undefined) {
+    row.form_permission_granted = normalizeBoolean(b.form_permission_granted ?? b.formPermissionGranted);
+  }
 
   if (hasStandingUrl) {
     row.standing_photo_url = stripPhotoUrlQuery(
@@ -403,9 +436,11 @@ export default async function handler(req, res) {
       }
     }
 
+    const includePrivateFields = isAdminDriversRequest(req);
+    const normalizeProfile = includePrivateFields ? buildAdminDriverProfile : buildPublicDriverProfile;
     const rows = await getDriverProfiles();
     const normalized = rows
-      .map(normalizeDriverProfile)
+      .map(normalizeProfile)
       .filter(Boolean)
       .sort((a, b) => a.iracing_name.localeCompare(b.iracing_name));
 
@@ -513,5 +548,5 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: `Supabase error: ${error.message}` });
   }
 
-  return res.status(200).json(normalizeDriverProfile(data));
+  return res.status(200).json(buildAdminDriverProfile(data));
 }

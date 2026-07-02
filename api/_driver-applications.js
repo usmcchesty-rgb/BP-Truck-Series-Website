@@ -114,12 +114,16 @@ function buildApplicationDriverProfilePatch(application, carNumber, now) {
     driver_name: displayName,
     slug: slugify(displayName || customerId),
     active: true,
-    form_email: normalizeOptionalText(application.email),
     form_submitted_at: application.created_at || null,
     source_application_id: application.id,
     approved_application_at: now,
     updated_at: now,
   };
+
+  const applicationEmail = normalizeOptionalText(application.email);
+  if (applicationEmail) {
+    patch.form_email = applicationEmail;
+  }
 
   if (customerId) patch.iracing_customer_id = customerId;
 
