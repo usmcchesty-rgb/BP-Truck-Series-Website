@@ -62,6 +62,16 @@
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   }
 
+  const ANY_PREFERRED_NUMBER = 'ANY';
+
+  function renderAnyOption() {
+    return `<option value="${ANY_PREFERRED_NUMBER}">ANY</option>`;
+  }
+
+  function isAnyPreferredNumber(value) {
+    return String(value || '').trim().toUpperCase() === ANY_PREFERRED_NUMBER;
+  }
+
   function readFormData() {
     return {
       driver_name: form.driver_name?.value?.trim() || '',
@@ -87,6 +97,12 @@
     }
     if (!payload.age_confirmed) errors.push('Age confirmation is required.');
     if (!payload.preferred_number) errors.push('Preferred number is required.');
+    else if (
+      !isAnyPreferredNumber(payload.preferred_number) &&
+      !/^\d{1,2}$/.test(payload.preferred_number)
+    ) {
+      errors.push('Preferred number must be ANY, 00, or 1 through 99.');
+    }
     if (!isValidEmail(payload.email)) errors.push('Please enter a valid email address.');
     return errors;
   }
@@ -94,15 +110,6 @@
   function renderAvailableNumbers(numberRows) {
     if (!preferredNumberInput) return;
     const rows = Array.isArray(numberRows) ? numberRows : [];
-    if (!rows.length) {
-      preferredNumberInput.innerHTML = '<option value="">No numbers available</option>';
-      preferredNumberInput.disabled = true;
-      if (preferredNumberHelpEl) {
-        preferredNumberHelpEl.textContent =
-          'No available numbers could be loaded. Please contact league staff.';
-      }
-      return;
-    }
 
     const statusLabel = {
       available: 'Available',
@@ -124,22 +131,25 @@
       return status === 'available';
     });
 
-    preferredNumberInput.disabled = !hasAvailable;
-    preferredNumberInput.innerHTML = [
-      '<option value="" selected disabled hidden>Select available number</option>',
-      ...options,
-    ].join('');
+    preferredNumberInput.disabled = false;
+    preferredNumberInput.innerHTML = [renderAnyOption(), ...options].join('');
 
     if (preferredNumberHelpEl) {
-      preferredNumberHelpEl.textContent = hasAvailable
-        ? 'Only numbers marked Available can be selected. Pending numbers are held by other applicants under review. Number 0 is reserved for the pace car.'
-        : 'All numbers are currently pending, assigned, or reserved. Please contact league staff.';
+      if (!rows.length) {
+        preferredNumberHelpEl.textContent =
+          'Select ANY if you have no number preference, or contact league staff if no numbers are listed.';
+      } else if (hasAvailable) {
+        preferredNumberHelpEl.textContent =
+          'Select ANY if you have no preference, or choose an available number. Pending numbers are held by other applicants under review. Number 0 is reserved for the pace car.';
+      } else {
+        preferredNumberHelpEl.textContent =
+          'All specific numbers are currently pending, assigned, or reserved. Select ANY if you have no preference, or contact league staff.';
+      }
     }
   }
 
   async function loadAvailableNumbers() {
     if (!preferredNumberInput) return;
-    preferredNumberInput.disabled = true;
     try {
       const res = await fetch('/api/drivers?action=availableNumbers');
       const data = await res.json().catch(() => ({}));
@@ -149,11 +159,11 @@
         : (data.available || []).map((number) => ({ number, status: 'available' }));
       renderAvailableNumbers(rows);
     } catch (error) {
-      preferredNumberInput.innerHTML = '<option value="">Numbers unavailable</option>';
-      preferredNumberInput.disabled = true;
+      preferredNumberInput.disabled = false;
+      preferredNumberInput.innerHTML = renderAnyOption();
       if (preferredNumberHelpEl) {
         preferredNumberHelpEl.textContent =
-          'Available numbers could not be loaded. Please refresh or contact league staff.';
+          'Available numbers could not be loaded. You can still select ANY, or refresh and contact league staff.';
       }
     }
   }

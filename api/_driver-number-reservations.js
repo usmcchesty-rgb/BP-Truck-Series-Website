@@ -3,7 +3,14 @@ import { getDriverProfiles } from './_lib.js';
 export const ACTIVE_RESERVATION_STATUSES = ['pending', 'assigned', 'reserved'];
 export const RESERVATION_STATUSES = ['available', 'pending', 'assigned', 'reserved', 'released'];
 
+export const ANY_PREFERRED_NUMBER = 'ANY';
+
+export function isAnyPreferredNumber(value) {
+  return String(value ?? '').trim().toUpperCase() === ANY_PREFERRED_NUMBER;
+}
+
 export function normalizeCarNumber(value) {
+  if (isAnyPreferredNumber(value)) return '';
   const text = String(value ?? '').trim();
   if (!text) return '';
   if (!/^\d{1,2}$/.test(text)) return '';
@@ -117,6 +124,7 @@ export async function assertNumberAvailableForApplication(
   customerId = '',
   applicationId = ''
 ) {
+  if (isAnyPreferredNumber(preferredNumber)) return { ok: true, carNumber: '' };
   const carNumber = normalizeCarNumber(preferredNumber);
   if (!preferredNumber) return { ok: true, carNumber: '' };
   if (!carNumber) {
@@ -286,6 +294,9 @@ export async function releaseReservationForApplication(sb, applicationId, note =
 }
 
 export async function assignReservationForApplication(sb, application, driverId = '') {
+  if (isAnyPreferredNumber(application?.preferred_number)) {
+    return { ok: true, reservation: null };
+  }
   const reservation = await getReservationForApplication(sb, application?.id);
   if (!reservation) {
     if (!application?.preferred_number) return { ok: true, reservation: null };
@@ -332,7 +343,11 @@ export async function syncReservationForApplicationStatus(sb, application, previ
 
   if (['pending', 'reviewing', 'waitlist', 'recruiting_race'].includes(status)) {
     const reservation = await getReservationForApplication(sb, application.id);
-    if (!reservation && application.preferred_number) {
+    if (
+      !reservation &&
+      application.preferred_number &&
+      !isAnyPreferredNumber(application.preferred_number)
+    ) {
       return createPendingReservation(sb, {
         number: application.preferred_number,
         applicationId: application.id,
@@ -343,7 +358,8 @@ export async function syncReservationForApplicationStatus(sb, application, previ
     if (
       reservation &&
       String(reservation.status || '').toLowerCase() === 'released' &&
-      application.preferred_number
+      application.preferred_number &&
+      !isAnyPreferredNumber(application.preferred_number)
     ) {
       return createPendingReservation(sb, {
         number: application.preferred_number,
@@ -364,7 +380,7 @@ export async function releaseApplicationNumber(applicationId, note = 'released_b
   return releaseReservationForApplication(sb, applicationId, note);
 }
 
-export async function assignApplicationNumber(applicationId) {
+export async function assignApplicationNumber(applicationId, options = {}) {
   const { supabase } = await import('./_lib.js');
   const sb = supabase();
   if (!sb) return { ok: false, status: 503, error: 'Supabase not configured yet.' };
@@ -373,9 +389,24 @@ export async function assignApplicationNumber(applicationId) {
   const application = await getDriverApplicationById(applicationId);
   if (!application) return { ok: false, status: 404, error: 'Application not found.' };
 
+  const overrideNumber = normalizeCarNumber(options.number);
+  const applicationForAssign = isAnyPreferredNumber(application.preferred_number)
+    ? overrideNumber
+      ? { ...application, preferred_number: overrideNumber }
+      : application
+    : application;
+
+  if (isAnyPreferredNumber(application.preferred_number) && !overrideNumber) {
+    return {
+      ok: false,
+      status: 400,
+      error: 'Applicant selected ANY. Enter a car number to assign.',
+    };
+  }
+
   const availability = await assertNumberAvailableForApplication(
     sb,
-    application.preferred_number,
+    applicationForAssign.preferred_number,
     application.iracing_customer_id,
     application.id
   );
@@ -383,7 +414,7 @@ export async function assignApplicationNumber(applicationId) {
 
   return assignReservationForApplication(
     sb,
-    application,
+    applicationForAssign,
     normalizeCustomerId(application.iracing_customer_id)
   );
 }

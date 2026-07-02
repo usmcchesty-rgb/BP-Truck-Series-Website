@@ -335,7 +335,7 @@ async function handleDriverApplicationRoutes(req, res) {
       return true;
     }
     try {
-      const result = await assignApplicationNumber(applicationId);
+      const result = await assignApplicationNumber(applicationId, { number: body.number });
       if (!result.ok) {
         res.status(result.status).json({ error: result.error });
         return true;

@@ -1,10 +1,12 @@
 import { slugify, supabase } from './_lib.js';
 import { createSrhCareerSnapshotForApplication } from './_driver-application-srh-career-snapshots.js';
 import {
+  ANY_PREFERRED_NUMBER,
   assertNumberAvailableForApplication,
   assignReservationForApplication,
   createPendingReservation,
   getReservationForApplication,
+  isAnyPreferredNumber,
   normalizeCarNumber,
   normalizeCustomerId,
   releaseReservationForApplication,
@@ -129,14 +131,20 @@ export function validateApplicationPayload(body = {}) {
   if (!isValidApplicationEmail(email)) {
     errors.push('Please enter a valid email address.');
   }
-  const preferredNumber = normalizeOptionalText(body.preferred_number ?? body.preferredNumber);
-  if (preferredNumber && !normalizeCarNumber(preferredNumber)) {
+  const preferredNumberRaw = normalizeOptionalText(body.preferred_number ?? body.preferredNumber);
+  if (!preferredNumberRaw) {
+    errors.push('Preferred number is required.');
+  } else if (!isAnyPreferredNumber(preferredNumberRaw) && !normalizeCarNumber(preferredNumberRaw)) {
     errors.push('Preferred number must be 00 or 1 through 99. Number 0 is reserved for the pace car.');
   }
 
   if (errors.length) {
     return { ok: false, errors };
   }
+
+  const preferredNumberStored = isAnyPreferredNumber(preferredNumberRaw)
+    ? ANY_PREFERRED_NUMBER
+    : normalizeCarNumber(preferredNumberRaw);
 
   return {
     ok: true,
@@ -148,7 +156,7 @@ export function validateApplicationPayload(body = {}) {
       email,
       age_confirmed: true,
       timezone: normalizeOptionalText(body.timezone ?? body.timeZone),
-      preferred_number: preferredNumber ? normalizeCarNumber(preferredNumber) : null,
+      preferred_number: preferredNumberStored,
       racing_background: normalizeOptionalText(body.racing_background ?? body.racingBackground),
       why_join: normalizeOptionalText(body.why_join ?? body.whyJoin),
       referred_by: normalizeOptionalText(body.referred_by ?? body.referredBy),
@@ -198,11 +206,13 @@ export async function submitDriverApplication(body) {
     };
   }
 
-  const numberCheck = await assertNumberAvailableForApplication(
-    sb,
-    validation.row.preferred_number,
-    validation.row.iracing_customer_id
-  );
+  const numberCheck = isAnyPreferredNumber(validation.row.preferred_number)
+    ? { ok: true }
+    : await assertNumberAvailableForApplication(
+        sb,
+        validation.row.preferred_number,
+        validation.row.iracing_customer_id
+      );
   if (!numberCheck.ok) return numberCheck;
 
   const { data, error } = await sb
@@ -223,7 +233,7 @@ export async function submitDriverApplication(body) {
     return { ok: false, status: 500, error: error.message || 'Failed to save application.' };
   }
 
-  if (validation.row.preferred_number) {
+  if (validation.row.preferred_number && !isAnyPreferredNumber(validation.row.preferred_number)) {
     const reservationResult = await createPendingReservation(sb, {
       number: validation.row.preferred_number,
       applicationId: data.id,

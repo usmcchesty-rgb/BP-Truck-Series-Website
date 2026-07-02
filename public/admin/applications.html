@@ -1231,9 +1231,17 @@
       `;
     }
 
+    function formatPreferredNumber(value) {
+      const text = String(value || '').trim();
+      if (!text) return '—';
+      if (text.toUpperCase() === 'ANY') return 'ANY';
+      return text;
+    }
+
     function renderPreferredNumberSection(row, numberReservation) {
-      const number = row?.preferred_number || '—';
-      const reservationStatus = numberReservation?.status || (number !== '—' ? 'none' : 'none');
+      const number = formatPreferredNumber(row?.preferred_number);
+      const isAny = String(row?.preferred_number || '').trim().toUpperCase() === 'ANY';
+      const reservationStatus = numberReservation?.status || (isAny ? 'none' : 'none');
       const canRelease = ['pending', 'reserved'].includes(String(reservationStatus).toLowerCase());
       const canAssign =
         String(row?.status || '').toLowerCase() === 'approved' &&
@@ -1267,11 +1275,11 @@
       return data;
     }
 
-    async function apiAssignApplicationNumber(id) {
+    async function apiAssignApplicationNumber(id, number = '') {
       const res = await fetch(`/api/settings?action=assignApplicationNumber&id=${encodeURIComponent(id)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: getSessionPw() })
+        body: JSON.stringify({ password: getSessionPw(), number })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to assign number.');
@@ -1470,10 +1478,22 @@
 
     async function assignSelectedApplicationNumber() {
       if (!selectedId) return;
-      if (!window.confirm('Mark this number as assigned for this applicant?')) return;
+      const row = applications.find((item) => item.id === selectedId);
+      const isAny = String(row?.preferred_number || '').trim().toUpperCase() === 'ANY';
+      let assignNumber = '';
+      if (isAny) {
+        assignNumber = window.prompt('Applicant selected ANY. Enter car number to assign (00 or 1-99):', '');
+        if (assignNumber == null) return;
+        assignNumber = String(assignNumber).trim();
+        if (!assignNumber) {
+          setMsg('Enter a car number to assign.', true);
+          return;
+        }
+      }
+      if (!window.confirm(isAny ? `Assign number ${assignNumber} to this applicant?` : 'Mark this number as assigned for this applicant?')) return;
       setMsg('Assigning number...');
       try {
-        await apiAssignApplicationNumber(selectedId);
+        await apiAssignApplicationNumber(selectedId, assignNumber);
         setMsg('Number assigned.');
         await loadApplicationDetail();
       } catch (error) {
