@@ -26,6 +26,15 @@ export function buildAllowedNumbers() {
   return ['00', ...Array.from({ length: 99 }, (_, index) => String(index + 1))];
 }
 
+export function buildAnyNumberOption() {
+  return {
+    number: ANY_PREFERRED_NUMBER,
+    status: 'available',
+    label: ANY_PREFERRED_NUMBER,
+    selectable: true,
+  };
+}
+
 function isMissingTableError(error) {
   const message = String(error?.message || '');
   return error?.code === '42P01' || /does not exist/i.test(message);
@@ -92,7 +101,8 @@ export function buildNumberStatusSummary(profiles = [], reservations = []) {
   const numbers = allowed.map((number) => ({ number, status: statusByNumber[number] }));
 
   return {
-    numbers,
+    any: buildAnyNumberOption(),
+    numbers: [buildAnyNumberOption(), ...numbers],
     statuses: statusByNumber,
     available: allowed.filter((number) => statusByNumber[number] === 'available'),
     pending: allowed.filter((number) => statusByNumber[number] === 'pending'),
@@ -213,6 +223,10 @@ export async function assertNumberAvailableForApplication(
 }
 
 export async function createPendingReservation(sb, { number, applicationId, iracingCustomerId, note = '' }) {
+  if (isAnyPreferredNumber(number)) {
+    return { ok: true, reservation: null };
+  }
+
   const carNumber = normalizeCarNumber(number);
   if (!carNumber) {
     return { ok: false, status: 400, error: 'A valid preferred number is required.' };

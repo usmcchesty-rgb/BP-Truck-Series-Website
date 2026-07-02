@@ -72,6 +72,11 @@
     return String(value || '').trim().toUpperCase() === ANY_PREFERRED_NUMBER;
   }
 
+  function isNumericNumberEntry(entry) {
+    const number = typeof entry === 'string' ? entry : entry?.number;
+    return Boolean(number) && !isAnyPreferredNumber(number);
+  }
+
   function readFormData() {
     return {
       driver_name: form.driver_name?.value?.trim() || '',
@@ -109,7 +114,7 @@
 
   function renderAvailableNumbers(numberRows) {
     if (!preferredNumberInput) return;
-    const rows = Array.isArray(numberRows) ? numberRows : [];
+    const rows = (Array.isArray(numberRows) ? numberRows : []).filter(isNumericNumberEntry);
 
     const statusLabel = {
       available: 'Available',

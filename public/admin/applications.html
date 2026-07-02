@@ -699,6 +699,9 @@
 
     function renderNumberStatus(status) {
       const safe = String(status || 'none').trim().toLowerCase();
+      if (safe === 'not_reserved') {
+        return '<span class="number-status-pill none">Not Reserved</span>';
+      }
       if (!safe || safe === 'none') {
         return '<span class="number-status-pill none">None</span>';
       }
@@ -1241,11 +1244,14 @@
     function renderPreferredNumberSection(row, numberReservation) {
       const number = formatPreferredNumber(row?.preferred_number);
       const isAny = String(row?.preferred_number || '').trim().toUpperCase() === 'ANY';
-      const reservationStatus = numberReservation?.status || (isAny ? 'none' : 'none');
-      const canRelease = ['pending', 'reserved'].includes(String(reservationStatus).toLowerCase());
+      const reservationStatus = isAny
+        ? 'not_reserved'
+        : (numberReservation?.status || 'none');
+      const canRelease =
+        !isAny && ['pending', 'reserved'].includes(String(reservationStatus).toLowerCase());
       const canAssign =
         String(row?.status || '').toLowerCase() === 'approved' &&
-        String(reservationStatus).toLowerCase() !== 'assigned';
+        (isAny || String(reservationStatus).toLowerCase() !== 'assigned');
 
       return `
         <section class="review-card">
@@ -1253,8 +1259,8 @@
           <dl class="detail-grid">
             ${detailField('Selected Number', number)}
             ${detailFieldHtml('Number Status', renderNumberStatus(reservationStatus))}
-            ${detailField('Reservation Updated', formatDate(numberReservation?.updated_at))}
-            ${detailField('Reservation Note', numberReservation?.note || '—')}
+            ${detailField('Reservation Updated', isAny && !numberReservation ? '—' : formatDate(numberReservation?.updated_at))}
+            ${detailField('Reservation Note', isAny && !numberReservation ? '—' : (numberReservation?.note || '—'))}
           </dl>
           <div class="btn-row">
             <button id="releaseNumberBtn" class="btn btn-secondary" type="button"${canRelease ? '' : ' disabled'}>Release Number</button>
