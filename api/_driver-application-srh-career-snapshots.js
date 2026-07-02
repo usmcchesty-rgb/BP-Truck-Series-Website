@@ -24,37 +24,70 @@ function isMissingDisconnectColumnError(error) {
   );
 }
 
-function pickFiniteNumber(...values) {
-  for (const value of values) {
-    const number = Number(value);
-    if (Number.isFinite(number)) return number;
-  }
+function pickSrhMetric(flatValue, jsonValue) {
+  const flat = Number(flatValue);
+  const json = Number(jsonValue);
+  const flatNum = Number.isFinite(flat) ? flat : null;
+  const jsonNum = Number.isFinite(json) ? json : null;
+  if (jsonNum != null && jsonNum !== 0 && (flatNum == null || flatNum === 0)) return jsonNum;
+  if (flatNum != null) return flatNum;
+  if (jsonNum != null) return jsonNum;
   return null;
+}
+
+function parseCareerStatsJson(snapshot) {
+  const raw = snapshot?.career_stats_json;
+  if (raw && typeof raw === 'object') return raw;
+  if (typeof raw === 'string') {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return {};
+    }
+  }
+  return {};
 }
 
 export function normalizeSrhCareerSnapshot(snapshot, meta = {}) {
   if (!snapshot) return null;
 
-  const statsJson =
-    snapshot.career_stats_json && typeof snapshot.career_stats_json === 'object'
-      ? snapshot.career_stats_json
-      : {};
+  const statsJson = parseCareerStatsJson(snapshot);
 
-  const careerStarts = pickFiniteNumber(snapshot.career_starts, statsJson.careerStarts);
-  const careerDisconnects = pickFiniteNumber(
+  const careerStarts = pickSrhMetric(snapshot.career_starts, statsJson.careerStarts);
+  const careerIncidents = pickSrhMetric(snapshot.career_incidents, statsJson.careerIncidents);
+  const careerDisconnects = pickSrhMetric(
     snapshot.career_disconnects,
     statsJson.careerDisconnects
   );
-  const careerDisconnectRate = pickFiniteNumber(
+
+  let careerIncidentsPerStart = pickSrhMetric(
+    snapshot.career_incidents_per_start,
+    statsJson.careerIncidentsPerStart
+  );
+  if (careerIncidentsPerStart == null || careerIncidentsPerStart === 0) {
+    careerIncidentsPerStart = pickSrhMetric(
+      snapshot.career_incidents_per_race,
+      statsJson.careerIncidentsPerRace
+    );
+  }
+  if (careerIncidentsPerStart == null || careerIncidentsPerStart === 0) {
+    if (careerIncidents != null && careerStarts != null && careerStarts > 0) {
+      careerIncidentsPerStart = Number((careerIncidents / careerStarts).toFixed(3));
+    }
+  }
+
+  let careerDisconnectRate = pickSrhMetric(
     snapshot.career_disconnect_rate,
     statsJson.careerDisconnectRate
   );
-  const careerIncidentsPerStart = pickFiniteNumber(
-    snapshot.career_incidents_per_start,
-    statsJson.careerIncidentsPerStart,
-    snapshot.career_incidents_per_race,
-    statsJson.careerIncidentsPerRace
-  );
+  if (
+    (careerDisconnectRate == null || careerDisconnectRate === 0) &&
+    careerDisconnects != null &&
+    careerStarts != null &&
+    careerStarts > 0
+  ) {
+    careerDisconnectRate = Number((careerDisconnects / careerStarts).toFixed(3));
+  }
 
   const columnsMissing =
     meta.srh_disconnect_columns_missing === true ||
@@ -64,11 +97,13 @@ export function normalizeSrhCareerSnapshot(snapshot, meta = {}) {
     Object.prototype.hasOwnProperty.call(snapshot, 'career_disconnects') ||
     Object.prototype.hasOwnProperty.call(snapshot, 'career_disconnect_rate');
 
-  const disconnectColumnsMissing = columnsMissing || (snapshot.scrape_status === 'completed' && !hasDisconnectColumns);
+  const disconnectColumnsMissing =
+    columnsMissing || (snapshot.scrape_status === 'completed' && !hasDisconnectColumns);
 
   return {
     ...snapshot,
     career_starts: careerStarts,
+    career_incidents: careerIncidents,
     career_disconnects: careerDisconnects,
     career_disconnect_rate: careerDisconnectRate,
     career_incidents_per_start: careerIncidentsPerStart,

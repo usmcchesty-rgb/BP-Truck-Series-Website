@@ -56,12 +56,12 @@
     .decision-status-line { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #2a2a2a; }
     .decision-status-line span:first-child { color: #999; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; }
     .review-overview-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
-    .overview-tile.decision-card-wide { grid-column: span 2; min-height: 96px; }
-    .decision-wide-body { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 8px; min-width: 0; }
+    .overview-tile.decision-card-wide { grid-column: span 2; }
+    .decision-wide-body { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
     .decision-wide-irating { min-width: 0; flex: 1 1 auto; }
-    .decision-wide-irating b { font-size: clamp(24px, 2.8vw, 34px); line-height: 1; }
+    .decision-wide-irating b { font-size: clamp(16px, 1.8vw, 22px); line-height: 1.1; color: #fff; }
     .decision-wide-irating em { display: block; margin-top: 6px; color: #888; font-style: normal; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; }
-    .decision-license-pill { display: inline-flex; align-items: center; justify-content: center; min-width: 96px; padding: 10px 14px; border-radius: 999px; border: 1px solid #444; font-size: clamp(16px, 1.8vw, 22px); font-weight: 900; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .decision-license-pill { display: inline-flex; align-items: center; justify-content: center; min-width: 88px; padding: 6px 12px; border-radius: 999px; border: 1px solid #444; font-size: clamp(14px, 1.5vw, 18px); font-weight: 900; font-variant-numeric: tabular-nums; white-space: nowrap; flex: 0 0 auto; }
     .decision-license-pill.is-blue { border-color: #355; background: linear-gradient(180deg, rgba(18,42,58,.42), rgba(6,14,20,.5)); color: #bfe8ff; }
     .decision-license-pill.is-green { border-color: #2c8f46; background: linear-gradient(180deg, rgba(28,90,45,.36), rgba(8,28,15,.45)); color: #8dff9d; }
     .decision-license-pill.is-yellow { border-color: #9a8129; background: linear-gradient(180deg, rgba(110,86,18,.36), rgba(38,29,7,.45)); color: #ffe680; }
@@ -84,18 +84,18 @@
     .overview-tile.is-red b { color: #ff7878; }
     .overview-tile.is-neutral { border-color: #444; background: linear-gradient(180deg, rgba(28,28,28,.96), rgba(12,12,12,.96)); }
     .overview-tile.is-neutral b { color: #bbb; }
-    .overview-tile--srh-dnfs { min-height: 108px; gap: 0; }
+    .overview-tile--srh-dnfs { gap: 0; }
     .overview-tile--srh-dnfs > span:first-child { margin-top: 0; margin-bottom: 8px; }
     .overview-dnf-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-top: 2px; }
     .overview-dnf-stat { min-width: 0; flex: 1 1 0; }
     .overview-dnf-stat b { font-size: clamp(16px, 1.8vw, 22px); }
     .overview-dnf-stat em { display: block; margin-top: 4px; color: #888; font-style: normal; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; }
-    .overview-dnf-rate { display: block; margin-top: 10px; font-size: clamp(24px, 2.6vw, 32px); font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .overview-tile.is-green .overview-dnf-rate { color: #8dff9d; }
-    .overview-tile.is-yellow .overview-dnf-rate { color: #ffe680; }
-    .overview-tile.is-orange .overview-dnf-rate { color: #ffb15f; }
-    .overview-tile.is-red .overview-dnf-rate { color: #ff7878; }
-    .overview-tile.is-neutral .overview-dnf-rate { color: #bbb; }
+    .overview-dnf-rate { display: block; margin-top: 8px; font-size: clamp(16px, 1.8vw, 22px); font-weight: 900; line-height: 1.1; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .overview-dnf-rate.is-green { color: #8dff9d; }
+    .overview-dnf-rate.is-yellow { color: #ffe680; }
+    .overview-dnf-rate.is-orange { color: #ffb15f; }
+    .overview-dnf-rate.is-red { color: #ff7878; }
+    .overview-dnf-rate.is-neutral { color: #bbb; }
     .overview-dnf-rate-label { display: block; margin-top: 6px; color: #999; font-style: normal; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; }
     .number-status-pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; border: 1px solid #444; color: #ddd; }
     .number-status-pill.available { color: #7fd99a; border-color: #385; }
@@ -437,8 +437,7 @@
     function licenseClassToneClass(value) {
       const text = String(value || '').trim().toUpperCase();
       if (!text) return 'is-neutral';
-      if (text.startsWith('S') || text.startsWith('P')) return 'is-blue';
-      if (text.startsWith('A')) return 'is-green';
+      if (text.startsWith('A')) return 'is-blue';
       if (text.startsWith('B')) return 'is-green';
       if (text.startsWith('C')) return 'is-yellow';
       if (text.startsWith('D')) return 'is-orange';
@@ -446,13 +445,8 @@
       return 'is-neutral';
     }
 
-    function licenseOverviewTone(licenseSnapshot) {
-      const licenseClass = String(licenseSnapshot?.oval_license_class || '').trim().toUpperCase();
-      const sr = numericValue(licenseSnapshot?.oval_safety_rating);
-      if (sr != null && sr < 2) return 'is-red';
-      const classTone = licenseClassToneClass(licenseClass);
-      if (classTone !== 'is-neutral') return classTone;
-      return safetyRatingToneClass(sr) || 'is-neutral';
+    function licensePillToneClass(licenseSnapshot) {
+      return licenseClassToneClass(licenseSnapshot?.oval_license_class);
     }
 
     function formatLicensePill(licenseSnapshot) {
@@ -467,20 +461,29 @@
     function renderIracingLicenseRatingTile(licenseSnapshot) {
       const irating = licenseSnapshot?.oval_irating ?? '—';
       const pillText = formatLicensePill(licenseSnapshot);
-      const toneClass = licenseOverviewTone(licenseSnapshot);
+      const pillTone = licensePillToneClass(licenseSnapshot);
 
       return `
-        <div class="overview-tile decision-card-wide ${escapeHtml(toneClass)}">
-          <span>IRACING LICENSE / RATING</span>
+        <div class="overview-tile decision-card-wide">
           <div class="decision-wide-body">
             <div class="decision-wide-irating">
               <b>${escapeHtml(irating)}</b>
               <em>iRating</em>
             </div>
-            <div class="decision-license-pill ${escapeHtml(toneClass)}">${escapeHtml(pillText)}</div>
+            <div class="decision-license-pill ${escapeHtml(pillTone)}">${escapeHtml(pillText)}</div>
           </div>
+          <span>IRACING LICENSE / RATING</span>
         </div>
       `;
+    }
+
+    function pickSrhMetric(flatValue, jsonValue) {
+      const flat = numericValue(flatValue);
+      const json = numericValue(jsonValue);
+      if (json != null && json !== 0 && (flat == null || flat === 0)) return json;
+      if (flat != null) return flat;
+      if (json != null) return json;
+      return null;
     }
 
     function disconnectRateToneClass(value) {
@@ -498,10 +501,9 @@
     }
 
     function formatSrhIncPerStart(snapshot) {
-      const normalized = normalizeSrhCareerSnapshotClient(snapshot);
-      const value = normalized?.career_incidents_per_start;
-      if (value == null || value === '') return '—';
-      return value;
+      const { normalized, dataReady } = getSrhIncidentState(snapshot);
+      if (!dataReady || !normalized) return '—';
+      return normalized.career_incidents_per_start;
     }
 
     function formatDisconnectRate(value) {
@@ -516,19 +518,19 @@
 
       if (!dataReady || !normalized) {
         return `
-          <div class="overview-tile overview-tile--srh-dnfs decision-card-wide is-neutral">
-            <span>SRH Starts / DNFs</span>
-            <b>Not available</b>
-            <small>${escapeHtml(helper)}</small>
-          </div>
-        `;
+        <div class="overview-tile overview-tile--srh-dnfs decision-card-wide is-neutral">
+          <span>SRH Starts / DNFs</span>
+          <b>Not available</b>
+          <small>${escapeHtml(helper)}</small>
+        </div>
+      `;
       }
 
       const toneClass = disconnectRateToneClass(normalized.career_disconnect_rate);
       const rateLabel = formatDisconnectRate(normalized.career_disconnect_rate);
 
       return `
-        <div class="overview-tile overview-tile--srh-dnfs decision-card-wide ${escapeHtml(toneClass)}">
+        <div class="overview-tile overview-tile--srh-dnfs decision-card-wide is-neutral">
           <span>SRH Starts / DNFs</span>
           <div class="overview-dnf-row">
             <div class="overview-dnf-stat">
@@ -540,7 +542,7 @@
               <em>DNFs</em>
             </div>
           </div>
-          <strong class="overview-dnf-rate">${escapeHtml(rateLabel)}</strong>
+          <strong class="overview-dnf-rate ${escapeHtml(toneClass)}">${escapeHtml(rateLabel)}</strong>
           <em class="overview-dnf-rate-label">SRH Disconnect Rate</em>
           <small>${escapeHtml(helper)}</small>
         </div>
@@ -586,27 +588,59 @@
       const statsJson =
         snapshot.career_stats_json && typeof snapshot.career_stats_json === 'object'
           ? snapshot.career_stats_json
-          : {};
+          : typeof snapshot.career_stats_json === 'string'
+            ? (() => {
+                try {
+                  return JSON.parse(snapshot.career_stats_json);
+                } catch {
+                  return {};
+                }
+              })()
+            : {};
 
-      const pick = (...values) => {
-        for (const value of values) {
-          const number = Number(value);
-          if (Number.isFinite(number)) return number;
+      const careerStarts = pickSrhMetric(snapshot.career_starts, statsJson.careerStarts);
+      const careerIncidents = pickSrhMetric(snapshot.career_incidents, statsJson.careerIncidents);
+      const careerDisconnects = pickSrhMetric(
+        snapshot.career_disconnects,
+        statsJson.careerDisconnects
+      );
+
+      let careerIncidentsPerStart = pickSrhMetric(
+        snapshot.career_incidents_per_start,
+        statsJson.careerIncidentsPerStart
+      );
+      if (careerIncidentsPerStart == null || careerIncidentsPerStart === 0) {
+        careerIncidentsPerStart = pickSrhMetric(
+          snapshot.career_incidents_per_race,
+          statsJson.careerIncidentsPerRace
+        );
+      }
+      if (careerIncidentsPerStart == null || careerIncidentsPerStart === 0) {
+        if (careerIncidents != null && careerStarts != null && careerStarts > 0) {
+          careerIncidentsPerStart = Number((careerIncidents / careerStarts).toFixed(3));
         }
-        return null;
-      };
+      }
+
+      let careerDisconnectRate = pickSrhMetric(
+        snapshot.career_disconnect_rate,
+        statsJson.careerDisconnectRate
+      );
+      if (
+        (careerDisconnectRate == null || careerDisconnectRate === 0) &&
+        careerDisconnects != null &&
+        careerStarts != null &&
+        careerStarts > 0
+      ) {
+        careerDisconnectRate = Number((careerDisconnects / careerStarts).toFixed(3));
+      }
 
       return {
         ...snapshot,
-        career_starts: pick(snapshot.career_starts, statsJson.careerStarts),
-        career_disconnects: pick(snapshot.career_disconnects, statsJson.careerDisconnects),
-        career_disconnect_rate: pick(snapshot.career_disconnect_rate, statsJson.careerDisconnectRate),
-        career_incidents_per_start: pick(
-          snapshot.career_incidents_per_start,
-          statsJson.careerIncidentsPerStart,
-          snapshot.career_incidents_per_race,
-          statsJson.careerIncidentsPerRace
-        ),
+        career_starts: careerStarts,
+        career_incidents: careerIncidents,
+        career_incidents_per_start: careerIncidentsPerStart,
+        career_disconnects: careerDisconnects,
+        career_disconnect_rate: careerDisconnectRate,
       };
     }
 
@@ -633,10 +667,19 @@
         helper =
           'SRH disconnect columns missing. Run migration: driver_application_srh_career_snapshots_disconnects.sql';
       } else if (!dataReady) {
-        helper = 'Refresh SRH Career to populate disconnect stats.';
+        helper = 'Refresh SRH Career to populate SRH incident/disconnect data.';
       }
 
       return { normalized, columnsMissing, dataReady, helper };
+    }
+
+    function getSrhIncidentState(snapshot) {
+      const normalized = normalizeSrhCareerSnapshotClient(snapshot);
+      if (!normalized || normalized.scrape_status !== 'completed') {
+        return { normalized, dataReady: false };
+      }
+      const dataReady = normalized.career_incidents_per_start != null;
+      return { normalized, dataReady };
     }
 
     function statMetric(label, value, toneClass = '') {
@@ -744,6 +787,7 @@
 
       const normalized = normalizeSrhCareerSnapshotClient(snapshot);
       const { dataReady, helper } = getSrhDisconnectState(snapshot);
+      const incidentValue = normalized.career_incidents_per_start;
       const disconnectMetrics = dataReady
         ? `
           ${statMetric('DISCONNECTS', normalized.career_disconnects)}
@@ -763,7 +807,7 @@
           ${statMetric('AVG FINISH', snapshot.career_average_finish)}
           ${statMetric('POLES', snapshot.career_poles)}
           ${statMetric('LAPS LED', snapshot.career_laps_led)}
-          ${statMetric('INC/START', formatSrhIncPerStart(snapshot), incidentToneClass(formatSrhIncPerStart(snapshot)))}
+          ${statMetric('INC/START', incidentValue ?? '—', incidentToneClass(incidentValue))}
           ${disconnectMetrics}
         </div>
         ${dataReady ? '' : `<p class="detail-empty">${escapeHtml(helper)}</p>`}
@@ -1039,13 +1083,17 @@
     function renderReviewOverview(latestSnapshot, latestStatsSnapshot, latestSrhSnapshot) {
       const ovalStats = pickOvalStats(latestStatsSnapshot);
       const srhIncidents = formatSrhIncPerStart(latestSrhSnapshot);
+      const srhIncidentState = getSrhIncidentState(latestSrhSnapshot);
+      const srhIncSubtext = srhIncidentState.dataReady
+        ? 'All SimRacerHub leagues'
+        : 'Refresh SRH Career to populate SRH incident/disconnect data.';
 
       return `
         <div class="review-overview-grid">
           ${overviewTile('iRacing Oval Starts', ovalStats.starts, latestStatsSnapshot?.category || 'Oval profile stats')}
           ${overviewTile('iRacing Inc/Race', ovalStats.incidentsPerRace, 'Oval lifetime snapshot', incidentToneClass(ovalStats.incidentsPerRace))}
           ${renderIracingLicenseRatingTile(latestSnapshot)}
-          ${overviewTile('SRH Inc/Start', srhIncidents, 'All SimRacerHub leagues', incidentToneClass(srhIncidents))}
+          ${overviewTile('SRH Inc/Start', srhIncidents, srhIncSubtext, incidentToneClass(srhIncidents))}
           ${renderSrhStartsDnfsOverviewTile(latestSrhSnapshot)}
         </div>
       `;
@@ -1201,10 +1249,20 @@
         debugAdminApplications('application-detail', {
           applicationId: application.id,
           srhScrapeStatus: srhSnapshot?.scrape_status || null,
-          careerStarts: srhSnapshot?.career_starts ?? null,
-          careerDisconnects: srhSnapshot?.career_disconnects ?? null,
-          careerDisconnectRate: srhSnapshot?.career_disconnect_rate ?? null,
-          careerStatsJsonDisconnects: srhSnapshot?.career_stats_json?.careerDisconnects ?? null,
+          flat: {
+            careerStarts: srhSnapshot?.career_starts ?? null,
+            careerIncidents: srhSnapshot?.career_incidents ?? null,
+            careerIncidentsPerStart: srhSnapshot?.career_incidents_per_start ?? null,
+            careerDisconnects: srhSnapshot?.career_disconnects ?? null,
+            careerDisconnectRate: srhSnapshot?.career_disconnect_rate ?? null,
+          },
+          json: {
+            careerIncidents: srhSnapshot?.career_stats_json?.careerIncidents ?? null,
+            careerIncidentsPerStart: srhSnapshot?.career_stats_json?.careerIncidentsPerStart ?? null,
+            careerDisconnects: srhSnapshot?.career_stats_json?.careerDisconnects ?? null,
+            careerDisconnectRate: srhSnapshot?.career_stats_json?.careerDisconnectRate ?? null,
+          },
+          normalized: normalizeSrhCareerSnapshotClient(srhSnapshot),
           srhDisconnectColumnsMissing: srhSnapshot?.srh_disconnect_columns_missing === true,
         });
         applications = applications.map((item) => (item.id === application.id ? application : item));
@@ -1242,10 +1300,19 @@
         debugAdminApplications('srh-refresh', {
           applicationId: selectedId,
           scrapeStatus: snapshot?.scrape_status || null,
-          careerStarts: snapshot?.career_starts ?? null,
-          careerDisconnects: snapshot?.career_disconnects ?? null,
-          careerDisconnectRate: snapshot?.career_disconnect_rate ?? null,
-          careerStatsJsonDisconnects: snapshot?.career_stats_json?.careerDisconnects ?? null,
+          flat: {
+            careerIncidents: snapshot?.career_incidents ?? null,
+            careerIncidentsPerStart: snapshot?.career_incidents_per_start ?? null,
+            careerDisconnects: snapshot?.career_disconnects ?? null,
+            careerDisconnectRate: snapshot?.career_disconnect_rate ?? null,
+          },
+          json: {
+            careerIncidents: snapshot?.career_stats_json?.careerIncidents ?? null,
+            careerIncidentsPerStart: snapshot?.career_stats_json?.careerIncidentsPerStart ?? null,
+            careerDisconnects: snapshot?.career_stats_json?.careerDisconnects ?? null,
+            careerDisconnectRate: snapshot?.career_stats_json?.careerDisconnectRate ?? null,
+          },
+          normalized: normalizeSrhCareerSnapshotClient(snapshot),
           srhDisconnectColumnsMissing: snapshot?.srh_disconnect_columns_missing === true,
         });
         setMsg(`SRH career refresh complete. Status: ${snapshot?.scrape_status || 'unknown'}.`);
