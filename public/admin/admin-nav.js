@@ -15,6 +15,34 @@
   const LAYOUT_STYLE_ID = "admin-layout-styles";
   const MISSION_CONTROL_STYLE_ID = "admin-mission-control-styles";
   const MISSION_CONTROL_SCRIPT_ID = "admin-mission-control-script";
+  const ATTENTION_STYLE_ID = "admin-attention-styles";
+  const ATTENTION_SCRIPT_ID = "admin-attention-script";
+
+  function injectAttentionAssets() {
+    if (!document.getElementById(ATTENTION_STYLE_ID)) {
+      const link = document.createElement("link");
+      link.id = ATTENTION_STYLE_ID;
+      link.rel = "stylesheet";
+      link.href = "/admin/admin-attention.css";
+      document.head.appendChild(link);
+    }
+    if (!document.getElementById(ATTENTION_SCRIPT_ID)) {
+      const script = document.createElement("script");
+      script.id = ATTENTION_SCRIPT_ID;
+      script.src = "/admin/admin-attention.js";
+      script.defer = true;
+      document.body.appendChild(script);
+    }
+  }
+
+  function startAttentionSystem() {
+    const boot = () => {
+      if (!window.AdminAttention) return;
+      window.AdminAttention.init({ getCurrentPageId });
+    };
+    if (window.AdminAttention) boot();
+    else document.getElementById(ATTENTION_SCRIPT_ID)?.addEventListener("load", boot, { once: true });
+  }
 
   function injectMissionControlAssets() {
     if (!document.getElementById(MISSION_CONTROL_STYLE_ID)) {
@@ -314,10 +342,12 @@
 
     injectStyles();
     injectMissionControlAssets();
+    injectAttentionAssets();
 
     const baseItems = NAV_ITEMS.filter((item) => !item.optional);
     const activeId = getCurrentPageId();
     renderNav(mount, baseItems, activeId);
+    startAttentionSystem();
 
     window.addEventListener("hashchange", () => {
       updateActiveLinks(mount, getCurrentPageId());
@@ -336,6 +366,7 @@
       },
       refreshActive() {
         updateActiveLinks(mount, getCurrentPageId());
+        if (window.AdminAttention) window.AdminAttention.refresh({ skipFetch: true });
       },
     };
   }

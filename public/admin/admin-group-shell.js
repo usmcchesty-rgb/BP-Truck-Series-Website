@@ -152,6 +152,10 @@
       if (!parseHash().tabId) {
         setHash(tab.id, sub, true);
       }
+
+      if (window.AdminAttention) {
+        window.AdminAttention.refresh({ skipFetch: true });
+      }
     }
 
     async function login() {

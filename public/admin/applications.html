@@ -319,6 +319,9 @@
     function showApplicationsList() {
       $('#applicationsListPanel').hidden = false;
       $('#applicationDetailPanel').hidden = true;
+      window.requestAnimationFrame(() => {
+        if (window.AdminAttention) AdminAttention.markVisibleAttentionSeen();
+      });
     }
 
     function showApplicationDetailPage() {
@@ -482,6 +485,11 @@
       });
     }
 
+    function syncAdminAttention() {
+      if (!window.AdminAttention) return;
+      AdminAttention.setApplications(applications);
+    }
+
     function renderStatusTabs() {
       const nav = $('#applicationsStatusTabs');
       if (!nav) return;
@@ -497,8 +505,10 @@
           listStatusFilter = button.dataset.statusTab || 'all';
           renderStatusTabs();
           renderApplicationsTable();
+          syncAdminAttention();
         });
       });
+      syncAdminAttention();
     }
 
     function renderApplicationsTable() {
@@ -535,6 +545,7 @@
           void loadApplicationDetail();
         });
       });
+      syncAdminAttention();
     }
 
     function detailField(label, value) {
@@ -1481,6 +1492,7 @@
         applications = applications.map((row) => (row.id === updated.id ? updated : row));
         renderStatusTabs();
         renderApplicationsTable();
+        syncAdminAttention();
         await loadApplicationDetail();
         setMsg('Application updated.');
       } catch (error) {
@@ -1499,6 +1511,7 @@
         syncListControlValues();
         renderStatusTabs();
         renderApplicationsTable();
+        syncAdminAttention();
         await loadApplicationDetail();
         setMsg('');
       } catch (error) {

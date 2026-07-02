@@ -474,6 +474,7 @@
       }
 
       render(data);
+      if (window.AdminAttention) window.AdminAttention.setMissionControl(data);
       setStatus('', false);
     } catch (error) {
       setStatus(error.message || 'Load failed', true);
