@@ -181,7 +181,7 @@
         <h2>Driver Profiles</h2>
         <p class="sub">Drivers load from current standings. Save a row or use Sync All to write profiles to Supabase.</p>
         <p class="sub">Driver ID = SimRacerHub Driver ID. Car Numbers are managed by BP and do not come from SimRacerHub.</p>
-        <p class="sub">Manage driver email only in the Email column below. Private admin-only contact email — not shown publicly.</p>
+        <p class="sub">Driver emails are private and only visible to administrators. They are not shown on public pages.</p>
         <div class="drivers-actions">
           <button class="btn" type="button" onclick="syncAllDrivers()">Sync All Drivers</button>
           <button class="btn btn-secondary" type="button" onclick="previewFormSync()">Sync Driver Bios From Google Form</button>
@@ -581,7 +581,7 @@
           <td><input type="text" name="iracing_customer_id" value="${escapeAttr(d.iracing_customer_id || d.iracingCustomerId || '')}"></td>
           <td class="readonly iracing-name">${escapeHtml(d.iracing_name)}</td>
           <td><input type="text" name="display_name" value="${escapeAttr(d.display_name || '')}"></td>
-          <td><input type="email" name="form_email" value="${escapeAttr(d.form_email || d.formEmail || '')}" placeholder="Private admin contact" title="Private admin-only contact email. Not shown publicly."></td>
+          <td><input type="email" name="form_email" value="${escapeAttr(d.form_email || d.formEmail || '')}"></td>
           <td><input type="text" name="car_number" value="${escapeAttr(d.car_number || '')}"></td>
           <td><input type="text" name="photo_url" value="${escapeAttr(d.photo_url || '')}"></td>
           <td><input type="text" name="date_of_birth" value="${escapeAttr(d.date_of_birth || d.dateOfBirth || '')}" placeholder="e.g. March 14, 1990"></td>
