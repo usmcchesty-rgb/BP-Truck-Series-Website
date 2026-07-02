@@ -13,7 +13,9 @@ import {
 } from '../../recruit-scanner/iracing-urls.js';
 import {
   BROWSER_ZOOM_DEFAULT,
+  BROWSER_FIT_MODE_DEFAULT,
   clampBrowserZoomFactor,
+  normalizeBrowserFitMode,
 } from './app-settings.js';
 
 export const IRACING_SESSION_PARTITION = 'persist:bp-recruit-scanner';
@@ -37,41 +39,94 @@ const ESTIMATE_PAGE_CONTENT_SIZE_SCRIPT = `
   };
 })()
 `;
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export function createEmbeddedBrowserManager(mainWindow) {
+function formatZoomPercent(factor) {
+  return `${Math.round(Number(factor) * 100)}%`;
+}
+
+export function createEmbeddedBrowserManager(mainWindow, options = {}) {
+  const readSettings = options.readSettings ?? (() => ({}));
+  const onZoomApplied = options.onZoomApplied ?? (() => {});
+
   let browserView = null;
   let separateWindow = null;
   let currentBounds = { x: 0, y: 0, width: 0, height: 0 };
   let embeddedVisible = false;
   let isAttached = false;
-  let currentZoomFactor = BROWSER_ZOOM_DEFAULT;
+  let savedZoomFactor = BROWSER_ZOOM_DEFAULT;
+  let navigatingProgrammatically = false;
 
-  function applyZoomToWebContents(webContents, factor) {
-    if (!webContents || webContents.isDestroyed()) {
-      return;
-    }
-
-    webContents.setZoomFactor(factor);
+  function getSavedZoomFactor() {
+    const settings = readSettings();
+    return clampBrowserZoomFactor(settings.browserZoomFactor ?? savedZoomFactor);
   }
 
-  function applyZoomToAllActive(factor) {
-    currentZoomFactor = clampBrowserZoomFactor(factor);
-    applyZoomToWebContents(getEmbeddedWebContents(), currentZoomFactor);
-    if (isSeparateWindowOpen()) {
-      applyZoomToWebContents(separateWindow.webContents, currentZoomFactor);
+  function getSavedFitMode() {
+    const settings = readSettings();
+    return normalizeBrowserFitMode(settings.browserFitMode ?? BROWSER_FIT_MODE_DEFAULT);
+  }
+
+  function readAppliedZoomFactor(webContents) {
+    if (!webContents || webContents.isDestroyed()) {
+      return savedZoomFactor;
     }
+
+    try {
+      const applied = webContents.getZoomFactor();
+      if (Number.isFinite(applied) && applied > 0) {
+        return clampBrowserZoomFactor(applied);
+      }
+    } catch {
+      // Fall back to saved zoom.
+    }
+
+    return savedZoomFactor;
+  }
+
+  function applyZoomToWebContents(webContents, factor, { log = true } = {}) {
+    if (!webContents || webContents.isDestroyed()) {
+      return savedZoomFactor;
+    }
+
+    const next = clampBrowserZoomFactor(factor);
+    webContents.setZoomFactor(next);
+    savedZoomFactor = readAppliedZoomFactor(webContents);
+
+    if (log) {
+      logMessage(`Applied browser zoom: ${formatZoomPercent(savedZoomFactor)}`);
+      onZoomApplied(savedZoomFactor);
+    }
+
+    return savedZoomFactor;
+  }
+
+  function applyZoomToAllActive(factor, options = {}) {
+    const embedded = getEmbeddedWebContents();
+    if (embedded) {
+      applyZoomToWebContents(embedded, factor, options);
+    }
+
+    if (isSeparateWindowOpen()) {
+      applyZoomToWebContents(separateWindow.webContents, factor, { log: false });
+    }
+
+    return savedZoomFactor;
   }
 
   function setZoomFactor(factor) {
-    applyZoomToAllActive(factor);
-    return currentZoomFactor;
+    return applyZoomToAllActive(factor);
   }
 
   function getZoomFactor() {
-    return currentZoomFactor;
+    const webContents = getActiveWebContents();
+    if (webContents) {
+      savedZoomFactor = readAppliedZoomFactor(webContents);
+    }
+    return savedZoomFactor;
   }
 
   async function estimatePageContentSize() {
@@ -93,40 +148,112 @@ export function createEmbeddedBrowserManager(mainWindow) {
     }
   }
 
+  function getHostDimensions() {
+    return {
+      width: currentBounds.width,
+      height: currentBounds.height,
+    };
+  }
+
   async function fitZoomWidth() {
-    const panelWidth = currentBounds.width;
-    if (panelWidth <= 0) {
-      return currentZoomFactor;
+    const { width: hostWidth } = getHostDimensions();
+    if (hostWidth <= 0) {
+      return getZoomFactor();
     }
 
     const { width: contentWidth } = await estimatePageContentSize();
-    applyZoomToAllActive(clampBrowserZoomFactor(panelWidth / contentWidth));
-    return currentZoomFactor;
+    if (contentWidth <= 0) {
+      return getZoomFactor();
+    }
+
+    return applyZoomToAllActive(hostWidth / contentWidth);
   }
 
   async function fitZoomHeight() {
-    const panelHeight = currentBounds.height;
-    if (panelHeight <= 0) {
-      return currentZoomFactor;
+    const { height: hostHeight } = getHostDimensions();
+    if (hostHeight <= 0) {
+      return getZoomFactor();
     }
 
     const { height: contentHeight } = await estimatePageContentSize();
-    applyZoomToAllActive(clampBrowserZoomFactor(panelHeight / contentHeight));
-    return currentZoomFactor;
+    if (contentHeight <= 0) {
+      return getZoomFactor();
+    }
+
+    return applyZoomToAllActive(hostHeight / contentHeight);
   }
 
   async function fitZoomToPanel() {
-    const panelWidth = currentBounds.width;
-    const panelHeight = currentBounds.height;
-    if (panelWidth <= 0 || panelHeight <= 0) {
-      return currentZoomFactor;
+    const { width: hostWidth, height: hostHeight } = getHostDimensions();
+    if (hostWidth <= 0 || hostHeight <= 0) {
+      return getZoomFactor();
     }
 
     const { width: contentWidth, height: contentHeight } = await estimatePageContentSize();
-    const widthFit = panelWidth / contentWidth;
-    const heightFit = panelHeight / contentHeight;
-    applyZoomToAllActive(clampBrowserZoomFactor(Math.min(widthFit, heightFit)));
-    return currentZoomFactor;
+    if (contentWidth <= 0 || contentHeight <= 0) {
+      return getZoomFactor();
+    }
+
+    const widthZoom = hostWidth / contentWidth;
+    const heightZoom = hostHeight / contentHeight;
+    return applyZoomToAllActive(Math.min(widthZoom, heightZoom));
+  }
+
+  async function applySavedFitMode() {
+    const fitMode = getSavedFitMode();
+    if (fitMode === 'manual') {
+      return getZoomFactor();
+    }
+
+    if (fitMode === 'fit-width') {
+      return fitZoomWidth();
+    }
+
+    if (fitMode === 'fit-height') {
+      return fitZoomHeight();
+    }
+
+    return fitZoomToPanel();
+  }
+
+  async function syncZoomAfterNavigation() {
+    const webContents = getActiveWebContents();
+    if (!webContents || webContents.isDestroyed()) {
+      return savedZoomFactor;
+    }
+
+    await sleep(PAGE_SETTLE_MS);
+
+    const fitMode = getSavedFitMode();
+    if (fitMode === 'manual') {
+      return applyZoomToWebContents(webContents, getSavedZoomFactor());
+    }
+
+    return applySavedFitMode();
+  }
+
+  function attachNavigationHooks(webContents) {
+    if (!webContents || webContents.isDestroyed()) {
+      return;
+    }
+
+    webContents.on('did-start-loading', () => {
+      applyEmbeddedBounds();
+    });
+
+    webContents.on('did-finish-load', () => {
+      applyEmbeddedBounds();
+      if (!navigatingProgrammatically) {
+        void syncZoomAfterNavigation();
+      }
+    });
+
+    webContents.on('did-navigate-in-page', () => {
+      applyEmbeddedBounds();
+      if (!navigatingProgrammatically) {
+        void syncZoomAfterNavigation();
+      }
+    });
   }
 
   function setActualSizeZoom() {
@@ -134,7 +261,7 @@ export function createEmbeddedBrowserManager(mainWindow) {
   }
 
   function adjustZoom(delta) {
-    return setZoomFactor(currentZoomFactor + delta);
+    return setZoomFactor(savedZoomFactor + delta);
   }
 
   function getIracingSession() {
@@ -166,7 +293,9 @@ export function createEmbeddedBrowserManager(mainWindow) {
       },
     });
 
-    applyZoomToWebContents(browserView.webContents, currentZoomFactor);
+    savedZoomFactor = getSavedZoomFactor();
+    applyZoomToWebContents(browserView.webContents, savedZoomFactor);
+    attachNavigationHooks(browserView.webContents);
 
     return browserView;
   }
@@ -217,8 +346,8 @@ export function createEmbeddedBrowserManager(mainWindow) {
     currentBounds = {
       x: Math.max(0, Math.round(bounds.x ?? 0)),
       y: Math.max(0, Math.round(bounds.y ?? 0)),
-      width: Math.max(0, Math.round(bounds.width ?? 0)),
-      height: Math.max(0, Math.round(bounds.height ?? 0)),
+      width: Math.max(0, Math.floor(bounds.width ?? 0)),
+      height: Math.max(0, Math.floor(bounds.height ?? 0)),
     };
 
     embeddedVisible = bounds.visible !== false;
@@ -268,7 +397,7 @@ export function createEmbeddedBrowserManager(mainWindow) {
     });
 
     hide();
-    applyZoomToWebContents(separateWindow.webContents, currentZoomFactor);
+    applyZoomToWebContents(separateWindow.webContents, savedZoomFactor);
     void separateWindow.loadURL(targetUrl);
 
     separateWindow.on('closed', () => {
@@ -326,14 +455,19 @@ export function createEmbeddedBrowserManager(mainWindow) {
   async function navigate(url) {
     show();
 
-    const webContents = getActiveWebContents() ?? ensureView().webContents;
-    await waitForLoad(webContents, url);
-    await sleep(PAGE_SETTLE_MS);
+    navigatingProgrammatically = true;
+    try {
+      const webContents = getActiveWebContents() ?? ensureView().webContents;
+      await waitForLoad(webContents, url);
+      await syncZoomAfterNavigation();
 
-    if (isSeparateWindowOpen()) {
-      hide();
-    } else {
-      applyEmbeddedBounds();
+      if (isSeparateWindowOpen()) {
+        hide();
+      } else {
+        applyEmbeddedBounds();
+      }
+    } finally {
+      navigatingProgrammatically = false;
     }
   }
 
@@ -423,6 +557,15 @@ export function createEmbeddedBrowserManager(mainWindow) {
     return `${userDataPath}/Partitions/${IRACING_SESSION_PARTITION.replace(':', '_')}`;
   }
 
+  function initializeZoomFromSettings() {
+    savedZoomFactor = getSavedZoomFactor();
+    const webContents = getEmbeddedWebContents();
+    if (webContents) {
+      applyZoomToWebContents(webContents, savedZoomFactor);
+    }
+    return savedZoomFactor;
+  }
+
   return {
     ensureView,
     setBounds,
@@ -449,6 +592,9 @@ export function createEmbeddedBrowserManager(mainWindow) {
     fitZoomWidth,
     fitZoomHeight,
     setActualSizeZoom,
+    applySavedFitMode,
+    syncZoomAfterNavigation,
+    initializeZoomFromSettings,
   };
 }
 
@@ -458,6 +604,7 @@ export function createElectronBrowserAdapter(manager) {
 
     async init() {
       manager.show();
+      manager.initializeZoomFromSettings();
       logMessage('Browser started using embedded iRacing panel (persist:bp-recruit-scanner)');
     },
 

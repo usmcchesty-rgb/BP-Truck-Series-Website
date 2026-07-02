@@ -7,13 +7,22 @@ export const BROWSER_ZOOM_MAX = 2.5;
 export const BROWSER_ZOOM_STEP = 0.05;
 export const BROWSER_ZOOM_DEFAULT = 1.25;
 
+export const BROWSER_FIT_MODES = ['manual', 'fit-panel', 'fit-width', 'fit-height'];
+export const BROWSER_FIT_MODE_DEFAULT = 'manual';
+
 const DEFAULTS = {
   useEmbeddedBrowser: true,
   browserZoomFactor: BROWSER_ZOOM_DEFAULT,
+  browserFitMode: BROWSER_FIT_MODE_DEFAULT,
 };
 
 function getSettingsPath() {
   return path.join(app.getPath('userData'), 'app-settings.json');
+}
+
+export function normalizeBrowserFitMode(value) {
+  const mode = String(value ?? '').trim();
+  return BROWSER_FIT_MODES.includes(mode) ? mode : BROWSER_FIT_MODE_DEFAULT;
 }
 
 export function clampBrowserZoomFactor(value) {
@@ -41,6 +50,7 @@ export function readAppSettings() {
       browserZoomFactor: clampBrowserZoomFactor(
         parsed.browserZoomFactor ?? BROWSER_ZOOM_DEFAULT
       ),
+      browserFitMode: normalizeBrowserFitMode(parsed.browserFitMode),
     };
   } catch {
     return { ...DEFAULTS };
@@ -53,6 +63,7 @@ export function writeAppSettings(settings) {
     browserZoomFactor: clampBrowserZoomFactor(
       settings.browserZoomFactor ?? BROWSER_ZOOM_DEFAULT
     ),
+    browserFitMode: normalizeBrowserFitMode(settings.browserFitMode),
   };
   fs.writeFileSync(getSettingsPath(), `${JSON.stringify(next, null, 2)}\n`, 'utf8');
   return next;

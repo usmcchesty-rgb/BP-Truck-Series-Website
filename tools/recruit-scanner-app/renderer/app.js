@@ -4,6 +4,7 @@ const scannerStatus = document.getElementById('scannerStatus');
 const settingsMsg = document.getElementById('settingsMsg');
 const browserHost = document.getElementById('iracingBrowserHost');
 const browserBlock = document.getElementById('browserBlock');
+const browserToolbar = document.getElementById('browserToolbar');
 
 const supabaseUrl = document.getElementById('supabaseUrl');
 const supabaseKey = document.getElementById('supabaseKey');
@@ -15,7 +16,7 @@ const zoomPercent = document.getElementById('zoomPercent');
 const ZOOM_STEP = 0.05;
 
 let boundsFrame = null;
-let currentZoomFactor = 1.25;
+let lastSentBounds = null;
 
 function appendLog(message, isError = false) {
   const line = document.createElement('div');
@@ -23,7 +24,6 @@ function appendLog(message, isError = false) {
   line.textContent = message;
   logOutput.appendChild(line);
   logOutput.scrollTop = logOutput.scrollHeight;
-  scheduleBoundsUpdate();
 }
 
 function setScannerStatus(running) {
@@ -36,27 +36,35 @@ function setSettingsMessage(text, type = '') {
   settingsMsg.className = `inline-msg ${type}`.trim();
 }
 
-function getHeaderBottom() {
-  const header = document.querySelector('.app-header');
-  return header?.getBoundingClientRect().bottom ?? 0;
+function boundsEqual(a, b) {
+  if (!a || !b) return false;
+  return (
+    a.x === b.x &&
+    a.y === b.y &&
+    a.width === b.width &&
+    a.height === b.height &&
+    a.visible === b.visible
+  );
 }
 
-function computeClippedBounds(rect) {
-  const headerBottom = getHeaderBottom();
-  const viewportWidth = window.innerWidth;
-  const viewportHeight = window.innerHeight;
+function computeHostBounds() {
+  if (!browserHost) {
+    return {
+      x: 0,
+      y: 0,
+      width: 0,
+      height: 0,
+      visible: false,
+    };
+  }
 
-  const left = Math.max(0, rect.left);
-  const top = Math.max(headerBottom, rect.top);
-  const right = Math.min(viewportWidth, rect.right);
-  const bottom = Math.min(viewportHeight, rect.bottom);
-
-  const width = Math.max(0, right - left);
-  const height = Math.max(0, bottom - top);
+  const rect = browserHost.getBoundingClientRect();
+  const width = Math.max(0, Math.floor(rect.width));
+  const height = Math.max(0, Math.floor(rect.height));
 
   return {
-    x: left,
-    y: top,
+    x: Math.round(rect.left),
+    y: Math.round(rect.top),
     width,
     height,
     visible: width >= 8 && height >= 8,
@@ -69,18 +77,27 @@ async function updateBrowserBounds() {
   }
 
   if (!useEmbeddedBrowser.checked) {
-    await window.scannerApp.setBrowserBounds({
+    const hiddenBounds = {
       x: 0,
       y: 0,
       width: 0,
       height: 0,
       visible: false,
-    });
+    };
+
+    if (!boundsEqual(lastSentBounds, hiddenBounds)) {
+      lastSentBounds = hiddenBounds;
+      await window.scannerApp.setBrowserBounds(hiddenBounds);
+    }
     return;
   }
 
-  const rect = browserHost.getBoundingClientRect();
-  const bounds = computeClippedBounds(rect);
+  const bounds = computeHostBounds();
+  if (boundsEqual(lastSentBounds, bounds)) {
+    return;
+  }
+
+  lastSentBounds = bounds;
   await window.scannerApp.setBrowserBounds(bounds);
 }
 
@@ -102,28 +119,32 @@ function setupBrowserBoundsTracking() {
     const observer = new ResizeObserver(() => scheduleBoundsUpdate());
     observer.observe(browserHost);
     observer.observe(browserBlock);
-    observer.observe(document.querySelector('.layout'));
+    if (browserToolbar) {
+      observer.observe(browserToolbar);
+      browserToolbar.querySelectorAll('.browser-toolbar-row').forEach((row) => {
+        observer.observe(row);
+      });
+    }
+    const browserBlockHeader = document.querySelector('.browser-block-header');
+    if (browserBlockHeader) {
+      observer.observe(browserBlockHeader);
+    }
+    const browserHint = document.querySelector('.browser-block-hint');
+    if (browserHint) {
+      observer.observe(browserHint);
+    }
     observer.observe(document.querySelector('.right-column'));
+    observer.observe(document.querySelector('.layout'));
   }
 
   window.addEventListener('resize', scheduleBoundsUpdate);
-  window.addEventListener('scroll', scheduleBoundsUpdate, true);
   window.scannerApp.onRequestBrowserBounds(scheduleBoundsUpdate);
-
-  if (typeof IntersectionObserver !== 'undefined') {
-    const intersectionObserver = new IntersectionObserver(
-      () => scheduleBoundsUpdate(),
-      { threshold: [0, 0.01, 0.25, 0.5, 0.75, 1] }
-    );
-    intersectionObserver.observe(browserHost);
-  }
 }
 
 async function focusBrowserPanel() {
-  browserBlock?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  await new Promise((resolve) => setTimeout(resolve, 120));
   scheduleBoundsUpdate();
   await window.scannerApp.focusIracingBrowser();
+  scheduleBoundsUpdate();
 }
 
 async function loadSettings() {
@@ -145,9 +166,8 @@ function formatZoomPercent(factor) {
 }
 
 function updateZoomDisplay(factor) {
-  currentZoomFactor = Number(factor) || currentZoomFactor;
-  if (zoomPercent) {
-    zoomPercent.textContent = formatZoomPercent(currentZoomFactor);
+  if (zoomPercent && factor != null) {
+    zoomPercent.textContent = formatZoomPercent(factor);
   }
 }
 
@@ -347,6 +367,7 @@ document.getElementById('btnLogin').addEventListener('click', async () => {
     await focusBrowserPanel();
     await window.scannerApp.openLogin();
     scheduleBoundsUpdate();
+    await refreshBrowserZoom();
   } catch (error) {
     appendLog(error.message, true);
   }
@@ -389,6 +410,30 @@ document.getElementById('btnTest').addEventListener('click', async () => {
     const result = await window.scannerApp.testCustomerId(customerId);
     testPreview.textContent = formatPreview(result);
     scheduleBoundsUpdate();
+    await refreshBrowserZoom();
+  } catch (error) {
+    testPreview.textContent = error.message;
+    appendLog(error.message, true);
+  }
+});
+
+document.getElementById('btnRefreshCustomer').addEventListener('click', async () => {
+  const customerId = customerIdInput.value.trim();
+  if (!customerId) {
+    appendLog('Enter a Customer ID to refresh.', true);
+    return;
+  }
+
+  testPreview.textContent = 'Queueing refresh...';
+  try {
+    const result = await window.scannerApp.refreshCustomerId(customerId);
+    if (result.ok) {
+      testPreview.textContent = `Refresh queued.\nJob: ${result.job.id}\nStatus: ${result.job.status}`;
+      appendLog(`Refresh queued for Customer ID ${customerId}: ${result.job.id}`);
+    } else {
+      testPreview.textContent = result.message || 'Refresh was not queued.';
+      appendLog(result.message || 'Refresh was not queued.', result.status !== 'active_exists');
+    }
   } catch (error) {
     testPreview.textContent = error.message;
     appendLog(error.message, true);
@@ -414,7 +459,8 @@ document.getElementById('btnSeparateWindow').addEventListener('click', async () 
 
 document.getElementById('btnFitPanel').addEventListener('click', async () => {
   try {
-    await focusBrowserPanel();
+    scheduleBoundsUpdate();
+    await new Promise((resolve) => setTimeout(resolve, 80));
     const result = await window.scannerApp.fitBrowserToPanel();
     if (result?.browserZoomFactor != null) {
       updateZoomDisplay(result.browserZoomFactor);
@@ -426,7 +472,8 @@ document.getElementById('btnFitPanel').addEventListener('click', async () => {
 
 document.getElementById('btnFitWidth').addEventListener('click', async () => {
   try {
-    await focusBrowserPanel();
+    scheduleBoundsUpdate();
+    await new Promise((resolve) => setTimeout(resolve, 80));
     const result = await window.scannerApp.fitBrowserWidth();
     if (result?.browserZoomFactor != null) {
       updateZoomDisplay(result.browserZoomFactor);
@@ -438,7 +485,8 @@ document.getElementById('btnFitWidth').addEventListener('click', async () => {
 
 document.getElementById('btnFitHeight').addEventListener('click', async () => {
   try {
-    await focusBrowserPanel();
+    scheduleBoundsUpdate();
+    await new Promise((resolve) => setTimeout(resolve, 80));
     const result = await window.scannerApp.fitBrowserHeight();
     if (result?.browserZoomFactor != null) {
       updateZoomDisplay(result.browserZoomFactor);
@@ -490,16 +538,19 @@ browserHost?.addEventListener(
 
 document.getElementById('btnClearLogs').addEventListener('click', () => {
   logOutput.innerHTML = '';
-  scheduleBoundsUpdate();
 });
 
 useEmbeddedBrowser.addEventListener('change', () => {
   setSettingsMessage('Save settings to apply browser mode changes.', '');
+  lastSentBounds = null;
   scheduleBoundsUpdate();
 });
 
 window.scannerApp.onLog((message) => appendLog(message));
 window.scannerApp.onError((message) => appendLog(message, true));
+window.scannerApp.onBrowserZoomUpdated(({ browserZoomFactor }) => {
+  updateZoomDisplay(browserZoomFactor);
+});
 
 loadSettings()
   .then(() => {

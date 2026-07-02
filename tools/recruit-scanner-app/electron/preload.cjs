@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('scannerApp', {
   stopScanner: () => ipcRenderer.invoke('stop-scanner'),
   openLogin: () => ipcRenderer.invoke('open-login'),
   testCustomerId: (customerId) => ipcRenderer.invoke('test-customer-id', customerId),
+  refreshCustomerId: (customerId) => ipcRenderer.invoke('refresh-customer-id', customerId),
   processQueuedJobs: () => ipcRenderer.invoke('process-queued-jobs'),
   clearSession: () => ipcRenderer.invoke('clear-session'),
   openSupabase: () => ipcRenderer.invoke('open-supabase'),
@@ -35,5 +36,10 @@ contextBridge.exposeInMainWorld('scannerApp', {
     const listener = () => callback();
     ipcRenderer.on('request-browser-bounds', listener);
     return () => ipcRenderer.removeListener('request-browser-bounds', listener);
+  },
+  onBrowserZoomUpdated: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('browser-zoom-updated', listener);
+    return () => ipcRenderer.removeListener('browser-zoom-updated', listener);
   },
 });

@@ -8,7 +8,78 @@ const SRH_SEARCH_URL = 'https://www.simracerhub.com/search_suggest.php';
 const SRH_DRIVER_STATS_BASE = 'https://www.simracerhub.com/scoring/driver_stats.php';
 
 const SRH_CAREER_SNAPSHOT_FIELDS =
+  'id, created_at, application_id, source, scrape_status, scrape_error, lookup_name, matched_driver_id, matched_driver_name, match_confidence, match_candidates_json, career_starts, career_wins, career_top5s, career_top10s, career_average_finish, career_poles, career_laps_led, career_incidents, career_incidents_per_race, career_incidents_per_start, career_disconnects, career_disconnect_rate, race_entries_used, source_url, raw_search_json, career_stats_json';
+
+const SRH_CAREER_SNAPSHOT_FIELDS_LEGACY =
   'id, created_at, application_id, source, scrape_status, scrape_error, lookup_name, matched_driver_id, matched_driver_name, match_confidence, match_candidates_json, career_starts, career_wins, career_top5s, career_top10s, career_average_finish, career_poles, career_laps_led, career_incidents, career_incidents_per_race, race_entries_used, source_url, raw_search_json, career_stats_json';
+
+const SRH_DISCONNECT_MIGRATION_HINT =
+  'SRH disconnect columns missing. Run migration: driver_application_srh_career_snapshots_disconnects.sql';
+
+function isMissingDisconnectColumnError(error) {
+  const message = String(error?.message || '');
+  return (
+    error?.code === '42703' &&
+    /career_disconnect|career_incidents_per_start/i.test(message)
+  );
+}
+
+function pickFiniteNumber(...values) {
+  for (const value of values) {
+    const number = Number(value);
+    if (Number.isFinite(number)) return number;
+  }
+  return null;
+}
+
+export function normalizeSrhCareerSnapshot(snapshot, meta = {}) {
+  if (!snapshot) return null;
+
+  const statsJson =
+    snapshot.career_stats_json && typeof snapshot.career_stats_json === 'object'
+      ? snapshot.career_stats_json
+      : {};
+
+  const careerStarts = pickFiniteNumber(snapshot.career_starts, statsJson.careerStarts);
+  const careerDisconnects = pickFiniteNumber(
+    snapshot.career_disconnects,
+    statsJson.careerDisconnects
+  );
+  const careerDisconnectRate = pickFiniteNumber(
+    snapshot.career_disconnect_rate,
+    statsJson.careerDisconnectRate
+  );
+  const careerIncidentsPerStart = pickFiniteNumber(
+    snapshot.career_incidents_per_start,
+    statsJson.careerIncidentsPerStart,
+    snapshot.career_incidents_per_race,
+    statsJson.careerIncidentsPerRace
+  );
+
+  const columnsMissing =
+    meta.srh_disconnect_columns_missing === true ||
+    snapshot.srh_disconnect_columns_missing === true;
+
+  const hasDisconnectColumns =
+    Object.prototype.hasOwnProperty.call(snapshot, 'career_disconnects') ||
+    Object.prototype.hasOwnProperty.call(snapshot, 'career_disconnect_rate');
+
+  const disconnectColumnsMissing = columnsMissing || (snapshot.scrape_status === 'completed' && !hasDisconnectColumns);
+
+  return {
+    ...snapshot,
+    career_starts: careerStarts,
+    career_disconnects: careerDisconnects,
+    career_disconnect_rate: careerDisconnectRate,
+    career_incidents_per_start: careerIncidentsPerStart,
+    srh_disconnect_columns_missing: disconnectColumnsMissing,
+    srh_disconnect_data_ready:
+      snapshot.scrape_status === 'completed' &&
+      careerStarts != null &&
+      careerDisconnects != null &&
+      careerDisconnectRate != null,
+  };
+}
 
 function normalizeLookupName(value) {
   return String(value || '')
@@ -30,6 +101,9 @@ function snapshotBase(application, lookupName) {
 function careerStatsToColumns(stats) {
   const starts = Number(stats?.careerStarts);
   const incidents = Number(stats?.careerIncidents);
+  const disconnects = Number(stats?.careerDisconnects);
+  const disconnectRate = Number(stats?.careerDisconnectRate);
+  const incidentsPerStart = Number(stats?.careerIncidentsPerStart);
   return {
     career_starts: Number.isFinite(starts) ? starts : null,
     career_wins: Number.isFinite(Number(stats?.careerWins)) ? Number(stats.careerWins) : null,
@@ -47,6 +121,14 @@ function careerStatsToColumns(stats) {
       Number.isFinite(starts) && starts > 0 && Number.isFinite(incidents)
         ? Number((incidents / starts).toFixed(3))
         : null,
+    career_incidents_per_start:
+      Number.isFinite(incidentsPerStart)
+        ? incidentsPerStart
+        : Number.isFinite(starts) && starts > 0 && Number.isFinite(incidents)
+          ? Number((incidents / starts).toFixed(3))
+          : null,
+    career_disconnects: Number.isFinite(disconnects) ? disconnects : null,
+    career_disconnect_rate: Number.isFinite(disconnectRate) ? disconnectRate : null,
     race_entries_used: Number.isFinite(Number(stats?.raceEntriesUsed))
       ? Number(stats.raceEntriesUsed)
       : null,
@@ -57,14 +139,36 @@ async function insertSrhCareerSnapshot(row) {
   const sb = supabase();
   if (!sb) throw new Error('Supabase not configured yet.');
 
-  const { data, error } = await sb
+  let { data, error } = await sb
     .from('driver_application_srh_career_snapshots')
     .insert(row)
     .select(SRH_CAREER_SNAPSHOT_FIELDS)
     .single();
 
+  if (error && isMissingDisconnectColumnError(error)) {
+    const {
+      career_disconnects: _careerDisconnects,
+      career_disconnect_rate: _careerDisconnectRate,
+      career_incidents_per_start: _careerIncidentsPerStart,
+      ...legacyRow
+    } = row;
+
+    const warning = SRH_DISCONNECT_MIGRATION_HINT;
+    const mergedError = legacyRow.scrape_error ? `${legacyRow.scrape_error} ${warning}` : warning;
+
+    ({ data, error } = await sb
+      .from('driver_application_srh_career_snapshots')
+      .insert({ ...legacyRow, scrape_error: mergedError })
+      .select(SRH_CAREER_SNAPSHOT_FIELDS_LEGACY)
+      .single());
+
+    if (data) {
+      data.srh_disconnect_columns_missing = true;
+    }
+  }
+
   if (error) throw new Error(error.message);
-  return data;
+  return normalizeSrhCareerSnapshot(data);
 }
 
 async function searchSimRacerHubDrivers(lookupName) {
@@ -121,7 +225,7 @@ export async function createSrhCareerSnapshotForApplication(application) {
       scrape_error: 'No applicant name available for SimRacerHub lookup.',
       match_confidence: 'missing_lookup_name',
     });
-    return { ok: false, snapshot };
+    return { ok: false, snapshot: normalizeSrhCareerSnapshot(snapshot) };
   }
 
   try {
@@ -145,7 +249,7 @@ export async function createSrhCareerSnapshotForApplication(application) {
         match_candidates_json: candidates,
         raw_search_json: searchData,
       });
-      return { ok: false, snapshot };
+      return { ok: false, snapshot: normalizeSrhCareerSnapshot(snapshot) };
     }
 
     const driverId = String(match.driver.id);
@@ -176,14 +280,14 @@ export async function createSrhCareerSnapshotForApplication(application) {
       ...careerStatsToColumns(careerStats),
     });
 
-    return { ok: snapshot.scrape_status === 'completed', snapshot };
+    return { ok: snapshot.scrape_status === 'completed', snapshot: normalizeSrhCareerSnapshot(snapshot) };
   } catch (error) {
     const snapshot = await insertSrhCareerSnapshot({
       ...snapshotBase(application, lookupName),
       scrape_status: 'failed',
       scrape_error: error?.message || 'Failed to load SimRacerHub career stats.',
     });
-    return { ok: false, snapshot };
+    return { ok: false, snapshot: normalizeSrhCareerSnapshot(snapshot) };
   }
 }
 
@@ -194,7 +298,7 @@ export async function getLatestSrhCareerSnapshotForApplication(applicationId) {
   const id = String(applicationId || '').trim();
   if (!id) return null;
 
-  const { data, error } = await sb
+  let { data, error } = await sb
     .from('driver_application_srh_career_snapshots')
     .select(SRH_CAREER_SNAPSHOT_FIELDS)
     .eq('application_id', id)
@@ -202,9 +306,24 @@ export async function getLatestSrhCareerSnapshotForApplication(applicationId) {
     .limit(1)
     .maybeSingle();
 
+  if (error && isMissingDisconnectColumnError(error)) {
+    ({ data, error } = await sb
+      .from('driver_application_srh_career_snapshots')
+      .select(SRH_CAREER_SNAPSHOT_FIELDS_LEGACY)
+      .eq('application_id', id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle());
+
+    if (data) {
+      data.srh_disconnect_columns_missing = true;
+    }
+  }
+
   if (error) {
     if (error.code === '42P01' || /does not exist/i.test(error.message || '')) return null;
     throw new Error(error.message);
   }
-  return data;
+
+  return normalizeSrhCareerSnapshot(data);
 }

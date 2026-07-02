@@ -56,6 +56,18 @@
     .decision-status-line { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #2a2a2a; }
     .decision-status-line span:first-child { color: #999; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; }
     .review-overview-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+    .overview-tile.decision-card-wide { grid-column: span 2; min-height: 96px; }
+    .decision-wide-body { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 8px; min-width: 0; }
+    .decision-wide-irating { min-width: 0; flex: 1 1 auto; }
+    .decision-wide-irating b { font-size: clamp(24px, 2.8vw, 34px); line-height: 1; }
+    .decision-wide-irating em { display: block; margin-top: 6px; color: #888; font-style: normal; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; }
+    .decision-license-pill { display: inline-flex; align-items: center; justify-content: center; min-width: 96px; padding: 10px 14px; border-radius: 999px; border: 1px solid #444; font-size: clamp(16px, 1.8vw, 22px); font-weight: 900; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .decision-license-pill.is-blue { border-color: #355; background: linear-gradient(180deg, rgba(18,42,58,.42), rgba(6,14,20,.5)); color: #bfe8ff; }
+    .decision-license-pill.is-green { border-color: #2c8f46; background: linear-gradient(180deg, rgba(28,90,45,.36), rgba(8,28,15,.45)); color: #8dff9d; }
+    .decision-license-pill.is-yellow { border-color: #9a8129; background: linear-gradient(180deg, rgba(110,86,18,.36), rgba(38,29,7,.45)); color: #ffe680; }
+    .decision-license-pill.is-orange { border-color: #a35f1f; background: linear-gradient(180deg, rgba(122,63,18,.38), rgba(42,20,5,.45)); color: #ffb15f; }
+    .decision-license-pill.is-red { border-color: #9e2f2f; background: linear-gradient(180deg, rgba(115,24,24,.42), rgba(43,7,7,.48)); color: #ff7878; }
+    .decision-license-pill.is-neutral { border-color: #444; background: linear-gradient(180deg, rgba(28,28,28,.96), rgba(12,12,12,.96)); color: #bbb; }
     .overview-tile { border: 1px solid #333; background: linear-gradient(180deg, #111, #080808); padding: 12px; min-height: 88px; display: flex; flex-direction: column; justify-content: space-between; min-width: 0; }
     .overview-tile b { display: block; font-size: clamp(16px, 1.8vw, 22px); color: #fff; font-variant-numeric: tabular-nums; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .overview-tile span { display: block; margin-top: 7px; color: #999; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -89,8 +101,9 @@
     .number-status-pill.available { color: #7fd99a; border-color: #385; }
     .number-status-pill.pending { color: #ffd27a; border-color: #865; }
     .number-status-pill.assigned { color: #ff8080; border-color: #733; }
-    .number-status-pill.reserved { color: #9ec5ff; border-color: #456; }
     .number-status-pill.released { color: #aaa; border-color: #555; }
+    .number-status-pill.reserved { color: #9ec5ff; border-color: #456; }
+    .number-status-pill.none { color: #aaa; border-color: #555; }
     .evidence-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
     .detail-grid { display: grid; grid-template-columns: minmax(150px, 220px) minmax(0, 1fr); gap: 10px 16px; font-size: 12px; margin-bottom: 14px; max-width: 1100px; }
     .detail-grid dt { color: #888; font-weight: 900; text-transform: uppercase; font-size: 10px; margin: 0; }
@@ -202,6 +215,10 @@
   <script>
     const SESSION_KEY = 'bp_admin_pw';
     const STATUS_OPTIONS = ['pending', 'reviewing', 'approved', 'rejected', 'waitlist', 'recruiting_race'];
+    const ADMIN_APPS_DEBUG =
+      window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1' ||
+      /(?:^|[?&])debug=1(?:&|$)/.test(window.location.search);
     let applications = [];
     let selectedId = '';
 
@@ -384,6 +401,15 @@
       return `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(display)}</dd>`;
     }
 
+    function detailFieldHtml(label, html) {
+      return `<dt>${escapeHtml(label)}</dt><dd>${html || '—'}</dd>`;
+    }
+
+    function debugAdminApplications(label, payload) {
+      if (!ADMIN_APPS_DEBUG) return;
+      console.info('[admin-applications]', label, payload);
+    }
+
     function numericValue(value) {
       if (value == null || value === '') return null;
       const number = Number.parseFloat(String(value).replace(/,/g, ''));
@@ -410,13 +436,51 @@
 
     function licenseClassToneClass(value) {
       const text = String(value || '').trim().toUpperCase();
-      if (!text) return '';
+      if (!text) return 'is-neutral';
       if (text.startsWith('S') || text.startsWith('P')) return 'is-blue';
       if (text.startsWith('A')) return 'is-green';
-      if (text.startsWith('B')) return 'is-yellow';
-      if (text.startsWith('C')) return 'is-orange';
-      if (text.startsWith('D') || text.startsWith('R')) return 'is-red';
-      return '';
+      if (text.startsWith('B')) return 'is-green';
+      if (text.startsWith('C')) return 'is-yellow';
+      if (text.startsWith('D')) return 'is-orange';
+      if (text.startsWith('R')) return 'is-red';
+      return 'is-neutral';
+    }
+
+    function licenseOverviewTone(licenseSnapshot) {
+      const licenseClass = String(licenseSnapshot?.oval_license_class || '').trim().toUpperCase();
+      const sr = numericValue(licenseSnapshot?.oval_safety_rating);
+      if (sr != null && sr < 2) return 'is-red';
+      const classTone = licenseClassToneClass(licenseClass);
+      if (classTone !== 'is-neutral') return classTone;
+      return safetyRatingToneClass(sr) || 'is-neutral';
+    }
+
+    function formatLicensePill(licenseSnapshot) {
+      const licenseClass = String(licenseSnapshot?.oval_license_class || '').trim();
+      const sr = licenseSnapshot?.oval_safety_rating;
+      if (licenseClass && sr != null && sr !== '') return `${licenseClass} / ${sr}`;
+      if (licenseClass) return licenseClass;
+      if (sr != null && sr !== '') return `SR ${sr}`;
+      return '—';
+    }
+
+    function renderIracingLicenseRatingTile(licenseSnapshot) {
+      const irating = licenseSnapshot?.oval_irating ?? '—';
+      const pillText = formatLicensePill(licenseSnapshot);
+      const toneClass = licenseOverviewTone(licenseSnapshot);
+
+      return `
+        <div class="overview-tile decision-card-wide ${escapeHtml(toneClass)}">
+          <span>IRACING LICENSE / RATING</span>
+          <div class="decision-wide-body">
+            <div class="decision-wide-irating">
+              <b>${escapeHtml(irating)}</b>
+              <em>iRating</em>
+            </div>
+            <div class="decision-license-pill ${escapeHtml(toneClass)}">${escapeHtml(pillText)}</div>
+          </div>
+        </div>
+      `;
     }
 
     function disconnectRateToneClass(value) {
@@ -430,12 +494,14 @@
     }
 
     function hasSrhDisconnectData(snapshot) {
-      return (
-        snapshot?.scrape_status === 'completed' &&
-        snapshot?.career_starts != null &&
-        snapshot?.career_disconnects != null &&
-        snapshot?.career_disconnect_rate != null
-      );
+      return getSrhDisconnectState(snapshot).dataReady;
+    }
+
+    function formatSrhIncPerStart(snapshot) {
+      const normalized = normalizeSrhCareerSnapshotClient(snapshot);
+      const value = normalized?.career_incidents_per_start;
+      if (value == null || value === '') return '—';
+      return value;
     }
 
     function formatDisconnectRate(value) {
@@ -445,43 +511,38 @@
       return `${pct.toFixed(1)}%`;
     }
 
-    function formatSrhIncPerStart(snapshot) {
-      const value =
-        snapshot?.career_incidents_per_start ?? snapshot?.career_incidents_per_race ?? null;
-      if (value == null || value === '') return '—';
-      return value;
-    }
-
     function renderSrhStartsDnfsOverviewTile(snapshot) {
-      if (!hasSrhDisconnectData(snapshot)) {
+      const { normalized, dataReady, helper } = getSrhDisconnectState(snapshot);
+
+      if (!dataReady || !normalized) {
         return `
-          <div class="overview-tile overview-tile--srh-dnfs is-neutral">
-            <b>Not available</b>
+          <div class="overview-tile overview-tile--srh-dnfs decision-card-wide is-neutral">
             <span>SRH Starts / DNFs</span>
-            <small>Refresh SRH Career to populate disconnect stats.</small>
+            <b>Not available</b>
+            <small>${escapeHtml(helper)}</small>
           </div>
         `;
       }
 
-      const toneClass = disconnectRateToneClass(snapshot.career_disconnect_rate);
-      const rateLabel = formatDisconnectRate(snapshot.career_disconnect_rate);
+      const toneClass = disconnectRateToneClass(normalized.career_disconnect_rate);
+      const rateLabel = formatDisconnectRate(normalized.career_disconnect_rate);
 
       return `
-        <div class="overview-tile overview-tile--srh-dnfs ${escapeHtml(toneClass)}">
+        <div class="overview-tile overview-tile--srh-dnfs decision-card-wide ${escapeHtml(toneClass)}">
           <span>SRH Starts / DNFs</span>
           <div class="overview-dnf-row">
             <div class="overview-dnf-stat">
-              <b>${escapeHtml(snapshot.career_starts)}</b>
+              <b>${escapeHtml(normalized.career_starts)}</b>
               <em>Starts</em>
             </div>
             <div class="overview-dnf-stat">
-              <b>${escapeHtml(snapshot.career_disconnects)}</b>
+              <b>${escapeHtml(normalized.career_disconnects)}</b>
               <em>DNFs</em>
             </div>
           </div>
           <strong class="overview-dnf-rate">${escapeHtml(rateLabel)}</strong>
           <em class="overview-dnf-rate-label">SRH Disconnect Rate</em>
-          <small>Counted from SRH rows with status "Disconnected".</small>
+          <small>${escapeHtml(helper)}</small>
         </div>
       `;
     }
@@ -498,8 +559,17 @@
     }
 
     function numberStatusPill(status) {
-      const safe = escapeHtml(String(status || 'none').toLowerCase());
-      return `<span class="number-status-pill ${safe}">${safe.replace(/_/g, ' ')}</span>`;
+      const safe = String(status || 'none').trim().toLowerCase();
+      const label = safe.replace(/_/g, ' ');
+      return `<span class="number-status-pill ${escapeHtml(safe)}">${escapeHtml(label)}</span>`;
+    }
+
+    function renderNumberStatus(status) {
+      const safe = String(status || 'none').trim().toLowerCase();
+      if (!safe || safe === 'none') {
+        return '<span class="number-status-pill none">None</span>';
+      }
+      return numberStatusPill(safe);
     }
 
     function pickOvalStats(statsSnapshot) {
@@ -511,19 +581,62 @@
       };
     }
 
-    function formatLicenseSr(licenseSnapshot) {
-      const licenseClass = licenseSnapshot?.oval_license_class || '';
-      const sr = licenseSnapshot?.oval_safety_rating;
-      if (licenseClass && sr != null && sr !== '') return `${licenseClass} / ${sr}`;
-      if (licenseClass) return licenseClass;
-      if (sr != null && sr !== '') return String(sr);
-      return '—';
+    function normalizeSrhCareerSnapshotClient(snapshot) {
+      if (!snapshot) return null;
+      const statsJson =
+        snapshot.career_stats_json && typeof snapshot.career_stats_json === 'object'
+          ? snapshot.career_stats_json
+          : {};
+
+      const pick = (...values) => {
+        for (const value of values) {
+          const number = Number(value);
+          if (Number.isFinite(number)) return number;
+        }
+        return null;
+      };
+
+      return {
+        ...snapshot,
+        career_starts: pick(snapshot.career_starts, statsJson.careerStarts),
+        career_disconnects: pick(snapshot.career_disconnects, statsJson.careerDisconnects),
+        career_disconnect_rate: pick(snapshot.career_disconnect_rate, statsJson.careerDisconnectRate),
+        career_incidents_per_start: pick(
+          snapshot.career_incidents_per_start,
+          statsJson.careerIncidentsPerStart,
+          snapshot.career_incidents_per_race,
+          statsJson.careerIncidentsPerRace
+        ),
+      };
     }
 
-    function licenseOverviewTone(licenseSnapshot) {
-      const srTone = safetyRatingToneClass(licenseSnapshot?.oval_safety_rating);
-      const classTone = licenseClassToneClass(licenseSnapshot?.oval_license_class);
-      return srTone || classTone;
+    function getSrhDisconnectState(snapshot) {
+      const normalized = normalizeSrhCareerSnapshotClient(snapshot);
+      if (!normalized) {
+        return {
+          normalized: null,
+          columnsMissing: false,
+          dataReady: false,
+          helper: 'No SRH career snapshot yet.',
+        };
+      }
+
+      const columnsMissing = normalized.srh_disconnect_columns_missing === true;
+      const dataReady =
+        normalized.scrape_status === 'completed' &&
+        normalized.career_starts != null &&
+        normalized.career_disconnects != null &&
+        normalized.career_disconnect_rate != null;
+
+      let helper = 'Counted from SRH rows with status "Disconnected".';
+      if (columnsMissing) {
+        helper =
+          'SRH disconnect columns missing. Run migration: driver_application_srh_career_snapshots_disconnects.sql';
+      } else if (!dataReady) {
+        helper = 'Refresh SRH Career to populate disconnect stats.';
+      }
+
+      return { normalized, columnsMissing, dataReady, helper };
     }
 
     function statMetric(label, value, toneClass = '') {
@@ -629,10 +742,12 @@
         return '<p class="detail-empty">No verified SRH all-leagues career stats yet.</p>';
       }
 
-      const disconnectMetrics = hasSrhDisconnectData(snapshot)
+      const normalized = normalizeSrhCareerSnapshotClient(snapshot);
+      const { dataReady, helper } = getSrhDisconnectState(snapshot);
+      const disconnectMetrics = dataReady
         ? `
-          ${statMetric('DISCONNECTS', snapshot.career_disconnects)}
-          ${statMetric('DISCONNECT %', formatDisconnectRate(snapshot.career_disconnect_rate), disconnectRateToneClass(snapshot.career_disconnect_rate))}
+          ${statMetric('DISCONNECTS', normalized.career_disconnects)}
+          ${statMetric('DISCONNECT %', formatDisconnectRate(normalized.career_disconnect_rate), disconnectRateToneClass(normalized.career_disconnect_rate))}
         `
         : `
           ${statMetric('DISCONNECTS', 'Not available', 'is-neutral')}
@@ -641,7 +756,7 @@
 
       return `
         <div class="stats-metric-grid">
-          ${statMetric('STARTS', snapshot.career_starts)}
+          ${statMetric('STARTS', normalized.career_starts)}
           ${statMetric('WINS', snapshot.career_wins)}
           ${statMetric('TOP 5', snapshot.career_top5s)}
           ${statMetric('TOP 10', snapshot.career_top10s)}
@@ -651,9 +766,7 @@
           ${statMetric('INC/START', formatSrhIncPerStart(snapshot), incidentToneClass(formatSrhIncPerStart(snapshot)))}
           ${disconnectMetrics}
         </div>
-        ${hasSrhDisconnectData(snapshot)
-          ? ''
-          : '<p class="detail-empty">Refresh SRH Career to populate disconnect stats.</p>'}
+        ${dataReady ? '' : `<p class="detail-empty">${escapeHtml(helper)}</p>`}
       `;
     }
 
@@ -931,8 +1044,7 @@
         <div class="review-overview-grid">
           ${overviewTile('iRacing Oval Starts', ovalStats.starts, latestStatsSnapshot?.category || 'Oval profile stats')}
           ${overviewTile('iRacing Inc/Race', ovalStats.incidentsPerRace, 'Oval lifetime snapshot', incidentToneClass(ovalStats.incidentsPerRace))}
-          ${overviewTile('iRating', latestSnapshot?.oval_irating ?? '—', latestSnapshot?.oval_license_class || 'No license snapshot', 'is-blue')}
-          ${overviewTile('License / SR', formatLicenseSr(latestSnapshot), 'Oval license snapshot', licenseOverviewTone(latestSnapshot))}
+          ${renderIracingLicenseRatingTile(latestSnapshot)}
           ${overviewTile('SRH Inc/Start', srhIncidents, 'All SimRacerHub leagues', incidentToneClass(srhIncidents))}
           ${renderSrhStartsDnfsOverviewTile(latestSrhSnapshot)}
         </div>
@@ -952,7 +1064,7 @@
           <h4>Preferred Number</h4>
           <dl class="detail-grid">
             ${detailField('Selected Number', number)}
-            ${detailField('Number Status', numberStatusPill(reservationStatus))}
+            ${detailFieldHtml('Number Status', renderNumberStatus(reservationStatus))}
             ${detailField('Reservation Updated', formatDate(numberReservation?.updated_at))}
             ${detailField('Reservation Note', numberReservation?.note || '—')}
           </dl>
@@ -1085,13 +1197,23 @@
       try {
         const data = await apiGetApplicationDetail(selectedId);
         const application = data.application || row;
+        const srhSnapshot = data.latest_srh_career_snapshot || null;
+        debugAdminApplications('application-detail', {
+          applicationId: application.id,
+          srhScrapeStatus: srhSnapshot?.scrape_status || null,
+          careerStarts: srhSnapshot?.career_starts ?? null,
+          careerDisconnects: srhSnapshot?.career_disconnects ?? null,
+          careerDisconnectRate: srhSnapshot?.career_disconnect_rate ?? null,
+          careerStatsJsonDisconnects: srhSnapshot?.career_stats_json?.careerDisconnects ?? null,
+          srhDisconnectColumnsMissing: srhSnapshot?.srh_disconnect_columns_missing === true,
+        });
         applications = applications.map((item) => (item.id === application.id ? application : item));
         renderApplicationDetail(
           application,
           data.latest_snapshot || null,
           data.latest_stats_snapshot || null,
           data.latest_lookup_job || null,
-          data.latest_srh_career_snapshot || null,
+          srhSnapshot,
           data.number_reservation || null
         );
       } catch (error) {
@@ -1117,6 +1239,15 @@
       setMsg('Refreshing SRH career stats...');
       try {
         const snapshot = await apiRefreshSrhCareerData(selectedId);
+        debugAdminApplications('srh-refresh', {
+          applicationId: selectedId,
+          scrapeStatus: snapshot?.scrape_status || null,
+          careerStarts: snapshot?.career_starts ?? null,
+          careerDisconnects: snapshot?.career_disconnects ?? null,
+          careerDisconnectRate: snapshot?.career_disconnect_rate ?? null,
+          careerStatsJsonDisconnects: snapshot?.career_stats_json?.careerDisconnects ?? null,
+          srhDisconnectColumnsMissing: snapshot?.srh_disconnect_columns_missing === true,
+        });
         setMsg(`SRH career refresh complete. Status: ${snapshot?.scrape_status || 'unknown'}.`);
         await loadApplicationDetail();
       } catch (error) {

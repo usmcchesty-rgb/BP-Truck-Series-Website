@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'">
   <title>BP Recruit Scanner</title>
   <link rel="stylesheet" href="./styles.css">
@@ -17,32 +17,43 @@
   </header>
 
   <main class="layout">
-    <section class="panel controls-panel">
-      <h2>Controls</h2>
-      <div class="button-grid">
-        <button type="button" id="btnStart">Start Scanner</button>
-        <button type="button" id="btnStop">Stop Scanner</button>
-        <button type="button" id="btnLogin">Open iRacing Login</button>
-        <button type="button" id="btnProcess">Process Queued Jobs</button>
-        <button type="button" id="btnClear">Clear Saved iRacing Session</button>
-        <button type="button" id="btnSupabase">Open Supabase Project</button>
-      </div>
-
-      <div class="test-block">
-        <label for="customerIdInput">Test Customer ID</label>
-        <div class="test-row">
-          <input id="customerIdInput" type="text" inputmode="numeric" placeholder="91227">
-          <button type="button" id="btnTest" class="primary">Test Customer ID</button>
+    <div class="left-column">
+      <section class="panel controls-panel">
+        <h2>Controls</h2>
+        <div class="button-grid">
+          <button type="button" id="btnStart">Start Scanner</button>
+          <button type="button" id="btnStop">Stop Scanner</button>
+          <button type="button" id="btnLogin">Open iRacing Login</button>
+          <button type="button" id="btnProcess">Process Queued Jobs</button>
+          <button type="button" id="btnClear">Clear Saved iRacing Session</button>
+          <button type="button" id="btnSupabase">Open Supabase Project</button>
         </div>
-      </div>
 
-      <div class="preview-block">
-        <h3>Test Preview</h3>
-        <pre id="testPreview" class="preview-box">Run a test to preview license and stats text.</pre>
-      </div>
-    </section>
+        <div class="test-block">
+          <label for="customerIdInput">Test Customer ID</label>
+          <div class="test-row">
+            <input id="customerIdInput" type="text" inputmode="numeric" placeholder="91227">
+            <button type="button" id="btnTest" class="primary">Test Customer ID</button>
+            <button type="button" id="btnRefreshCustomer">Refresh Application</button>
+          </div>
+        </div>
 
-    <section class="panel right-column">
+        <div class="preview-block">
+          <h3>Test Preview</h3>
+          <pre id="testPreview" class="preview-box">Run a test to preview license and stats text.</pre>
+        </div>
+      </section>
+
+      <section class="panel logs-panel">
+        <div class="logs-header">
+          <h2>Live Logs</h2>
+          <button type="button" id="btnClearLogs" class="ghost">Clear Logs</button>
+        </div>
+        <pre id="logOutput" class="log-box"></pre>
+      </section>
+    </div>
+
+    <div class="right-column">
       <div class="settings-block">
         <h2>Settings</h2>
         <p class="hint">Saved locally to <code>tools/recruit-scanner/.env</code> (never committed).</p>
@@ -69,34 +80,28 @@
       <div class="browser-block" id="browserBlock">
         <div class="browser-block-header">
           <h2>iRacing Browser</h2>
-          <div class="browser-toolbar">
-            <div class="zoom-controls" aria-label="Browser zoom controls">
-              <button type="button" id="btnFitPanel" class="ghost">Fit to Panel</button>
-              <button type="button" id="btnFitWidth" class="ghost">Fit Width</button>
-              <button type="button" id="btnFitHeight" class="ghost">Fit Height</button>
-              <button type="button" id="btnActualSize" class="ghost">Actual Size</button>
-              <button type="button" id="btnZoomOut" class="ghost" title="Zoom out">Zoom −</button>
+          <div class="browser-toolbar" id="browserToolbar">
+            <div class="browser-toolbar-row browser-toolbar-row-zoom" aria-label="Browser zoom controls">
+              <button type="button" id="btnFitPanel" class="ghost toolbar-btn">Fit to Panel</button>
+              <button type="button" id="btnFitWidth" class="ghost toolbar-btn">Fit Width</button>
+              <button type="button" id="btnFitHeight" class="ghost toolbar-btn">Fit Height</button>
+              <button type="button" id="btnActualSize" class="ghost toolbar-btn">Actual Size</button>
+              <button type="button" id="btnZoomOut" class="ghost toolbar-btn" title="Zoom out">Zoom −</button>
               <span id="zoomPercent" class="zoom-percent">125%</span>
-              <button type="button" id="btnZoomIn" class="ghost" title="Zoom in">Zoom +</button>
+              <button type="button" id="btnZoomIn" class="ghost toolbar-btn" title="Zoom in">Zoom +</button>
             </div>
-            <button type="button" id="btnFocusBrowser" class="ghost">Focus iRacing Browser</button>
-            <button type="button" id="btnSeparateWindow" class="ghost">Open Browser in Separate Window</button>
+            <div class="browser-toolbar-row browser-toolbar-row-actions">
+              <button type="button" id="btnFocusBrowser" class="ghost toolbar-btn">Focus iRacing Browser</button>
+              <button type="button" id="btnSeparateWindow" class="ghost toolbar-btn">Open Browser in Separate Window</button>
+            </div>
           </div>
         </div>
-        <p class="hint">Embedded panel uses a dedicated app session. Log in here — not your personal Chrome profile.</p>
+        <p class="hint browser-block-hint">Embedded panel uses a dedicated app session. Log in here — not your personal Chrome profile.</p>
         <div id="iracingBrowserHost" class="browser-host">
           <div class="browser-host-placeholder">iRacing pages appear in this panel when embedded mode is enabled.</div>
         </div>
       </div>
-    </section>
-
-    <section class="panel logs-panel">
-      <div class="logs-header">
-        <h2>Live Logs</h2>
-        <button type="button" id="btnClearLogs" class="ghost">Clear Logs</button>
-      </div>
-      <pre id="logOutput" class="log-box"></pre>
-    </section>
+    </div>
   </main>
 
   <script src="./app.js"></script>

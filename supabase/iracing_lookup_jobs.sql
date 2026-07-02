@@ -8,6 +8,7 @@ create table if not exists iracing_lookup_jobs (
   application_id uuid not null references driver_applications (id) on delete cascade,
   customer_id text,
   status text not null default 'queued',
+  reason text not null default 'application_submitted',
   attempts integer not null default 0,
   worker_name text,
   started_at timestamptz,
@@ -15,14 +16,18 @@ create table if not exists iracing_lookup_jobs (
   error text,
   constraint iracing_lookup_jobs_status_check check (
     status in ('queued', 'processing', 'completed', 'failed', 'needs_login')
+  ),
+  constraint iracing_lookup_jobs_reason_check check (
+    reason in ('application_submitted', 'manual_refresh', 'scheduled_refresh', 'retry_failed')
   )
 );
 
 create index if not exists iracing_lookup_jobs_status_idx
   on iracing_lookup_jobs (status);
 
-create unique index if not exists iracing_lookup_jobs_application_id_idx
-  on iracing_lookup_jobs (application_id);
+create unique index if not exists iracing_lookup_jobs_active_application_id_idx
+  on iracing_lookup_jobs (application_id)
+  where status in ('queued', 'processing', 'needs_login');
 
 create or replace function iracing_lookup_jobs_set_updated_at()
 returns trigger
@@ -48,9 +53,10 @@ security definer
 set search_path = public
 as $$
 begin
-  insert into iracing_lookup_jobs (application_id, customer_id, status)
-  values (new.id, new.iracing_customer_id, 'queued')
-  on conflict (application_id) do nothing;
+  insert into iracing_lookup_jobs (application_id, customer_id, status, reason)
+  values (new.id, new.iracing_customer_id, 'queued', 'application_submitted')
+  on conflict (application_id) where status in ('queued', 'processing', 'needs_login')
+  do nothing;
 
   return new;
 end;

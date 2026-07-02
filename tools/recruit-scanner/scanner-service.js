@@ -28,9 +28,17 @@ import {
 
 const WORKER_NAME = 'Recruit Scanner';
 const JOB_DELAY_MS = Number(process.env.JOB_DELAY_MS || 3_000);
+const STALE_PROCESSING_JOB_MS = Number(process.env.STALE_PROCESSING_JOB_MS || 10 * 60 * 1000);
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isJobStale(job, now = Date.now()) {
+  const timestamp = job?.started_at || job?.updated_at;
+  if (!timestamp) return false;
+  const startedAt = new Date(timestamp).getTime();
+  return Number.isFinite(startedAt) && now - startedAt > STALE_PROCESSING_JOB_MS;
 }
 
 function applyEnvToProcess(envValues) {
@@ -385,6 +393,86 @@ export class RecruitScannerService {
     return data;
   }
 
+  async enqueueIracingLookupJob(applicationId, customerId, reason = 'manual_refresh') {
+    const normalizedApplicationId = String(applicationId || '').trim();
+    const normalizedCustomerId = String(customerId ?? '').trim().replace(/\D/g, '');
+    if (!normalizedApplicationId) {
+      throw new Error('Application id is required.');
+    }
+    if (!normalizedCustomerId) {
+      throw new Error('Customer ID is required.');
+    }
+
+    const { data: activeJob, error: activeError } = await this.supabase
+      .from('iracing_lookup_jobs')
+      .select('id, status, created_at, updated_at')
+      .eq('application_id', normalizedApplicationId)
+      .in('status', ['queued', 'processing', 'needs_login'])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (activeError) {
+      throw new Error(activeError.message);
+    }
+
+    if (activeJob) {
+      return {
+        ok: false,
+        status: 'active_exists',
+        message: 'Lookup already queued or processing.',
+        job: activeJob,
+      };
+    }
+
+    const { data: job, error } = await this.supabase
+      .from('iracing_lookup_jobs')
+      .insert({
+        application_id: normalizedApplicationId,
+        customer_id: normalizedCustomerId,
+        status: 'queued',
+        reason,
+      })
+      .select('*')
+      .single();
+
+    if (error) {
+      if (error.code === '23505') {
+        return {
+          ok: false,
+          status: 'active_exists',
+          message: 'Lookup already queued or processing.',
+        };
+      }
+      throw new Error(error.message);
+    }
+
+    this.log(`Refresh lookup queued: job ${job.id} for application ${normalizedApplicationId}.`);
+    if (this.running) {
+      this.enqueueJob(job);
+    } else {
+      this.log('Scanner is stopped; start the scanner or process queued jobs to run this refresh.');
+    }
+    return { ok: true, job };
+  }
+
+  async refreshApplicationByCustomerId(customerId, reason = 'manual_refresh') {
+    const normalizedId = String(customerId ?? '').trim().replace(/\D/g, '');
+    if (!normalizedId) {
+      throw new Error('Customer ID is required.');
+    }
+
+    this.ensureSupabaseConfigured();
+    const application = await this.findApplicationByCustomerId(normalizedId);
+    if (!application?.id) {
+      const message = 'No matching driver application found - preview only, no refresh job queued.';
+      this.log(message);
+      return { ok: false, status: 'not_found', message };
+    }
+
+    return this.enqueueIracingLookupJob(application.id, normalizedId, reason);
+  }
+
   enqueueJob(job) {
     if (!job?.id || this.queuedJobIds.has(job.id)) {
       return;
@@ -412,6 +500,65 @@ export class RecruitScannerService {
       completed_at: null,
       worker_name: null,
     });
+  }
+
+  async resetStaleProcessingJob(job, reason = 'stale processing job') {
+    const cutoffMinutes = Math.round(STALE_PROCESSING_JOB_MS / 60_000);
+    this.log(`Recovering stale lookup job ${job.id}: ${reason}; older than ${cutoffMinutes} minutes.`);
+
+    const { data: resetJob, error } = await this.supabase
+      .from('iracing_lookup_jobs')
+      .update({
+        status: 'queued',
+        error: `Reset stale processing job after ${cutoffMinutes} minutes.`,
+        started_at: null,
+        completed_at: null,
+        worker_name: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', job.id)
+      .eq('status', 'processing')
+      .select('*')
+      .maybeSingle();
+
+    if (error) {
+      this.error(`Failed to recover stale lookup job ${job.id}: ${error.message}`);
+      return null;
+    }
+
+    if (!resetJob) {
+      this.log(`Stale lookup job ${job.id} was already claimed or updated by another worker.`);
+      return null;
+    }
+
+    this.log(`Stale lookup job ${job.id} reset to queued.`);
+    this.enqueueJob(resetJob);
+    return resetJob;
+  }
+
+  async recoverStaleProcessingJobs() {
+    const { data: jobs, error } = await this.supabase
+      .from('iracing_lookup_jobs')
+      .select('*')
+      .eq('status', 'processing')
+      .order('updated_at', { ascending: true });
+
+    if (error) {
+      this.error(`Failed to scan for stale processing jobs: ${error.message}`);
+      return 0;
+    }
+
+    const now = Date.now();
+    const staleJobs = (jobs || []).filter((job) => isJobStale(job, now));
+    for (const job of staleJobs) {
+      await this.resetStaleProcessingJob(job, 'startup/backlog stale scan');
+    }
+
+    if (staleJobs.length) {
+      this.log(`Recovered ${staleJobs.length} stale processing lookup job(s).`);
+    }
+
+    return staleJobs.length;
   }
 
   startLoginWatcher(job) {
@@ -467,7 +614,23 @@ export class RecruitScannerService {
     }
 
     if (!claimed) {
-      this.log('Job already claimed by another worker.');
+      const { data: currentJob, error: currentError } = await this.supabase
+        .from('iracing_lookup_jobs')
+        .select('*')
+        .eq('id', job.id)
+        .maybeSingle();
+
+      if (currentError) {
+        this.error(`Job claim skipped and current status could not be loaded: ${currentError.message}`);
+        return;
+      }
+
+      if (currentJob?.status === 'processing' && isJobStale(currentJob)) {
+        await this.resetStaleProcessingJob(currentJob, 'claim found stale processing status');
+        return;
+      }
+
+      this.log(`Job skipped cleanly: already ${currentJob?.status || 'claimed'} by another worker.`);
       return;
     }
 
@@ -556,22 +719,29 @@ export class RecruitScannerService {
           ? 'License snapshot saved.'
           : `License snapshot saved for manual review: ${parsed.scrape_error}`;
 
-      await this.updateJob(job.id, {
-        status: 'completed',
-        completed_at: finishedAt,
-        error: jobNote,
-      });
-      this.log('Job complete');
-
+      let statsNote = '';
       try {
-        await this.scrapeAndSaveStats({
+        const statsSave = await this.scrapeAndSaveStats({
           job,
           customerId,
           applicationId: job.application_id,
         });
+        if (statsSave.saved) {
+          statsNote = ` Stats snapshot saved: ${statsSave.snapshot.id}.`;
+        } else if (statsSave.reason) {
+          statsNote = ` Stats snapshot not saved: ${statsSave.reason}.`;
+        }
       } catch (statsErr) {
+        statsNote = ` Stats snapshot failed: ${statsErr.message}.`;
         this.error(`Stats snapshot failed (license snapshot preserved): ${statsErr.message}`);
       }
+
+      await this.updateJob(job.id, {
+        status: 'completed',
+        completed_at: new Date().toISOString(),
+        error: `${jobNote}${statsNote}`,
+      });
+      this.log('Job complete');
     } catch (err) {
       try {
         await this.updateJob(job.id, {
@@ -612,6 +782,8 @@ export class RecruitScannerService {
   }
 
   async loadQueuedBacklog() {
+    await this.recoverStaleProcessingJobs();
+
     const { data: jobs, error } = await this.supabase
       .from('iracing_lookup_jobs')
       .select('*')

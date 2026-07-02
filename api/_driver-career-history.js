@@ -550,29 +550,47 @@ function buildScopeCareerHistory({
   };
 }
 
+export function isSrhDisconnectedStatus(status) {
+  return String(status || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\\\//g, '/')
+    .includes('disconnect');
+}
+
+function parseDriverStatsRaceParticipantBody(match) {
+  const body = match[3];
+  const get = (key) => body.match(new RegExp(`"${key}":"([^"]*)"`))?.[1];
+  const finish = Number(get('finish_pos'));
+  const status = get('status') || '';
+  const hasValidFinish = Number.isFinite(finish) && finish >= 1;
+
+  if (!hasValidFinish && !isSrhDisconnectedStatus(status)) return null;
+
+  return {
+    raceParticipantId: match[2],
+    raceId: get('race_id') || null,
+    finish: hasValidFinish ? finish : null,
+    status,
+    isDisconnected: isSrhDisconnectedStatus(status),
+    incidents: Number(get('incidents') || 0),
+    lapsLed: Number(get('laps_led') || 0),
+    qualifyPos: get('qualify_pos') || '',
+    seasonId: String(get('season_id') || ''),
+    seriesId: String(get('series_id') || ''),
+    leagueId: String(get('league_id') || ''),
+    provisional: get('provisional') || 'N',
+  };
+}
+
 export function parseDriverStatsRaceEntries(html) {
   const m = String(html || '').match(/React\.createElement\(DriverStats,(\{[\s\S]*?\})\)\)/);
   if (!m) return [];
 
   const entries = [];
   for (const match of m[1].matchAll(/"(\d+)":\{"race_participant_id":"(\d+)"([\s\S]*?)\}(?=,"|\})/g)) {
-    const body = match[3];
-    const get = (key) => body.match(new RegExp(`"${key}":"([^"]*)"`))?.[1];
-    const finish = Number(get('finish_pos'));
-    if (!Number.isFinite(finish) || finish < 1) continue;
-
-    entries.push({
-      raceParticipantId: match[2],
-      raceId: get('race_id') || null,
-      finish,
-      incidents: Number(get('incidents') || 0),
-      lapsLed: Number(get('laps_led') || 0),
-      qualifyPos: get('qualify_pos') || '',
-      seasonId: String(get('season_id') || ''),
-      seriesId: String(get('series_id') || ''),
-      leagueId: String(get('league_id') || ''),
-      provisional: get('provisional') || 'N',
-    });
+    const row = parseDriverStatsRaceParticipantBody(match);
+    if (row) entries.push(row);
   }
 
   return entries;
@@ -616,32 +634,21 @@ export function parseDriverCareerRaceEntries(html, leagueId = DEFAULT_LEAGUE_ID)
   for (const match of String(html || '').matchAll(
     /"(\d+)":\{"race_participant_id":"(\d+)"([\s\S]*?)\}(?=,"|\})/g
   )) {
-    const body = match[3];
-    const get = (key) => body.match(new RegExp(`"${key}":"([^"]*)"`))?.[1];
-    const finish = Number(get('finish_pos'));
-    if (!Number.isFinite(finish) || finish < 1) continue;
-    if (String(get('league_id') || '') !== league) continue;
+    const row = parseDriverStatsRaceParticipantBody(match);
+    if (!row) continue;
+    if (String(row.leagueId || '') !== league) continue;
 
-    const trackConfigId = get('track_config_id');
+    const trackConfigId = match[3].match(/"track_config_id":"([^"]*)"/)?.[1];
     const cfg = configs[trackConfigId] || {};
 
     entries.push({
-      raceParticipantId: match[2],
-      raceId: get('race_id') || null,
-      finish,
-      incidents: Number(get('incidents') || 0),
-      lapsLed: Number(get('laps_led') || 0),
-      qualifyPos: get('qualify_pos') || '',
-      seasonId: String(get('season_id') || ''),
-      seriesId: String(get('series_id') || ''),
-      leagueId: league,
-      scheduleId: get('schedule_id') || null,
+      ...row,
+      scheduleId: match[3].match(/"schedule_id":"([^"]*)"/)?.[1] || null,
       trackConfigId: trackConfigId || null,
       trackName: cfg.track_name || null,
       trackConfigName: cfg.track_config_name || null,
       trackConfigShort: cfg.track_config_short || null,
       simracerTypeName: cfg.type_name || null,
-      provisional: get('provisional') || 'N',
     });
   }
 
@@ -715,6 +722,7 @@ function buildParticipatedSeasonsFromRaceEntries(entries = [], seasonCatalog = n
     }
     const season = bySeason[entry.seasonId];
     season.starts += 1;
+    if (entry.isDisconnected) return;
     if (entry.finish === 1) season.wins += 1;
     if (entry.finish >= 1 && entry.finish <= 5) season.top5s += 1;
     if (entry.finish >= 1 && entry.finish <= 10) season.top10s += 1;
@@ -741,20 +749,30 @@ export function aggregateLeagueCareerStatsFromRaceEntries(entries = [], meta = {
       careerPoles: null,
       careerLapsLed: null,
       careerIncidents: null,
+      careerDisconnects: null,
+      careerDisconnectRate: null,
+      careerIncidentsPerStart: null,
       raceEntriesUsed: 0,
       reason: 'No race results found in SimRacerHub driver stats.',
     };
   }
 
-  const wins = entries.filter((entry) => entry.finish === 1).length;
-  const top5s = entries.filter((entry) => entry.finish >= 1 && entry.finish <= 5).length;
-  const top10s = entries.filter((entry) => entry.finish >= 1 && entry.finish <= 10).length;
-  const poles = entries.filter((entry) => Number(entry.qualifyPos) === 1).length;
-  const lapsLed = entries.reduce((sum, entry) => sum + entry.lapsLed, 0);
+  const completedEntries = entries.filter((entry) => !entry.isDisconnected);
+  const disconnects = entries.filter((entry) => entry.isDisconnected).length;
+  const wins = completedEntries.filter((entry) => entry.finish === 1).length;
+  const top5s = completedEntries.filter((entry) => entry.finish >= 1 && entry.finish <= 5).length;
+  const top10s = completedEntries.filter((entry) => entry.finish >= 1 && entry.finish <= 10).length;
+  const poles = completedEntries.filter((entry) => Number(entry.qualifyPos) === 1).length;
+  const lapsLed = completedEntries.reduce((sum, entry) => sum + entry.lapsLed, 0);
   const incidents = entries.reduce((sum, entry) => sum + entry.incidents, 0);
-  const careerAverageFinish = Number(
-    (entries.reduce((sum, entry) => sum + entry.finish, 0) / starts).toFixed(1)
-  );
+  const careerAverageFinish =
+    completedEntries.length > 0
+      ? Number(
+          (
+            completedEntries.reduce((sum, entry) => sum + entry.finish, 0) / completedEntries.length
+          ).toFixed(1)
+        )
+      : null;
 
   return {
     verified: true,
@@ -766,6 +784,9 @@ export function aggregateLeagueCareerStatsFromRaceEntries(entries = [], meta = {
     careerPoles: poles,
     careerLapsLed: lapsLed,
     careerIncidents: incidents,
+    careerDisconnects: disconnects,
+    careerDisconnectRate: Number((disconnects / starts).toFixed(3)),
+    careerIncidentsPerStart: Number((incidents / starts).toFixed(3)),
     raceEntriesUsed: starts,
   };
 }

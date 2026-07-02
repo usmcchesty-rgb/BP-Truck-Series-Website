@@ -7,7 +7,6 @@
   --muted: #9a9a9a;
   --red: #e50914;
   --red-dark: #9a0610;
-  --header-height: 88px;
 }
 
 * {
@@ -80,9 +79,17 @@ code {
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(380px, 460px);
-  grid-template-rows: minmax(0, 1fr) auto;
   gap: 16px;
   padding: 16px;
+  overflow: hidden;
+}
+
+.left-column,
+.right-column {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -109,27 +116,22 @@ code {
 }
 
 .controls-panel {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
-}
-
-.right-column {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 0;
-  background: transparent;
-  border: none;
-  overflow: hidden;
+  overflow-x: hidden;
 }
 
 .settings-block {
   flex: 0 0 auto;
   max-height: 42%;
   overflow-y: auto;
+  overflow-x: hidden;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 16px;
+  min-height: 0;
 }
 
 .browser-block {
@@ -145,49 +147,75 @@ code {
 }
 
 .browser-block-header {
+  flex: 0 0 auto;
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  overflow: visible;
 }
 
 .browser-block-header h2 {
   margin-bottom: 0;
+  flex: 0 0 auto;
+}
+
+.browser-block-hint {
+  flex: 0 0 auto;
+  margin: 8px 0 0;
 }
 
 .browser-toolbar {
   display: flex;
+  flex-direction: column;
   flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-  justify-content: flex-end;
+  gap: 6px;
+  overflow: visible;
+  width: 100%;
 }
 
-.zoom-controls {
-  display: inline-flex;
+.browser-toolbar-row {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
+  overflow: visible;
+  width: 100%;
+}
+
+.browser-toolbar-row-zoom {
   padding: 4px 6px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.02);
 }
 
+.browser-toolbar-row-actions {
+  justify-content: flex-start;
+}
+
+.toolbar-btn {
+  padding: 4px 8px;
+  font-size: 11px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
 .zoom-percent {
-  min-width: 52px;
+  min-width: 40px;
   text-align: center;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   color: #ddd;
+  flex: 0 0 auto;
 }
 
 .logs-panel {
-  grid-column: 1 / -1;
+  flex: 0 0 220px;
   display: flex;
   flex-direction: column;
-  flex-shrink: 0;
-  max-height: 220px;
   overflow: hidden;
+  min-height: 180px;
 }
 
 .button-grid {
@@ -272,8 +300,8 @@ input {
 }
 
 .preview-box {
-  min-height: 120px;
-  max-height: 180px;
+  min-height: 100px;
+  max-height: 160px;
 }
 
 .log-box {
@@ -286,18 +314,20 @@ input {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 10px;
+  flex: 0 0 auto;
 }
 
 .browser-host {
   position: relative;
   flex: 1 1 auto;
-  min-height: 460px;
+  min-height: 0;
   margin-top: 10px;
   border: 2px solid #3a3a3a;
   border-radius: 6px;
   background: #050505;
   overflow: hidden;
   isolation: isolate;
+  contain: layout paint size;
 }
 
 .browser-host-placeholder {
@@ -351,10 +381,16 @@ input {
 @media (max-width: 980px) {
   .layout {
     grid-template-columns: 1fr;
-    grid-template-rows: auto minmax(520px, 1fr) auto;
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+    overflow-y: auto;
   }
 
-  .browser-host {
-    min-height: 420px;
+  .left-column,
+  .right-column {
+    min-height: 480px;
+  }
+
+  .logs-panel {
+    flex-basis: 180px;
   }
 }

@@ -5,7 +5,14 @@ import { setBrowserAdapter, resetBrowserAdapter } from '../../recruit-scanner/br
 import { createPlaywrightBrowserAdapter } from '../../recruit-scanner/iracing-browser-playwright.js';
 import { createScannerService } from '../../recruit-scanner/scanner-service.js';
 import { readEnvFile, writeEnvFile, SCANNER_ENV_PATH } from '../../recruit-scanner/env-file.js';
-import { readAppSettings, writeAppSettings, getAppSettingsPath, BROWSER_ZOOM_STEP, clampBrowserZoomFactor } from './app-settings.js';
+import {
+  readAppSettings,
+  writeAppSettings,
+  getAppSettingsPath,
+  BROWSER_ZOOM_STEP,
+  clampBrowserZoomFactor,
+  normalizeBrowserFitMode,
+} from './app-settings.js';
 import {
   createEmbeddedBrowserManager,
   createElectronBrowserAdapter,
@@ -28,13 +35,50 @@ function requestBrowserBoundsUpdate() {
   sendToRenderer('request-browser-bounds');
 }
 
+function notifyBrowserZoomUpdated(factor) {
+  sendToRenderer('browser-zoom-updated', {
+    browserZoomFactor: clampBrowserZoomFactor(factor),
+  });
+}
+
+function createEmbeddedBrowserInstance() {
+  return createEmbeddedBrowserManager(mainWindow, {
+    readSettings: readAppSettings,
+    onZoomApplied: notifyBrowserZoomUpdated,
+  });
+}
+
+async function persistAppSettings(partial) {
+  const current = readAppSettings();
+  const next = writeAppSettings({
+    ...current,
+    ...partial,
+  });
+  return next;
+}
+
+async function persistBrowserZoom(factor) {
+  const next = await persistAppSettings({
+    browserZoomFactor: clampBrowserZoomFactor(factor),
+  });
+  notifyBrowserZoomUpdated(next.browserZoomFactor);
+  return next.browserZoomFactor;
+}
+
+async function persistBrowserFitMode(mode) {
+  const next = await persistAppSettings({
+    browserFitMode: normalizeBrowserFitMode(mode),
+  });
+  return next.browserFitMode;
+}
+
 function applyBrowserMode(useEmbeddedBrowser) {
   if (useEmbeddedBrowser) {
     if (!embeddedBrowser && mainWindow) {
-      embeddedBrowser = createEmbeddedBrowserManager(mainWindow);
+      embeddedBrowser = createEmbeddedBrowserInstance();
     }
     setBrowserAdapter(createElectronBrowserAdapter(embeddedBrowser));
-    embeddedBrowser?.setZoomFactor(readAppSettings().browserZoomFactor);
+    embeddedBrowser?.initializeZoomFromSettings();
   } else {
     resetBrowserAdapter();
     embeddedBrowser?.hide();
@@ -67,9 +111,9 @@ function createMainWindow() {
     title: 'BP Recruit Scanner',
   });
 
-  embeddedBrowser = createEmbeddedBrowserManager(mainWindow);
+  embeddedBrowser = createEmbeddedBrowserInstance();
   applyBrowserMode(readAppSettings().useEmbeddedBrowser);
-  embeddedBrowser.setZoomFactor(readAppSettings().browserZoomFactor);
+  embeddedBrowser.initializeZoomFromSettings();
 
   mainWindow.loadFile(path.join(RENDERER_DIR, 'index.html'));
 
@@ -133,14 +177,18 @@ ipcMain.handle('save-settings', async (_event, settings) => {
     browserZoomFactor: clampBrowserZoomFactor(
       settings?.browserZoomFactor ?? readAppSettings().browserZoomFactor
     ),
+    browserFitMode: normalizeBrowserFitMode(
+      settings?.browserFitMode ?? readAppSettings().browserFitMode
+    ),
   });
 
   if (embeddedBrowser) {
-    embeddedBrowser.setZoomFactor(appSettings.browserZoomFactor);
+    embeddedBrowser.initializeZoomFromSettings();
   }
 
   applyBrowserMode(appSettings.useEmbeddedBrowser);
   requestBrowserBoundsUpdate();
+  notifyBrowserZoomUpdated(appSettings.browserZoomFactor);
 
   return {
     ok: true,
@@ -148,26 +196,19 @@ ipcMain.handle('save-settings', async (_event, settings) => {
     appSettingsPath: getAppSettingsPath(),
     useEmbeddedBrowser: appSettings.useEmbeddedBrowser,
     browserZoomFactor: appSettings.browserZoomFactor,
+    browserFitMode: appSettings.browserFitMode,
   };
 });
-
-async function persistBrowserZoom(factor) {
-  const appSettings = readAppSettings();
-  const next = writeAppSettings({
-    ...appSettings,
-    browserZoomFactor: clampBrowserZoomFactor(factor),
-  });
-  return next.browserZoomFactor;
-}
 
 ipcMain.handle('set-browser-zoom', async (_event, factor) => {
   if (!embeddedBrowser || !readAppSettings().useEmbeddedBrowser) {
     return { ok: false };
   }
 
+  await persistBrowserFitMode('manual');
   const browserZoomFactor = embeddedBrowser.setZoomFactor(factor);
   await persistBrowserZoom(browserZoomFactor);
-  return { ok: true, browserZoomFactor };
+  return { ok: true, browserZoomFactor, browserFitMode: 'manual' };
 });
 
 ipcMain.handle('adjust-browser-zoom', async (_event, delta) => {
@@ -175,9 +216,10 @@ ipcMain.handle('adjust-browser-zoom', async (_event, delta) => {
     return { ok: false };
   }
 
+  await persistBrowserFitMode('manual');
   const browserZoomFactor = embeddedBrowser.adjustZoom(Number(delta) || 0);
   await persistBrowserZoom(browserZoomFactor);
-  return { ok: true, browserZoomFactor };
+  return { ok: true, browserZoomFactor, browserFitMode: 'manual' };
 });
 
 ipcMain.handle('fit-browser-width', async () => {
@@ -187,9 +229,10 @@ ipcMain.handle('fit-browser-width', async () => {
 
   requestBrowserBoundsUpdate();
   await new Promise((resolve) => setTimeout(resolve, 80));
+  await persistBrowserFitMode('fit-width');
   const browserZoomFactor = await embeddedBrowser.fitZoomWidth();
   await persistBrowserZoom(browserZoomFactor);
-  return { ok: true, browserZoomFactor };
+  return { ok: true, browserZoomFactor, browserFitMode: 'fit-width' };
 });
 
 ipcMain.handle('fit-browser-height', async () => {
@@ -199,9 +242,10 @@ ipcMain.handle('fit-browser-height', async () => {
 
   requestBrowserBoundsUpdate();
   await new Promise((resolve) => setTimeout(resolve, 80));
+  await persistBrowserFitMode('fit-height');
   const browserZoomFactor = await embeddedBrowser.fitZoomHeight();
   await persistBrowserZoom(browserZoomFactor);
-  return { ok: true, browserZoomFactor };
+  return { ok: true, browserZoomFactor, browserFitMode: 'fit-height' };
 });
 
 ipcMain.handle('fit-browser-to-panel', async () => {
@@ -211,9 +255,10 @@ ipcMain.handle('fit-browser-to-panel', async () => {
 
   requestBrowserBoundsUpdate();
   await new Promise((resolve) => setTimeout(resolve, 80));
+  await persistBrowserFitMode('fit-panel');
   const browserZoomFactor = await embeddedBrowser.fitZoomToPanel();
   await persistBrowserZoom(browserZoomFactor);
-  return { ok: true, browserZoomFactor };
+  return { ok: true, browserZoomFactor, browserFitMode: 'fit-panel' };
 });
 
 ipcMain.handle('set-browser-actual-size', async () => {
@@ -221,15 +266,18 @@ ipcMain.handle('set-browser-actual-size', async () => {
     return { ok: false };
   }
 
+  await persistBrowserFitMode('manual');
   const browserZoomFactor = embeddedBrowser.setActualSizeZoom();
   await persistBrowserZoom(browserZoomFactor);
-  return { ok: true, browserZoomFactor };
+  return { ok: true, browserZoomFactor, browserFitMode: 'manual' };
 });
 
 ipcMain.handle('get-browser-zoom', async () => {
+  const appSettings = readAppSettings();
   return {
     ok: true,
-    browserZoomFactor: embeddedBrowser?.getZoomFactor?.() ?? readAppSettings().browserZoomFactor,
+    browserZoomFactor: embeddedBrowser?.getZoomFactor?.() ?? appSettings.browserZoomFactor,
+    browserFitMode: appSettings.browserFitMode,
     step: BROWSER_ZOOM_STEP,
   };
 });
@@ -286,6 +334,16 @@ ipcMain.handle('test-customer-id', async (_event, customerId) => {
   const service = getScanner();
   const result = await service.testCustomerId(customerId, { saveSnapshot: true });
   requestBrowserBoundsUpdate();
+  if (embeddedBrowser) {
+    notifyBrowserZoomUpdated(embeddedBrowser.getZoomFactor());
+  }
+  return result;
+});
+
+ipcMain.handle('refresh-customer-id', async (_event, customerId) => {
+  const service = getScanner();
+  const result = await service.refreshApplicationByCustomerId(customerId, 'manual_refresh');
+  requestBrowserBoundsUpdate();
   return result;
 });
 
@@ -321,7 +379,8 @@ ipcMain.handle('get-status', async () => {
     running: service.running,
     envPath: SCANNER_ENV_PATH,
     useEmbeddedBrowser: appSettings.useEmbeddedBrowser,
-    browserZoomFactor: appSettings.browserZoomFactor,
+    browserZoomFactor: embeddedBrowser?.getZoomFactor?.() ?? appSettings.browserZoomFactor,
+    browserFitMode: appSettings.browserFitMode,
     sessionStoragePath: embeddedBrowser?.getSessionStoragePath(app.getPath('userData')),
     separateWindowOpen: embeddedBrowser?.isSeparateWindowOpen?.() ?? false,
   };

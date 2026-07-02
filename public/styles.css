@@ -12,6 +12,8 @@
 }
 *{box-sizing:border-box}
 body{margin:0;background:#050505;color:var(--bp-text-body);font-family:Arial Narrow,Roboto Condensed,Impact,Arial,sans-serif;letter-spacing:.2px;overflow-x:hidden;display:flex;flex-direction:column;min-height:100vh}
+/* Connected to Codex */
+.bg-clean{background-color:var(--dark)}
 .bp-text-primary{color:var(--bp-text-primary)}
 .bp-text-body{color:var(--bp-text-body)}
 .bp-text-secondary{color:var(--bp-text-secondary)}
