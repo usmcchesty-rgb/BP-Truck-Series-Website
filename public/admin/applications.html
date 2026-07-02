@@ -26,6 +26,16 @@
     #adminMsg.error, #loginMsg.error { color: #ff6060; }
     .pw-row { max-width: 320px; margin-bottom: 14px; }
     .applications-layout { display: block; }
+    body.admin-applications-page #adminView > h1 { text-transform: uppercase; letter-spacing: .04em; }
+    .applications-list-header { display: none; }
+    .applications-status-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
+    .applications-tab { padding: 8px 14px; font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; color: #bbb; background: linear-gradient(#1c1c1c, #080808); border: 1px solid #444; cursor: pointer; }
+    .applications-tab:hover { color: #fff; border-color: #666; }
+    .applications-tab.is-active { color: #fff; background: linear-gradient(#d40000, #680000); border-color: #ff2424; }
+    .applications-toolbar { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: end; margin: 0 0 14px; }
+    .applications-sort-controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+    .applications-sort-controls .field-label { margin: 0 0 4px; }
+    .applications-sort-select { width: auto; min-width: 160px; margin-bottom: 0; }
     .table-wrap { overflow: auto; border: 1px solid #333; }
     .applications-table { width: 100%; border-collapse: collapse; font-size: 11px; min-width: 720px; }
     .applications-table th, .applications-table td { padding: 8px 10px; border-bottom: 1px solid #222; text-align: left; vertical-align: top; }
@@ -163,12 +173,30 @@
   </main>
 
   <main id="adminView" class="wrap" hidden>
-    <h1>Driver Applications</h1>
+    <h1>Applications Received</h1>
     <p class="sub">Review submitted Join Blazing Pedals applications, update status, and leave internal admin notes.</p>
 
     <div class="applications-layout">
       <section id="applicationsListPanel" class="panel">
-        <h2>Applications</h2>
+        <nav id="applicationsStatusTabs" class="applications-status-tabs" aria-label="Application status filters"></nav>
+        <div class="applications-toolbar">
+          <div class="applications-sort-controls">
+            <div>
+              <label class="field-label" for="applicationsSortField">Sort By</label>
+              <select id="applicationsSortField" class="select applications-sort-select">
+                <option value="date">Application Date</option>
+                <option value="name">Name</option>
+              </select>
+            </div>
+            <div>
+              <label class="field-label" for="applicationsSortDirection">Direction</label>
+              <select id="applicationsSortDirection" class="select applications-sort-select">
+                <option value="desc">Newest First</option>
+                <option value="asc">Oldest First</option>
+              </select>
+            </div>
+          </div>
+        </div>
         <div class="table-wrap">
           <table class="applications-table">
             <thead>
@@ -204,12 +232,25 @@
   <script>
     const SESSION_KEY = 'bp_admin_pw';
     const STATUS_OPTIONS = ['pending', 'reviewing', 'approved', 'rejected', 'waitlist', 'recruiting_race'];
+    const STATUS_TABS = [
+      { id: 'all', label: 'All' },
+      { id: 'pending', label: 'Pending' },
+      { id: 'reviewing', label: 'Reviewing' },
+      { id: 'approved', label: 'Approved' },
+      { id: 'rejected', label: 'Rejected' },
+      { id: 'waitlist', label: 'Waitlist' },
+      { id: 'recruiting_race', label: 'Recruiting Race' },
+    ];
     const ADMIN_APPS_DEBUG =
       window.location.hostname === 'localhost' ||
       window.location.hostname === '127.0.0.1' ||
       /(?:^|[?&])debug=1(?:&|$)/.test(window.location.search);
     let applications = [];
     let selectedId = '';
+    let listStatusFilter = 'all';
+    let listSortField = 'date';
+    let listSortDirection = 'desc';
+    let listControlsBound = false;
 
     function $(sel) { return document.querySelector(sel); }
 
@@ -356,18 +397,129 @@
       return data.snapshot;
     }
 
+    function applicationDisplayName(row) {
+      return String(row?.iracing_display_name || row?.driver_name || '').trim();
+    }
+
+    function getStatusCounts() {
+      const counts = { all: applications.length };
+      STATUS_OPTIONS.forEach((status) => {
+        counts[status] = 0;
+      });
+      applications.forEach((row) => {
+        const status = String(row.status || 'pending').toLowerCase();
+        if (Object.prototype.hasOwnProperty.call(counts, status)) counts[status] += 1;
+      });
+      return counts;
+    }
+
+    function getFilteredApplications() {
+      if (listStatusFilter === 'all') return [...applications];
+      return applications.filter(
+        (row) => String(row.status || 'pending').toLowerCase() === listStatusFilter
+      );
+    }
+
+    function compareApplications(a, b) {
+      let cmp = 0;
+      if (listSortField === 'name') {
+        cmp = applicationDisplayName(a).localeCompare(applicationDisplayName(b), undefined, {
+          sensitivity: 'base',
+        });
+      } else {
+        const aTime = new Date(a.created_at || 0).getTime();
+        const bTime = new Date(b.created_at || 0).getTime();
+        cmp = aTime - bTime;
+      }
+      return listSortDirection === 'asc' ? cmp : -cmp;
+    }
+
+    function getVisibleApplications() {
+      return getFilteredApplications().sort(compareApplications);
+    }
+
+    function updateSortDirectionOptions() {
+      const dir = $('#applicationsSortDirection');
+      if (!dir) return;
+      if (listSortField === 'name') {
+        dir.innerHTML = `
+          <option value="asc">A-Z</option>
+          <option value="desc">Z-A</option>
+        `;
+        if (listSortDirection !== 'asc' && listSortDirection !== 'desc') listSortDirection = 'asc';
+      } else {
+        dir.innerHTML = `
+          <option value="desc">Newest First</option>
+          <option value="asc">Oldest First</option>
+        `;
+        if (listSortDirection !== 'asc' && listSortDirection !== 'desc') listSortDirection = 'desc';
+      }
+      dir.value = listSortDirection;
+    }
+
+    function syncListControlValues() {
+      const sortField = $('#applicationsSortField');
+      const sortDirection = $('#applicationsSortDirection');
+      if (sortField) sortField.value = listSortField;
+      updateSortDirectionOptions();
+      if (sortDirection) sortDirection.value = listSortDirection;
+    }
+
+    function bindListControls() {
+      if (listControlsBound) return;
+      listControlsBound = true;
+
+      $('#applicationsSortField')?.addEventListener('change', (event) => {
+        listSortField = event.target.value === 'name' ? 'name' : 'date';
+        listSortDirection = listSortField === 'name' ? 'asc' : 'desc';
+        syncListControlValues();
+        renderApplicationsTable();
+      });
+
+      $('#applicationsSortDirection')?.addEventListener('change', (event) => {
+        listSortDirection = event.target.value === 'asc' ? 'asc' : 'desc';
+        renderApplicationsTable();
+      });
+    }
+
+    function renderStatusTabs() {
+      const nav = $('#applicationsStatusTabs');
+      if (!nav) return;
+      const counts = getStatusCounts();
+      nav.innerHTML = STATUS_TABS.map((tab) => {
+        const active = tab.id === listStatusFilter ? ' is-active' : '';
+        const count = counts[tab.id] ?? 0;
+        return `<button type="button" class="applications-tab${active}" data-status-tab="${escapeHtml(tab.id)}">${escapeHtml(tab.label)} (${count})</button>`;
+      }).join('');
+
+      nav.querySelectorAll('[data-status-tab]').forEach((button) => {
+        button.addEventListener('click', () => {
+          listStatusFilter = button.dataset.statusTab || 'all';
+          renderStatusTabs();
+          renderApplicationsTable();
+        });
+      });
+    }
+
     function renderApplicationsTable() {
       const body = $('#applicationsBody');
+      const visible = getVisibleApplications();
+
       if (!applications.length) {
         body.innerHTML = '<tr><td colspan="6">No applications yet.</td></tr>';
         return;
       }
 
-      body.innerHTML = applications.map((row) => {
+      if (!visible.length) {
+        body.innerHTML = '<tr><td colspan="6">No applications found for this status.</td></tr>';
+        return;
+      }
+
+      body.innerHTML = visible.map((row) => {
         const selected = row.id === selectedId ? ' is-selected' : '';
         return `<tr class="${selected.trim()}" data-id="${escapeHtml(row.id)}">
           <td>${escapeHtml(formatDate(row.created_at))}</td>
-          <td>${escapeHtml(row.iracing_display_name || row.driver_name || '—')}</td>
+          <td>${escapeHtml(applicationDisplayName(row) || '—')}</td>
           <td>${escapeHtml(row.iracing_customer_id)}</td>
           <td>${escapeHtml(row.discord_name || '—')}</td>
           <td>${escapeHtml(row.email || '—')}</td>
@@ -1327,6 +1479,7 @@
           admin_notes: $('#detailNotes').value
         });
         applications = applications.map((row) => (row.id === updated.id ? updated : row));
+        renderStatusTabs();
         renderApplicationsTable();
         await loadApplicationDetail();
         setMsg('Application updated.');
@@ -1342,6 +1495,9 @@
         if (selectedId && !applications.some((row) => row.id === selectedId)) {
           selectedId = '';
         }
+        bindListControls();
+        syncListControlValues();
+        renderStatusTabs();
         renderApplicationsTable();
         await loadApplicationDetail();
         setMsg('');
