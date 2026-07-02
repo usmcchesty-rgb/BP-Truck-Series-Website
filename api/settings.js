@@ -65,6 +65,7 @@ import {
   submitDriverApplication,
   updateDriverApplication,
 } from './_driver-applications.js';
+import { stripPrivateDriverProfileFields } from './drivers.js';
 import { getLatestIracingSnapshotForApplication } from './_driver-application-iracing-snapshots.js';
 import { getLatestIracingStatsSnapshotForApplication } from './_driver-application-iracing-stats-snapshots.js';
 import {
@@ -225,7 +226,7 @@ async function handleDriverApplicationRoutes(req, res) {
       res.status(result.status).json({
         ok: true,
         application: result.application,
-        driver_profile: result.driver_profile || null,
+        driver_profile: stripPrivateDriverProfileFields(result.driver_profile || null),
         driver_profile_action: result.driver_profile_action || null,
         message: result.message || null,
         number_reservation: result.number_reservation || null,

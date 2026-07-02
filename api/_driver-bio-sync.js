@@ -628,6 +628,15 @@ function matchProfile(entry, profiles) {
   return { profile: null, method: null, conflicts: [] };
 }
 
+function stripPrivateProposedFields(proposed) {
+  if (!proposed || typeof proposed !== 'object') return proposed;
+  const sanitized = { ...proposed };
+  delete sanitized.form_email;
+  delete sanitized.form_submitted_at;
+  delete sanitized.form_permission_granted;
+  return sanitized;
+}
+
 function buildProposedUpdates(entry, profile) {
   if (!entry.permissionGranted) {
     return {
@@ -703,7 +712,7 @@ export function buildFormSyncPreview(profiles, sheetData) {
         twitch: entry.twitch,
         tiktok: entry.tiktok,
       },
-      proposed: preview.proposed,
+      proposed: stripPrivateProposedFields(preview.proposed),
       skipReason: preview.skipReason,
       warnings: rowWarnings,
       conflicts,
