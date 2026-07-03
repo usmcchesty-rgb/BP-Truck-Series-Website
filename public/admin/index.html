@@ -40,6 +40,44 @@
     .drivers-table .readonly { color: #aaa; font-size: 11px; }
     .drivers-table .btn-save { padding: 4px 10px; font-size: 9px; }
     .drivers-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 14px; }
+    .drivers-roster-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
+    .drivers-roster-tab {
+      border: 1px solid #444;
+      background: #111;
+      color: #ddd;
+      padding: 6px 12px;
+      font-size: 11px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      cursor: pointer;
+    }
+    .drivers-roster-tab.is-active { border-color: #a33; color: #fff; background: #1a0a0a; }
+    .roster-badge {
+      display: inline-block;
+      margin-right: 6px;
+      padding: 2px 6px;
+      border-radius: 999px;
+      font-size: 9px;
+      font-weight: 900;
+      letter-spacing: .04em;
+      border: 1px solid #444;
+      vertical-align: middle;
+      white-space: nowrap;
+    }
+    .roster-badge--current { color: #7fd99a; border-color: #385; }
+    .roster-badge--new { color: #9ec5ff; border-color: #456; }
+    .roster-badge--inactive { color: #aaa; border-color: #555; }
+    .drivers-table .roster-group-row td {
+      background: #121212;
+      color: #ff3030;
+      font-size: 10px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      border-top: 1px solid #333;
+    }
+    .drivers-table .display-name-cell { min-width: 140px; }
     .form-sync-panel { margin: 16px 0; padding: 14px; border: 1px solid #333; background: #0a0a0a; }
     .form-sync-panel h3 { margin: 0 0 10px; font-size: 14px; color: #fff; }
     .form-sync-summary { font-size: 12px; color: #aaa; margin-bottom: 12px; line-height: 1.5; }
@@ -179,8 +217,8 @@
     <div id="driversSection" class="admin-section">
       <div class="panel">
         <h2>Driver Profiles</h2>
-        <p class="sub">Drivers load from current standings. Save a row or use Sync All to write profiles to Supabase.</p>
-        <p class="sub">Driver ID = SimRacerHub Driver ID. Car Numbers are managed by BP and do not come from SimRacerHub.</p>
+        <p class="sub">Master driver database for all Blazing Pedals drivers. Current standings drivers, approved applicants not yet in standings, and inactive/former drivers.</p>
+        <p class="sub">Driver ID = SimRacerHub Driver ID for standings drivers, or iRacing Customer ID for approved applicants not yet in standings.</p>
         <p class="sub">Driver emails are private and only visible to administrators. They are not shown on public pages.</p>
         <div class="drivers-actions">
           <button class="btn" type="button" onclick="syncAllDrivers()">Sync All Drivers</button>
@@ -209,11 +247,13 @@
             <button class="btn btn-secondary" type="button" onclick="closeFormSyncPanel()">Cancel</button>
           </div>
         </div>
+        <nav id="driversRosterTabs" class="drivers-roster-tabs" aria-label="Driver roster filters"></nav>
         <div class="table-wrap">
           <table class="drivers-table" id="driversTable">
             <thead>
               <tr>
                 <th>Driver ID</th>
+                <th>Roster</th>
                 <th>iRacing ID</th>
                 <th>iRacing Name</th>
                 <th>Display Name</th>
@@ -473,56 +513,212 @@
       }
     }
 
+    const ROSTER_STATUS_ORDER = { current: 0, new_approved: 1, inactive: 2 };
+    const ROSTER_FILTER_TABS = [
+      { id: 'all', label: 'All' },
+      { id: 'current', label: 'Current' },
+      { id: 'new_approved', label: 'New / Approved' },
+      { id: 'inactive', label: 'Inactive' },
+    ];
+    const ROSTER_GROUP_LABELS = {
+      current: 'Current BP Drivers',
+      new_approved: 'New / Approved Drivers',
+      inactive: 'Inactive / Former Drivers',
+    };
+
+    let rosterDrivers = [];
+    let rosterFilter = 'all';
+
+    function normalizeCustomerId(value) {
+      return String(value ?? '').trim().replace(/\D/g, '');
+    }
+
+    function profileFromRow(profile, row, options = {}) {
+      const active = profile?.active !== false;
+      return {
+        driver_id: String(options.driver_id || row?.driverId || profile?.driver_id || ''),
+        iracing_customer_id:
+          profile?.iracing_customer_id ||
+          profile?.iracingCustomerId ||
+          normalizeCustomerId(options.iracing_customer_id || row?.driverId || ''),
+        iracing_name: row?.driver || profile?.iracing_name || profile?.display_name || 'Unknown Driver',
+        display_name: profile?.display_name || row?.driver || profile?.iracing_name || 'Unknown Driver',
+        form_email: profile?.form_email || profile?.formEmail || '',
+        car_number: profile?.car_number || '',
+        photo_url: profile?.photo_url || row?.photoUrl || '',
+        date_of_birth: profile?.date_of_birth || profile?.dateOfBirth || '',
+        hometown: profile?.hometown || '',
+        team: profile?.team || '',
+        is_streamer: profile?.is_streamer === true,
+        stream_url: profile?.stream_url || '',
+        active,
+        in_standings: Boolean(options.in_standings),
+        source_application_id: profile?.source_application_id || profile?.sourceApplicationId || null,
+        roster_status: options.roster_status || 'current',
+      };
+    }
+
+    function resolveRosterStatus({ active, inStandings }) {
+      if (!active) return 'inactive';
+      if (inStandings) return 'current';
+      return 'new_approved';
+    }
+
     function buildDriverList(standingsRows, profiles) {
       const byId = Object.fromEntries(profiles.map((p) => [String(p.driver_id), p]));
+      const standingsDriverIds = new Set(standingsRows.map((row) => String(row.driverId)));
+      const standingsCustomerIds = new Set();
       const usedProfileIds = new Set();
+      const list = [];
 
-      const list = standingsRows.map((row) => {
+      for (const row of standingsRows) {
         const profile = byId[String(row.driverId)] || null;
-        if (profile) usedProfileIds.add(String(profile.driver_id));
-        return {
-          driver_id: String(row.driverId),
-          iracing_customer_id: profile?.iracing_customer_id || profile?.iracingCustomerId || String(row.driverId || ''),
-          iracing_name: row.driver,
-          display_name: profile?.display_name || row.driver,
-          form_email: profile?.form_email || profile?.formEmail || '',
-          car_number: profile?.car_number || '',
-          photo_url: profile?.photo_url || row.photoUrl || '',
-          date_of_birth: profile?.date_of_birth || profile?.dateOfBirth || '',
-          hometown: profile?.hometown || '',
-          team: profile?.team || '',
-          is_streamer: profile?.is_streamer === true,
-          stream_url: profile?.stream_url || '',
-          active: profile?.active !== false
-        };
-      });
+        if (profile) {
+          usedProfileIds.add(String(profile.driver_id));
+          const customerId = normalizeCustomerId(profile.iracing_customer_id || profile.iracingCustomerId);
+          if (customerId) standingsCustomerIds.add(customerId);
+        }
+        const active = profile?.active !== false;
+        list.push(
+          profileFromRow(profile, row, {
+            driver_id: String(row.driverId),
+            in_standings: true,
+            roster_status: resolveRosterStatus({ active, inStandings: true }),
+          })
+        );
+      }
 
       for (const profile of profiles) {
         const driverId = String(profile.driver_id || '').trim();
         if (!driverId || usedProfileIds.has(driverId)) continue;
         usedProfileIds.add(driverId);
-        list.push({
-          driver_id: driverId,
-          iracing_customer_id: profile.iracing_customer_id || profile.iracingCustomerId || '',
-          iracing_name: profile.iracing_name || profile.display_name || 'Unknown Driver',
-          display_name: profile.display_name || profile.iracing_name || 'Unknown Driver',
-          form_email: profile.form_email || profile.formEmail || '',
-          car_number: profile.car_number || '',
-          photo_url: profile.photo_url || '',
-          date_of_birth: profile.date_of_birth || profile.dateOfBirth || '',
-          hometown: profile.hometown || '',
-          team: profile.team || '',
-          is_streamer: profile.is_streamer === true,
-          stream_url: profile.stream_url || '',
-          active: profile.active !== false
-        });
+
+        const customerId = normalizeCustomerId(profile.iracing_customer_id || profile.iracingCustomerId);
+        const inStandings =
+          standingsDriverIds.has(driverId) ||
+          (customerId && standingsCustomerIds.has(customerId));
+        const active = profile.active !== false;
+
+        list.push(
+          profileFromRow(profile, null, {
+            driver_id: driverId,
+            iracing_customer_id: customerId,
+            in_standings: inStandings,
+            roster_status: resolveRosterStatus({ active, inStandings }),
+          })
+        );
       }
 
-      return list.sort((a, b) =>
-        String(a.display_name || a.iracing_name || '').localeCompare(
+      return list.sort((a, b) => {
+        const groupDiff =
+          (ROSTER_STATUS_ORDER[a.roster_status] ?? 99) - (ROSTER_STATUS_ORDER[b.roster_status] ?? 99);
+        if (groupDiff !== 0) return groupDiff;
+        return String(a.display_name || a.iracing_name || '').localeCompare(
           String(b.display_name || b.iracing_name || '')
-        )
-      );
+        );
+      });
+    }
+
+    function rosterStatusLabel(status) {
+      if (status === 'current') return 'CURRENT';
+      if (status === 'new_approved') return 'NEW / APPROVED';
+      if (status === 'inactive') return 'INACTIVE';
+      return String(status || '').toUpperCase();
+    }
+
+    function rosterBadgeHtml(status) {
+      const safe = String(status || '').trim().toLowerCase();
+      const label = rosterStatusLabel(safe);
+      const modifier =
+        safe === 'current' ? 'current' : safe === 'new_approved' ? 'new' : 'inactive';
+      return `<span class="roster-badge roster-badge--${modifier}">${escapeHtml(label)}</span>`;
+    }
+
+    function getRosterCounts(drivers) {
+      const counts = { all: drivers.length, current: 0, new_approved: 0, inactive: 0 };
+      for (const driver of drivers) {
+        const status = String(driver.roster_status || '').toLowerCase();
+        if (counts[status] != null) counts[status] += 1;
+      }
+      return counts;
+    }
+
+    function getVisibleRosterDrivers(drivers, filter = rosterFilter) {
+      if (filter === 'all') return drivers;
+      return drivers.filter((driver) => String(driver.roster_status || '') === filter);
+    }
+
+    function renderRosterTabs(drivers) {
+      const nav = $('#driversRosterTabs');
+      if (!nav) return;
+      const counts = getRosterCounts(drivers);
+      nav.innerHTML = ROSTER_FILTER_TABS.map((tab) => {
+        const active = tab.id === rosterFilter ? ' is-active' : '';
+        return `<button type="button" class="drivers-roster-tab${active}" data-roster-filter="${escapeAttr(tab.id)}">${escapeHtml(tab.label)} (${counts[tab.id] ?? 0})</button>`;
+      }).join('');
+
+      nav.querySelectorAll('[data-roster-filter]').forEach((button) => {
+        button.addEventListener('click', () => {
+          rosterFilter = button.dataset.rosterFilter || 'all';
+          renderRosterTabs(rosterDrivers);
+          renderDriversTable(getVisibleRosterDrivers(rosterDrivers));
+        });
+      });
+    }
+
+    function renderDriverRow(d) {
+      const id = escapeAttr(d.driver_id);
+      return `<tr data-driver-id="${id}" data-roster-status="${escapeAttr(d.roster_status || '')}">
+          <td class="readonly">${escapeHtml(d.driver_id)}</td>
+          <td class="readonly">${rosterBadgeHtml(d.roster_status)}</td>
+          <td><input type="text" name="iracing_customer_id" value="${escapeAttr(d.iracing_customer_id || d.iracingCustomerId || '')}"></td>
+          <td class="readonly iracing-name">${escapeHtml(d.iracing_name)}</td>
+          <td class="display-name-cell"><input type="text" name="display_name" value="${escapeAttr(d.display_name || '')}"></td>
+          <td><input type="email" name="form_email" value="${escapeAttr(d.form_email || d.formEmail || '')}"></td>
+          <td><input type="text" name="car_number" value="${escapeAttr(d.car_number || '')}"></td>
+          <td><input type="text" name="photo_url" value="${escapeAttr(d.photo_url || '')}"></td>
+          <td><input type="text" name="date_of_birth" value="${escapeAttr(d.date_of_birth || d.dateOfBirth || '')}" placeholder="e.g. March 14, 1990"></td>
+          <td><input type="text" name="hometown" value="${escapeAttr(d.hometown || '')}"></td>
+          <td><input type="text" name="team" value="${escapeAttr(d.team || '')}"></td>
+          <td class="center"><input type="checkbox" name="is_streamer"${d.is_streamer === true ? ' checked' : ''}></td>
+          <td><input type="url" name="stream_url" value="${escapeAttr(d.stream_url || '')}" placeholder="https://twitch.tv/username or YouTube/Kick/etc."></td>
+          <td class="center"><input type="checkbox" name="active"${d.active !== false ? ' checked' : ''}></td>
+          <td><button type="button" class="btn btn-save">Save</button></td>
+        </tr>`;
+    }
+
+    function renderDriversTable(drivers) {
+      const tbody = $('#driversBody');
+      const visible = Array.isArray(drivers) ? drivers : [];
+      if (!visible.length) {
+        tbody.innerHTML = '<tr><td colspan="15">No drivers found for this roster filter.</td></tr>';
+        return;
+      }
+
+      if (rosterFilter === 'all') {
+        const chunks = [];
+        let lastGroup = '';
+        for (const driver of visible) {
+          const group = String(driver.roster_status || '');
+          if (group !== lastGroup) {
+            lastGroup = group;
+            chunks.push(
+              `<tr class="roster-group-row"><td colspan="15">${escapeHtml(ROSTER_GROUP_LABELS[group] || 'Drivers')}</td></tr>`
+            );
+          }
+          chunks.push(renderDriverRow(driver));
+        }
+        tbody.innerHTML = chunks.join('');
+      } else {
+        tbody.innerHTML = visible.map((driver) => renderDriverRow(driver)).join('');
+      }
+
+      tbody.querySelectorAll('.btn-save').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const row = btn.closest('tr[data-driver-id]');
+          if (row) saveDriverRow(row);
+        });
+      });
     }
 
     function rowInput(rowEl, name) {
@@ -602,36 +798,6 @@
       return profile;
     }
 
-    function renderDriversTable(drivers) {
-      const tbody = $('#driversBody');
-      tbody.innerHTML = drivers.map((d) => {
-        const id = escapeAttr(d.driver_id);
-        return `<tr data-driver-id="${id}">
-          <td class="readonly">${escapeHtml(d.driver_id)}</td>
-          <td><input type="text" name="iracing_customer_id" value="${escapeAttr(d.iracing_customer_id || d.iracingCustomerId || '')}"></td>
-          <td class="readonly iracing-name">${escapeHtml(d.iracing_name)}</td>
-          <td><input type="text" name="display_name" value="${escapeAttr(d.display_name || '')}"></td>
-          <td><input type="email" name="form_email" value="${escapeAttr(d.form_email || d.formEmail || '')}"></td>
-          <td><input type="text" name="car_number" value="${escapeAttr(d.car_number || '')}"></td>
-          <td><input type="text" name="photo_url" value="${escapeAttr(d.photo_url || '')}"></td>
-          <td><input type="text" name="date_of_birth" value="${escapeAttr(d.date_of_birth || d.dateOfBirth || '')}" placeholder="e.g. March 14, 1990"></td>
-          <td><input type="text" name="hometown" value="${escapeAttr(d.hometown || '')}"></td>
-          <td><input type="text" name="team" value="${escapeAttr(d.team || '')}"></td>
-          <td class="center"><input type="checkbox" name="is_streamer"${d.is_streamer === true ? ' checked' : ''}></td>
-          <td><input type="url" name="stream_url" value="${escapeAttr(d.stream_url || '')}" placeholder="https://twitch.tv/username or YouTube/Kick/etc."></td>
-          <td class="center"><input type="checkbox" name="active"${d.active !== false ? ' checked' : ''}></td>
-          <td><button type="button" class="btn btn-save">Save</button></td>
-        </tr>`;
-      }).join('');
-
-      tbody.querySelectorAll('.btn-save').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          const row = btn.closest('tr[data-driver-id]');
-          if (row) saveDriverRow(row);
-        });
-      });
-    }
-
     function escapeHtml(s) {
       return String(s)
         .replace(/&/g, '&amp;')
@@ -661,10 +827,14 @@
 
         const standingsRows = standingsData.rows || [];
         const profileList = Array.isArray(profiles) ? profiles : [];
-        const list = buildDriverList(standingsRows, profileList);
+        rosterDrivers = buildDriverList(standingsRows, profileList);
+        renderRosterTabs(rosterDrivers);
+        renderDriversTable(getVisibleRosterDrivers(rosterDrivers));
 
-        renderDriversTable(list);
-        setDriversMsg(`Loaded ${list.length} drivers from standings (${profileList.length} saved in Supabase).`);
+        const counts = getRosterCounts(rosterDrivers);
+        setDriversMsg(
+          `Loaded ${rosterDrivers.length} drivers (${counts.current} current, ${counts.new_approved} new/approved, ${counts.inactive} inactive). ${profileList.length} profiles in Supabase.`
+        );
       } catch (e) {
         setDriversMsg(e.message, true);
       }

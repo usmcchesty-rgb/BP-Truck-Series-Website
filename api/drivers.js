@@ -454,6 +454,7 @@ export default async function handler(req, res) {
     const normalized = rows
       .map(normalizeProfile)
       .filter(Boolean)
+      .filter((row) => includePrivateFields || row.active !== false)
       .sort((a, b) => a.iracing_name.localeCompare(b.iracing_name));
 
     if (queryAction === 'availableNumbers') {
@@ -475,6 +476,9 @@ export default async function handler(req, res) {
     if (driverId) {
       const profile = findDriverProfile(normalized, driverId);
       if (!profile) {
+        return res.status(404).json({ error: 'Driver not found.' });
+      }
+      if (!includePrivateFields && profile.active === false) {
         return res.status(404).json({ error: 'Driver not found.' });
       }
 
