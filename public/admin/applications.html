@@ -105,7 +105,8 @@
     .number-status-pill.reserved { color: #9ec5ff; border-color: #456; }
     .number-status-pill.none { color: #aaa; border-color: #555; }
     .evidence-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
-    .evidence-stack { display: grid; grid-template-columns: minmax(260px, 34%) minmax(0, 1fr); gap: 14px; align-items: start; width: 100%; }
+    .evidence-stack { display: grid; grid-template-columns: minmax(240px, 28%) minmax(0, 1fr); gap: 14px; align-items: start; width: 100%; }
+    .evidence-stack--full { grid-column: 1 / -1; }
     .evidence-stack .snapshot-card--license { margin-top: 0; }
     .evidence-stack .snapshot-card--stats { margin-top: 0; padding: 14px; border: 1px solid #333; background: rgba(0,0,0,.28); min-width: 0; width: 100%; }
     .detail-grid.stats-grid { max-width: none; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); margin-bottom: 0; }
@@ -131,25 +132,10 @@
     .stats-controls .field-label { margin-top: 0; }
     .stats-control { min-width: 220px; max-width: 320px; flex: 0 1 280px; }
     .stats-category-select { margin-bottom: 0; }
-    .stats-categories-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; width: 100%; margin: 10px 0 14px; }
-    .stats-category-block { border: 1px solid #333; background: linear-gradient(180deg, rgba(16,16,16,.95), rgba(6,6,6,.95)); padding: 10px 12px; min-width: 0; }
-    .stats-category-block.is-primary { border-color: #5a2020; background: linear-gradient(180deg, rgba(36,12,12,.55), rgba(10,6,6,.92)); }
-    .stats-category-title { margin: 0 0 8px; font-size: 12px; font-weight: 900; color: #fff; text-transform: uppercase; letter-spacing: .04em; }
-    .stats-compact-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(68px, 1fr)); gap: 8px 12px; width: 100%; }
-    .stats-compact-cell { min-width: 0; }
-    .stats-compact-label { color: #888; font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; line-height: 1.2; margin-bottom: 3px; }
-    .stats-compact-value { color: #fff; font-size: clamp(14px, 1.15vw, 18px); font-weight: 900; line-height: 1.15; font-variant-numeric: tabular-nums; white-space: nowrap; }
-    .stats-compact-value.is-green { color: #8dff9d; }
-    .stats-compact-value.is-yellow { color: #ffe680; }
-    .stats-compact-value.is-orange { color: #ffb15f; }
-    .stats-compact-value.is-red { color: #ff7878; }
-    .stats-compact-value.is-neutral { color: #bbb; }
-    .stats-meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px 14px; margin: 0 0 10px; max-width: 720px; }
-    .stats-meta-grid .detail-grid { margin-bottom: 0; max-width: none; }
-    .stats-metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); gap: 10px; margin: 12px 0 18px; }
-    .stat-metric { min-height: 76px; padding: 12px; border: 1px solid #333; background: linear-gradient(180deg, #111, #090909); box-shadow: inset 0 1px 0 rgba(255,255,255,.035); display: flex; flex-direction: column; justify-content: space-between; min-width: 0; }
-    .stat-metric dt { margin: 0 0 7px; color: #9a9a9a; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .stat-metric dd { margin: 0; color: #fff; font-size: clamp(18px, 1.8vw, 22px); font-weight: 900; line-height: 1.1; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .stats-metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 10px; margin: 12px 0 18px; width: 100%; }
+    .stat-metric { min-height: 72px; padding: 10px 12px; border: 1px solid #333; background: linear-gradient(180deg, #111, #090909); box-shadow: inset 0 1px 0 rgba(255,255,255,.035); display: flex; flex-direction: column; justify-content: space-between; min-width: 0; }
+    .stat-metric dt { margin: 0 0 6px; color: #9a9a9a; font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
+    .stat-metric dd { margin: 0; color: #fff; font-size: clamp(14px, 1.35vw, 20px); font-weight: 900; line-height: 1.1; font-variant-numeric: tabular-nums; white-space: nowrap; }
     .stat-metric.is-green, .stat-badge.is-green { border-color: #2c8f46; background: linear-gradient(180deg, rgba(28,90,45,.36), rgba(8,28,15,.45)); color: #8dff9d; }
     .stat-metric.is-yellow, .stat-badge.is-yellow { border-color: #9a8129; background: linear-gradient(180deg, rgba(110,86,18,.36), rgba(38,29,7,.45)); color: #ffe680; }
     .stat-metric.is-orange, .stat-badge.is-orange { border-color: #a35f1f; background: linear-gradient(180deg, rgba(122,63,18,.38), rgba(42,20,5,.45)); color: #ffb15f; }
@@ -168,21 +154,23 @@
     .data-status-icon { width: 12px; flex: 0 0 12px; text-align: center; font-size: 11px; font-weight: 900; }
     .data-status-updated { margin: 0; color: #888; font-size: 10px; line-height: 1.35; }
     .data-status-updated-label { display: block; color: #777; font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 2px; }
-    .lookup-status-card .btn-row { margin-top: 10px; }
+    .btn-danger { background: linear-gradient(#5a1010, #2a0505); border-color: #733; }
+    .danger-zone-hint { margin: 0 0 10px; color: #888; font-size: 11px; line-height: 1.4; }
+    .review-card--danger { border-color: #522; background: linear-gradient(180deg, rgba(28,10,10,.55), rgba(10,4,4,.92)); }
     .section-heading { margin: 0 0 10px; font-size: 13px; color: #aaa; text-transform: uppercase; letter-spacing: .04em; }
     @media (min-width: 1024px) {
       body.admin-applications-page main.wrap { padding-left: 72px; padding-right: 72px; }
     }
     @media (min-width: 1400px) {
       body.admin-applications-page main.wrap { padding-left: 96px; padding-right: 96px; }
-      .stats-compact-grid { grid-template-columns: repeat(auto-fit, minmax(76px, 1fr)); }
+      .stats-metric-grid { grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); }
     }
     @media (max-width: 980px) {
       body.admin-applications-page main.wrap { padding-left: 12px; padding-right: 12px; }
       .detail-header { display: block; }
       .detail-header .btn-row { margin-top: 12px; }
       .detail-grid { grid-template-columns: 1fr; }
-      .review-shell, .evidence-grid, .evidence-stack, .review-overview-grid { grid-template-columns: 1fr; }
+      .review-shell, .evidence-grid, .evidence-stack, .evidence-stack--full, .review-overview-grid { grid-template-columns: 1fr; }
       .review-overview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .review-sidebar { position: static; }
     }
@@ -969,57 +957,39 @@
       `;
     }
 
-    function renderStatsCompactCell(label, value, toneClass = '') {
-      const display = value == null || value === '' ? '—' : value;
-      return `
-        <div class="stats-compact-cell">
-          <div class="stats-compact-label">${escapeHtml(label)}</div>
-          <div class="stats-compact-value ${escapeHtml(toneClass)}">${escapeHtml(display)}</div>
-        </div>
-      `;
-    }
-
-    function renderStatsCompactGrid(row = {}) {
+    function renderStatsCategoryFields(statsJson, categoryName) {
+      const row = statsJson?.[categoryName] || {};
       const incidentTone = incidentToneClass(row.incidentsPerRace);
       return `
-        <div class="stats-compact-grid">
-          ${renderStatsCompactCell('Starts', row.starts)}
-          ${renderStatsCompactCell('Wins', row.wins)}
-          ${renderStatsCompactCell('Top 5', row.top5)}
-          ${renderStatsCompactCell('Poles', row.poles)}
-          ${renderStatsCompactCell('Avg Start', row.avgStart)}
-          ${renderStatsCompactCell('Avg Finish', row.avgFinish)}
-          ${renderStatsCompactCell('Laps', row.totalLaps)}
-          ${renderStatsCompactCell('Led', row.lapsLed)}
-          ${renderStatsCompactCell('Inc/Race', row.incidentsPerRace, incidentTone)}
-          ${renderStatsCompactCell('Pts/Race', row.pointsPerRace)}
-          ${renderStatsCompactCell('Win %', row.winPercentage)}
-          ${renderStatsCompactCell('Top 5 %', row.top5Percentage)}
+        <div class="stats-metric-grid" id="statsCategoryFields">
+          ${statMetric('STARTS', row.starts)}
+          ${statMetric('WINS', row.wins)}
+          ${statMetric('TOP 5', row.top5)}
+          ${statMetric('POLES', row.poles)}
+          ${statMetric('AVG START', row.avgStart)}
+          ${statMetric('AVG FINISH', row.avgFinish)}
+          ${statMetric('TOTAL LAPS', row.totalLaps)}
+          ${statMetric('LAPS LED', row.lapsLed)}
+          ${statMetric('INC/RACE', row.incidentsPerRace, incidentTone)}
+          ${statMetric('PTS/RACE', row.pointsPerRace)}
+          ${statMetric('WIN %', row.winPercentage)}
+          ${statMetric('TOP 5 %', row.top5Percentage)}
         </div>
       `;
     }
 
-    function renderAllStatsCategories(statsJson) {
-      const categories = Object.keys(statsJson || {});
-      if (!categories.length) {
-        return '<p class="detail-empty">No category stats parsed.</p>';
-      }
+    function bindStatsCategorySelector(snapshot) {
+      const select = document.getElementById('statsCategorySelect');
+      const mount = document.getElementById('statsCategoryMount');
+      if (!select || !mount) return;
 
-      return `
-        <div class="stats-categories-grid">
-          ${categories
-            .map((name) => {
-              const isPrimary = /^Oval$/i.test(name);
-              return `
-                <div class="stats-category-block${isPrimary ? ' is-primary' : ''}">
-                  <h5 class="stats-category-title">${escapeHtml(name)}</h5>
-                  ${renderStatsCompactGrid(statsJson[name])}
-                </div>
-              `;
-            })
-            .join('')}
-        </div>
-      `;
+      const statsJson = normalizeStatsJson(snapshot);
+      const update = () => {
+        mount.innerHTML = renderStatsCategoryFields(statsJson, select.value);
+      };
+
+      select.addEventListener('change', update);
+      update();
     }
 
     function renderSrhMetricGrid(snapshot) {
@@ -1232,19 +1202,38 @@
 
       const statusClass = escapeHtml(snapshot.scrape_status || 'unknown');
       const statsJson = normalizeStatsJson(snapshot);
+      const categories = Object.keys(statsJson);
+      const defaultCategory = categories.includes('Oval')
+        ? 'Oval'
+        : snapshot.category && statsJson[snapshot.category]
+          ? snapshot.category
+          : categories[0] || snapshot.category || 'Oval';
+
+      const categoryOptions = categories.length
+        ? categories
+            .map((name) => {
+              const selected = name === defaultCategory ? ' selected' : '';
+              return `<option value="${escapeHtml(name)}"${selected}>${escapeHtml(name)}</option>`;
+            })
+            .join('')
+        : `<option value="${escapeHtml(defaultCategory)}" selected>${escapeHtml(defaultCategory)}</option>`;
 
       return `
         <div class="snapshot-card snapshot-card--stats">
           <h4>Latest iRacing Stats Snapshot</h4>
           <div class="snapshot-status ${statusClass}">${statusClass.replace(/_/g, ' ')}</div>
-          <div class="stats-meta-grid">
-            <dl class="detail-grid stats-grid">
-              ${detailField('Snapshot Date', formatDate(snapshot.created_at))}
-              ${detailField('Primary Category', snapshot.category || 'Oval')}
-              ${detailField('Review Note', snapshot.scrape_error)}
-            </dl>
+          <dl class="detail-grid stats-grid">
+            ${detailField('Snapshot Date', formatDate(snapshot.created_at))}
+            ${detailField('Primary Category', snapshot.category || 'Oval')}
+            ${detailField('Review Note', snapshot.scrape_error)}
+          </dl>
+          <div class="stats-controls">
+            <div class="stats-control">
+              <label class="field-label" for="statsCategorySelect">Lifetime Stats Category</label>
+              <select id="statsCategorySelect" class="select stats-category-select">${categoryOptions}</select>
+            </div>
           </div>
-          ${renderAllStatsCategories(statsJson)}
+          <div id="statsCategoryMount"></div>
           ${renderYearlyProgressionSection(snapshot)}
         </div>
       `;
@@ -1396,6 +1385,47 @@
       return data;
     }
 
+    async function apiDeleteApplication(id) {
+      const res = await fetch(`/api/settings?action=deleteDriverApplication&id=${encodeURIComponent(id)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: getSessionPw() })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to remove application.');
+      return data;
+    }
+
+    function hasAssignedNumberReservation(numberReservation) {
+      return String(numberReservation?.status || '').toLowerCase() === 'assigned';
+    }
+
+    async function removeSelectedApplication(numberReservation = null) {
+      if (!selectedId) return;
+
+      let message = 'Are you sure you want to remove this application? This cannot be undone.';
+      if (hasAssignedNumberReservation(numberReservation)) {
+        message +=
+          '\n\nThis application has an assigned number. Removing it may affect roster history.';
+      }
+
+      if (!window.confirm(message)) return;
+
+      try {
+        await apiDeleteApplication(selectedId);
+        applications = applications.filter((item) => item.id !== selectedId);
+        selectedId = '';
+        renderStatusTabs();
+        renderApplicationsTable();
+        syncAdminAttention();
+        showApplicationsList();
+        renderApplicationDetail(null);
+        setMsg('Application removed.');
+      } catch (error) {
+        setMsg(error.message, true);
+      }
+    }
+
     function renderApplicationDetail(row, latestSnapshot = null, latestStatsSnapshot = null, latestLookupJob = null, latestSrhSnapshot = null, numberReservation = null) {
       const mount = $('#applicationDetail');
       if (!row) {
@@ -1427,10 +1457,6 @@
             </section>
             ${renderPreferredNumberSection(row, numberReservation)}
             ${renderSrhCareerSection(latestSrhSnapshot)}
-            <div class="evidence-stack">
-              ${renderSnapshotSection(latestSnapshot)}
-              ${renderStatsSnapshotSection(latestStatsSnapshot)}
-            </div>
             <section class="review-card">
               <h4>Application Answers</h4>
               <dl class="detail-grid">
@@ -1468,7 +1494,16 @@
               <h4>Data Status</h4>
               ${renderLookupStatusSection(latestLookupJob, latestSnapshot, latestStatsSnapshot, latestSrhSnapshot)}
             </section>
+            <section class="review-card review-card--danger">
+              <h4>Danger Zone</h4>
+              <p class="danger-zone-hint">Permanently remove this application and related lookup data.</p>
+              <button id="removeApplicationBtn" class="btn btn-danger" type="button">Remove Application</button>
+            </section>
           </aside>
+          <div class="evidence-stack evidence-stack--full">
+            ${renderSnapshotSection(latestSnapshot)}
+            ${renderStatsSnapshotSection(latestStatsSnapshot)}
+          </div>
         </div>
       `;
 
@@ -1477,7 +1512,11 @@
       $('#refreshSrhBtn').addEventListener('click', refreshSelectedSrhCareerData);
       $('#releaseNumberBtn')?.addEventListener('click', releaseSelectedApplicationNumber);
       $('#assignNumberBtn')?.addEventListener('click', assignSelectedApplicationNumber);
+      $('#removeApplicationBtn')?.addEventListener('click', () => {
+        removeSelectedApplication(numberReservation);
+      });
       if (latestStatsSnapshot) {
+        bindStatsCategorySelector(latestStatsSnapshot);
         bindYearlyStatsSelector(latestStatsSnapshot);
       }
     }

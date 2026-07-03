@@ -730,3 +730,56 @@ export async function enqueueIracingLookupJob(applicationId, customerId, reason 
 
   return { ok: true, status: 201, job };
 }
+
+export async function deleteDriverApplication(id) {
+  const sb = supabase();
+  if (!sb) return { ok: false, status: 503, error: 'Supabase not configured yet.' };
+
+  const applicationId = String(id || '').trim();
+  if (!applicationId) {
+    return { ok: false, status: 400, error: 'Application id is required.' };
+  }
+
+  const application = await getDriverApplicationById(applicationId);
+  if (!application) {
+    return { ok: false, status: 404, error: 'Application not found.' };
+  }
+
+  const releaseResult = await releaseReservationForApplication(
+    sb,
+    applicationId,
+    'application_deleted'
+  );
+  if (!releaseResult.ok) {
+    return releaseResult;
+  }
+
+  const { error: reservationError } = await sb
+    .from('driver_number_reservations')
+    .delete()
+    .eq('application_id', applicationId);
+
+  if (reservationError) {
+    const message = String(reservationError.message || '');
+    const missingTable =
+      reservationError.code === '42P01' || /does not exist/i.test(message);
+    if (!missingTable) {
+      return {
+        ok: false,
+        status: 500,
+        error: reservationError.message || 'Failed to clean up number reservation.',
+      };
+    }
+  }
+
+  const { error } = await sb.from('driver_applications').delete().eq('id', applicationId);
+  if (error) {
+    return {
+      ok: false,
+      status: 500,
+      error: error.message || 'Failed to delete application.',
+    };
+  }
+
+  return { ok: true, deletedId: applicationId };
+}

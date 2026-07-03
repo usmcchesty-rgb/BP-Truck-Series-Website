@@ -58,6 +58,7 @@ import {
 } from './_fantasy-slate-progression.js';
 import { getFantasyAuthConfig, getUserFromBearerToken } from './_fantasy-auth.js';
 import {
+  deleteDriverApplication,
   enqueueIracingLookupJob,
   getDriverApplicationById,
   getLatestIracingLookupJobForApplication,
@@ -367,6 +368,29 @@ async function handleDriverApplicationRoutes(req, res) {
       return true;
     } catch (error) {
       res.status(500).json({ error: error.message || 'Failed to assign number.' });
+      return true;
+    }
+  }
+
+  const isDeleteApplication =
+    req.method === 'POST' &&
+    applicationId &&
+    (action === 'deleteDriverApplication' || queryAction === 'deleteDriverApplication');
+  if (isDeleteApplication) {
+    if (!isAdminPasswordValid(req, body)) {
+      res.status(401).json({ error: 'Bad password' });
+      return true;
+    }
+    try {
+      const result = await deleteDriverApplication(applicationId);
+      if (!result.ok) {
+        res.status(result.status).json({ error: result.error });
+        return true;
+      }
+      res.status(200).json({ ok: true, deletedId: result.deletedId, message: 'Application removed.' });
+      return true;
+    } catch (error) {
+      res.status(500).json({ error: error.message || 'Failed to delete application.' });
       return true;
     }
   }
