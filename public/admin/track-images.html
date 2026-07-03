@@ -104,6 +104,33 @@
       .row .grow {
         flex: 1 1 520px;
       }
+      .process-option {
+        margin: 12px 0 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        max-width: 720px;
+      }
+      .process-option label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: #fff;
+        cursor: pointer;
+      }
+      .process-option input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        accent-color: #ff3030;
+        cursor: pointer;
+      }
+      .process-option .hint {
+        margin: 0;
+        font-size: 11px;
+        color: #777;
+        line-height: 1.45;
+      }
       @media (max-width: 800px) {
         .preview-grid {
           grid-template-columns: 1fr;
@@ -139,6 +166,16 @@
         </div>
 
         <input id="file" class="input" type="file" accept="image/png,.png" />
+        <div class="process-option">
+          <label for="whiteTrackNoOutline">
+            <input id="whiteTrackNoOutline" type="checkbox" />
+            White Track (No Outline)
+          </label>
+          <p class="hint">
+            Converts the remaining black track to solid white on a transparent
+            background. No outline or stroke is added.
+          </p>
+        </div>
         <button id="processBtn" class="btn" type="button" disabled>
           Process &amp; Save
         </button>
@@ -166,6 +203,7 @@
       const msg = $("#msg");
       const fileInput = $("#file");
       const processBtn = $("#processBtn");
+      const whiteTrackNoOutline = $("#whiteTrackNoOutline");
       const trackSelect = $("#trackSelect");
       const beforeStage = $("#beforeStage");
       const afterStage = $("#afterStage");
@@ -355,6 +393,11 @@
         setMsg("");
       });
 
+      whiteTrackNoOutline.addEventListener("change", () => {
+        setPreview(afterStage, "", "Processed preview appears here");
+        setMsg("");
+      });
+
       processBtn.addEventListener("click", async () => {
         const file = fileInput.files?.[0];
         if (!file) return;
@@ -388,6 +431,7 @@
               password,
               outputFilename,
               trackName: selectedTrackName,
+              whiteTrackNoOutline: whiteTrackNoOutline.checked,
             }),
           });
 

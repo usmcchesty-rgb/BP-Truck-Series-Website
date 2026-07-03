@@ -28,7 +28,9 @@ function dilateMask(mask, width, height, radius) {
   return out;
 }
 
-export async function processTrackPng(inputBuffer) {
+export async function processTrackPng(inputBuffer, options = {}) {
+  const whiteTrackNoOutline = options.whiteTrackNoOutline === true;
+
   const { data, info } = await sharp(inputBuffer)
     .ensureAlpha()
     .raw()
@@ -40,38 +42,66 @@ export async function processTrackPng(inputBuffer) {
   }
 
   const out = Buffer.alloc(data.length);
-  const trackMask = new Uint8Array(width * height);
 
-  for (let i = 0; i < width * height; i++) {
-    const o = i * 4;
-    const r = data[o];
-    const g = data[o + 1];
-    const b = data[o + 2];
+  if (whiteTrackNoOutline) {
+    for (let i = 0; i < width * height; i++) {
+      const o = i * 4;
+      const r = data[o];
+      const g = data[o + 1];
+      const b = data[o + 2];
+      const srcAlpha = data[o + 3];
 
-    if (isWhitePixel(r, g, b)) {
-      out[o] = 0;
-      out[o + 1] = 0;
-      out[o + 2] = 0;
-      out[o + 3] = 0;
-    } else {
-      out[o] = r;
-      out[o + 1] = g;
-      out[o + 2] = b;
-      out[o + 3] = 255;
-      trackMask[i] = 1;
+      if (isWhitePixel(r, g, b)) {
+        out[o] = 0;
+        out[o + 1] = 0;
+        out[o + 2] = 0;
+        out[o + 3] = 0;
+      } else {
+        const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+        const opacity = Math.min(
+          255,
+          Math.round((1 - luminance / WHITE_THRESHOLD) * 255),
+        );
+        out[o] = 255;
+        out[o + 1] = 255;
+        out[o + 2] = 255;
+        out[o + 3] = Math.round((opacity * srcAlpha) / 255);
+      }
     }
-  }
+  } else {
+    const trackMask = new Uint8Array(width * height);
 
-  const dilated = dilateMask(trackMask, width, height, STROKE_RADIUS);
+    for (let i = 0; i < width * height; i++) {
+      const o = i * 4;
+      const r = data[o];
+      const g = data[o + 1];
+      const b = data[o + 2];
 
-  for (let i = 0; i < width * height; i++) {
-    if (trackMask[i]) continue;
-    if (!dilated[i]) continue;
-    const o = i * 4;
-    out[o] = 255;
-    out[o + 1] = 255;
-    out[o + 2] = 255;
-    out[o + 3] = 255;
+      if (isWhitePixel(r, g, b)) {
+        out[o] = 0;
+        out[o + 1] = 0;
+        out[o + 2] = 0;
+        out[o + 3] = 0;
+      } else {
+        out[o] = r;
+        out[o + 1] = g;
+        out[o + 2] = b;
+        out[o + 3] = 255;
+        trackMask[i] = 1;
+      }
+    }
+
+    const dilated = dilateMask(trackMask, width, height, STROKE_RADIUS);
+
+    for (let i = 0; i < width * height; i++) {
+      if (trackMask[i]) continue;
+      if (!dilated[i]) continue;
+      const o = i * 4;
+      out[o] = 255;
+      out[o + 1] = 255;
+      out[o + 2] = 255;
+      out[o + 3] = 255;
+    }
   }
 
   return sharp(out, { raw: { width, height, channels: 4 } })

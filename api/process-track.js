@@ -79,7 +79,8 @@ export default async function handler(req, res) {
       return;
     }
 
-    const processed = await processTrackPng(uploadBuffer);
+    const whiteTrackNoOutline = body.whiteTrackNoOutline === true;
+    const processed = await processTrackPng(uploadBuffer, { whiteTrackNoOutline });
     const saved = await saveTrackImage(processed, filename);
 
     json(res, 200, {
