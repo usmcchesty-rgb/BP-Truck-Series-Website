@@ -68,26 +68,45 @@ async function findExistingDriverProfileForApplication(sb, application) {
 
   if (customerId) {
     const byCustomerId = await findProfileByExactField(sb, 'iracing_customer_id', customerId);
-    if (byCustomerId) return byCustomerId;
+    if (byCustomerId) return { profile: byCustomerId, matchedBy: 'iracing_customer_id' };
 
     const byDriverId = await findProfileByExactField(sb, 'driver_id', customerId);
-    if (byDriverId) return byDriverId;
+    if (byDriverId) return { profile: byDriverId, matchedBy: 'driver_id' };
   }
 
   if (displayName) {
     const byIracingName = await findProfileByExactField(sb, 'iracing_name', displayName);
-    if (byIracingName) return byIracingName;
+    if (byIracingName) return { profile: byIracingName, matchedBy: 'iracing_display_name' };
 
     const byDisplayName = await findProfileByExactField(sb, 'display_name', displayName);
-    if (byDisplayName) return byDisplayName;
+    if (byDisplayName) return { profile: byDisplayName, matchedBy: 'iracing_display_name' };
   }
 
   if (applicationId) {
     const byApplicationId = await findProfileByExactField(sb, 'source_application_id', applicationId);
-    if (byApplicationId) return byApplicationId;
+    if (byApplicationId) return { profile: byApplicationId, matchedBy: 'source_application_id' };
   }
 
-  return null;
+  return { profile: null, matchedBy: null };
+}
+
+function buildSyncLogEntry(application, match, result) {
+  const customerId = normalizeCustomerId(application?.iracing_customer_id);
+  return {
+    application:
+      normalizeExactDisplayName(application?.iracing_display_name) ||
+      normalizeOptionalText(application?.driver_name) ||
+      String(application?.id || ''),
+    application_id: application?.id || null,
+    customer_id: customerId || null,
+    matched_existing_profile: match.profile
+      ? `${match.profile.driver_id}${match.matchedBy ? ` (${match.matchedBy})` : ''}`
+      : 'No',
+    action: result.action,
+    reason: result.reason || '',
+    driver_id: result.driverProfile?.driver_id || match.profile?.driver_id || null,
+    error: result.error || null,
+  };
 }
 
 async function resolveApprovedCarNumber(sb, application) {
@@ -154,6 +173,8 @@ async function updateExistingDriverProfileFromApplication(sb, existing, applicat
     if (error.code === '23505') {
       return {
         ok: false,
+        action: 'Error',
+        reason: 'Cannot link this iRacing Customer ID — it is already assigned to another driver profile.',
         status: 409,
         error:
           'Cannot link this iRacing Customer ID — it is already assigned to another driver profile.',
@@ -161,6 +182,8 @@ async function updateExistingDriverProfileFromApplication(sb, existing, applicat
     }
     return {
       ok: false,
+      action: 'Error',
+      reason: error.message || 'Driver profile update failed.',
       status: 500,
       error: error.message || 'Application approved, but driver profile update failed.',
     };
@@ -168,6 +191,8 @@ async function updateExistingDriverProfileFromApplication(sb, existing, applicat
 
   return {
     ok: true,
+    action: 'Updated',
+    reason: 'Matched existing driver profile and updated application fields.',
     driverProfile: data,
     driverProfileAction: 'updated',
     message: 'Existing driver updated',
@@ -176,8 +201,12 @@ async function updateExistingDriverProfileFromApplication(sb, existing, applicat
 
 async function createDriverProfileFromApplication(sb, application, carNumber, now) {
   const customerId = normalizeCustomerId(application?.iracing_customer_id);
+  const displayName = String(
+    application.iracing_display_name || application.driver_name || `Driver ${customerId}`
+  ).trim();
   const row = {
     driver_id: customerId,
+    iracing_name: displayName,
     ...buildApplicationDriverProfilePatch(application, carNumber, now),
   };
 
@@ -185,18 +214,28 @@ async function createDriverProfileFromApplication(sb, application, carNumber, no
 
   if (error) {
     if (error.code === '23505') {
-      const existing = await findExistingDriverProfileForApplication(sb, application);
-      if (existing) {
-        return updateExistingDriverProfileFromApplication(sb, existing, application, carNumber, now);
+      const match = await findExistingDriverProfileForApplication(sb, application);
+      if (match.profile) {
+        return updateExistingDriverProfileFromApplication(
+          sb,
+          match.profile,
+          application,
+          carNumber,
+          now
+        );
       }
       return {
         ok: false,
+        action: 'Error',
+        reason: 'Driver profile already exists for this iRacing Customer ID.',
         status: 409,
         error: 'Driver profile already exists for this iRacing Customer ID.',
       };
     }
     return {
       ok: false,
+      action: 'Error',
+      reason: error.message || 'Driver profile creation failed.',
       status: 500,
       error: error.message || 'Application approved, but driver profile creation failed.',
     };
@@ -204,36 +243,104 @@ async function createDriverProfileFromApplication(sb, application, carNumber, no
 
   return {
     ok: true,
+    action: 'Created',
+    reason: 'No existing driver profile found; created a new profile.',
     driverProfile: data,
     driverProfileAction: 'created',
     message: 'Driver created',
   };
 }
 
-async function promoteApprovedApplicationToDriverProfile(sb, application) {
+export async function syncApplicationToDriverProfile(sb, application, options = {}) {
   const customerId = normalizeCustomerId(application?.iracing_customer_id);
+  const enforceNumberCheck = options.enforceNumberCheck !== false;
+
   if (!customerId) {
-    return { ok: false, status: 400, error: 'Approved application is missing an iRacing Customer ID.' };
+    return {
+      ok: false,
+      action: 'Skipped',
+      reason: 'Missing iRacing Customer ID.',
+      status: 400,
+      error: 'Approved application is missing an iRacing Customer ID.',
+    };
   }
 
   const carNumber = await resolveApprovedCarNumber(sb, application);
-  if (carNumber) {
+  if (carNumber && enforceNumberCheck) {
     const numberCheck = await assertNumberAvailableForApplication(
       sb,
       carNumber,
       customerId,
       application.id
     );
-    if (!numberCheck.ok) return numberCheck;
+    if (!numberCheck.ok) {
+      return {
+        ok: false,
+        action: 'Error',
+        reason: numberCheck.error || 'Number is not available.',
+        status: numberCheck.status || 409,
+        error: numberCheck.error,
+      };
+    }
   }
 
   const now = new Date().toISOString();
-  const existing = await findExistingDriverProfileForApplication(sb, application);
-  if (existing) {
-    return updateExistingDriverProfileFromApplication(sb, existing, application, carNumber, now);
+  const match = await findExistingDriverProfileForApplication(sb, application);
+  if (match.profile) {
+    return updateExistingDriverProfileFromApplication(
+      sb,
+      match.profile,
+      application,
+      carNumber,
+      now
+    );
   }
 
   return createDriverProfileFromApplication(sb, application, carNumber, now);
+}
+
+async function promoteApprovedApplicationToDriverProfile(sb, application, options = {}) {
+  return syncApplicationToDriverProfile(sb, application, options);
+}
+
+export async function syncApprovedApplicationsToDriverProfiles() {
+  const sb = supabase();
+  if (!sb) throw new Error('Supabase not configured yet.');
+
+  const { data, error } = await sb
+    .from('driver_applications')
+    .select('*')
+    .eq('status', 'approved')
+    .order('created_at', { ascending: true });
+
+  if (error) throw new Error(error.message || 'Failed to load approved applications.');
+
+  const applications = data || [];
+  const summary = { created: 0, updated: 0, skipped: 0, errors: 0 };
+  const results = [];
+
+  for (const application of applications) {
+    const match = await findExistingDriverProfileForApplication(sb, application);
+    const syncResult = await syncApplicationToDriverProfile(sb, application, {
+      enforceNumberCheck: false,
+    });
+    const logEntry = buildSyncLogEntry(application, match, syncResult);
+    results.push(logEntry);
+
+    const action = String(syncResult.action || '').toLowerCase();
+    if (!syncResult.ok) summary.errors += 1;
+    else if (action === 'created') summary.created += 1;
+    else if (action === 'updated') summary.updated += 1;
+    else if (action === 'skipped') summary.skipped += 1;
+    else summary.errors += 1;
+  }
+
+  return {
+    ok: true,
+    summary,
+    results,
+    total: applications.length,
+  };
 }
 
 function isValidApplicationEmail(value) {
@@ -482,7 +589,11 @@ export async function updateDriverApplication(id, patch = {}) {
     return { ok: false, status: 404, error: 'Application not found.' };
   }
 
-  if (update.status === 'approved') {
+  const wasApproved = String(existing.status || '').trim().toLowerCase() === 'approved';
+  const transitioningToApproved =
+    update.status === 'approved' && !wasApproved;
+
+  if (transitioningToApproved) {
     const approvedCarNumber = await resolveApprovedCarNumber(sb, existing);
     if (approvedCarNumber) {
       const numberCheck = await assertNumberAvailableForApplication(
@@ -509,18 +620,34 @@ export async function updateDriverApplication(id, patch = {}) {
   const reservationSync = await syncReservationForApplicationStatus(sb, data, existing.status);
   if (!reservationSync.ok) return reservationSync;
 
-  if (data.status === 'approved') {
-    const promoteResult = await promoteApprovedApplicationToDriverProfile(sb, data);
+  const isApproved = String(data.status || '').trim().toLowerCase() === 'approved';
+  if (isApproved) {
+    const match = await findExistingDriverProfileForApplication(sb, data);
+    const promoteResult = await promoteApprovedApplicationToDriverProfile(sb, data, {
+      enforceNumberCheck: transitioningToApproved,
+    });
     if (!promoteResult.ok) {
-      await releaseReservationForApplication(sb, data.id, 'approval_rollback');
-      return promoteResult;
+      if (transitioningToApproved) {
+        await releaseReservationForApplication(sb, data.id, 'approval_rollback');
+      }
+      return {
+        ok: false,
+        status: promoteResult.status || 400,
+        error: promoteResult.error,
+        sync_log: buildSyncLogEntry(data, match, promoteResult),
+      };
     }
-    const assignResult = await assignReservationForApplication(
-      sb,
-      data,
-      normalizeCustomerId(data.iracing_customer_id)
-    );
-    if (!assignResult.ok) return assignResult;
+
+    let assignResult = { ok: true, reservation: null };
+    if (transitioningToApproved) {
+      assignResult = await assignReservationForApplication(
+        sb,
+        data,
+        normalizeCustomerId(data.iracing_customer_id)
+      );
+      if (!assignResult.ok) return assignResult;
+    }
+
     return {
       ok: true,
       status: 200,
@@ -528,6 +655,7 @@ export async function updateDriverApplication(id, patch = {}) {
       driver_profile: promoteResult.driverProfile,
       driver_profile_action: promoteResult.driverProfileAction || null,
       message: promoteResult.message || null,
+      sync_log: buildSyncLogEntry(data, match, promoteResult),
       number_reservation: assignResult.reservation || null,
     };
   }

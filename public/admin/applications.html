@@ -33,6 +33,7 @@
     .applications-tab:hover { color: #fff; border-color: #666; }
     .applications-tab.is-active { color: #fff; background: linear-gradient(#d40000, #680000); border-color: #ff2424; }
     .applications-toolbar { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: end; margin: 0 0 14px; }
+    .applications-toolbar-actions { margin: 0 0 14px; }
     .applications-sort-controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
     .applications-sort-controls .field-label { margin: 0 0 4px; }
     .applications-sort-select { width: auto; min-width: 160px; margin-bottom: 0; }
@@ -175,6 +176,9 @@
   <main id="adminView" class="wrap" hidden>
     <h1>Applications Received</h1>
     <p class="sub">Review submitted Join Blazing Pedals applications, update status, and leave internal admin notes.</p>
+    <div class="btn-row applications-toolbar-actions">
+      <button id="syncApprovedDriversBtn" class="btn btn-secondary" type="button">Sync Approved Drivers</button>
+    </div>
 
     <div class="applications-layout">
       <section id="applicationsListPanel" class="panel">
@@ -356,6 +360,49 @@
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load applications.');
       return data.applications || [];
+    }
+
+    async function apiSyncApprovedDrivers() {
+      const res = await fetch('/api/settings?action=syncApprovedDrivers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: getSessionPw() })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to sync approved drivers.');
+      return data;
+    }
+
+    function formatSyncApprovedDriversSummary(data) {
+      const summary = data.summary || {};
+      const lines = [
+        `Created: ${summary.created ?? 0}`,
+        `Updated: ${summary.updated ?? 0}`,
+        `Skipped: ${summary.skipped ?? 0}`,
+        `Errors: ${summary.errors ?? 0}`,
+      ];
+      const details = Array.isArray(data.results)
+        ? data.results.map((row) =>
+            [
+              `Application: ${row.application || '—'}`,
+              `Customer ID: ${row.customer_id || '—'}`,
+              `Matched existing profile: ${row.matched_existing_profile || 'No'}`,
+              `Action: ${row.action || '—'}`,
+              `Reason: ${row.reason || row.error || '—'}`,
+            ].join('\n')
+          )
+        : [];
+      return `${lines.join('\n')}${details.length ? `\n\n${details.join('\n\n')}` : ''}`;
+    }
+
+    async function syncApprovedDrivers() {
+      setMsg('Syncing approved applications to driver profiles...');
+      try {
+        const data = await apiSyncApprovedDrivers();
+        setMsg(formatSyncApprovedDriversSummary(data));
+      } catch (error) {
+        setMsg(error.message, true);
+      }
     }
 
     async function apiPatchApplication(id, payload) {
@@ -1520,7 +1567,10 @@
         renderApplicationsTable();
         syncAdminAttention();
         await loadApplicationDetail();
-        setMsg(result.message || 'Application updated.');
+        const syncNote = result.sync_log
+          ? ` (${result.sync_log.action}: ${result.sync_log.matched_existing_profile})`
+          : '';
+        setMsg((result.message || 'Application updated.') + syncNote);
       } catch (error) {
         setMsg(error.message, true);
       }
@@ -1554,6 +1604,7 @@
       if (event.key === 'Enter') login();
     });
     $('#backToApplicationsBtn')?.addEventListener('click', showApplicationsList);
+    $('#syncApprovedDriversBtn')?.addEventListener('click', syncApprovedDrivers);
 
     initSession();
   </script>

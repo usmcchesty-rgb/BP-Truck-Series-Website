@@ -63,6 +63,7 @@ import {
   getLatestIracingLookupJobForApplication,
   listDriverApplications,
   submitDriverApplication,
+  syncApprovedApplicationsToDriverProfiles,
   updateDriverApplication,
 } from './_driver-applications.js';
 import { stripPrivateDriverProfileFields } from './drivers.js';
@@ -160,6 +161,24 @@ async function handleDriverApplicationRoutes(req, res) {
     }
   }
 
+  if (
+    req.method === 'POST' &&
+    (action === 'syncApprovedDrivers' || queryAction === 'syncApprovedDrivers')
+  ) {
+    if (!isAdminPasswordValid(req, body)) {
+      res.status(401).json({ error: 'Bad password' });
+      return true;
+    }
+    try {
+      const result = await syncApprovedApplicationsToDriverProfiles();
+      res.status(200).json(result);
+      return true;
+    } catch (error) {
+      res.status(500).json({ error: error.message || 'Failed to sync approved drivers.' });
+      return true;
+    }
+  }
+
   const applicationId = String(req.query?.id || body.id || '').trim();
   const isApplicationDetailGet =
     req.method === 'GET' &&
@@ -229,6 +248,7 @@ async function handleDriverApplicationRoutes(req, res) {
         driver_profile: stripPrivateDriverProfileFields(result.driver_profile || null),
         driver_profile_action: result.driver_profile_action || null,
         message: result.message || null,
+        sync_log: result.sync_log || null,
         number_reservation: result.number_reservation || null,
       });
       return true;

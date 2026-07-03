@@ -475,8 +475,11 @@
 
     function buildDriverList(standingsRows, profiles) {
       const byId = Object.fromEntries(profiles.map((p) => [String(p.driver_id), p]));
-      return standingsRows.map((row) => {
+      const usedProfileIds = new Set();
+
+      const list = standingsRows.map((row) => {
         const profile = byId[String(row.driverId)] || null;
+        if (profile) usedProfileIds.add(String(profile.driver_id));
         return {
           driver_id: String(row.driverId),
           iracing_customer_id: profile?.iracing_customer_id || profile?.iracingCustomerId || String(row.driverId || ''),
@@ -493,6 +496,33 @@
           active: profile?.active !== false
         };
       });
+
+      for (const profile of profiles) {
+        const driverId = String(profile.driver_id || '').trim();
+        if (!driverId || usedProfileIds.has(driverId)) continue;
+        usedProfileIds.add(driverId);
+        list.push({
+          driver_id: driverId,
+          iracing_customer_id: profile.iracing_customer_id || profile.iracingCustomerId || '',
+          iracing_name: profile.iracing_name || profile.display_name || 'Unknown Driver',
+          display_name: profile.display_name || profile.iracing_name || 'Unknown Driver',
+          form_email: profile.form_email || profile.formEmail || '',
+          car_number: profile.car_number || '',
+          photo_url: profile.photo_url || '',
+          date_of_birth: profile.date_of_birth || profile.dateOfBirth || '',
+          hometown: profile.hometown || '',
+          team: profile.team || '',
+          is_streamer: profile.is_streamer === true,
+          stream_url: profile.stream_url || '',
+          active: profile.active !== false
+        });
+      }
+
+      return list.sort((a, b) =>
+        String(a.display_name || a.iracing_name || '').localeCompare(
+          String(b.display_name || b.iracing_name || '')
+        )
+      );
     }
 
     function rowInput(rowEl, name) {
