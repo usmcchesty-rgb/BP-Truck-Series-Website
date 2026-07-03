@@ -21,6 +21,7 @@ import {
 import {
   countLineupsForSlate,
   getFantasyAdminSubmittedLineups,
+  resolveAdminSubmittedLineupsSlate,
   getFantasyLaunchDashboard,
   getFantasyPublicStandings,
   getUserLineupForCurrentSlate,
@@ -792,11 +793,8 @@ export default async function handler(req, res) {
         : await loadFantasyDraftSlate(seasonId);
       const publishedPayload = await loadLatestFantasySlate(seasonId);
       const progression = await resolveFantasySlateProgression(seasonId);
-      const countSlateId =
-        progression.activeSlateRow?.id ||
-        progression.archivedSlateRow?.id ||
-        publishedPayload?.slate?.id ||
-        null;
+      const submittedLineupsSlate = await resolveAdminSubmittedLineupsSlate(seasonId);
+      const countSlateId = submittedLineupsSlate.slateRow?.id ?? null;
       const lineupCount = countSlateId ? await countLineupsForSlate(countSlateId) : 0;
       let lockPreview = null;
       if (payload?.slate?.race_number) {
@@ -809,7 +807,11 @@ export default async function handler(req, res) {
       }
       return res.status(200).json({
         slate: payload?.slate || null,
-        publishedSlate: progression.archivedSlateRow || progression.activeSlateRow || publishedPayload?.slate || null,
+        publishedSlate:
+          progression.activeSlateRow ||
+          progression.archivedSlateRow ||
+          publishedPayload?.slate ||
+          null,
         activePlayableSlate: progression.activeSlateRow,
         completedPublishedSlate: progression.archivedSlateRow,
         progression: buildFantasyProgressionMeta(progression),
@@ -821,6 +823,7 @@ export default async function handler(req, res) {
             }
           : null,
         lineupCount,
+        submittedLineupsSelection: submittedLineupsSlate.selection,
         lockPreview,
       });
     } catch (error) {
@@ -836,7 +839,11 @@ export default async function handler(req, res) {
         body.slateId != null && Number.isFinite(Number(body.slateId))
           ? Number(body.slateId)
           : null;
-      const result = await getFantasyAdminSubmittedLineups(seasonId, slateId);
+      const raceNumber =
+        body.raceNumber != null && Number.isFinite(Number(body.raceNumber))
+          ? Number(body.raceNumber)
+          : null;
+      const result = await getFantasyAdminSubmittedLineups(seasonId, { slateId, raceNumber });
       return res.status(200).json(result);
     } catch (error) {
       return res.status(500).json({ error: error.message || 'Failed to load submitted lineups.' });

@@ -417,33 +417,105 @@ export async function getFantasyPublicStandings(seasonId) {
   };
 }
 
-export async function getFantasyAdminSubmittedLineups(seasonId, slateId = null) {
-  let targetSlateId = slateId != null ? Number(slateId) : null;
+async function loadPublishedSlateForRace(seasonId, raceNumber) {
+  const sb = supabase();
+  if (!sb || raceNumber == null) return null;
+
+  const { data, error } = await sb
+    .from('fantasy_slates')
+    .select('*')
+    .eq('season_id', String(seasonId))
+    .eq('race_number', Number(raceNumber))
+    .eq('status', 'published')
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return data;
+}
+
+function normalizeSubmittedLineupsOptions(options = null) {
+  if (typeof options === 'number' || options === null || options === undefined) {
+    return { slateId: options ?? null };
+  }
+  return {
+    slateId:
+      options.slateId != null && Number.isFinite(Number(options.slateId))
+        ? Number(options.slateId)
+        : null,
+    raceNumber:
+      options.raceNumber != null && Number.isFinite(Number(options.raceNumber))
+        ? Number(options.raceNumber)
+        : null,
+  };
+}
+
+export async function resolveAdminSubmittedLineupsSlate(seasonId, options = {}) {
+  const opts = normalizeSubmittedLineupsOptions(options);
+  const progression = await resolveFantasySlateProgression(seasonId, opts);
+
   let slateRow = null;
-  let progression = null;
+  let source = 'none';
 
-  if (targetSlateId) {
-    slateRow = await loadSlateById(targetSlateId);
-  } else {
-    progression = await resolveFantasySlateProgression(seasonId);
-    slateRow =
-      progression.archivedSlateRow ||
-      progression.activeSlateRow ||
-      progression.displaySlateRow;
-    targetSlateId = slateRow?.id ?? null;
+  if (opts.slateId) {
+    slateRow = await loadSlateById(opts.slateId);
+    source = 'requested';
+  } else if (opts.raceNumber != null) {
+    slateRow = await loadPublishedSlateForRace(seasonId, opts.raceNumber);
+    source = 'requested';
+  } else if (progression.activeSlateRow?.id) {
+    slateRow = progression.activeSlateRow;
+    source = 'active';
+  } else if (progression.archivedSlateRow?.id) {
+    slateRow = progression.archivedSlateRow;
+    source = 'archived';
   }
 
-  if (!targetSlateId || !slateRow) {
-    return { slate: null, lineups: [], lineupCount: 0, progression: buildFantasyProgressionMeta(progression || {}) };
-  }
+  const selectedSlatePhase =
+    source === 'active'
+      ? 'active'
+      : source === 'archived'
+        ? 'race-complete'
+        : slateRow &&
+            isFantasyRaceComplete(progression.scheduleRaces, slateRow.race_number)
+          ? 'race-complete'
+          : progression.slatePhase;
 
-  if (!progression) {
-    progression = await resolveFantasySlateProgression(seasonId);
+  const selection = {
+    selectedSlateId: slateRow?.id ?? null,
+    selectedRaceNumber: slateRow?.race_number ?? null,
+    selectedSlatePhase,
+    selectedTrack: slateRow?.track ?? null,
+    source,
+    activeSlateId: progression.activeSlateRow?.id ?? null,
+    activeRaceNumber: progression.activeSlateRow?.race_number ?? null,
+    activeTrack: progression.activeSlateRow?.track ?? null,
+    archivedSlateId: progression.archivedSlateRow?.id ?? null,
+    archivedRaceNumber: progression.archivedSlateRow?.race_number ?? null,
+    archivedTrack: progression.archivedSlateRow?.track ?? null,
+  };
+
+  return { progression, slateRow, selection };
+}
+
+export async function getFantasyAdminSubmittedLineups(seasonId, options = {}) {
+  const { progression, slateRow, selection } = await resolveAdminSubmittedLineupsSlate(
+    seasonId,
+    options,
+  );
+
+  if (!slateRow?.id) {
+    return {
+      slate: null,
+      lineups: [],
+      lineupCount: 0,
+      progression: buildFantasyProgressionMeta(progression),
+      selection,
+    };
   }
 
   const raceComplete = isFantasyRaceComplete(progression.scheduleRaces, slateRow.race_number);
   const lock = parseLockState(slateRow, { raceComplete });
-  const lineups = await listSubmittedLineupsForSlate(targetSlateId);
+  const lineups = await listSubmittedLineupsForSlate(slateRow.id);
 
   return {
     slate: {
@@ -455,12 +527,13 @@ export async function getFantasyAdminSubmittedLineups(seasonId, slateId = null) 
       lockTime: slateRow.lock_time || null,
       publishedAt: slateRow.published_at || null,
       raceComplete,
-      slatePhase: raceComplete ? 'race-complete' : progression.slatePhase,
+      slatePhase: raceComplete ? 'race-complete' : selection.selectedSlatePhase,
       ...lock,
     },
     lineups,
     lineupCount: lineups.length,
     progression: buildFantasyProgressionMeta(progression),
+    selection,
   };
 }
 

@@ -581,8 +581,12 @@
           <div class="admin-card">
             <div class="admin-card-title">Fantasy Status</div>
             <div class="admin-kv">
-              <div class="admin-k">Published slate</div>
-              <div class="admin-v" id="fantasyPublishedSlateSummary">—</div>
+              <div class="admin-k">Active slate</div>
+              <div class="admin-v" id="fantasyActiveSlateSummary">—</div>
+            </div>
+            <div class="admin-kv" id="fantasyArchivedSlateRow" hidden>
+              <div class="admin-k">Archived slate</div>
+              <div class="admin-v" id="fantasyArchivedSlateSummary">—</div>
             </div>
             <div class="admin-kv">
               <div class="admin-k">Slate phase</div>
@@ -597,8 +601,16 @@
               <div class="admin-v" id="fantasyPublishedLockTime">—</div>
             </div>
             <div class="admin-kv">
+              <div class="admin-k">Submitted lineups view</div>
+              <div class="admin-v" id="fantasySubmittedLineupsSlateSummary">—</div>
+            </div>
+            <div class="admin-kv">
               <div class="admin-k">Submitted lineups</div>
               <div class="admin-v" id="fantasySubmittedLineupCount">—</div>
+            </div>
+            <div class="admin-kv">
+              <div class="admin-k">Lineups slate debug</div>
+              <div class="admin-v admin-v--mono" id="fantasySubmittedLineupsDebug">—</div>
             </div>
             <div class="admin-kv">
               <div class="admin-k">Backend</div>
@@ -609,7 +621,7 @@
 
           <!-- Submitted Lineups -->
           <div class="admin-card admin-card--full">
-            <div class="admin-card-title">Submitted Lineups</div>
+            <div class="admin-card-title" id="fantasySubmittedLineupsTitle">Submitted Lineups</div>
             <span class="field-help">Read-only view of player entries for the current published slate. Admins cannot edit player lineups.</span>
             <div class="fantasy-generate-row">
               <button id="reloadSubmittedLineupsBtn" class="btn btn-secondary" type="button">Reload Submitted Lineups</button>
@@ -1013,6 +1025,91 @@
         const date = new Date(value);
         if (Number.isNaN(date.getTime())) return String(value);
         return date.toLocaleString();
+      }
+
+      function formatFantasySlateLabel(raceNumber, track, options = {}) {
+        if (raceNumber == null || raceNumber === '') return 'No published slate';
+        const archivedSuffix =
+          options.archived || options.source === 'archived' ? ' (archived — race complete)' : '';
+        return `Race ${raceNumber} — ${track || 'TBD'}${archivedSuffix}`;
+      }
+
+      function formatSubmittedLineupsDebug(selection = {}) {
+        const parts = [
+          `source=${selection.source || 'none'}`,
+          `selectedSlateId=${selection.selectedSlateId ?? '—'}`,
+          `selectedRaceNumber=${selection.selectedRaceNumber ?? '—'}`,
+          `selectedSlatePhase=${selection.selectedSlatePhase || '—'}`,
+        ];
+        if (selection.activeRaceNumber != null) {
+          parts.push(`activeRace=${selection.activeRaceNumber}`);
+        }
+        if (selection.archivedRaceNumber != null) {
+          parts.push(`archivedRace=${selection.archivedRaceNumber}`);
+        }
+        return parts.join(' · ');
+      }
+
+      function renderSubmittedLineupsSelection(selection = {}, slate = null) {
+        const titleEl = $('#fantasySubmittedLineupsTitle');
+        const summaryEl = $('#fantasySubmittedLineupsSlateSummary');
+        const debugEl = $('#fantasySubmittedLineupsDebug');
+        const raceNumber = slate?.raceNumber ?? slate?.race_number ?? selection.selectedRaceNumber;
+        const track = slate?.track ?? selection.selectedTrack;
+        const label = formatFantasySlateLabel(raceNumber, track, {
+          archived: selection.source === 'archived',
+          source: selection.source,
+        });
+
+        if (titleEl) {
+          titleEl.textContent = raceNumber
+            ? `Submitted Lineups — ${label}`
+            : 'Submitted Lineups';
+        }
+        if (summaryEl) {
+          summaryEl.textContent = raceNumber ? label : 'No published slate';
+        }
+        if (debugEl) {
+          debugEl.textContent = formatSubmittedLineupsDebug(selection);
+        }
+      }
+
+      function renderFantasyStatusSlates(data = {}) {
+        const activeSlate = data.activePlayableSlate || null;
+        const archivedSlate = data.completedPublishedSlate || null;
+        const activeSummaryEl = $('#fantasyActiveSlateSummary');
+        const archivedRowEl = $('#fantasyArchivedSlateRow');
+        const archivedSummaryEl = $('#fantasyArchivedSlateSummary');
+
+        if (activeSummaryEl) {
+          activeSummaryEl.textContent = activeSlate?.race_number
+            ? formatFantasySlateLabel(activeSlate.race_number, activeSlate.track)
+            : 'No active published slate';
+        }
+
+        const showArchived =
+          archivedSlate?.race_number &&
+          archivedSlate.race_number !== activeSlate?.race_number;
+        if (archivedRowEl) {
+          archivedRowEl.hidden = !showArchived;
+        }
+        if (archivedSummaryEl) {
+          archivedSummaryEl.textContent = showArchived
+            ? formatFantasySlateLabel(archivedSlate.race_number, archivedSlate.track, {
+                archived: true,
+              })
+            : '—';
+        }
+
+        renderSubmittedLineupsSelection(
+          data.submittedLineupsSelection || {},
+          data.submittedLineupsSelection?.selectedRaceNumber
+            ? {
+                raceNumber: data.submittedLineupsSelection.selectedRaceNumber,
+                track: data.submittedLineupsSelection.selectedTrack,
+              }
+            : null,
+        );
       }
 
       function getTrackHistoryDisplayContext(driver) {
@@ -1678,21 +1775,16 @@
 
           if (countEl) countEl.textContent = String(data.lineupCount ?? 0);
 
-          const publishedSummaryEl = $('#fantasyPublishedSlateSummary');
           const publishedPhaseEl = $('#fantasyPublishedSlatePhase');
           const nextRaceEl = $('#fantasyNextRaceSummary');
           const publishedLockEl = $('#fantasyPublishedLockTime');
-          const published = data.publishedSlate || data.completedPublishedSlate;
+          const activeSlate = data.activePlayableSlate || null;
           const progression = data.progression || {};
-          if (publishedSummaryEl) {
-            publishedSummaryEl.textContent = published?.race_number
-              ? `Race ${published.race_number} — ${published.track || 'TBD'} (${published.status || 'published'})`
-              : 'No published slate';
-          }
+          renderFantasyStatusSlates(data);
           if (publishedPhaseEl) {
-            if (progression.slatePhase === 'race-complete' || data.completedPublishedSlate) {
+            if (progression.slatePhase === 'race-complete' && !activeSlate) {
               publishedPhaseEl.textContent = 'Race complete — scoring pending';
-            } else if (progression.isPlayable) {
+            } else if (progression.isPlayable || activeSlate) {
               publishedPhaseEl.textContent = 'Active — accepting lineups';
             } else if (progression.hasUpcomingRaceWithoutSlate) {
               publishedPhaseEl.textContent = 'Next race slate not published yet';
@@ -1706,7 +1798,8 @@
               : 'Schedule unavailable';
           }
           if (publishedLockEl) {
-            publishedLockEl.textContent = published?.lock_time || published?.lock_at || 'Not set';
+            const lockSlate = activeSlate || data.publishedSlate || null;
+            publishedLockEl.textContent = lockSlate?.lock_time || lockSlate?.lock_at || 'Not set';
           }
 
           const slate = data.slate;
@@ -1751,6 +1844,14 @@
           if (!res.ok) throw new Error(data.error || 'Could not load submitted lineups.');
 
           const lineups = Array.isArray(data.lineups) ? data.lineups : [];
+          renderSubmittedLineupsSelection(data.selection || {}, data.slate);
+          const slateLabel = data.slate
+            ? formatFantasySlateLabel(
+                data.slate.raceNumber ?? data.slate.race_number,
+                data.slate.track,
+                { source: data.selection?.source },
+              )
+            : '';
           if (!lineups.length) {
             safeSetInnerHtml(
               body,
@@ -1781,7 +1882,7 @@
 
           if (statusEl) {
             statusEl.textContent = data.slate
-              ? `${lineups.length} lineup(s) for Race ${data.slate.raceNumber ?? data.slate.race_number ?? ''}.`
+              ? `${lineups.length} lineup(s) for ${slateLabel}.`
               : 'No published slate.';
           }
         } catch (error) {
