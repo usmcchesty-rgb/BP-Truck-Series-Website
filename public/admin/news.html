@@ -414,6 +414,7 @@
   <script src="/spotlight-image.js"></script>
   <script src="/news-article-body.js"></script>
   <script src="/admin/news-body-editor.js"></script>
+  <script src="/admin/admin-driver-roster.js"></script>
   <script>
     const $ = (s) => document.querySelector(s);
     const SESSION_KEY = 'bp_admin_pw';
@@ -1218,14 +1219,13 @@
 
     async function loadDrivers() {
       try {
-        const res = await fetch('/api/drivers');
-        const data = await res.json();
-        drivers = Array.isArray(data) ? data : [];
+        const Roster = window.BPAdminDriverRoster;
+        drivers = await Roster.fetchDriverRoster({ includeInactive: false });
         const select = $('#spotlightDriverId');
         const current = select?.value || '';
         select.innerHTML = '<option value="">—</option>' + drivers.map((d) => {
-          const name = d.display_name || d.iracing_name || 'Unknown';
-          return `<option value="${d.driver_id}">${name}</option>`;
+          const label = Roster.formatDriverDropdownLabel(d);
+          return `<option value="${escapeHtml(d.driver_id)}">${escapeHtml(label)}</option>`;
         }).join('');
         if (current) select.value = current;
         if (isDriverSpotlightType()) updateSpotlightImagePreview();

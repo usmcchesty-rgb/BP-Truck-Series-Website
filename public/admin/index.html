@@ -276,6 +276,7 @@
       </div>
     </div>
   </main>
+  <script src="/admin/admin-driver-roster.js"></script>
   <script>
     const $ = (s) => document.querySelector(s);
 
@@ -513,7 +514,8 @@
       }
     }
 
-    const ROSTER_STATUS_ORDER = { current: 0, new_approved: 1, inactive: 2 };
+    const Roster = window.BPAdminDriverRoster;
+    const ROSTER_STATUS_ORDER = Roster.ROSTER_STATUS_ORDER;
     const ROSTER_FILTER_TABS = [
       { id: 'all', label: 'All' },
       { id: 'current', label: 'Current' },
@@ -528,96 +530,6 @@
 
     let rosterDrivers = [];
     let rosterFilter = 'all';
-
-    function normalizeCustomerId(value) {
-      return String(value ?? '').trim().replace(/\D/g, '');
-    }
-
-    function profileFromRow(profile, row, options = {}) {
-      const active = profile?.active !== false;
-      return {
-        driver_id: String(options.driver_id || row?.driverId || profile?.driver_id || ''),
-        iracing_customer_id:
-          profile?.iracing_customer_id ||
-          profile?.iracingCustomerId ||
-          normalizeCustomerId(options.iracing_customer_id || row?.driverId || ''),
-        iracing_name: row?.driver || profile?.iracing_name || profile?.display_name || 'Unknown Driver',
-        display_name: profile?.display_name || row?.driver || profile?.iracing_name || 'Unknown Driver',
-        form_email: profile?.form_email || profile?.formEmail || '',
-        car_number: profile?.car_number || '',
-        photo_url: profile?.photo_url || row?.photoUrl || '',
-        date_of_birth: profile?.date_of_birth || profile?.dateOfBirth || '',
-        hometown: profile?.hometown || '',
-        team: profile?.team || '',
-        is_streamer: profile?.is_streamer === true,
-        stream_url: profile?.stream_url || '',
-        active,
-        in_standings: Boolean(options.in_standings),
-        source_application_id: profile?.source_application_id || profile?.sourceApplicationId || null,
-        roster_status: options.roster_status || 'current',
-      };
-    }
-
-    function resolveRosterStatus({ active, inStandings }) {
-      if (!active) return 'inactive';
-      if (inStandings) return 'current';
-      return 'new_approved';
-    }
-
-    function buildDriverList(standingsRows, profiles) {
-      const byId = Object.fromEntries(profiles.map((p) => [String(p.driver_id), p]));
-      const standingsDriverIds = new Set(standingsRows.map((row) => String(row.driverId)));
-      const standingsCustomerIds = new Set();
-      const usedProfileIds = new Set();
-      const list = [];
-
-      for (const row of standingsRows) {
-        const profile = byId[String(row.driverId)] || null;
-        if (profile) {
-          usedProfileIds.add(String(profile.driver_id));
-          const customerId = normalizeCustomerId(profile.iracing_customer_id || profile.iracingCustomerId);
-          if (customerId) standingsCustomerIds.add(customerId);
-        }
-        const active = profile?.active !== false;
-        list.push(
-          profileFromRow(profile, row, {
-            driver_id: String(row.driverId),
-            in_standings: true,
-            roster_status: resolveRosterStatus({ active, inStandings: true }),
-          })
-        );
-      }
-
-      for (const profile of profiles) {
-        const driverId = String(profile.driver_id || '').trim();
-        if (!driverId || usedProfileIds.has(driverId)) continue;
-        usedProfileIds.add(driverId);
-
-        const customerId = normalizeCustomerId(profile.iracing_customer_id || profile.iracingCustomerId);
-        const inStandings =
-          standingsDriverIds.has(driverId) ||
-          (customerId && standingsCustomerIds.has(customerId));
-        const active = profile.active !== false;
-
-        list.push(
-          profileFromRow(profile, null, {
-            driver_id: driverId,
-            iracing_customer_id: customerId,
-            in_standings: inStandings,
-            roster_status: resolveRosterStatus({ active, inStandings }),
-          })
-        );
-      }
-
-      return list.sort((a, b) => {
-        const groupDiff =
-          (ROSTER_STATUS_ORDER[a.roster_status] ?? 99) - (ROSTER_STATUS_ORDER[b.roster_status] ?? 99);
-        if (groupDiff !== 0) return groupDiff;
-        return String(a.display_name || a.iracing_name || '').localeCompare(
-          String(b.display_name || b.iracing_name || '')
-        );
-      });
-    }
 
     function rosterStatusLabel(status) {
       if (status === 'current') return 'CURRENT';
@@ -827,7 +739,7 @@
 
         const standingsRows = standingsData.rows || [];
         const profileList = Array.isArray(profiles) ? profiles : [];
-        rosterDrivers = buildDriverList(standingsRows, profileList);
+        rosterDrivers = Roster.buildDriverList(standingsRows, profileList);
         renderRosterTabs(rosterDrivers);
         renderDriversTable(getVisibleRosterDrivers(rosterDrivers));
 

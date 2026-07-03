@@ -365,8 +365,9 @@
           <option value="">Loading drivers...</option>
         </select>
         <div class="hint">
-          Drivers come from the same records as Admin &gt; Drivers
-          (standings + saved profiles).
+          Drivers come from the master driver roster (standings + active
+          driver profiles). New approved drivers appear even before their
+          first race.
         </div>
         <label class="field">Display Name</label>
         <input id="displayName" class="input" type="text" readonly />
@@ -570,6 +571,7 @@
     </main>
 
     <script src="/driver-standing-photo.js"></script>
+    <script src="/admin/admin-driver-roster.js"></script>
     <script type="module">
       const $ = (s) => document.querySelector(s);
 
@@ -1297,6 +1299,19 @@
         standingMsg.className = type;
       }
 
+      const Roster = window.BPAdminDriverRoster;
+
+      function resolveDriverPhotoUrl(driver) {
+        const existing = Roster.stripPhotoUrlQuery(driver?.photo_url || "");
+        if (existing && existing.toLowerCase().endsWith(".png")) {
+          return existing;
+        }
+        const slug = slugifyName(
+          driver?.display_name || driver?.iracing_name || driver?.driver_id,
+        );
+        return slug ? `assets/drivers/${slug}.png` : "";
+      }
+
       function slugifyName(name) {
         return String(name || "")
           .toLowerCase()
@@ -1640,55 +1655,9 @@
         return `${clean}?v=${encodeURIComponent(version)}`;
       }
 
-      // Same merge the Admin > Drivers page uses:
-      // standings rows + saved Supabase profiles.
-      function buildDriverList(standingsRows, profiles) {
-        const byId = Object.fromEntries(
-          profiles.map((p) => [String(p.driver_id), p]),
-        );
-        return standingsRows.map((row) => {
-          const profile = byId[String(row.driverId)] || null;
-          return {
-            driver_id: String(row.driverId),
-            iracing_name: profile?.iracing_name || row.driver,
-            display_name: profile?.display_name || row.driver,
-            car_number: profile?.car_number || "",
-            photo_url: stripPhotoUrlQuery(profile?.photo_url || row.photoUrl || ""),
-            standing_photo_url: stripPhotoUrlQuery(profile?.standing_photo_url || ""),
-            standingPhotoUrl: profile?.standingPhotoUrl || "",
-            standing_photo_zoom: profile?.standing_photo_zoom,
-            standingPhotoZoom: profile?.standingPhotoZoom,
-            standing_photo_x: profile?.standing_photo_x,
-            standingPhotoX: profile?.standingPhotoX,
-            standing_photo_y: profile?.standing_photo_y,
-            standingPhotoY: profile?.standingPhotoY,
-            standing_photo_updated_at: profile?.standing_photo_updated_at,
-            standingPhotoUpdatedAt: profile?.standingPhotoUpdatedAt,
-            standing_photo_enabled: profile?.standing_photo_enabled,
-            standingPhotoEnabled: profile?.standingPhotoEnabled,
-          };
-        });
-      }
-
       async function loadDrivers() {
         try {
-          const [standingsRes, driversRes] = await Promise.all([
-            fetch("/api/standings"),
-            fetch("/api/drivers"),
-          ]);
-          const standingsData = await standingsRes.json();
-          const profiles = await driversRes.json();
-
-          if (!standingsRes.ok)
-            throw new Error(standingsData.error || "Failed to load standings");
-          if (!driversRes.ok)
-            throw new Error(profiles.error || "Failed to load profiles");
-
-          drivers = buildDriverList(
-            standingsData.rows || [],
-            Array.isArray(profiles) ? profiles : [],
-          );
-          drivers.sort((a, b) => a.display_name.localeCompare(b.display_name));
+          drivers = await Roster.fetchDriverRoster({ includeInactive: false });
 
           driverSelect.innerHTML = "";
           const empty = document.createElement("option");
@@ -1699,9 +1668,9 @@
           for (const d of drivers) {
             const opt = document.createElement("option");
             opt.value = d.driver_id;
-            opt.textContent = d.car_number
-              ? `#${d.car_number} ${d.display_name}${hasStandingAsset(d) ? " ★" : ""}`
-              : `${d.display_name}${hasStandingAsset(d) ? " ★" : ""}`;
+            opt.textContent = Roster.formatDriverDropdownLabel(d, {
+              suffix: (driver) => (hasStandingAsset(driver) ? " ★" : ""),
+            });
             driverSelect.appendChild(opt);
           }
         } catch (e) {
@@ -1722,16 +1691,17 @@
 
       function updateSaveState() {
         const d = selectedDriver();
+        const effectivePhotoUrl = d ? resolveDriverPhotoUrl(d) : "";
         displayNameInput.value = d?.display_name || "";
         carNumberInput.value = d?.car_number || "";
-        photoUrlInput.value = d?.photo_url || "";
+        photoUrlInput.value = effectivePhotoUrl;
 
-        const filename = filenameFromPhotoUrl(d?.photo_url);
+        const filename = filenameFromPhotoUrl(effectivePhotoUrl);
         if (!d) {
           filenamePreview.textContent = "select a driver...";
         } else if (!filename) {
           filenamePreview.textContent =
-            "No .png Photo URL set for this driver — set one in Admin > Drivers first.";
+            "Could not resolve a .png export path for this driver.";
         } else {
           filenamePreview.textContent = filename;
         }
@@ -1751,7 +1721,8 @@
 
       saveBtn.addEventListener("click", async () => {
         const driver = selectedDriver();
-        const filename = filenameFromPhotoUrl(driver?.photo_url);
+        const photoUrl = resolveDriverPhotoUrl(driver);
+        const filename = filenameFromPhotoUrl(photoUrl);
         if (!cutout || !filename) return;
 
         saveBtn.disabled = true;
@@ -1765,7 +1736,7 @@
               action: "driver-photo",
               password: getSessionPw(),
               imageBase64: exportPngDataUrl(),
-              photoUrl: driver.photo_url,
+              photoUrl,
               driver_id: driver.driver_id,
               iracing_name: driver.iracing_name,
               display_name: driver.display_name,
