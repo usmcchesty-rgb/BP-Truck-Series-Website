@@ -105,6 +105,12 @@
     .number-status-pill.reserved { color: #9ec5ff; border-color: #456; }
     .number-status-pill.none { color: #aaa; border-color: #555; }
     .evidence-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+    .evidence-stack { display: grid; grid-template-columns: minmax(260px, 34%) minmax(0, 1fr); gap: 14px; align-items: start; width: 100%; }
+    .evidence-stack .snapshot-card--license { margin-top: 0; }
+    .evidence-stack .snapshot-card--stats { margin-top: 0; padding: 14px; border: 1px solid #333; background: rgba(0,0,0,.28); min-width: 0; width: 100%; }
+    .detail-grid.stats-grid { max-width: none; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); margin-bottom: 0; }
+    .review-sidebar .review-card { padding: 10px 12px; }
+    .review-sidebar .review-card h4 { margin-bottom: 8px; }
     .detail-grid { display: grid; grid-template-columns: minmax(150px, 220px) minmax(0, 1fr); gap: 10px 16px; font-size: 12px; margin-bottom: 14px; max-width: 1100px; }
     .detail-grid dt { color: #888; font-weight: 900; text-transform: uppercase; font-size: 10px; margin: 0; }
     .detail-grid dd { margin: 0; color: #eee; line-height: 1.45; white-space: pre-wrap; }
@@ -121,10 +127,25 @@
     .snapshot-table th { color: #888; font-size: 10px; text-transform: uppercase; }
     .snapshot-table tr.is-primary td { color: #fff; background: rgba(229,9,20,.08); }
     .snapshot-subhead { margin: 12px 0 6px; font-size: 11px; color: #aaa; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; }
-    .stats-controls { display: flex; flex-wrap: wrap; gap: 14px; align-items: end; margin: 12px 0 14px; }
+    .stats-controls { display: flex; flex-wrap: wrap; gap: 14px; align-items: end; margin: 10px 0 12px; }
     .stats-controls .field-label { margin-top: 0; }
     .stats-control { min-width: 220px; max-width: 320px; flex: 0 1 280px; }
     .stats-category-select { margin-bottom: 0; }
+    .stats-categories-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; width: 100%; margin: 10px 0 14px; }
+    .stats-category-block { border: 1px solid #333; background: linear-gradient(180deg, rgba(16,16,16,.95), rgba(6,6,6,.95)); padding: 10px 12px; min-width: 0; }
+    .stats-category-block.is-primary { border-color: #5a2020; background: linear-gradient(180deg, rgba(36,12,12,.55), rgba(10,6,6,.92)); }
+    .stats-category-title { margin: 0 0 8px; font-size: 12px; font-weight: 900; color: #fff; text-transform: uppercase; letter-spacing: .04em; }
+    .stats-compact-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(68px, 1fr)); gap: 8px 12px; width: 100%; }
+    .stats-compact-cell { min-width: 0; }
+    .stats-compact-label { color: #888; font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; line-height: 1.2; margin-bottom: 3px; }
+    .stats-compact-value { color: #fff; font-size: clamp(14px, 1.15vw, 18px); font-weight: 900; line-height: 1.15; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .stats-compact-value.is-green { color: #8dff9d; }
+    .stats-compact-value.is-yellow { color: #ffe680; }
+    .stats-compact-value.is-orange { color: #ffb15f; }
+    .stats-compact-value.is-red { color: #ff7878; }
+    .stats-compact-value.is-neutral { color: #bbb; }
+    .stats-meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px 14px; margin: 0 0 10px; max-width: 720px; }
+    .stats-meta-grid .detail-grid { margin-bottom: 0; max-width: none; }
     .stats-metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); gap: 10px; margin: 12px 0 18px; }
     .stat-metric { min-height: 76px; padding: 12px; border: 1px solid #333; background: linear-gradient(180deg, #111, #090909); box-shadow: inset 0 1px 0 rgba(255,255,255,.035); display: flex; flex-direction: column; justify-content: space-between; min-width: 0; }
     .stat-metric dt { margin: 0 0 7px; color: #9a9a9a; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -138,7 +159,15 @@
     .stat-badge { display: inline-block; min-width: 56px; padding: 4px 8px; border: 1px solid #444; font-weight: 900; font-variant-numeric: tabular-nums; text-align: center; }
     .snapshot-status.not_found, .snapshot-status.ambiguous { color: #ffd27a; }
     .snapshot-status.failed { color: #ff8080; }
-    .lookup-status-card { margin: 12px 0 16px; padding: 12px; border: 1px solid #333; background: rgba(255,255,255,.03); }
+    .lookup-status-card { margin: 0; padding: 0; border: 0; background: transparent; }
+    .data-status-panel { display: grid; gap: 8px; }
+    .data-status-list { display: grid; gap: 4px; margin: 0; }
+    .data-status-item { display: flex; align-items: center; gap: 6px; font-size: 11px; line-height: 1.25; font-weight: 700; }
+    .data-status-item.is-complete { color: #7fd99a; }
+    .data-status-item.is-pending { color: #888; }
+    .data-status-icon { width: 12px; flex: 0 0 12px; text-align: center; font-size: 11px; font-weight: 900; }
+    .data-status-updated { margin: 0; color: #888; font-size: 10px; line-height: 1.35; }
+    .data-status-updated-label { display: block; color: #777; font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 2px; }
     .lookup-status-card .btn-row { margin-top: 10px; }
     .section-heading { margin: 0 0 10px; font-size: 13px; color: #aaa; text-transform: uppercase; letter-spacing: .04em; }
     @media (min-width: 1024px) {
@@ -146,14 +175,14 @@
     }
     @media (min-width: 1400px) {
       body.admin-applications-page main.wrap { padding-left: 96px; padding-right: 96px; }
-      .stats-metric-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+      .stats-compact-grid { grid-template-columns: repeat(auto-fit, minmax(76px, 1fr)); }
     }
     @media (max-width: 980px) {
       body.admin-applications-page main.wrap { padding-left: 12px; padding-right: 12px; }
       .detail-header { display: block; }
       .detail-header .btn-row { margin-top: 12px; }
       .detail-grid { grid-template-columns: 1fr; }
-      .review-shell, .evidence-grid, .review-overview-grid { grid-template-columns: 1fr; }
+      .review-shell, .evidence-grid, .evidence-stack, .review-overview-grid { grid-template-columns: 1fr; }
       .review-overview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .review-sidebar { position: static; }
     }
@@ -940,23 +969,55 @@
       `;
     }
 
-    function renderStatsCategoryFields(statsJson, categoryName) {
-      const row = statsJson?.[categoryName] || {};
+    function renderStatsCompactCell(label, value, toneClass = '') {
+      const display = value == null || value === '' ? '—' : value;
+      return `
+        <div class="stats-compact-cell">
+          <div class="stats-compact-label">${escapeHtml(label)}</div>
+          <div class="stats-compact-value ${escapeHtml(toneClass)}">${escapeHtml(display)}</div>
+        </div>
+      `;
+    }
+
+    function renderStatsCompactGrid(row = {}) {
       const incidentTone = incidentToneClass(row.incidentsPerRace);
       return `
-        <div class="stats-metric-grid" id="statsCategoryFields">
-          ${statMetric('STARTS', row.starts)}
-          ${statMetric('WINS', row.wins)}
-          ${statMetric('TOP 5', row.top5)}
-          ${statMetric('POLES', row.poles)}
-          ${statMetric('AVG START', row.avgStart)}
-          ${statMetric('AVG FINISH', row.avgFinish)}
-          ${statMetric('TOTAL LAPS', row.totalLaps)}
-          ${statMetric('LAPS LED', row.lapsLed)}
-          ${statMetric('INC/RACE', row.incidentsPerRace, incidentTone)}
-          ${statMetric('PTS/RACE', row.pointsPerRace)}
-          ${statMetric('WIN %', row.winPercentage)}
-          ${statMetric('TOP 5 %', row.top5Percentage)}
+        <div class="stats-compact-grid">
+          ${renderStatsCompactCell('Starts', row.starts)}
+          ${renderStatsCompactCell('Wins', row.wins)}
+          ${renderStatsCompactCell('Top 5', row.top5)}
+          ${renderStatsCompactCell('Poles', row.poles)}
+          ${renderStatsCompactCell('Avg Start', row.avgStart)}
+          ${renderStatsCompactCell('Avg Finish', row.avgFinish)}
+          ${renderStatsCompactCell('Laps', row.totalLaps)}
+          ${renderStatsCompactCell('Led', row.lapsLed)}
+          ${renderStatsCompactCell('Inc/Race', row.incidentsPerRace, incidentTone)}
+          ${renderStatsCompactCell('Pts/Race', row.pointsPerRace)}
+          ${renderStatsCompactCell('Win %', row.winPercentage)}
+          ${renderStatsCompactCell('Top 5 %', row.top5Percentage)}
+        </div>
+      `;
+    }
+
+    function renderAllStatsCategories(statsJson) {
+      const categories = Object.keys(statsJson || {});
+      if (!categories.length) {
+        return '<p class="detail-empty">No category stats parsed.</p>';
+      }
+
+      return `
+        <div class="stats-categories-grid">
+          ${categories
+            .map((name) => {
+              const isPrimary = /^Oval$/i.test(name);
+              return `
+                <div class="stats-category-block${isPrimary ? ' is-primary' : ''}">
+                  <h5 class="stats-category-title">${escapeHtml(name)}</h5>
+                  ${renderStatsCompactGrid(statsJson[name])}
+                </div>
+              `;
+            })
+            .join('')}
         </div>
       `;
     }
@@ -1120,20 +1181,6 @@
       `;
     }
 
-    function bindStatsCategorySelector(snapshot) {
-      const select = document.getElementById('statsCategorySelect');
-      const mount = document.getElementById('statsCategoryMount');
-      if (!select || !mount) return;
-
-      const statsJson = normalizeStatsJson(snapshot);
-      const update = () => {
-        mount.innerHTML = renderStatsCategoryFields(statsJson, select.value);
-      };
-
-      select.addEventListener('change', update);
-      update();
-    }
-
     function bindYearlyStatsSelector(snapshot) {
       const select = document.getElementById('yearlyStatsClassSelect');
       const body = document.getElementById('yearlyStatsRows');
@@ -1148,7 +1195,7 @@
     function renderSnapshotSection(snapshot) {
       if (!snapshot) {
         return `
-          <div class="snapshot-card">
+          <div class="snapshot-card snapshot-card--license">
             <h4>Latest iRacing License Snapshot</h4>
             <p class="detail-empty">No license snapshot saved yet for this application.</p>
           </div>
@@ -1157,7 +1204,7 @@
 
       const statusClass = escapeHtml(snapshot.scrape_status || 'unknown');
       return `
-        <div class="snapshot-card">
+        <div class="snapshot-card snapshot-card--license">
           <h4>Latest iRacing License Snapshot</h4>
           <div class="snapshot-status ${statusClass}">${statusClass.replace(/_/g, ' ')}</div>
           <dl class="detail-grid">
@@ -1176,7 +1223,7 @@
     function renderStatsSnapshotSection(snapshot) {
       if (!snapshot) {
         return `
-          <div class="snapshot-card">
+          <div class="snapshot-card snapshot-card--stats">
             <h4>Latest iRacing Stats Snapshot</h4>
             <p class="detail-empty">No stats snapshot yet.</p>
           </div>
@@ -1185,38 +1232,19 @@
 
       const statusClass = escapeHtml(snapshot.scrape_status || 'unknown');
       const statsJson = normalizeStatsJson(snapshot);
-      const categories = Object.keys(statsJson);
-      const defaultCategory = categories.includes('Oval')
-        ? 'Oval'
-        : snapshot.category && statsJson[snapshot.category]
-          ? snapshot.category
-          : categories[0] || snapshot.category || 'Oval';
-
-      const categoryOptions = categories.length
-        ? categories
-            .map((name) => {
-              const selected = name === defaultCategory ? ' selected' : '';
-              return `<option value="${escapeHtml(name)}"${selected}>${escapeHtml(name)}</option>`;
-            })
-            .join('')
-        : `<option value="${escapeHtml(defaultCategory)}" selected>${escapeHtml(defaultCategory)}</option>`;
 
       return `
-        <div class="snapshot-card">
+        <div class="snapshot-card snapshot-card--stats">
           <h4>Latest iRacing Stats Snapshot</h4>
           <div class="snapshot-status ${statusClass}">${statusClass.replace(/_/g, ' ')}</div>
-          <dl class="detail-grid stats-grid">
-            ${detailField('Snapshot Date', formatDate(snapshot.created_at))}
-            ${detailField('Primary Category', snapshot.category || 'Oval')}
-            ${detailField('Review Note', snapshot.scrape_error)}
-          </dl>
-          <div class="stats-controls">
-            <div class="stats-control">
-              <label class="field-label" for="statsCategorySelect">Lifetime Stats Category</label>
-              <select id="statsCategorySelect" class="select stats-category-select">${categoryOptions}</select>
-            </div>
+          <div class="stats-meta-grid">
+            <dl class="detail-grid stats-grid">
+              ${detailField('Snapshot Date', formatDate(snapshot.created_at))}
+              ${detailField('Primary Category', snapshot.category || 'Oval')}
+              ${detailField('Review Note', snapshot.scrape_error)}
+            </dl>
           </div>
-          <div id="statsCategoryMount"></div>
+          ${renderAllStatsCategories(statsJson)}
           ${renderYearlyProgressionSection(snapshot)}
         </div>
       `;
@@ -1247,16 +1275,45 @@
         .sort((a, b) => b.time - a.time)[0]?.value || values[0];
     }
 
+    function isYearlyStatsComplete(snapshot) {
+      return snapshot?.yearly_parse_status === 'completed' && normalizeYearlyStats(snapshot).length > 0;
+    }
+
+    function renderDataStatusItem(label, complete) {
+      const stateClass = complete ? 'is-complete' : 'is-pending';
+      const icon = complete ? '✓' : '○';
+      return `<div class="data-status-item ${stateClass}"><span class="data-status-icon" aria-hidden="true">${icon}</span><span>${escapeHtml(label)}</span></div>`;
+    }
+
     function renderLookupStatusSection(job, latestSnapshot, latestStatsSnapshot, latestSrhSnapshot) {
-      const status = lookupStatusLabel(job);
       const refreshedAt = latestRefreshTimestamp(latestSnapshot, latestStatsSnapshot, latestSrhSnapshot);
+      const iracingComplete =
+        latestSnapshot?.scrape_status === 'completed' &&
+        latestStatsSnapshot?.scrape_status === 'completed';
+      const srhComplete = latestSrhSnapshot?.scrape_status === 'completed';
+      const yearlyComplete = isYearlyStatsComplete(latestStatsSnapshot);
+      const lookupStatus = lookupStatusLabel(job);
+      const lookupNote = String(job?.error || '').trim();
+
       return `
         <div class="lookup-status-card">
-          <dl class="detail-grid">
-            ${detailField('Latest Lookup Status', status)}
-            ${detailField('Latest Data Refresh', refreshedAt ? formatDate(refreshedAt) : 'Not checked')}
-            ${detailField('Lookup Note', job?.error || '')}
-          </dl>
+          <div class="data-status-panel">
+            <div class="data-status-list">
+              ${renderDataStatusItem('iRacing Complete', iracingComplete)}
+              ${renderDataStatusItem('SRH Complete', srhComplete)}
+              ${renderDataStatusItem('Yearly Stats Complete', yearlyComplete)}
+            </div>
+            <p class="data-status-updated">
+              <span class="data-status-updated-label">Updated</span>
+              ${escapeHtml(refreshedAt ? formatDate(refreshedAt) : 'Not checked')}
+            </p>
+            ${lookupStatus !== 'Not checked'
+              ? `<p class="data-status-updated"><span class="data-status-updated-label">Lookup</span>${escapeHtml(lookupStatus)}</p>`
+              : ''}
+            ${lookupNote
+              ? `<p class="data-status-updated"><span class="data-status-updated-label">Note</span>${escapeHtml(lookupNote)}</p>`
+              : ''}
+          </div>
         </div>
       `;
     }
@@ -1370,10 +1427,10 @@
             </section>
             ${renderPreferredNumberSection(row, numberReservation)}
             ${renderSrhCareerSection(latestSrhSnapshot)}
-            <section class="evidence-grid">
+            <div class="evidence-stack">
               ${renderSnapshotSection(latestSnapshot)}
               ${renderStatsSnapshotSection(latestStatsSnapshot)}
-            </section>
+            </div>
             <section class="review-card">
               <h4>Application Answers</h4>
               <dl class="detail-grid">
@@ -1421,7 +1478,6 @@
       $('#releaseNumberBtn')?.addEventListener('click', releaseSelectedApplicationNumber);
       $('#assignNumberBtn')?.addEventListener('click', assignSelectedApplicationNumber);
       if (latestStatsSnapshot) {
-        bindStatsCategorySelector(latestStatsSnapshot);
         bindYearlyStatsSelector(latestStatsSnapshot);
       }
     }
