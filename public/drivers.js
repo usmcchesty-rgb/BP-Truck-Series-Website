@@ -108,8 +108,12 @@ function driverDisplayName(driver) {
   return String(driver.display_name || driver.iracing_name || "").trim();
 }
 
+function driverBpNumber(driver) {
+  return String(driver?.bp_number || driver?.car_number || "").trim();
+}
+
 function parseCarNumber(driver) {
-  const raw = String(driver.car_number ?? "").replace(/[^\d.]/g, "");
+  const raw = String(driverBpNumber(driver)).replace(/[^\d.]/g, "");
   const value = Number(raw);
   return Number.isFinite(value) ? value : null;
 }
@@ -181,7 +185,7 @@ function getVisibleDrivers() {
   return pageState.drivers.filter((driver) => {
     const name = driverDisplayName(driver).toLowerCase();
     const iracing = String(driver.iracing_name || "").toLowerCase();
-    const carNumber = String(driver.car_number || "").toLowerCase();
+    const carNumber = driverBpNumber(driver).toLowerCase();
     const iracingCustomerId = String(driver.iracing_customer_id || driver.iracingCustomerId || "").toLowerCase();
     return (
       name.includes(query) ||
@@ -223,8 +227,9 @@ function renderDriverGrid(drivers) {
     .map((d) => {
       const name = d.display_name || d.iracing_name || "Unknown";
       const photo = d.photoUrl || d.photo_url || driverImage(name);
-      const number = d.car_number
-        ? `<span class="num">${escapeHtml(d.car_number)}</span>`
+      const displayNumber = driverBpNumber(d);
+      const number = displayNumber
+        ? `<span class="num">${escapeHtml(displayNumber)}</span>`
         : "";
       const showStreamerBadge = isMarkedStreamer(d);
       const badge = showStreamerBadge ? streamerBadgeHtml(d.stream_url) : "";

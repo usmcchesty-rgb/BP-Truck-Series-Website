@@ -114,6 +114,10 @@ function normalizeCarNumber(value) {
     .replace(/^0+/, "") || "";
 }
 
+function driverBpNumber(profile) {
+  return String(profile?.bp_number || profile?.car_number || "").trim();
+}
+
 function buildNameAssetBases(name) {
   const trimmed = String(name || "").trim();
   if (!trimmed) return [];
@@ -148,7 +152,7 @@ function buildLocalCarImageCandidates(profile) {
   const name = profile.display_name || profile.iracing_name || "";
   const nameBases = buildNameAssetBases(name);
   const slug = slugifyDriverName(name);
-  const carNum = normalizeCarNumber(profile.car_number);
+  const carNum = normalizeCarNumber(driverBpNumber(profile));
   const driverId = String(profile.driver_id || "").trim();
   const orderedBases = [];
 
@@ -1176,7 +1180,7 @@ function renderProfile(profile, stats, seasonLabel, carImageUrl = "") {
   if (!panel || !profile) return;
 
   const name = profile.display_name || profile.iracing_name || "Driver";
-  const number = String(profile.car_number || "").trim();
+  const number = driverBpNumber(profile);
   const { nameClass, nameStackClass } = driverNameSizeClasses(name);
   const nameClasses = ["driver-profile-name", nameClass].filter(Boolean).join(" ");
   const nameStackClasses = ["driver-profile-name-stack", nameStackClass]

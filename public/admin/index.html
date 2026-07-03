@@ -587,7 +587,7 @@
           <td class="readonly iracing-name">${escapeHtml(d.iracing_name)}</td>
           <td class="display-name-cell"><input type="text" name="display_name" value="${escapeAttr(d.display_name || '')}"></td>
           <td><input type="email" name="form_email" value="${escapeAttr(d.form_email || d.formEmail || '')}"></td>
-          <td><input type="text" name="car_number" value="${escapeAttr(d.car_number || '')}"></td>
+          <td><input type="text" name="car_number" value="${escapeAttr(d.car_number || d.bp_number || '')}"></td>
           <td><input type="text" name="photo_url" value="${escapeAttr(d.photo_url || '')}"></td>
           <td><input type="text" name="date_of_birth" value="${escapeAttr(d.date_of_birth || d.dateOfBirth || '')}" placeholder="e.g. March 14, 1990"></td>
           <td><input type="text" name="hometown" value="${escapeAttr(d.hometown || '')}"></td>

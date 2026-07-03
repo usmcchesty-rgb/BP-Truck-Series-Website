@@ -1395,7 +1395,7 @@
         const hasPendingUpload = Boolean(pendingStandingDataUrl);
 
         displayNameInput.value = driver?.display_name || "";
-        carNumberInput.value = driver?.car_number || "";
+        carNumberInput.value = driver?.bp_number || driver?.car_number || "";
         standingUrlInput.value =
           driver?.standingPhotoUrl || driver?.standing_photo_url || "";
         standingFilenamePreview.textContent = driver
@@ -1495,7 +1495,7 @@
             driver_id: driver.driver_id,
             iracing_name: driver.iracing_name,
             display_name: driver.display_name || driver.iracing_name,
-            car_number: driver.car_number || "",
+            car_number: driver.car_number || driver.bp_number || "",
             photo_url: driver.photo_url || "",
             standing_photo_url: stripPhotoUrlQuery(
               driver.standing_photo_url || driver.standingPhotoUrl || "",
@@ -1548,7 +1548,7 @@
             driver_id: driver.driver_id,
             iracing_name: driver.iracing_name,
             display_name: driver.display_name || driver.iracing_name,
-            car_number: driver.car_number || "",
+            car_number: driver.car_number || driver.bp_number || "",
             imageBase64,
             standingPhotoZoom: crop.standingPhotoZoom,
             standingPhotoX: crop.standingPhotoX,
@@ -1606,7 +1606,7 @@
             driver_id: driver.driver_id,
             iracing_name: driver.iracing_name,
             display_name: driver.display_name || driver.iracing_name,
-            car_number: driver.car_number || "",
+            car_number: driver.car_number || driver.bp_number || "",
           }),
         });
         const data = await res.json().catch(() => ({}));
@@ -1663,7 +1663,7 @@
             driver_id: driver.driver_id,
             iracing_name: driver.iracing_name,
             display_name: driver.display_name || driver.iracing_name,
-            car_number: driver.car_number || "",
+            car_number: driver.car_number || driver.bp_number || "",
             photo_url: driver.photo_url,
           }),
         });
@@ -1736,7 +1736,7 @@
         const d = selectedDriver();
         const effectivePhotoUrl = d ? resolveDriverPhotoUrl(d) : "";
         displayNameInput.value = d?.display_name || "";
-        carNumberInput.value = d?.car_number || "";
+        carNumberInput.value = d?.bp_number || d?.car_number || "";
         photoUrlInput.value = effectivePhotoUrl;
 
         const filename = filenameFromPhotoUrl(effectivePhotoUrl);
@@ -1787,7 +1787,7 @@
               driver_id: driver.driver_id,
               iracing_name: driver.iracing_name,
               display_name: driver.display_name,
-              car_number: driver.car_number,
+              car_number: driver.car_number || driver.bp_number,
             }),
           });
 

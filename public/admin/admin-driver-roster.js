@@ -29,6 +29,7 @@
       display_name: profile?.display_name || row?.driver || profile?.iracing_name || 'Unknown Driver',
       form_email: profile?.form_email || profile?.formEmail || '',
       car_number: profile?.car_number || '',
+      bp_number: profile?.bp_number || profile?.car_number || '',
       photo_url: stripPhotoUrlQuery(profile?.photo_url || row?.photoUrl || ''),
       date_of_birth: profile?.date_of_birth || profile?.dateOfBirth || '',
       hometown: profile?.hometown || '',
@@ -127,7 +128,8 @@
 
   function formatDriverDropdownLabel(driver, options = {}) {
     const name = driver?.display_name || driver?.iracing_name || 'Unknown';
-    const label = driver?.car_number ? `#${driver.car_number} ${name}` : name;
+    const number = driver?.bp_number || driver?.car_number || '';
+    const label = number ? `#${number} ${name}` : name;
     const showNewBadge = options.showNewBadge !== false;
     const suffix = options.suffix ? String(options.suffix(driver) || '') : '';
     const newSuffix =

@@ -1,5 +1,6 @@
 import { getDriverProfiles, supabase, slugify, stripPhotoUrlQuery, withPhotoCacheBust, photoCacheVersion } from './_lib.js';
 import { buildAvailableNumberSummaryFromDb } from './_driver-number-reservations.js';
+import { attachBpNumber, loadBpNumberContext } from './_bp-driver-number.js';
 import {
   fetchGoogleFormResponses,
   buildFormSyncPreview,
@@ -196,7 +197,9 @@ function normalizeDriverProfile(row, options = {}) {
     iracingCustomerId: normalizeOptionalText(row.iracing_customer_id) || '',
     iracing_name: row.iracing_name || row.driver_name || '',
     display_name: row.display_name || row.driver_name || '',
-    car_number: row.car_number || row.truck_number || '',
+    car_number: String(row.car_number ?? '').trim(),
+    truck_number: String(row.truck_number ?? '').trim(),
+    truckNumber: String(row.truck_number ?? '').trim(),
     photo_url,
     photoUrl: photo_url
       ? withPhotoCacheBust(photo_url, photoCacheVersion(row.updated_at))
@@ -451,8 +454,14 @@ export default async function handler(req, res) {
     const includePrivateFields = isAdminDriversRequest(req);
     const normalizeProfile = includePrivateFields ? buildAdminDriverProfile : buildPublicDriverProfile;
     const rows = await getDriverProfiles();
+    const sb = supabase();
+    const bpContext = await loadBpNumberContext(sb);
     const normalized = rows
-      .map(normalizeProfile)
+      .map((row) => {
+        const profile = normalizeProfile(row);
+        if (!profile) return null;
+        return attachBpNumber(profile, row, bpContext);
+      })
       .filter(Boolean)
       .filter((row) => includePrivateFields || row.active !== false)
       .sort((a, b) => a.iracing_name.localeCompare(b.iracing_name));
@@ -485,7 +494,7 @@ export default async function handler(req, res) {
       if (format === 'html') {
         const origin = getSiteOrigin(req);
         const name = profile.display_name || profile.iracing_name || 'Driver';
-        const number = profile.car_number ? `#${profile.car_number} ` : '';
+        const number = profile.bp_number ? `#${profile.bp_number} ` : '';
         const description = profile.bio
           ? String(profile.bio).trim().slice(0, 200)
           : `${name} driver profile — Blazing Pedals Truck Series Season 11.`;
@@ -564,5 +573,5 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: `Supabase error: ${error.message}` });
   }
 
-  return res.status(200).json(buildAdminDriverProfile(data));
+  return res.status(200).json(attachBpNumber(buildAdminDriverProfile(data), data, await loadBpNumberContext(sb)));
 }

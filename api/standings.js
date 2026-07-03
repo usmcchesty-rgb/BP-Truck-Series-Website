@@ -1,7 +1,12 @@
-import { getSettings, getDriverProfiles, slugify, withPhotoCacheBust, photoCacheVersion } from './_lib.js';
+import { getSettings, getDriverProfiles, slugify, withPhotoCacheBust, photoCacheVersion, supabase } from './_lib.js';
 import { computeSeasonCautionStatsFromScheduleHtml, parseScheduleRacesFromHtml } from './_caution-stats.js';
 import { enrichScheduleRaces } from './_schedule-points-races.js';
 import { buildDriverActivityMap } from './_driver-activity.js';
+import {
+  attachBpNumber,
+  extractStandingsCarNumber,
+  loadBpNumberContext,
+} from './_bp-driver-number.js';
 import * as cheerio from "cheerio";
 
 
@@ -97,6 +102,7 @@ export default async function handler(req, res) {
     const data = await response.json();
     const profiles = await getDriverProfiles();
     const byDriverId = Object.fromEntries(profiles.map(p => [String(p.driver_id), p]));
+    const bpContext = await loadBpNumberContext(supabase());
 
     const scheduleRaces = scheduleHtml
       ? enrichScheduleRaces(parseScheduleRacesFromHtml(scheduleHtml))
@@ -119,6 +125,13 @@ export default async function handler(req, res) {
         const slug = slugify(name);
         const profile = byDriverId[String(r.drid)] || null;
         const displayName = profile?.display_name || name;
+        const standingsCarNumber = extractStandingsCarNumber(r, driver);
+        const bp_number = attachBpNumber(
+          { driver_id: String(r.drid) },
+          profile || { driver_id: String(r.drid) },
+          bpContext,
+          standingsCarNumber,
+        ).bp_number;
         const finishes = [];
 
 for (const schedule of Object.values(data.schedules || {})) {
@@ -147,7 +160,12 @@ const avgFinish =
 
           driver: displayName,
           driverId: r.drid,
-          carNumber: profile?.car_number || '',
+          carNumber: bp_number,
+          bp_number,
+          standingsCarNumber:
+            standingsCarNumber && standingsCarNumber !== bp_number
+              ? standingsCarNumber
+              : '',
           points: Number(r.tpts || 0),
           races: Number(r.counted || r.starts || 0),
           starts: Number(r.starts || 0),
