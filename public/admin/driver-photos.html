@@ -478,11 +478,23 @@
 
       <div id="tab-standing" class="photo-mode-panel" role="tabpanel" hidden>
         <div class="panel">
-          <h2>1. Upload Standing PNG</h2>
-          <input id="standingFile" class="input" type="file" accept="image/png" />
+          <h2>1. Upload &amp; Remove Background</h2>
+          <input id="standingFile" class="input" type="file" accept="image/*" />
+          <br />
+          <button id="standingRemoveBgBtn" class="btn" type="button" disabled>
+            Remove Background
+          </button>
+          <button id="standingSkipBgBtn" class="btn" type="button" disabled>
+            Skip (already transparent)
+          </button>
+          <button id="standingClearUploadBtn" class="btn btn-secondary" type="button" disabled>
+            Clear Upload
+          </button>
           <div class="hint">
-            Transparent PNG recommended. Re-upload replaces the existing standing
-            photo in <code>driver-standing-photos/{driver-slug}.png</code>.
+            Use &quot;Skip&quot; if your photo is already a transparent PNG cutout.
+            Standing photos save separately to
+            <code>driver-standing-photos/{driver-slug}.png</code> and do not
+            overwrite the regular card photo.
           </div>
           <label class="field">Standing Photo URL</label>
           <input id="standingUrl" class="input" type="text" readonly />
@@ -605,6 +617,9 @@
       const tabRegular = $("#tab-regular");
       const tabStanding = $("#tab-standing");
       const standingFile = $("#standingFile");
+      const standingRemoveBgBtn = $("#standingRemoveBgBtn");
+      const standingSkipBgBtn = $("#standingSkipBgBtn");
+      const standingClearUploadBtn = $("#standingClearUploadBtn");
       const standingUrlInput = $("#standingUrl");
       const standingFilenamePreview = $("#standingFilenamePreview");
       const standingPreviewImg = $("#standingPreviewImg");
@@ -1377,7 +1392,7 @@
       function updateStandingState() {
         const driver = selectedDriver();
         const hasStanding = hasStandingAsset(driver);
-        const hasFile = Boolean(pendingStandingDataUrl || standingFile.files?.[0]);
+        const hasPendingUpload = Boolean(pendingStandingDataUrl);
 
         displayNameInput.value = driver?.display_name || "";
         carNumberInput.value = driver?.car_number || "";
@@ -1387,17 +1402,23 @@
           ? standingFilenameFor(driver)
           : "select a driver...";
 
-        if (driver && hasStanding && !pendingStandingDataUrl && !standingFile.files?.[0]) {
+        if (hasPendingUpload) {
+          updateStandingPreviewImage(pendingStandingDataUrl);
+        } else if (driver && hasStanding) {
           updateStandingPreviewImage(BPDriverStandingPhoto.displayUrl(driver));
-        } else if (!pendingStandingDataUrl && !standingFile.files?.[0]) {
+        } else {
           updateStandingPreviewImage("");
         }
 
-        if (hasStanding) {
-          setStandingCropFromDriver(driver);
+        if (hasStanding || hasPendingUpload) {
+          if (hasStanding) {
+            setStandingCropFromDriver(driver);
+          }
           standingEnabled.disabled = false;
           standingEnabledWrap.classList.remove("is-disabled");
-          standingEnabled.checked = driver.standing_photo_enabled !== false;
+          standingEnabled.checked = hasPendingUpload
+            ? true
+            : driver.standing_photo_enabled !== false;
           standingEnabledHint.textContent =
             "When enabled, the driver profile hero uses the standing photo.";
         } else {
@@ -1407,9 +1428,10 @@
           standingEnabledHint.textContent = "Upload standing photo first.";
         }
 
-        standingSaveUploadBtn.disabled = !driver || !hasFile;
-        standingSaveSettingsBtn.disabled = !driver || (!hasStanding && !hasFile);
+        standingSaveUploadBtn.disabled = !driver || !hasPendingUpload;
+        standingSaveSettingsBtn.disabled = !driver || (!hasStanding && !hasPendingUpload);
         standingRemoveBtn.disabled = !driver || !hasStanding;
+        syncStandingUploadControls();
       }
 
       function switchPhotoTab(tab) {
@@ -1426,13 +1448,33 @@
         }
       }
 
-      function fileToDataUrl(file) {
+      function blobToDataUrl(blob) {
         return new Promise((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = () => resolve(String(reader.result || ""));
-          reader.onerror = () => reject(new Error("Could not read file."));
-          reader.readAsDataURL(file);
+          reader.onerror = () => reject(new Error("Could not read image."));
+          reader.readAsDataURL(blob);
         });
+      }
+
+      function clearStandingUpload() {
+        pendingStandingDataUrl = "";
+        if (standingFile) standingFile.value = "";
+        updateStandingPreviewImage("");
+        if (standingRemoveBgBtn) standingRemoveBgBtn.disabled = true;
+        if (standingSkipBgBtn) standingSkipBgBtn.disabled = true;
+        if (standingClearUploadBtn) standingClearUploadBtn.disabled = true;
+        updateStandingState();
+      }
+
+      function syncStandingUploadControls() {
+        const hasFile = Boolean(standingFile?.files?.[0]);
+        const hasPending = Boolean(pendingStandingDataUrl);
+        if (standingRemoveBgBtn) standingRemoveBgBtn.disabled = !hasFile;
+        if (standingSkipBgBtn) standingSkipBgBtn.disabled = !hasFile;
+        if (standingClearUploadBtn) {
+          standingClearUploadBtn.disabled = !hasFile && !hasPending;
+        }
       }
 
       async function saveStandingCropSettings() {
@@ -1487,11 +1529,11 @@
         }
 
         let imageBase64 = pendingStandingDataUrl;
-        if (!imageBase64 && standingFile.files?.[0]) {
-          imageBase64 = await fileToDataUrl(standingFile.files[0]);
-        }
         if (!imageBase64) {
-          setStandingMsg("Choose a PNG file first.", "error");
+          setStandingMsg(
+            "Process the image with Remove Background or Skip first.",
+            "error",
+          );
           return;
         }
 
@@ -1533,6 +1575,7 @@
         driver.standingPhotoEnabled = true;
         pendingStandingDataUrl = "";
         standingFile.value = "";
+        syncStandingUploadControls();
         standingEnabled.checked = true;
         updateStandingState();
         setStandingMsg(`Standing photo saved to ${data.savedTo || "storage"}.`, "success");
@@ -1712,8 +1755,12 @@
 
       driverSelect.addEventListener("change", () => {
         savedPreviewWrap.hidden = true;
-        pendingStandingDataUrl = "";
-        if (standingFile) standingFile.value = "";
+        clearStandingUpload();
+        cutout = null;
+        fileInput.value = "";
+        removeBgBtn.disabled = true;
+        skipBgBtn.disabled = true;
+        draw();
         updateSaveState();
       });
 
@@ -1804,22 +1851,71 @@
       standingSaveUploadBtn.addEventListener("click", uploadStandingPhoto);
       standingRemoveBtn.addEventListener("click", removeStandingPhoto);
       standingEnabled.addEventListener("change", saveStandingEnabled);
-      standingFile.addEventListener("change", async () => {
+
+      standingFile.addEventListener("change", () => {
+        pendingStandingDataUrl = "";
+        updateStandingPreviewImage("");
+        syncStandingUploadControls();
+        setStandingMsg("");
+        updateStandingState();
+      });
+
+      standingRemoveBgBtn.addEventListener("click", async () => {
         const file = standingFile.files?.[0];
-        if (!file) {
-          pendingStandingDataUrl = "";
+        if (!file) return;
+
+        standingRemoveBgBtn.disabled = true;
+        standingSkipBgBtn.disabled = true;
+        setStandingMsg(
+          "Removing background... first run downloads the AI model (~40 MB), please wait.",
+        );
+
+        try {
+          const removeBackground = await getRemoveBackground();
+          const resultBlob = await removeBackground(file);
+          pendingStandingDataUrl = await blobToDataUrl(resultBlob);
+          updateStandingPreviewImage(pendingStandingDataUrl);
           updateStandingState();
-          return;
+          setStandingMsg(
+            "Background removed. Adjust crop in step 2, then save.",
+            "success",
+          );
+        } catch (e) {
+          setStandingMsg(`Background removal failed: ${e.message || e}`, "error");
+        } finally {
+          syncStandingUploadControls();
         }
+      });
+
+      standingSkipBgBtn.addEventListener("click", async () => {
+        const file = standingFile.files?.[0];
+        if (!file) return;
+
         try {
           pendingStandingDataUrl = await fileToDataUrl(file);
           updateStandingPreviewImage(pendingStandingDataUrl);
           updateStandingState();
-          setStandingMsg("PNG loaded. Adjust crop, then save.", "success");
+          setStandingMsg("Photo loaded. Adjust crop in step 2, then save.", "success");
         } catch (e) {
           setStandingMsg(e.message || "Could not load file.", "error");
+        } finally {
+          syncStandingUploadControls();
         }
       });
+
+      standingClearUploadBtn.addEventListener("click", () => {
+        clearStandingUpload();
+        setStandingMsg("Upload cleared.", "success");
+      });
+
+      function fileToDataUrl(file) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result || ""));
+          reader.onerror = () => reject(new Error("Could not read file."));
+          reader.readAsDataURL(file);
+        });
+      }
 
       if (location.hash === "#standing") {
         switchPhotoTab("standing");
