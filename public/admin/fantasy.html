@@ -1354,6 +1354,65 @@
           eligibilityLines.push('Sparse recent data: no');
         }
 
+        const guardrailLines = [];
+        const g = driver.salaryGuardrails || breakdown._v26Guardrails || {};
+        const activity = breakdown._v26Activity || {};
+        if (g.salaryEngineVersion || activity.activityMultiplier != null || g.activityMultiplier != null) {
+          guardrailLines.push('Salary Engine v2.6 guardrails');
+          guardrailLines.push(
+            `Recent starts: ${g.recentStarts ?? driver.recentStarts ?? activity.recentStarts ?? 0}/5`
+          );
+          guardrailLines.push(
+            `Activity multiplier: ${g.activityMultiplier ?? driver.activityMultiplier ?? activity.activityMultiplier ?? 1}`
+          );
+          guardrailLines.push(
+            `Consecutive DNP: ${g.consecutiveDnpCount ?? driver.consecutiveDnpCount ?? 0}`
+          );
+          if ((g.consecutiveDnpPenalty ?? driver.consecutiveDnpPenalty ?? 0) > 0) {
+            guardrailLines.push(
+              `Consecutive DNP penalty: -${g.consecutiveDnpPenalty ?? driver.consecutiveDnpPenalty} tier score`
+            );
+          }
+          if (activity.fantasyTierScoreBeforeActivity != null) {
+            guardrailLines.push(
+              `Tier score: ${Number(activity.fantasyTierScoreBeforeActivity).toFixed(1)} → ${Number(activity.fantasyTierScoreAfterActivity ?? driver.fantasyTierScore).toFixed(1)} after activity/DNP`
+            );
+          }
+          if (g.tierProgressCapApplied) {
+            guardrailLines.push(
+              `Tier progress cap: 50% (max ${formatFantasySalary(g.tierProgressCapMax ?? driver.tierProgressCapMax)})`
+            );
+            if (g.uncappedBandSalary != null) {
+              guardrailLines.push(
+                `Uncapped band candidate: ${formatFantasySalary(g.uncappedBandSalary)}`
+              );
+            }
+          }
+          if (Array.isArray(g.guardrailNotes) && g.guardrailNotes.length) {
+            guardrailLines.push(`Guardrail: ${g.guardrailNotes.join(' ')}`);
+          } else if (g.salaryGuardrailApplied) {
+            guardrailLines.push('Guardrail: Salary movement limits applied.');
+          }
+          if (g.newDriverProtectionApplied) {
+            guardrailLines.push(
+              `New Driver Protection: ${g.seasonStarts ?? driver.seasonStarts ?? 0} season start${(g.seasonStarts ?? driver.seasonStarts) === 1 ? '' : 's'} — salary movement capped at ±${formatFantasySalary(g.newDriverMovementCap ?? driver.newDriverMovementCap)}`
+            );
+          } else if ((g.seasonStarts ?? driver.seasonStarts ?? 0) >= 3) {
+            guardrailLines.push(
+              `New Driver Protection: not applied (${g.seasonStarts ?? driver.seasonStarts} season starts)`
+            );
+          }
+          if (
+            g.salaryBeforeGuardrails != null &&
+            g.salaryAfterGuardrails != null &&
+            g.salaryBeforeGuardrails !== g.salaryAfterGuardrails
+          ) {
+            guardrailLines.push(
+              `Final salary reduced from ${formatFantasySalary(g.salaryBeforeGuardrails)} to ${formatFantasySalary(g.salaryAfterGuardrails)} before publish.`
+            );
+          }
+        }
+
         return `<ul class="fantasy-detail-list">${rows
           .map(([label, component]) => {
             if (!component) {
@@ -1373,6 +1432,7 @@
             attendanceLines.map((line) => `<li>${escapeAdminHtml(line)}</li>`),
             trackHistoryLines.map((line) => `<li>${escapeAdminHtml(line)}</li>`),
             eligibilityLines.map((line) => `<li>${escapeAdminHtml(line)}</li>`),
+            guardrailLines.map((line) => `<li>${escapeAdminHtml(line)}</li>`),
             capLine ? [`<li>${escapeAdminHtml(capLine)}</li>`] : [],
             recoveryLine ? [`<li>${escapeAdminHtml(recoveryLine)}</li>`] : []
           )

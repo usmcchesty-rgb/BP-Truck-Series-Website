@@ -181,6 +181,40 @@ export function buildFantasySalaryReasons(scored = {}) {
     );
   }
 
+  const v26 = scored.salaryGuardrails || scored.scoreBreakdown?._v26Guardrails;
+  if (v26) {
+    reasons.push(
+      `Activity multiplier: ${v26.activityMultiplier ?? scored.activityMultiplier ?? 1} (${v26.recentStarts ?? scored.recentStarts ?? 0}/5 recent starts)`
+    );
+    if ((v26.consecutiveDnpPenalty ?? scored.consecutiveDnpPenalty) > 0) {
+      reasons.push(
+        `Consecutive DNP penalty: -${v26.consecutiveDnpPenalty ?? scored.consecutiveDnpPenalty} tier score (${v26.consecutiveDnpCount ?? scored.consecutiveDnpCount ?? 0} in a row)`
+      );
+    }
+    if (v26.tierProgressCapApplied) {
+      reasons.push(
+        `Tier progress cap: 50% band max ${formatMoney(v26.tierProgressCapMax ?? scored.tierProgressCapMax)} (uncapped candidate ${formatMoney(v26.uncappedBandSalary ?? scored.uncappedBandSalary)})`
+      );
+    }
+    if (v26.guardrailNotes?.length) {
+      reasons.push(`Salary guardrails: ${v26.guardrailNotes.join(' ')}`);
+    }
+    if (v26.newDriverProtectionApplied) {
+      reasons.push(
+        `New Driver Protection: ${v26.seasonStarts ?? scored.seasonStarts ?? 0} season start${(v26.seasonStarts ?? scored.seasonStarts) === 1 ? '' : 's'} — salary movement capped at ±${formatMoney(v26.newDriverMovementCap ?? scored.newDriverMovementCap)}`,
+      );
+    }
+    if (
+      v26.salaryBeforeGuardrails != null &&
+      v26.salaryAfterGuardrails != null &&
+      v26.salaryBeforeGuardrails !== v26.salaryAfterGuardrails
+    ) {
+      reasons.push(
+        `Guardrail salary adjustment: ${formatMoney(v26.salaryBeforeGuardrails)} → ${formatMoney(v26.salaryAfterGuardrails)}`
+      );
+    }
+  }
+
   reasons.push(`Generated salary ${formatMoney(scored.generatedSalary)} (rounded to nearest $100)`);
   return reasons;
 }
