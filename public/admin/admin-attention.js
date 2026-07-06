@@ -34,7 +34,7 @@
     },
   ];
 
-  const MISSION_ATTENTION = [
+  const MISSION_ATTENTION = window.AdminMissionSectionTasks?.MISSION_ATTENTION || [
     {
       id: 'race-ops-overdue',
       label: 'Overdue race operations',
@@ -124,17 +124,51 @@
   }
 
   function collectMissionTasks(data) {
+    if (window.AdminMissionSectionTasks?.collectMissionTasks) {
+      return window.AdminMissionSectionTasks.collectMissionTasks(data);
+    }
     const postRace = data?.workflows?.postRace?.tasks || [];
     const nextRace = data?.workflows?.nextRace?.tasks || [];
     return [...postRace, ...nextRace];
   }
 
-  function missionSignature(tasks, statuses) {
+  function missionSignature(tasks) {
     return tasks
-      .filter((task) => statuses.includes(task.status))
       .map((task) => String(task.id))
       .sort()
       .join(',');
+  }
+
+  function getMissionSectionAttention(navId) {
+    const tasks = window.AdminMissionSectionTasks?.getSectionAttentionTasks(
+      state.missionControl,
+      navId,
+    ) || [];
+    const signature = missionSignature(tasks);
+    const seenKey = `mission-section-${navId}`;
+    const unseen = tasks.length > 0 && signature && getSeenSignature(seenKey) !== signature;
+    const severity = tasks.some((task) => task.status === 'overdue') ? 'danger' : 'warning';
+    return { tasks, count: tasks.length, signature, unseen, severity, seenKey };
+  }
+
+  function getMissionTabAttention(pageId, tabId) {
+    const tasks = window.AdminMissionSectionTasks?.getTabAttentionTasks(
+      state.missionControl,
+      pageId,
+      tabId,
+    ) || [];
+    const signature = missionSignature(tasks);
+    const seenKey = `mission-tab-${pageId}-${tabId}`;
+    const unseen = tasks.length > 0 && signature && getSeenSignature(seenKey) !== signature;
+    const severity = tasks.some((task) => task.status === 'overdue') ? 'danger' : 'warning';
+    return { tasks, count: tasks.length, signature, unseen, severity, seenKey };
+  }
+
+  function buildMissionAttentionItems() {
+    if (window.AdminMissionSectionTasks?.buildMissionAttentionItems) {
+      return window.AdminMissionSectionTasks.buildMissionAttentionItems(state.missionControl);
+    }
+    return [];
   }
 
   function missionCount(tasks, statuses) {
@@ -151,12 +185,18 @@
       items.push({ ...def, count, signature, unseen });
     });
 
-    const tasks = collectMissionTasks(state.missionControl);
-    MISSION_ATTENTION.forEach((def) => {
-      const count = missionCount(tasks, def.taskStatuses);
-      const signature = missionSignature(tasks, def.taskStatuses);
-      const unseen = count > 0 && signature && getSeenSignature(def.id) !== signature;
-      items.push({ ...def, count, signature, unseen });
+    ['dashboard', 'content', 'competition', 'race-operations'].forEach((navId) => {
+      const mission = getMissionSectionAttention(navId);
+      if (!mission.count) return;
+      items.push({
+        id: mission.seenKey,
+        label: `Mission tasks for ${navId}`,
+        parentNav: navId,
+        count: mission.count,
+        signature: mission.signature,
+        unseen: mission.unseen,
+        severity: mission.severity,
+      });
     });
 
     return items;
@@ -183,13 +223,9 @@
   }
 
   function aggregateForGroupTab(pageId, tabId) {
-    const unseen = getUnseenItems().filter(
-      (item) => item.groupPageId === pageId && item.groupTabId === tabId
-    );
-    if (!unseen.length) return null;
-    const count = unseen.reduce((sum, item) => sum + item.count, 0);
-    const severity = unseen.some((item) => item.severity === 'danger') ? 'danger' : 'warning';
-    return { count, severity };
+    const mission = getMissionTabAttention(pageId, tabId);
+    if (!mission.unseen) return null;
+    return { count: mission.count, severity: mission.severity };
   }
 
   function aggregateForApplicationsTab(statusId) {
@@ -232,10 +268,8 @@
     return isElementVisible(tableWrap || panel, 0.2);
   }
 
-  function isRaceControlPanelVisible() {
+  function isRaceOperationsPageVisible() {
     if (!pathMatches('/admin/race-operations.html')) return false;
-    const { tabId } = parseGroupHash();
-    if (tabId !== 'race-control') return false;
     const wrap = document.querySelector('.admin-group-frame-wrap');
     return isElementVisible(wrap, 0.2);
   }
@@ -254,16 +288,24 @@
       });
     }
 
-    if (isRaceControlPanelVisible()) {
-      const tasks = collectMissionTasks(state.missionControl);
-      MISSION_ATTENTION.forEach((def) => {
-        const count = missionCount(tasks, def.taskStatuses);
-        const signature = missionSignature(tasks, def.taskStatuses);
-        if (count > 0 && signature && getSeenSignature(def.id) !== signature) {
-          markSeen(def.id, signature);
+    if (isRaceOperationsPageVisible()) {
+      const mission = getMissionSectionAttention('race-operations');
+      if (mission.count > 0 && mission.signature && getSeenSignature(mission.seenKey) !== mission.signature) {
+        markSeen(mission.seenKey, mission.signature);
+        changed = true;
+      }
+      const { tabId } = parseGroupHash();
+      if (tabId) {
+        const tabMission = getMissionTabAttention('race-operations', tabId);
+        if (
+          tabMission.count > 0 &&
+          tabMission.signature &&
+          getSeenSignature(tabMission.seenKey) !== tabMission.signature
+        ) {
+          markSeen(tabMission.seenKey, tabMission.signature);
           changed = true;
         }
-      });
+      }
     }
 
     state.visibilityTargets.forEach((target) => {
@@ -302,15 +344,48 @@
 
   function storeNavMissionHighlight(navId) {
     if (!window.AdminMissionTaskSummary || !navId) return;
-    const tasks = window.AdminMissionTaskSummary.collectActionableTasks(
+    const tasks = window.AdminMissionSectionTasks?.getSectionAttentionTasks(
       state.missionControl,
       navId,
-    );
+    ) || [];
     const top =
       tasks.find((task) => task.status === 'overdue') ||
       tasks.find((task) => task.status === 'due') ||
       tasks[0];
     if (top) window.AdminMissionTaskSummary.storeHighlight(top.id);
+  }
+
+  function getApplicationAttentionTasks(sectionId) {
+    if (sectionId !== 'competition') return [];
+    return APPLICATION_ATTENTION.flatMap((def) => {
+      const count = appsCount(state.applications, def.statuses);
+      if (!count) return [];
+      return [
+        {
+          id: def.id,
+          title: def.label,
+          description: `${count} application${count === 1 ? '' : 's'} need review.`,
+          href: def.groupToolHref,
+          status: 'due',
+          raceNumber: null,
+          track: null,
+          isApplicationAttention: true,
+        },
+      ];
+    });
+  }
+
+  function getSectionPanelTasks(sectionId) {
+    const missionTasks = window.AdminMissionSectionTasks?.getSectionAttentionTasks(
+      state.missionControl,
+      sectionId,
+    ) || [];
+    return [...missionTasks, ...getApplicationAttentionTasks(sectionId)];
+  }
+
+  function getNavBadgeCount(navId) {
+    const agg = aggregateForNav(navId);
+    return agg?.count ?? 0;
   }
 
   function applyNavDecorations() {
@@ -408,6 +483,9 @@
 
     markVisibleAttentionSeen();
     applyAllDecorations();
+    if (window.AdminMissionTaskSummary) {
+      window.AdminMissionTaskSummary.renderAll();
+    }
   }
 
   function injectStyles() {
@@ -472,5 +550,11 @@
     getUnseenItems,
     markSeen,
     getSeenSignature,
+    getMissionControl() {
+      return state.missionControl;
+    },
+    getNavBadgeCount,
+    getSectionPanelTasks,
+    getApplicationAttentionTasks,
   };
 })();

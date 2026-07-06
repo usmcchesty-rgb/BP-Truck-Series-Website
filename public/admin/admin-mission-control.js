@@ -477,6 +477,7 @@
       }
 
       render(data);
+      window.__bpPendingMissionControl = data;
       if (window.AdminAttention) window.AdminAttention.setMissionControl(data);
       if (window.AdminMissionTaskSummary) window.AdminMissionTaskSummary.setMissionControl(data);
       setStatus('', false);

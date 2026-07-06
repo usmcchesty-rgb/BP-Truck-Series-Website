@@ -11,8 +11,6 @@
     pending: 'Pending',
   };
 
-  const STATUS_PRIORITY = { overdue: 0, due: 1, pending: 2, upcoming: 3, done: 4 };
-
   const SEVERITY_LABELS = {
     overdue: 'Critical',
     due: 'High',
@@ -29,26 +27,16 @@
     done: '✓',
   };
 
-  const HREF_TARGETS = [
-    { href: '/admin/race-control', section: 'race-operations', tab: 'race-control' },
-    { href: '/admin/transcripts', section: 'race-operations', tab: 'transcripts' },
-    { href: '/admin/social-sharing', section: 'content', tab: 'social-sharing' },
-    { href: '/admin/track-images', section: 'content', tab: 'track-images' },
-    { href: '/admin/driver-photos', section: 'content', tab: 'driver-photos' },
-    { href: '/admin/power-rankings', section: 'competition', tab: 'power-rankings' },
-    { href: '/admin/fantasy', section: 'competition', tab: 'fantasy' },
-    { href: '/admin/news', section: 'content', tab: 'news' },
-    { href: '/fantasy/lineup', section: 'competition', tab: 'fantasy', external: true },
-    { href: '/results', section: 'dashboard', tab: null },
-    { href: '/admin', section: 'dashboard', tab: null },
-  ].sort((a, b) => b.href.length - a.href.length);
-
   const state = {
     data: null,
     updatedAt: null,
     loading: false,
     mounts: new Map(),
   };
+
+  function sectionTasksLib() {
+    return window.AdminMissionSectionTasks || null;
+  }
 
   function escapeHtml(value) {
     return String(value ?? '')
@@ -66,73 +54,46 @@
     }
   }
 
-  function normalizeHref(href) {
-    let path = String(href || '').split('?')[0].split('#')[0].replace(/\\/g, '/');
-    if (path.endsWith('.html')) path = path.slice(0, -'.html'.length);
-    if (path.endsWith('/')) path = path.slice(0, -1);
-    return path;
-  }
-
-  function normalizePath(pathname) {
-    let path = String(pathname || '').replace(/\\/g, '/');
-    if (path.endsWith('/index.html')) path = path.slice(0, -'/index.html'.length);
-    if (path.endsWith('/')) path = path.slice(0, -1);
-    return path;
-  }
-
   function resolveHrefTarget(href) {
-    const normalized = normalizeHref(href);
-    for (const rule of HREF_TARGETS) {
-      if (normalized === rule.href || normalized.startsWith(`${rule.href}/`)) {
-        return rule;
-      }
-    }
+    const lib = sectionTasksLib();
+    if (lib?.resolveHrefTarget) return lib.resolveHrefTarget(href);
     return { section: 'dashboard', tab: null, external: false };
   }
 
-  function taskBelongsToSection(task, sectionId) {
-    if (sectionId === 'analytics') return false;
-    if (!task?.href) return sectionId === 'dashboard';
-    return resolveHrefTarget(task.href).section === sectionId;
+  function getPanelTasks(sectionId) {
+    if (window.AdminAttention?.getSectionPanelTasks) {
+      return window.AdminAttention.getSectionPanelTasks(sectionId);
+    }
+    const lib = sectionTasksLib();
+    if (lib?.getSectionAttentionTasks) {
+      return lib.getSectionAttentionTasks(state.data, sectionId);
+    }
+    return [];
   }
 
-  function collectActionableTasks(data, sectionId) {
-    if (!data || sectionId === 'analytics') return [];
-
-    const groups = [
-      { workflow: 'postRace', bucket: data.workflows?.postRace || data.postRace },
-      { workflow: 'nextRace', bucket: data.workflows?.nextRace || data.nextRace },
-    ];
-
-    const tasks = [];
-    for (const group of groups) {
-      const bucket = group.bucket || {};
-      for (const task of bucket.tasks || []) {
-        if (task.completed || task.status === 'done') continue;
-        if (!taskBelongsToSection(task, sectionId)) continue;
-        tasks.push({
-          ...task,
-          workflow: task.workflow || group.workflow,
-          raceNumber: bucket.raceNumber ?? task.raceNumber ?? null,
-          track: bucket.track || null,
-          date: bucket.date || null,
-        });
-      }
+  function getNavBadgeCount(sectionId) {
+    if (window.AdminAttention?.getNavBadgeCount) {
+      return window.AdminAttention.getNavBadgeCount(sectionId);
     }
-
-    return tasks.sort((a, b) => {
-      const priorityDiff =
-        (STATUS_PRIORITY[a.status] ?? 99) - (STATUS_PRIORITY[b.status] ?? 99);
-      if (priorityDiff !== 0) return priorityDiff;
-      return String(a.title || '').localeCompare(String(b.title || ''));
-    });
+    const lib = sectionTasksLib();
+    if (lib?.getNavMissionBadgeCount) {
+      return lib.getNavMissionBadgeCount(state.data, sectionId, false);
+    }
+    return 0;
   }
 
   function worstStatus(tasks) {
+    const priority = sectionTasksLib()?.STATUS_PRIORITY || {
+      overdue: 0,
+      due: 1,
+      pending: 2,
+      upcoming: 3,
+      done: 4,
+    };
     let worst = 'done';
     for (const task of tasks) {
       if (task.status === 'done') continue;
-      if (worst === 'done' || STATUS_PRIORITY[task.status] < STATUS_PRIORITY[worst]) {
+      if (worst === 'done' || priority[task.status] < priority[worst]) {
         worst = task.status;
       }
     }
@@ -199,7 +160,7 @@
     }
   }
 
-  function consumeHighlight(sectionId) {
+  function consumeHighlight(sectionId, tasks) {
     try {
       const raw = sessionStorage.getItem(HIGHLIGHT_KEY);
       if (!raw) return null;
@@ -208,7 +169,6 @@
         sessionStorage.removeItem(HIGHLIGHT_KEY);
         return null;
       }
-      const tasks = collectActionableTasks(state.data, sectionId);
       const match = tasks.find((task) => String(task.id) === String(parsed.taskId));
       if (!match) return null;
       sessionStorage.removeItem(HIGHLIGHT_KEY);
@@ -230,6 +190,11 @@
     if (!task) return;
     storeHighlight(task.id);
 
+    if (task.isApplicationAttention && task.href) {
+      window.location.href = task.href;
+      return;
+    }
+
     const target = resolveHrefTarget(task.href);
     if (target.external) {
       window.location.href = task.href;
@@ -250,7 +215,7 @@
     }
   }
 
-  function renderRaceGroup(group, mountConfig, highlightTaskId) {
+  function renderRaceGroup(group, highlightTaskId) {
     const label = group.raceNumber
       ? `Race ${group.raceNumber}${group.track ? ` — ${group.track}` : ''}`
       : 'General';
@@ -305,11 +270,16 @@
     const mountEl = mountConfig?.mountEl;
     if (!mountEl) return;
 
-    const tasks = collectActionableTasks(state.data, sectionId);
+    const tasks = getPanelTasks(sectionId);
+    const badgeCount = getNavBadgeCount(sectionId);
     const priorityStatus =
       sectionId === 'analytics' ? 'done' : tasks.length ? worstStatus(tasks) : 'done';
     const priorityLabel = SEVERITY_LABELS[priorityStatus] || 'Complete';
-    const highlightTaskId = consumeHighlight(sectionId);
+    const highlightTaskId = consumeHighlight(sectionId, tasks);
+
+    if (sectionTasksLib()?.assertPanelMatchesBadge) {
+      sectionTasksLib().assertPanelMatchesBadge(sectionId, badgeCount, tasks, state.data);
+    }
 
     if (!tasks.length) {
       const message =
@@ -332,7 +302,7 @@
     }
 
     const raceGroups = groupTasksByRace(tasks)
-      .map((group) => renderRaceGroup(group, mountConfig, highlightTaskId))
+      .map((group) => renderRaceGroup(group, highlightTaskId))
       .join('');
 
     mountEl.innerHTML = `
@@ -375,7 +345,26 @@
     state.mounts.forEach((_config, sectionId) => renderSection(sectionId));
   }
 
+  function adoptMissionControlData() {
+    if (state.data) return state.data;
+    if (window.__bpPendingMissionControl) {
+      state.data = window.__bpPendingMissionControl;
+      state.updatedAt = new Date();
+      return state.data;
+    }
+    if (window.AdminAttention?.getMissionControl) {
+      const existing = window.AdminAttention.getMissionControl();
+      if (existing) {
+        state.data = existing;
+        state.updatedAt = new Date();
+        return state.data;
+      }
+    }
+    return null;
+  }
+
   async function ensureData() {
+    adoptMissionControlData();
     if (state.data || state.loading || !getSessionPw()) return state.data;
     state.loading = true;
     try {
@@ -392,7 +381,7 @@
       setMissionControl(data);
       return data;
     } catch {
-      return null;
+      return adoptMissionControlData();
     } finally {
       state.loading = false;
     }
@@ -401,6 +390,7 @@
   function setMissionControl(data) {
     state.data = data || null;
     state.updatedAt = new Date();
+    window.__bpPendingMissionControl = state.data;
     renderAll();
   }
 
@@ -417,6 +407,7 @@
       setTab: typeof config.setTab === 'function' ? config.setTab : null,
     });
 
+    adoptMissionControlData();
     if (state.data) {
       renderSection(sectionId);
     } else {
@@ -425,7 +416,9 @@
   }
 
   function inferSectionFromPath() {
-    const path = normalizePath(location.pathname);
+    let path = String(location.pathname || '').replace(/\\/g, '/');
+    if (path.endsWith('/index.html')) path = path.slice(0, -'/index.html'.length);
+    if (path.endsWith('/')) path = path.slice(0, -1);
     if (path.endsWith('/content')) return 'content';
     if (path.endsWith('/competition')) return 'competition';
     if (path.endsWith('/race-operations')) return 'race-operations';
@@ -451,7 +444,7 @@
     renderAll,
     storeHighlight,
     resolveHrefTarget,
-    collectActionableTasks,
+    getPanelTasks,
     bindMissionControlLinks,
     inferSectionFromPath,
   };

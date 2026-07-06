@@ -117,7 +117,7 @@
       if (!mount) return;
 
       const boot = () => {
-        if (!window.AdminMissionTaskSummary) return;
+        if (!window.AdminMissionSectionTasks || !window.AdminMissionTaskSummary) return;
         AdminMissionTaskSummary.init({
           section: config.missionSection || inferMissionSection(),
           mount,
@@ -128,8 +128,11 @@
         });
       };
 
-      if (window.AdminMissionTaskSummary) boot();
-      else document.getElementById("admin-mission-summary-script")?.addEventListener("load", boot, { once: true });
+      if (window.AdminMissionSectionTasks && window.AdminMissionTaskSummary) boot();
+      else {
+        document.getElementById("admin-mission-section-tasks-script")?.addEventListener("load", boot, { once: true });
+        document.getElementById("admin-mission-summary-script")?.addEventListener("load", boot, { once: true });
+      }
     }
 
     function inferMissionSection() {
