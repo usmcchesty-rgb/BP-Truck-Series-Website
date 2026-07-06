@@ -15,6 +15,8 @@
   const LAYOUT_STYLE_ID = "admin-layout-styles";
   const MISSION_CONTROL_STYLE_ID = "admin-mission-control-styles";
   const MISSION_CONTROL_SCRIPT_ID = "admin-mission-control-script";
+  const MISSION_SUMMARY_STYLE_ID = "admin-mission-summary-styles";
+  const MISSION_SUMMARY_SCRIPT_ID = "admin-mission-summary-script";
   const ATTENTION_STYLE_ID = "admin-attention-styles";
   const ATTENTION_SCRIPT_ID = "admin-attention-script";
 
@@ -42,6 +44,23 @@
     };
     if (window.AdminAttention) boot();
     else document.getElementById(ATTENTION_SCRIPT_ID)?.addEventListener("load", boot, { once: true });
+  }
+
+  function injectMissionSummaryAssets() {
+    if (!document.getElementById(MISSION_SUMMARY_STYLE_ID)) {
+      const link = document.createElement("link");
+      link.id = MISSION_SUMMARY_STYLE_ID;
+      link.rel = "stylesheet";
+      link.href = "/admin/admin-mission-task-summary.css";
+      document.head.appendChild(link);
+    }
+    if (!document.getElementById(MISSION_SUMMARY_SCRIPT_ID)) {
+      const script = document.createElement("script");
+      script.id = MISSION_SUMMARY_SCRIPT_ID;
+      script.src = "/admin/admin-mission-task-summary.js";
+      script.defer = true;
+      document.body.appendChild(script);
+    }
   }
 
   function injectMissionControlAssets() {
@@ -342,6 +361,7 @@
 
     injectStyles();
     injectMissionControlAssets();
+    injectMissionSummaryAssets();
     injectAttentionAssets();
 
     const baseItems = NAV_ITEMS.filter((item) => !item.optional);

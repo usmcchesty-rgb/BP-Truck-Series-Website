@@ -149,6 +149,7 @@
   <main id="adminView" class="wrap" hidden>
     <h1 class="admin-embed-hide">Admin</h1>
     <p class="sub admin-embed-hide">Password is checked by the server. Settings and driver profiles save to Supabase after you add Supabase keys in Vercel.</p>
+    <div id="adminMissionSummaryRoot" class="admin-embed-hide"></div>
 
     <div id="settingsSection" class="admin-section active">
       <div class="panel">
@@ -304,11 +305,23 @@
       $('#loginPw').focus();
     }
 
+    function initDashboardMissionSummary() {
+      const root = $('#adminMissionSummaryRoot');
+      if (!root || new URLSearchParams(location.search).get('embed') === '1') return;
+      const boot = () => {
+        if (!window.AdminMissionTaskSummary) return;
+        AdminMissionTaskSummary.init({ section: 'dashboard', mount: root });
+      };
+      if (window.AdminMissionTaskSummary) boot();
+      else document.getElementById('admin-mission-summary-script')?.addEventListener('load', boot, { once: true });
+    }
+
     function showAdmin() {
       $('#loginView').hidden = true;
       $('#adminView').hidden = false;
       if (window.AdminNav) AdminNav.setLoggedIn(true);
       else if ($('#logoutBtn')) $('#logoutBtn').hidden = false;
+      initDashboardMissionSummary();
       applyAdminHash();
       loadSettings();
     }

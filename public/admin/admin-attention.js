@@ -300,9 +300,29 @@
     }
   }
 
+  function storeNavMissionHighlight(navId) {
+    if (!window.AdminMissionTaskSummary || !navId) return;
+    const tasks = window.AdminMissionTaskSummary.collectActionableTasks(
+      state.missionControl,
+      navId,
+    );
+    const top =
+      tasks.find((task) => task.status === 'overdue') ||
+      tasks.find((task) => task.status === 'due') ||
+      tasks[0];
+    if (top) window.AdminMissionTaskSummary.storeHighlight(top.id);
+  }
+
   function applyNavDecorations() {
     document.querySelectorAll('[data-nav-id]').forEach((link) => {
-      decorateElement(link, aggregateForNav(link.dataset.navId));
+      const navId = link.dataset.navId;
+      const decoration = aggregateForNav(navId);
+      decorateElement(link, decoration);
+      if (link.dataset.missionNavBound === '1') return;
+      link.dataset.missionNavBound = '1';
+      link.addEventListener('click', () => {
+        if (aggregateForNav(navId)) storeNavMissionHighlight(navId);
+      });
     });
   }
 
@@ -381,6 +401,9 @@
       ]);
       if (Array.isArray(applications)) state.applications = applications;
       if (missionControl) state.missionControl = missionControl;
+      if (missionControl && window.AdminMissionTaskSummary) {
+        window.AdminMissionTaskSummary.setMissionControl(missionControl);
+      }
     }
 
     markVisibleAttentionSeen();
@@ -438,6 +461,9 @@
     },
     setMissionControl(missionControl) {
       state.missionControl = missionControl;
+      if (window.AdminMissionTaskSummary) {
+        window.AdminMissionTaskSummary.setMissionControl(missionControl);
+      }
       refresh({ skipFetch: true, missionControl });
     },
     observeTarget(target) {

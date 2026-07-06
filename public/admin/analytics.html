@@ -209,6 +209,8 @@
       <button type="button" class="admin-group-tab" data-tab="daily">Daily Traffic</button>
     </nav>
 
+    <div id="groupMissionSummary"></div>
+
     <div class="analytics-filters">
       <button type="button" class="analytics-filter-btn" data-preset="today">Today</button>
       <button type="button" class="analytics-filter-btn" data-preset="last7">Last 7 Days</button>
@@ -270,10 +272,22 @@
       if (window.AdminNav) AdminNav.setLoggedIn(false);
     }
 
+    async function initAnalyticsMissionSummary() {
+      const mount = $('#groupMissionSummary');
+      if (!mount) return;
+      const boot = () => {
+        if (!window.AdminMissionTaskSummary) return;
+        AdminMissionTaskSummary.init({ section: 'analytics', mount });
+      };
+      if (window.AdminMissionTaskSummary) boot();
+      else document.getElementById('admin-mission-summary-script')?.addEventListener('load', boot, { once: true });
+    }
+
     async function showAdmin() {
       $('#loginView').hidden = true;
       $('#adminView').hidden = false;
       if (window.AdminNav) AdminNav.setLoggedIn(true);
+      initAnalyticsMissionSummary();
       applyTabFromHash();
       await refreshAll();
     }

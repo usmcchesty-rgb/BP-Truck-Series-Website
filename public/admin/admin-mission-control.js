@@ -241,7 +241,7 @@
               }
               ${
                 task.href
-                  ? `<a class="admin-mission-control__link" href="${escapeHtml(task.href)}" target="_blank" rel="noopener">Open →</a>`
+                  ? `<a class="admin-mission-control__link" href="${escapeHtml(task.href)}" data-mc-task-link data-task-id="${escapeHtml(task.id)}" rel="noopener">Open →</a>`
                   : ''
               }
             </div>
@@ -392,6 +392,9 @@
     renderWorkflowTabs(root, payload);
     renderDayTabs(root, workflowTasks);
     renderTaskList(root, workflowTasks);
+    if (window.AdminMissionTaskSummary) {
+      window.AdminMissionTaskSummary.bindMissionControlLinks(root);
+    }
   }
 
   function renderShell(root) {
@@ -475,6 +478,7 @@
 
       render(data);
       if (window.AdminAttention) window.AdminAttention.setMissionControl(data);
+      if (window.AdminMissionTaskSummary) window.AdminMissionTaskSummary.setMissionControl(data);
       setStatus('', false);
     } catch (error) {
       setStatus(error.message || 'Load failed', true);

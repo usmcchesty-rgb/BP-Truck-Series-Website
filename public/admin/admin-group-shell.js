@@ -102,10 +102,50 @@
       if (window.AdminNav) AdminNav.setLoggedIn(false);
     }
 
+    function ensureMissionSummaryMount() {
+      let mount = document.getElementById("groupMissionSummary");
+      if (!mount && tabBar) {
+        mount = document.createElement("div");
+        mount.id = "groupMissionSummary";
+        tabBar.insertAdjacentElement("afterend", mount);
+      }
+      return mount;
+    }
+
+    function initMissionSummary() {
+      const mount = ensureMissionSummaryMount();
+      if (!mount) return;
+
+      const boot = () => {
+        if (!window.AdminMissionTaskSummary) return;
+        AdminMissionTaskSummary.init({
+          section: config.missionSection || inferMissionSection(),
+          mount,
+          setTab(tabId) {
+            setHash(tabId, "", false);
+            renderTabs();
+          },
+        });
+      };
+
+      if (window.AdminMissionTaskSummary) boot();
+      else document.getElementById("admin-mission-summary-script")?.addEventListener("load", boot, { once: true });
+    }
+
+    function inferMissionSection() {
+      const path = String(location.pathname || "").replace(/\\/g, "/");
+      if (path.endsWith("/content")) return "content";
+      if (path.endsWith("/competition")) return "competition";
+      if (path.endsWith("/race-operations")) return "race-operations";
+      if (path.endsWith("/analytics")) return "analytics";
+      return "dashboard";
+    }
+
     function showAdmin() {
       if (loginView) loginView.hidden = true;
       if (adminView) adminView.hidden = false;
       if (window.AdminNav) AdminNav.setLoggedIn(true);
+      initMissionSummary();
       renderTabs();
     }
 
