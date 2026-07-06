@@ -92,7 +92,7 @@
     };
     let worst = 'done';
     for (const task of tasks) {
-      if (task.status === 'done') continue;
+      if (task.status === 'done' || task.status === 'inactive') continue;
       if (worst === 'done' || priority[task.status] < priority[worst]) {
         worst = task.status;
       }
@@ -282,10 +282,15 @@
     }
 
     if (!tasks.length) {
+      const isOffWeek = Boolean(
+        state.data?.windowContext?.isOffWeek || state.data?.summary?.isOffWeek,
+      );
       const message =
         sectionId === 'analytics'
           ? 'All analytics systems are operating normally.'
-          : 'No action required.';
+          : isOffWeek
+            ? 'No action required. No race is scheduled this week.'
+            : 'No action required.';
       mountEl.innerHTML = `
         <section class="admin-mission-summary" aria-live="polite">
           <div class="admin-mission-summary__header">

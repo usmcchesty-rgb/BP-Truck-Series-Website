@@ -28,9 +28,10 @@
     upcoming: 'Upcoming',
     overdue: 'Overdue',
     pending: 'Pending',
+    inactive: 'Inactive',
   };
 
-  const STATUS_PRIORITY = { overdue: 0, due: 1, pending: 2, upcoming: 3, done: 4 };
+  const STATUS_PRIORITY = { overdue: 0, due: 1, pending: 2, upcoming: 3, inactive: 4, done: 5 };
 
   let state = {
     data: null,
@@ -91,7 +92,7 @@
 
     let worst = 'done';
     for (const task of dayTasks) {
-      if (task.status === 'done') continue;
+      if (task.status === 'done' || task.status === 'inactive') continue;
       if (worst === 'done' || STATUS_PRIORITY[task.status] < STATUS_PRIORITY[worst]) {
         worst = task.status;
       }
@@ -106,7 +107,7 @@
 
     let worst = 'done';
     for (const task of tasks) {
-      if (task.status === 'done') continue;
+      if (task.status === 'done' || task.status === 'inactive') continue;
       if (worst === 'done' || STATUS_PRIORITY[task.status] < STATUS_PRIORITY[worst]) {
         worst = task.status;
       }
@@ -160,11 +161,34 @@
   }
 
   function formatNextDue(data) {
+    if (data?.windowContext?.isOffWeek || data?.summary?.isOffWeek) {
+      return data?.summary?.offWeekMessage || 'Off week — no race-week tasks due.';
+    }
     const next = data?.summary?.nextDueTask;
     if (!next) return 'All tasks complete';
     const label = STATUS_LABELS[next.status] || next.status;
     const workflowLabel = next.workflow === 'postRace' ? 'Post-race' : 'Next race';
     return `${workflowLabel}: ${next.dayLabel} — ${next.title} (${label})`;
+  }
+
+  function formatLatestRaceLabel(windowContext, bucket, fallbackLabel) {
+    const latest = windowContext?.latestCompletedRace;
+    if (latest?.raceNumber) {
+      const track = latest.track ? ` — ${latest.track}` : '';
+      const date = latest.date ? ` (${latest.date})` : '';
+      return `Race ${latest.raceNumber}${track}${date}`;
+    }
+    return formatRaceLabel(bucket, fallbackLabel);
+  }
+
+  function formatNextRaceLabel(windowContext, bucket, fallbackLabel) {
+    const upcoming = windowContext?.nextUpcomingRace;
+    if (upcoming?.raceNumber) {
+      const track = upcoming.track ? ` — ${upcoming.track}` : '';
+      const date = upcoming.date ? ` (${upcoming.date})` : '';
+      return `Race ${upcoming.raceNumber}${track}${date}`;
+    }
+    return formatRaceLabel(bucket, fallbackLabel);
   }
 
   function readExpandedPreference() {
@@ -193,11 +217,15 @@
     return `Auto ${detection.automatic.label} · Manual ${detection.manual.label} · Overall ${detection.overall.label}`;
   }
 
-  function renderTaskList(root, tasks) {
+  function renderTaskList(root, tasks, options = {}) {
     const listEl = root.querySelector('[data-mc-task-list]');
     if (!listEl) return;
 
-    const dayTasks = getDayTasks(tasks, state.selectedDay);
+    const isOffWeek = Boolean(options.isOffWeek);
+    let dayTasks = getDayTasks(tasks, state.selectedDay);
+    if (isOffWeek) {
+      dayTasks = dayTasks.filter((task) => task.status !== 'inactive');
+    }
     if (!dayTasks.length) {
       listEl.innerHTML = '<p class="admin-mission-control__empty">No tasks for this day.</p>';
       return;
@@ -206,11 +234,12 @@
     listEl.innerHTML = dayTasks
       .map((task) => {
         const isManual = isManualTask(task);
+        const isInactive = task.status === 'inactive';
         const isAuto = !isManual;
         const modeBadge = isManual
           ? '<span class="admin-mission-control__mode-badge is-manual">Manual</span>'
           : '<span class="admin-mission-control__mode-badge is-auto"><span class="admin-mission-control__auto-icon" aria-hidden="true">⚙</span> Auto</span>';
-        const control = isManual
+        const control = isManual && !isInactive
           ? `<input
               class="admin-mission-control__check"
               type="checkbox"
@@ -346,6 +375,8 @@
     const workflowTasks = getWorkflowTasks(payload, state.selectedWorkflow);
     const postRace = getWorkflowBucket(payload, 'postRace');
     const nextRace = getWorkflowBucket(payload, 'nextRace');
+    const windowContext = payload.windowContext || {};
+    const isOffWeek = Boolean(windowContext.isOffWeek || payload.summary?.isOffWeek);
 
     const postRaceEl = root.querySelector('[data-mc-post-race]');
     const nextRaceEl = root.querySelector('[data-mc-next-race]');
@@ -357,8 +388,16 @@
     const noteEl = root.querySelector('[data-mc-note]');
     const workflowLabelEl = root.querySelector('[data-mc-workflow-label]');
 
-    if (postRaceEl) postRaceEl.textContent = formatRaceLabel(postRace, 'No completed race');
-    if (nextRaceEl) nextRaceEl.textContent = formatRaceLabel(nextRace, 'No upcoming race');
+    if (postRaceEl) {
+      postRaceEl.textContent = isOffWeek
+        ? `Latest: ${formatLatestRaceLabel(windowContext, postRace, 'No completed race')}`
+        : formatRaceLabel(postRace, 'No completed race');
+    }
+    if (nextRaceEl) {
+      nextRaceEl.textContent = isOffWeek
+        ? `Next: ${formatNextRaceLabel(windowContext, nextRace, 'No upcoming race')}`
+        : formatRaceLabel(nextRace, 'No upcoming race');
+    }
     if (remainingEl) remainingEl.textContent = String(payload?.summary?.remainingCount ?? '—');
     if (detectionEl) detectionEl.textContent = renderDetectionSummary(payload);
     if (nextDueEl) nextDueEl.textContent = formatNextDue(payload);
@@ -379,7 +418,11 @@
 
     const activeBucket = getWorkflowBucket(payload, state.selectedWorkflow);
     if (noteEl) {
-      if (activeBucket && activeBucket.hasRaceDate === false) {
+      if (isOffWeek) {
+        noteEl.hidden = false;
+        noteEl.textContent =
+          'Off week — no race-week tasks are due. Upcoming prep tasks stay hidden from due/overdue counts until their race-work window begins.';
+      } else if (activeBucket && activeBucket.hasRaceDate === false) {
         noteEl.hidden = false;
         noteEl.textContent =
           'Schedule race date unavailable for this bucket — overdue labels disabled. Confirm schedule in Admin settings.';
@@ -391,7 +434,7 @@
 
     renderWorkflowTabs(root, payload);
     renderDayTabs(root, workflowTasks);
-    renderTaskList(root, workflowTasks);
+    renderTaskList(root, workflowTasks, { isOffWeek });
     if (window.AdminMissionTaskSummary) {
       window.AdminMissionTaskSummary.bindMissionControlLinks(root);
     }

@@ -12,6 +12,13 @@ import {
   resolveTaskCompletionState,
   summarizeDetectionCounts,
 } from './_mission-control-task-engine.js';
+import {
+  buildMissionControlWindowContext,
+  computeWindowAwareTaskStatus,
+  easternDateKey,
+  easternDateKeyFromParts,
+  isWorkflowWindowActive,
+} from './_mission-control-windows.js';
 
 export const MISSION_CONTROL_TASKS = [
   {
@@ -254,12 +261,12 @@ export function parseMissionControlStore(raw) {
   return {};
 }
 
-function easternDateKeyFromParts({ year, month, day }) {
-  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+function easternDateKeyFromPartsLocal({ year, month, day }) {
+  return easternDateKeyFromParts({ year, month, day });
 }
 
-function easternDateKey(date = new Date()) {
-  return easternDateKeyFromParts(getEasternDateParts(date));
+function easternDateKeyLocal(date = new Date()) {
+  return easternDateKey(date);
 }
 
 function addCalendarDays(dateParts, deltaDays) {
@@ -359,18 +366,14 @@ function computeTaskDueDateKey(raceDateParts, workflow, dayKey) {
   const offsetMap = workflow === 'postRace' ? POST_RACE_DAY_OFFSET : NEXT_RACE_DAY_OFFSET;
   const offset = offsetMap[dayKey];
   if (offset == null) return null;
-  return easternDateKeyFromParts(addCalendarDays(raceDateParts, offset));
+  return easternDateKeyFromPartsLocal(addCalendarDays(raceDateParts, offset));
 }
 
-function computeTaskStatus({ completed, dueDateKey, todayKey, hasRaceDate }) {
-  if (!hasRaceDate || !dueDateKey) return completed ? 'done' : 'pending';
-  if (dueDateKey > todayKey) return 'upcoming';
-  if (completed) return 'done';
-  if (dueDateKey === todayKey) return 'due';
-  return 'overdue';
+function computeTaskStatus(args) {
+  return computeWindowAwareTaskStatus(args);
 }
 
-const STATUS_SORT = { overdue: 0, due: 1, pending: 2, upcoming: 3, done: 4 };
+const STATUS_SORT = { overdue: 0, due: 1, pending: 2, upcoming: 3, inactive: 4, done: 5 };
 
 function getDayOrderForWorkflow(workflow) {
   return workflow === 'postRace' ? POST_RACE_DAY_ORDER : NEXT_RACE_DAY_ORDER;
@@ -383,26 +386,37 @@ export function buildWorkflowTasks({
   completedTaskIds = [],
   detectionContext = null,
   now = new Date(),
+  windowContext = null,
 }) {
   const raceDateParts = raceDate ? parseScheduleDateParts(raceDate) : null;
-  const todayKey = easternDateKey(now);
+  const todayKey = easternDateKeyLocal(now);
   const hasRaceDate = Boolean(raceDateParts);
   const manualCompletedIds = new Set(completedTaskIds);
   const dayOrder = getDayOrderForWorkflow(workflow);
+  const windowActive = isWorkflowWindowActive(workflow, windowContext);
 
   const tasks = MISSION_CONTROL_TASKS.filter((task) => task.workflow === workflow).map((task) => {
     const dueDateKey = computeTaskDueDateKey(raceDateParts, workflow, task.day);
-    const calendarGate = { dueDateKey, todayKey, hasRaceDate, dayLabel: task.dayLabel };
+    const calendarGate = {
+      dueDateKey,
+      todayKey,
+      hasRaceDate,
+      dayLabel: task.dayLabel,
+      windowActive,
+    };
     const completion = detectionContext
       ? resolveTaskCompletionState(task, detectionContext, manualCompletedIds, calendarGate)
-      : resolveTaskCompletionState(
-          task,
-          {},
-          manualCompletedIds,
-          calendarGate
-        );
+      : resolveTaskCompletionState(task, {}, manualCompletedIds, calendarGate);
     const completed = Boolean(completion.completed);
-    const status = computeTaskStatus({ completed, dueDateKey, todayKey, hasRaceDate });
+    const status = computeTaskStatus({
+      completed,
+      dueDateKey,
+      todayKey,
+      hasRaceDate,
+      windowActive,
+      workflow,
+      windowContext,
+    });
     return {
       ...task,
       workflow,
@@ -415,6 +429,13 @@ export function buildWorkflowTasks({
       autoReason: completion.autoReason || null,
       autoPending: completion.autoPending === true,
       calendarGated: completion.calendarGated === true,
+      windowActive,
+      inactiveReason:
+        status === 'inactive'
+          ? 'Outside active race-work window'
+          : status === 'upcoming' && !windowActive
+            ? 'Scheduled for a future race week'
+            : null,
     };
   });
 
@@ -427,9 +448,22 @@ export function buildWorkflowTasks({
   return tasks;
 }
 
-export function summarizeMissionControl(tasks = []) {
-  const openTasks = tasks.filter((task) => task.status !== 'done');
-  const remainingCount = openTasks.length;
+export function summarizeMissionControl(tasks = [], windowContext = null) {
+  const actionableTasks = tasks.filter((task) => task.status !== 'inactive');
+
+  if (windowContext?.isOffWeek) {
+    return {
+      remainingCount: 0,
+      nextDueTask: null,
+      isOffWeek: true,
+      offWeekMessage: 'Off week — no race-week tasks due.',
+    };
+  }
+
+  const openTasks = actionableTasks.filter((task) => task.status !== 'done');
+  const remainingCount = openTasks.filter(
+    (task) => task.status === 'overdue' || task.status === 'due' || task.status === 'pending',
+  ).length;
   const nextDueTask =
     openTasks
       .filter((task) => task.status === 'overdue' || task.status === 'due' || task.status === 'pending')
@@ -448,6 +482,8 @@ export function summarizeMissionControl(tasks = []) {
           workflow: nextDueTask.workflow,
         }
       : null,
+    isOffWeek: false,
+    offWeekMessage: null,
   };
 }
 
@@ -459,6 +495,7 @@ function buildWorkflowBucket({
   seasonId,
   detectionContext,
   now,
+  windowContext,
 }) {
   if (!bucket?.raceNumber) {
     return {
@@ -483,6 +520,7 @@ function buildWorkflowBucket({
     completedTaskIds,
     detectionContext,
     now,
+    windowContext,
   });
 
   return {
@@ -491,9 +529,10 @@ function buildWorkflowBucket({
     track: bucket.track || null,
     date: raceDate,
     hasRaceDate: Boolean(raceDate && parseScheduleDateParts(raceDate)),
+    windowActive: isWorkflowWindowActive(workflow, windowContext),
     tasks,
-    summary: summarizeMissionControl(tasks),
-    detectionSummary: summarizeDetectionCounts(tasks),
+    summary: summarizeMissionControl(tasks, windowContext),
+    detectionSummary: summarizeDetectionCounts(tasks.filter((task) => task.status !== 'inactive')),
     completedTaskIds,
   };
 }
@@ -570,6 +609,12 @@ export async function buildAdminMissionControlResponse(options = {}) {
     nextRace: raceBuckets.nextRace,
   });
 
+  const windowContext = buildMissionControlWindowContext({
+    postRace: raceBuckets.postRace,
+    nextRace: raceBuckets.nextRace,
+    now,
+  });
+
   const postRace = buildWorkflowBucket({
     workflow: 'postRace',
     bucket: raceBuckets.postRace,
@@ -578,6 +623,7 @@ export async function buildAdminMissionControlResponse(options = {}) {
     seasonId,
     detectionContext,
     now,
+    windowContext,
   });
 
   const nextRace = buildWorkflowBucket({
@@ -588,11 +634,14 @@ export async function buildAdminMissionControlResponse(options = {}) {
     seasonId,
     detectionContext,
     now,
+    windowContext,
   });
 
   const allTasks = [...postRace.tasks, ...nextRace.tasks];
-  const summary = summarizeMissionControl(allTasks);
-  const detectionSummary = summarizeDetectionCounts(allTasks);
+  const summary = summarizeMissionControl(allTasks, windowContext);
+  const detectionSummary = summarizeDetectionCounts(
+    allTasks.filter((task) => task.status !== 'inactive'),
+  );
 
   return {
     seasonId,
@@ -603,6 +652,7 @@ export async function buildAdminMissionControlResponse(options = {}) {
     tasks: allTasks,
     summary,
     detectionSummary,
+    windowContext,
     hasRaceDate: Boolean(postRace.hasRaceDate || nextRace.hasRaceDate),
     workflows: {
       postRace,
@@ -620,4 +670,5 @@ export {
   WORKFLOW_ORDER,
   POST_RACE_DAY_OFFSET,
   NEXT_RACE_DAY_OFFSET,
+  buildMissionControlWindowContext,
 };

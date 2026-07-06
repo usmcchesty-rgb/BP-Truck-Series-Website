@@ -347,7 +347,8 @@
 }
 
 .admin-mission-control__badge.is-upcoming,
-.admin-mission-control__badge.is-pending {
+.admin-mission-control__badge.is-pending,
+.admin-mission-control__badge.is-inactive {
   border-color: rgba(255, 255, 255, 0.15);
   color: #bbb;
 }

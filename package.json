@@ -11,6 +11,7 @@
     "test:race-date-status": "node scripts/test-race-date-status.mjs",
     "test:race-control-parser": "node scripts/test-race-control-parser-fixtures.mjs",
     "test:fantasy-salary-v26": "node scripts/test-fantasy-salary-v26-guardrails.mjs",
+    "test:mission-control-windows": "node scripts/test-mission-control-windows.mjs",
     "track-tool": "node server/track-processor.mjs"
   },
   "dependencies": {

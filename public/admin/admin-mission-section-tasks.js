@@ -1,7 +1,7 @@
 (function () {
   const ATTENTION_TASK_STATUSES = ['overdue', 'due'];
 
-  const STATUS_PRIORITY = { overdue: 0, due: 1, pending: 2, upcoming: 3, done: 4 };
+  const STATUS_PRIORITY = { overdue: 0, due: 1, pending: 2, upcoming: 3, inactive: 4, done: 5 };
 
   const HREF_TARGETS = [
     { href: '/admin/race-control', section: 'race-operations', tab: 'race-control' },
@@ -90,6 +90,7 @@
     return collectMissionTasks(missionControl)
       .filter((task) => {
         if (task.completed || task.status === 'done') return false;
+        if (task.status === 'inactive') return false;
         if (statuses.length && !statuses.includes(task.status)) return false;
 
         const target = resolveHrefTarget(task.href);
