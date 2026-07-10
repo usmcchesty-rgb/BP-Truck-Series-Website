@@ -42,13 +42,73 @@ function resolveRaceDateParts(race) {
 function normalizeRaceRef(race) {
   if (!race) return null;
   const raceNumber =
-    race.raceNumber ?? race.race_number ?? race.officialPointsRaceNumber ?? null;
+    race.officialPointsRaceNumber ??
+    race.race_number ??
+    race.raceNumber ??
+    null;
   if (raceNumber == null) return null;
   return {
     raceNumber: Number(raceNumber),
     track: race.track || null,
     date: race.date || null,
     race,
+    raceSource: race.raceSource || null,
+    workflowRaceNumber: race.workflowRaceNumber ?? null,
+    workflowTrackName: race.workflowTrackName ?? null,
+  };
+}
+
+export function getWorkflowPostRaceRef(ctx) {
+  const bucket = ctx?.postRace;
+  if (!bucket?.raceNumber) return null;
+  const scheduleRace = bucket.race || null;
+  return {
+    raceNumber: Number(bucket.raceNumber),
+    track: bucket.track || scheduleRace?.track || null,
+    date: bucket.date || scheduleRace?.date || null,
+    race: scheduleRace,
+    raceSource: 'workflow',
+    workflowRaceNumber: Number(bucket.raceNumber),
+    workflowTrackName: bucket.track || scheduleRace?.track || null,
+  };
+}
+
+export function getWorkflowNextRaceRef(ctx) {
+  const bucket = ctx?.nextRace;
+  if (!bucket?.raceNumber) return null;
+  const scheduleRace = bucket.race || null;
+  return {
+    raceNumber: Number(bucket.raceNumber),
+    track: bucket.track || scheduleRace?.track || null,
+    date: bucket.date || scheduleRace?.date || null,
+    race: scheduleRace,
+    raceSource: 'workflow',
+    workflowRaceNumber: Number(bucket.raceNumber),
+    workflowTrackName: bucket.track || scheduleRace?.track || null,
+  };
+}
+
+function warnWorkflowRaceMismatch(taskId, workflowRaceNumber, evaluatorRaceNumber, evaluatorRaceSource) {
+  if (workflowRaceNumber == null || evaluatorRaceNumber == null) return;
+  if (Number(workflowRaceNumber) === Number(evaluatorRaceNumber)) return;
+  console.warn('[MissionControl] workflow/evaluator race mismatch', {
+    taskId,
+    workflowRaceNumber,
+    evaluatorRaceNumber,
+    evaluatorRaceSource,
+  });
+}
+
+function buildNewsMatchDiagnostics(race, article, raceSource, workflowRaceNumber) {
+  return {
+    workflowRaceNumber: workflowRaceNumber ?? race?.workflowRaceNumber ?? race?.raceNumber ?? null,
+    workflowTrackName: race?.workflowTrackName ?? race?.track ?? null,
+    evaluatorRaceNumber: race?.raceNumber ?? null,
+    evaluatorRaceSource: raceSource || race?.raceSource || 'workflow',
+    matchedArticleId: article?.id ?? null,
+    matchedArticleRaceNumber: article?.race_number ?? null,
+    matchedArticleType: article?.article_type ?? null,
+    matchedArticlePublishedAt: article?.published_at ?? null,
   };
 }
 
@@ -163,9 +223,15 @@ function findRaceScopedNewsMatch(articles, options = {}) {
   const typeLabel = options.typeLabel || 'article';
   const articleTypes = options.articleTypes || null;
   const titleIncludes = options.titleIncludes || null;
+  const raceSource = options.raceSource || race?.raceSource || 'workflow';
+  const workflowRaceNumber = options.workflowRaceNumber ?? race?.workflowRaceNumber ?? null;
 
   if (!race) {
-    return { complete: false, reason: `No target race set for ${typeLabel}.` };
+    return {
+      complete: false,
+      reason: `No target race set for ${typeLabel}.`,
+      diagnostics: buildNewsMatchDiagnostics(null, null, raceSource, workflowRaceNumber),
+    };
   }
 
   const sorted = [...(articles || [])]
@@ -184,6 +250,7 @@ function findRaceScopedNewsMatch(articles, options = {}) {
           complete: true,
           reason: `Found Race ${race.raceNumber} ${typeLabel}${article.published_at ? ` published ${formatPublishedDayLabel(article.published_at)}` : ''}.`,
           article,
+          diagnostics: buildNewsMatchDiagnostics(race, article, raceSource, workflowRaceNumber),
         };
       }
       latestWrongRace = ctx.itemRace;
@@ -195,6 +262,7 @@ function findRaceScopedNewsMatch(articles, options = {}) {
         complete: true,
         reason: `Found ${typeLabel} published ${formatPublishedDayLabel(article.published_at)} for Race ${race.raceNumber} week.`,
         article,
+        diagnostics: buildNewsMatchDiagnostics(race, article, raceSource, workflowRaceNumber),
       };
     }
   }
@@ -203,12 +271,14 @@ function findRaceScopedNewsMatch(articles, options = {}) {
     return {
       complete: false,
       reason: `Latest ${typeLabel} is from Race ${latestWrongRace}, not Race ${race.raceNumber}.`,
+      diagnostics: buildNewsMatchDiagnostics(race, null, raceSource, workflowRaceNumber),
     };
   }
 
   return {
     complete: false,
     reason: `No ${typeLabel} found for Race ${race.raceNumber}${window ? ' week' : ''}.`,
+    diagnostics: buildNewsMatchDiagnostics(race, null, raceSource, workflowRaceNumber),
   };
 }
 
@@ -310,11 +380,11 @@ async function loadBroadcastState(nextRace) {
 }
 
 function getPostRaceFromContext(ctx) {
-  return ctx.postRace?.race || ctx.postRace || null;
+  return getWorkflowPostRaceRef(ctx) || ctx.postRace?.race || ctx.postRace || null;
 }
 
 function getNextRaceFromContext(ctx) {
-  return ctx.nextRace?.race || ctx.nextRace || null;
+  return getWorkflowNextRaceRef(ctx) || ctx.nextRace?.race || ctx.nextRace || null;
 }
 
 function getNextRaceSlate(ctx) {
@@ -470,18 +540,24 @@ export const MISSION_CONTROL_EVALUATORS = {
   },
 
   'thu-confirm-next-race-schedule'(ctx) {
-    const next = normalizeRaceRef(getNextRaceFromContext(ctx) || ctx.nextRace);
+    const next = getWorkflowNextRaceRef(ctx);
     const complete = Boolean(next?.raceNumber);
     return {
       complete,
       reason: complete
         ? `Schedule has upcoming Race ${next.raceNumber}${next.track ? ` — ${next.track}` : ''}.`
         : 'No upcoming points race found in schedule.',
+      diagnostics: {
+        workflowRaceNumber: ctx.nextRace?.raceNumber ?? null,
+        workflowTrackName: ctx.nextRace?.track ?? null,
+        evaluatorRaceNumber: next?.raceNumber ?? null,
+        evaluatorRaceSource: next?.raceSource ?? 'workflow',
+      },
     };
   },
 
   'thu-confirm-broadcast-link'(ctx) {
-    const next = normalizeRaceRef(getNextRaceFromContext(ctx) || ctx.nextRace);
+    const next = getWorkflowNextRaceRef(ctx);
     const broadcast = ctx.broadcast || {};
 
     if (!broadcast.configured || !broadcast.embedUrl) {
@@ -504,49 +580,74 @@ export const MISSION_CONTROL_EVALUATORS = {
   },
 
   'thu-publish-driver-spotlight'(ctx) {
-    const nextRace = normalizeRaceRef(getNextRaceFromContext(ctx) || ctx.nextRace);
-    const window = getNextRacePrepWindow(getNextRaceFromContext(ctx));
+    const nextRace = getWorkflowNextRaceRef(ctx);
+    warnWorkflowRaceMismatch(
+      'thu-publish-driver-spotlight',
+      ctx.nextRace?.raceNumber,
+      nextRace?.raceNumber,
+      nextRace?.raceSource,
+    );
+    const window = getNextRacePrepWindow(nextRace);
 
     const byType = findRaceScopedNewsMatch(ctx.newsArticles, {
       race: nextRace,
       window,
       articleTypes: ['driver-spotlight'],
       typeLabel: 'Driver Spotlight',
+      raceSource: 'workflow',
+      workflowRaceNumber: ctx.nextRace?.raceNumber,
     });
-    if (byType.complete) return { complete: true, reason: byType.reason };
+    if (byType.complete) {
+      return { complete: true, reason: byType.reason, diagnostics: byType.diagnostics };
+    }
 
     const byTitle = findRaceScopedNewsMatch(ctx.newsArticles, {
       race: nextRace,
       window,
       titleIncludes: ['driver spotlight'],
       typeLabel: 'Driver Spotlight',
+      raceSource: 'workflow',
+      workflowRaceNumber: ctx.nextRace?.raceNumber,
     });
-    return { complete: byTitle.complete, reason: byTitle.reason };
+    return { complete: byTitle.complete, reason: byTitle.reason, diagnostics: byTitle.diagnostics };
   },
 
   'fri-post-weekend-outlook'(ctx) {
-    const nextRace = normalizeRaceRef(getNextRaceFromContext(ctx) || ctx.nextRace);
-    const window = getNextRacePrepWindow(getNextRaceFromContext(ctx));
+    const nextRace = getWorkflowNextRaceRef(ctx);
+    warnWorkflowRaceMismatch(
+      'fri-post-weekend-outlook',
+      ctx.nextRace?.raceNumber,
+      nextRace?.raceNumber,
+      nextRace?.raceSource,
+    );
+    const window = getNextRacePrepWindow(nextRace);
 
     const byType = findRaceScopedNewsMatch(ctx.newsArticles, {
       race: nextRace,
       window,
       articleTypes: ['weekend-preview'],
       typeLabel: 'Weekend Outlook',
+      raceSource: 'workflow',
+      workflowRaceNumber: ctx.nextRace?.raceNumber,
     });
-    if (byType.complete) return { complete: true, reason: byType.reason };
+    if (byType.complete) {
+      return { complete: true, reason: byType.reason, diagnostics: byType.diagnostics };
+    }
 
     const byTitle = findRaceScopedNewsMatch(ctx.newsArticles, {
       race: nextRace,
       window,
       titleIncludes: ['weekend outlook', 'weekend preview'],
       typeLabel: 'Weekend Outlook',
+      raceSource: 'workflow',
+      workflowRaceNumber: ctx.nextRace?.raceNumber,
     });
-    return { complete: byTitle.complete, reason: byTitle.reason };
+    return { complete: byTitle.complete, reason: byTitle.reason, diagnostics: byTitle.diagnostics };
   },
 
   'fri-publish-fantasy-slate'(ctx) {
-    const nextRaceNumber = normalizeRaceRef(getNextRaceFromContext(ctx) || ctx.nextRace)?.raceNumber;
+    const nextRace = getWorkflowNextRaceRef(ctx);
+    const nextRaceNumber = nextRace?.raceNumber ?? ctx.nextRace?.raceNumber ?? null;
     const slate = getNextRaceSlate(ctx);
     return {
       complete: Boolean(slate),
@@ -559,7 +660,7 @@ export const MISSION_CONTROL_EVALUATORS = {
   },
 
   'sat-verify-fantasy-slate-published'(ctx) {
-    const nextRaceNumber = normalizeRaceRef(getNextRaceFromContext(ctx) || ctx.nextRace)?.raceNumber;
+    const nextRaceNumber = getWorkflowNextRaceRef(ctx)?.raceNumber ?? ctx.nextRace?.raceNumber ?? null;
     const slate = getNextRaceSlate(ctx);
     return {
       complete: Boolean(slate),
@@ -572,7 +673,7 @@ export const MISSION_CONTROL_EVALUATORS = {
   },
 
   'sat-verify-lineups-open'(ctx) {
-    const nextRaceNumber = normalizeRaceRef(getNextRaceFromContext(ctx) || ctx.nextRace)?.raceNumber;
+    const nextRaceNumber = getWorkflowNextRaceRef(ctx)?.raceNumber ?? ctx.nextRace?.raceNumber ?? null;
     const slate = getNextRaceSlate(ctx);
     if (!slate) {
       return {
@@ -593,7 +694,7 @@ export const MISSION_CONTROL_EVALUATORS = {
   },
 
   'sat-lock-monitor-entries'(ctx) {
-    const nextRaceNumber = normalizeRaceRef(getNextRaceFromContext(ctx) || ctx.nextRace)?.raceNumber;
+    const nextRaceNumber = getWorkflowNextRaceRef(ctx)?.raceNumber ?? ctx.nextRace?.raceNumber ?? null;
     const slate = getNextRaceSlate(ctx);
     if (!slate) {
       return {
@@ -616,12 +717,13 @@ export const MISSION_CONTROL_EVALUATORS = {
 
 export function evaluateAutomaticTask(taskId, ctx) {
   const evaluator = MISSION_CONTROL_EVALUATORS[taskId];
-  if (!evaluator) return { complete: false, autoDetected: false, reason: null };
+  if (!evaluator) return { complete: false, autoDetected: false, reason: null, diagnostics: null };
   const result = evaluator(ctx);
   return {
     complete: Boolean(result?.complete),
     autoDetected: true,
     reason: result?.reason || null,
+    diagnostics: result?.diagnostics || null,
   };
 }
 
@@ -676,6 +778,7 @@ export function resolveTaskCompletionState(
       completionSource: auto.complete ? 'automatic' : null,
       autoReason: auto.reason,
       autoPending: !auto.complete,
+      detectionDiagnostics: auto.diagnostics || null,
     };
   }
 
@@ -685,6 +788,7 @@ export function resolveTaskCompletionState(
     completed: Boolean(auto.complete),
     completionSource: auto.complete ? 'automatic' : null,
     autoReason: auto.reason,
+    detectionDiagnostics: auto.diagnostics || null,
   };
 }
 
@@ -711,7 +815,17 @@ export async function loadMissionControlDetectionContext(options = {}) {
   const [newsArticles, publishedPowerRankingWeeks, broadcast, raceControlReport] = await Promise.all([
     loadPublishedNewsArticles(),
     loadPublishedPowerRankingWeeks(),
-    loadBroadcastState(nextRaceRace || options.nextRace),
+    loadBroadcastState(
+      nextRaceNumber != null
+        ? {
+            ...(nextRaceRace || {}),
+            raceNumber: nextRaceNumber,
+            officialPointsRaceNumber: nextRaceNumber,
+            track: options.nextRace?.track || nextRaceRace?.track || null,
+            date: options.nextRace?.date || nextRaceRace?.date || null,
+          }
+        : options.nextRace,
+    ),
     postRaceNumber != null
       ? loadRaceControlReportForRace(seasonId, postRaceNumber)
       : Promise.resolve(null),
@@ -731,12 +845,14 @@ export async function loadMissionControlDetectionContext(options = {}) {
       track: options.postRace?.track || postRaceRace?.track || null,
       date: options.postRace?.date || postRaceRace?.date || null,
       race: postRaceRace,
+      raceSource: 'workflow',
     },
     nextRace: {
       raceNumber: nextRaceNumber,
       track: options.nextRace?.track || nextRaceRace?.track || null,
       date: options.nextRace?.date || nextRaceRace?.date || null,
       race: nextRaceRace,
+      raceSource: 'workflow',
     },
     postRaceWindow,
     nextRacePrepWindow,

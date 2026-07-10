@@ -429,6 +429,7 @@ export function buildWorkflowTasks({
       autoReason: completion.autoReason || null,
       autoPending: completion.autoPending === true,
       calendarGated: completion.calendarGated === true,
+      detectionDiagnostics: completion.detectionDiagnostics || null,
       windowActive,
       inactiveReason:
         status === 'inactive'

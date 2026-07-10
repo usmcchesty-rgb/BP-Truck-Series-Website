@@ -13,6 +13,7 @@
     "test:fantasy-salary-v26": "node scripts/test-fantasy-salary-v26-guardrails.mjs",
     "test:mission-control-windows": "node scripts/test-mission-control-windows.mjs",
     "test:news-article-slug": "node scripts/test-news-article-slug.mjs",
+    "test:mission-control-race-match": "node scripts/test-mission-control-race-match.mjs",
     "track-tool": "node server/track-processor.mjs"
   },
   "dependencies": {
