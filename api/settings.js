@@ -766,6 +766,8 @@ export default async function handler(req, res) {
         taskId: body.taskId,
         workflow: body.workflow,
         completed: body.completed !== false,
+        manualOverride: body.manualOverride === true,
+        manuallyCompletedBy: body.manuallyCompletedBy || 'admin',
       });
       const missionControl = await buildAdminMissionControlResponse({ seasonId, settings });
       const activeProgression = await resolveFantasySlateProgression(seasonId, { settings });

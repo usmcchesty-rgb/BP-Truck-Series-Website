@@ -287,24 +287,28 @@ function isWorkflowBucket(value) {
   return value === 'postRace' || value === 'nextRace';
 }
 
-export function getCompletedTaskIds(store, seasonId, raceNumber, workflow) {
+export function getWorkflowTaskCompletions(store, seasonId, raceNumber, workflow) {
+  const completions = new Map();
   const raceStore = store?.[String(seasonId)]?.[String(raceNumber)] || {};
   const workflowStore = isWorkflowBucket(workflow) ? raceStore[workflow] || {} : {};
-  const completed = new Set();
 
   for (const [key, value] of Object.entries(workflowStore)) {
-    if (value?.completedAt) completed.add(key);
+    if (value?.completedAt) completions.set(key, value);
   }
 
-  if (!isWorkflowBucket(workflow)) return Array.from(completed);
-
-  for (const [key, value] of Object.entries(raceStore)) {
-    if (isWorkflowBucket(key) || !value?.completedAt) continue;
-    const task = getTaskDefinition(key);
-    if (task?.workflow === workflow) completed.add(key);
+  if (isWorkflowBucket(workflow)) {
+    for (const [key, value] of Object.entries(raceStore)) {
+      if (isWorkflowBucket(key) || !value?.completedAt) continue;
+      const task = getTaskDefinition(key);
+      if (task?.workflow === workflow) completions.set(key, value);
+    }
   }
 
-  return Array.from(completed);
+  return completions;
+}
+
+export function getCompletedTaskIds(store, seasonId, raceNumber, workflow) {
+  return Array.from(getWorkflowTaskCompletions(store, seasonId, raceNumber, workflow).keys());
 }
 
 export function resolveMissionControlRaces(scheduleRaces, options = {}) {
@@ -383,7 +387,7 @@ export function buildWorkflowTasks({
   workflow,
   raceNumber,
   raceDate,
-  completedTaskIds = [],
+  taskCompletions = new Map(),
   detectionContext = null,
   now = new Date(),
   windowContext = null,
@@ -391,7 +395,6 @@ export function buildWorkflowTasks({
   const raceDateParts = raceDate ? parseScheduleDateParts(raceDate) : null;
   const todayKey = easternDateKeyLocal(now);
   const hasRaceDate = Boolean(raceDateParts);
-  const manualCompletedIds = new Set(completedTaskIds);
   const dayOrder = getDayOrderForWorkflow(workflow);
   const windowActive = isWorkflowWindowActive(workflow, windowContext);
 
@@ -405,8 +408,8 @@ export function buildWorkflowTasks({
       windowActive,
     };
     const completion = detectionContext
-      ? resolveTaskCompletionState(task, detectionContext, manualCompletedIds, calendarGate)
-      : resolveTaskCompletionState(task, {}, manualCompletedIds, calendarGate);
+      ? resolveTaskCompletionState(task, detectionContext, taskCompletions, calendarGate)
+      : resolveTaskCompletionState(task, {}, taskCompletions, calendarGate);
     const completed = Boolean(completion.completed);
     const status = computeTaskStatus({
       completed,
@@ -424,8 +427,11 @@ export function buildWorkflowTasks({
       status,
       dueDateKey,
       completed,
-      completedAt: completed ? true : false,
+      completedAt: completion.manuallyCompletedAt || (completed ? true : false),
       completionSource: completion.completionSource,
+      manualOverride: completion.manualOverride === true,
+      manuallyCompletedAt: completion.manuallyCompletedAt || null,
+      manuallyCompletedBy: completion.manuallyCompletedBy || null,
       autoReason: completion.autoReason || null,
       autoPending: completion.autoPending === true,
       calendarGated: completion.calendarGated === true,
@@ -513,12 +519,13 @@ function buildWorkflowBucket({
   }
 
   const raceDate = bucket.date || resolveMissionRaceDate(scheduleRaces, bucket.raceNumber);
-  const completedTaskIds = getCompletedTaskIds(store, seasonId, bucket.raceNumber, workflow);
+  const taskCompletions = getWorkflowTaskCompletions(store, seasonId, bucket.raceNumber, workflow);
+  const completedTaskIds = Array.from(taskCompletions.keys());
   const tasks = buildWorkflowTasks({
     workflow,
     raceNumber: bucket.raceNumber,
     raceDate,
-    completedTaskIds,
+    taskCompletions,
     detectionContext,
     now,
     windowContext,
@@ -566,9 +573,6 @@ export async function setMissionControlTaskComplete(options = {}) {
   if (resolvedWorkflow !== taskDef.workflow) {
     throw new Error(`Task ${taskId} does not belong to workflow ${workflow}.`);
   }
-  if (taskDef.detectionMode !== DETECTION_MODES.MANUAL) {
-    throw new Error('Only manual tasks can be marked complete from admin.');
-  }
 
   const store = await loadMissionControlStore();
   if (!store[seasonId]) store[seasonId] = {};
@@ -576,7 +580,15 @@ export async function setMissionControlTaskComplete(options = {}) {
   if (!store[seasonId][raceNumber][resolvedWorkflow]) store[seasonId][raceNumber][resolvedWorkflow] = {};
 
   if (completed) {
-    store[seasonId][raceNumber][resolvedWorkflow][taskId] = { completedAt: new Date().toISOString() };
+    const isAutomatic =
+      taskDef.detectionMode === DETECTION_MODES.AUTOMATIC ||
+      taskDef.detectionMode === DETECTION_MODES.PLACEHOLDER;
+    store[seasonId][raceNumber][resolvedWorkflow][taskId] = {
+      completedAt: new Date().toISOString(),
+      completionSource: 'manual',
+      manualOverride: isAutomatic || options.manualOverride === true,
+      manuallyCompletedBy: String(options.manuallyCompletedBy || 'admin').trim() || 'admin',
+    };
     if (store[seasonId][raceNumber][taskId]) {
       delete store[seasonId][raceNumber][taskId];
     }

@@ -18,6 +18,7 @@
   const MISSION_SECTION_TASKS_SCRIPT_ID = "admin-mission-section-tasks-script";
   const MISSION_SUMMARY_STYLE_ID = "admin-mission-summary-styles";
   const MISSION_SUMMARY_SCRIPT_ID = "admin-mission-summary-script";
+  const MISSION_COMPLETION_SCRIPT_ID = "admin-mission-task-completion-script";
   const ATTENTION_STYLE_ID = "admin-attention-styles";
   const ATTENTION_SCRIPT_ID = "admin-attention-script";
 
@@ -56,7 +57,18 @@
     }
   }
 
+  function injectMissionCompletionAssets() {
+    if (!document.getElementById(MISSION_COMPLETION_SCRIPT_ID)) {
+      const script = document.createElement("script");
+      script.id = MISSION_COMPLETION_SCRIPT_ID;
+      script.src = "/admin/admin-mission-task-completion.js";
+      script.defer = true;
+      document.body.appendChild(script);
+    }
+  }
+
   function injectMissionSummaryAssets() {
+    injectMissionCompletionAssets();
     if (!document.getElementById(MISSION_SUMMARY_STYLE_ID)) {
       const link = document.createElement("link");
       link.id = MISSION_SUMMARY_STYLE_ID;
@@ -74,6 +86,7 @@
   }
 
   function injectMissionControlAssets() {
+    injectMissionCompletionAssets();
     if (!document.getElementById(MISSION_CONTROL_STYLE_ID)) {
       const link = document.createElement("link");
       link.id = MISSION_CONTROL_STYLE_ID;

@@ -746,7 +746,7 @@ function buildCalendarGatedCompletion(taskDef, calendarGate = {}) {
 export function resolveTaskCompletionState(
   taskDef,
   ctx,
-  manualCompletedIds = new Set(),
+  taskCompletions = new Map(),
   calendarGate = {}
 ) {
   if (isTaskCalendarGated(calendarGate)) {
@@ -759,14 +759,31 @@ export function resolveTaskCompletionState(
     completionSource: null,
     autoReason: null,
     completed: false,
+    manualOverride: false,
+    manuallyCompletedAt: null,
+    manuallyCompletedBy: null,
   };
 
-  if (detectionMode === DETECTION_MODES.MANUAL) {
-    const completed = manualCompletedIds.has(taskDef.id);
+  const stored = taskCompletions.get(taskDef.id);
+  if (stored?.completedAt) {
+    const isAutomatic =
+      detectionMode === DETECTION_MODES.AUTOMATIC ||
+      detectionMode === DETECTION_MODES.PLACEHOLDER;
     return {
       ...base,
-      completed,
-      completionSource: completed ? 'manual' : null,
+      completed: true,
+      completionSource: 'manual',
+      manualOverride: isAutomatic || stored.manualOverride === true,
+      manuallyCompletedAt: stored.completedAt,
+      manuallyCompletedBy: stored.manuallyCompletedBy || null,
+    };
+  }
+
+  if (detectionMode === DETECTION_MODES.MANUAL) {
+    return {
+      ...base,
+      completed: false,
+      completionSource: null,
     };
   }
 

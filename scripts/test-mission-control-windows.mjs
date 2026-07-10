@@ -65,7 +65,7 @@ function buildTasks(workflow, now, windowContext) {
     workflow,
     raceNumber: race.raceNumber,
     raceDate: race.date,
-    completedTaskIds: [],
+    taskCompletions: new Map(),
     detectionContext: null,
     now,
     windowContext,

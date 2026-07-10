@@ -207,6 +207,23 @@
     }
   }
 
+  function taskCompletionLib() {
+    return window.AdminMissionTaskCompletion || null;
+  }
+
+  function applyMissionPayload(data) {
+    if (!data) return;
+    state.data = data;
+    render(data);
+    window.__bpPendingMissionControl = data;
+    if (window.AdminAttention?.setMissionControl) {
+      window.AdminAttention.setMissionControl(data);
+    }
+    if (window.AdminMissionTaskSummary?.setMissionControl) {
+      window.AdminMissionTaskSummary.setMissionControl(data);
+    }
+  }
+
   function isManualTask(task) {
     return task?.detectionMode === 'manual';
   }
@@ -250,10 +267,15 @@
             />`
           : `<span class="admin-mission-control__task-check-placeholder" aria-hidden="true">${task.completed ? '✓' : '—'}</span>`;
 
+        const lib = taskCompletionLib();
+        const overrideBadge = lib?.buildOverrideBadge(task) || '';
+        const auditLine = lib?.buildManualAuditLine(task) || '';
+        const actionButton = lib?.buildTaskActionButton(task) || '';
+
         return `
         <div class="admin-mission-control__task" data-task-id="${escapeHtml(task.id)}">
           ${control}
-          <div>
+          <div class="admin-mission-control__task-body">
             <div class="admin-mission-control__task-title">${escapeHtml(task.title)}</div>
             ${
               task.description
@@ -262,6 +284,7 @@
             }
             <div class="admin-mission-control__task-meta">
               ${modeBadge}
+              ${overrideBadge}
               <span class="admin-mission-control__badge is-${escapeHtml(task.status)}">${escapeHtml(STATUS_LABELS[task.status] || task.status)}</span>
               ${
                 isAuto && task.autoReason
@@ -274,6 +297,8 @@
                   : ''
               }
             </div>
+            ${auditLine}
+            <div class="admin-mission-control__task-actions">${actionButton}</div>
           </div>
         </div>`;
       })
@@ -284,6 +309,11 @@
         toggleTask(input.dataset.taskId, input.dataset.workflow, input.checked);
       });
     });
+
+    const lib = taskCompletionLib();
+    if (lib?.bindTaskActionButtons) {
+      lib.bindTaskActionButtons(listEl, dayTasks, state.data);
+    }
   }
 
   function renderDayTabs(root, tasks) {
@@ -519,10 +549,7 @@
         );
       }
 
-      render(data);
-      window.__bpPendingMissionControl = data;
-      if (window.AdminAttention) window.AdminAttention.setMissionControl(data);
-      if (window.AdminMissionTaskSummary) window.AdminMissionTaskSummary.setMissionControl(data);
+      applyMissionPayload(data);
       setStatus('', false);
     } catch (error) {
       setStatus(error.message || 'Load failed', true);
@@ -533,30 +560,38 @@
 
   async function toggleTask(taskId, workflow, completed) {
     const bucket = getWorkflowBucket(state.data, workflow || state.selectedWorkflow);
-    const raceNumber = bucket?.raceNumber;
-    const task = (bucket?.tasks || []).find((row) => row.id === taskId);
+    const task =
+      (bucket?.tasks || []).find((row) => row.id === taskId) ||
+      taskCompletionLib()?.findTaskInPayload?.(state.data, taskId, workflow);
 
-    if (!taskId || raceNumber == null || !getSessionPw()) return;
-    if (task && !isManualTask(task)) return;
+    if (!taskId || !task || !getSessionPw()) return;
+    if (!isManualTask(task)) return;
+
+    const lib = taskCompletionLib();
+    if (lib?.confirmTaskToggle && !(await lib.confirmTaskToggle(task, completed))) return;
 
     setStatus('Saving…', false);
     try {
-      const res = await fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          password: getSessionPw(),
-          action: 'updateAdminMissionControlTask',
-          seasonId: state.data?.seasonId,
-          raceNumber,
-          workflow: workflow || state.selectedWorkflow,
-          taskId,
-          completed,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Save failed');
-      render(data);
+      if (lib?.setTaskCompletion) {
+        await lib.setTaskCompletion(task, completed, state.data);
+      } else {
+        const res = await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            password: getSessionPw(),
+            action: 'updateAdminMissionControlTask',
+            seasonId: state.data?.seasonId,
+            raceNumber: task.raceNumber,
+            workflow: workflow || task.workflow,
+            taskId,
+            completed,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Save failed');
+        applyMissionPayload(data);
+      }
       setStatus(completed ? 'Task marked done.' : 'Task reopened.', false);
     } catch (error) {
       setStatus(error.message || 'Save failed', true);
@@ -579,6 +614,10 @@
     load({ forceDefaultTabs: true });
 
     window.AdminMissionControl = {
+      applyPayload(data) {
+        state.data = data || null;
+        render(data);
+      },
       refresh(options = {}) {
         if (!getSessionPw()) {
           mount.hidden = true;

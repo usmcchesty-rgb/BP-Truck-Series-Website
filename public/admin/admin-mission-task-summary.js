@@ -215,6 +215,10 @@
     }
   }
 
+  function taskCompletionLib() {
+    return window.AdminMissionTaskCompletion || null;
+  }
+
   function renderRaceGroup(group, highlightTaskId) {
     const label = group.raceNumber
       ? `Race ${group.raceNumber}${group.track ? ` — ${group.track}` : ''}`
@@ -233,6 +237,14 @@
             : '';
         const raceLabel = formatRaceLabel(task);
         const dueState = formatDueState(task);
+        const lib = taskCompletionLib();
+        const modeBadge =
+          task.detectionMode === 'manual'
+            ? '<span class="admin-mission-control__mode-badge is-manual">Manual</span>'
+            : '<span class="admin-mission-control__mode-badge is-auto"><span class="admin-mission-control__auto-icon" aria-hidden="true">⚙</span> Auto</span>';
+        const overrideBadge = lib?.buildOverrideBadge(task) || '';
+        const auditLine = lib?.buildManualAuditLine(task) || '';
+        const actionButton = lib?.buildTaskActionButton(task) || '';
         const autoReason = task.autoReason
           ? `<div class="admin-mission-summary__card-desc">${escapeHtml(task.autoReason)}</div>`
           : '';
@@ -246,11 +258,17 @@
               ${task.description ? `<div class="admin-mission-summary__card-desc">${escapeHtml(task.description)}</div>` : ''}
               ${autoReason}
               <div class="admin-mission-summary__card-meta">
+                ${modeBadge}
+                ${overrideBadge}
                 <span class="admin-mission-control__badge ${statusClass}">${escapeHtml(SEVERITY_LABELS[task.status] || STATUS_LABELS[task.status] || task.status)}</span>
                 <span class="admin-mission-control__badge ${statusClass}">${escapeHtml(dueState)}</span>
               </div>
+              ${auditLine}
+              <div class="admin-mission-summary__card-actions">
+                ${actionButton}
+                <button type="button" class="btn btn-secondary admin-mission-summary__go-btn" data-go-task="${escapeHtml(task.id)}">Go to section</button>
+              </div>
             </div>
-            <button type="button" class="btn btn-secondary admin-mission-summary__go-btn" data-go-task="${escapeHtml(task.id)}">Go to section</button>
           </article>
         `;
       })
@@ -326,6 +344,11 @@
         navigateToTask(task, mountConfig);
       });
     });
+
+    const lib = taskCompletionLib();
+    if (lib?.bindTaskActionButtons) {
+      lib.bindTaskActionButtons(mountEl, tasks, state.data);
+    }
 
     if (highlightTaskId) {
       const card = mountEl.querySelector(`[data-task-id="${highlightTaskId}"]`);
