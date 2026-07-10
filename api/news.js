@@ -1,4 +1,5 @@
-import { slugify, stripPhotoUrlQuery, supabase } from './_lib.js';
+import { stripPhotoUrlQuery, supabase } from './_lib.js';
+import { resolveUniqueSlugForTable } from './_news-article-slug.js';
 import { ARTICLE_TYPES } from '../server/config/news-system-prompt.js';
 import { generateNewsArticle, normalizeArticleType } from './_news-generator.js';
 import {
@@ -36,9 +37,12 @@ function articleTypeLabel(type) {
   return ARTICLE_TYPES[type]?.label || type;
 }
 
-function buildSlug(headline, id = null) {
-  const base = slugify(headline || 'news-article') || 'news-article';
-  return id ? `${base}-${id}` : base;
+function resolveArticleId(body = {}) {
+  const raw = body.id ?? body.articleId;
+  if (raw == null || raw === '') return null;
+  const id = Number(raw);
+  if (!Number.isFinite(id) || id <= 0) return null;
+  return id;
 }
 
 function normalizeFeaturedImageDisplayMode(body = {}, existing = {}) {
@@ -310,7 +314,7 @@ async function saveArticle(body, publish = false) {
   if (!ARTICLE_TYPES[articleType]) return { error: 'Invalid article type.', status: 400 };
 
   const now = new Date().toISOString();
-  const id = body.id ? Number(body.id) : null;
+  const id = resolveArticleId(body);
   const crop = normalizeFeaturedImageCrop(body);
   const displayMode = normalizeFeaturedImageDisplayMode(body);
   const row = {
@@ -370,7 +374,12 @@ async function saveArticle(body, publish = false) {
   }
 
   if (id) {
-    row.slug = String(body.slug || buildSlug(headline, id)).trim() || buildSlug(headline, id);
+    const existing = await loadArticleById(id);
+    if (!existing) return { error: 'Article not found.', status: 404 };
+
+    row.slug =
+      String(body.slug || existing.slug || '').trim() ||
+      (await resolveUniqueSlugForTable(sb, headline, id));
     const { error } = await sb.from('news_articles').update(row).eq('id', id);
     if (error) return { error: `Supabase error: ${error.message}`, status: 500 };
     const saved = await loadArticleById(id);
@@ -378,42 +387,18 @@ async function saveArticle(body, publish = false) {
     return { data: enriched, status: 200 };
   }
 
+  const slug = await resolveUniqueSlugForTable(sb, headline);
   const { data, error } = await sb
     .from('news_articles')
-    .insert({ ...row, slug: buildSlug(headline) })
+    .insert({ ...row, slug })
     .select()
     .single();
 
   if (error) {
-    if (/duplicate|unique/i.test(error.message)) {
-      const retrySlug = buildSlug(headline, Date.now());
-      const retry = await sb
-        .from('news_articles')
-        .insert({ ...row, slug: retrySlug })
-        .select()
-        .single();
-      if (retry.error) return { error: `Supabase error: ${retry.error.message}`, status: 500 };
-      const saved = normalizeArticle(retry.data);
-      if (saved?.id && saved.slug.endsWith(String(saved.id)) === false) {
-        await sb
-          .from('news_articles')
-          .update({ slug: buildSlug(headline, saved.id) })
-          .eq('id', saved.id);
-        saved.slug = buildSlug(headline, saved.id);
-      }
-      const [enriched] = await enrichSpotlightArticles([saved]);
-      return { data: enriched, status: 200 };
-    }
     return { error: `Supabase error: ${error.message}`, status: 500 };
   }
 
   const saved = normalizeArticle(data);
-  const finalSlug = buildSlug(headline, saved.id);
-  if (saved.slug !== finalSlug) {
-    await sb.from('news_articles').update({ slug: finalSlug }).eq('id', saved.id);
-    saved.slug = finalSlug;
-  }
-
   const [enriched] = await enrichSpotlightArticles([saved]);
   return { data: enriched, status: 200 };
 }

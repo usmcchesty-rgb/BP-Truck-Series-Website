@@ -123,6 +123,9 @@
     }
     .article-status-badge.is-published { color: #7fd99a; }
     .article-item__dates { display: grid; gap: 2px; font-size: 11px; color: #888; line-height: 1.45; }
+    .editor-mode-label { margin: 0 0 12px; font-size: 12px; color: #ccc; }
+    .editor-mode-label strong { color: #fff; }
+    .editor-mode-label.is-create strong { color: #ffd54a; }
     .article-item__dates strong { color: #bbb; font-weight: 700; }
     .article-item-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start; }
     .article-item-actions button { padding: 4px 10px; font-size: 9px; }
@@ -250,6 +253,7 @@
 
     <div class="panel">
       <h2>Article Editor</h2>
+      <p id="editorModeLabel" class="editor-mode-label is-create"><strong>Creating New Article</strong></p>
       <div class="editor-reporter-preview">
         <div id="editorReporterPreview" class="miles-apex-avatar miles-apex-avatar--initials">MA</div>
         <div>
@@ -499,6 +503,62 @@
     let articleImageState = normalizeArticleImage({});
     let pendingArticlePreviewUrl = null;
     let pendingSpotlightPreviewUrl = null;
+    let loadedArticleMeta = null;
+
+    function getEditingArticleId() {
+      const raw = String($('#articleId')?.value || '').trim();
+      if (!raw) return null;
+      const id = Number(raw);
+      return Number.isFinite(id) && id > 0 ? id : null;
+    }
+
+    function clearEditingIdentity() {
+      $('#articleId').value = '';
+      loadedArticleMeta = null;
+      updateEditorModeLabel();
+    }
+
+    function setLoadedArticleMeta(article = null) {
+      if (!article?.id) {
+        loadedArticleMeta = null;
+        updateEditorModeLabel();
+        return;
+      }
+      loadedArticleMeta = {
+        id: Number(article.id),
+        articleType: article.articleType || article.article_type || $('#articleType').value,
+        headline: article.headline || '',
+      };
+      updateEditorModeLabel();
+    }
+
+    function updateEditorModeLabel() {
+      const label = $('#editorModeLabel');
+      if (!label) return;
+
+      const editingId = getEditingArticleId();
+      const headline = String($('#headline')?.value || loadedArticleMeta?.headline || '').trim();
+
+      if (editingId && loadedArticleMeta?.id === editingId) {
+        label.classList.remove('is-create');
+        label.innerHTML = headline
+          ? `<strong>Editing Article:</strong> ${escapeHtml(headline)} <span class="sub" style="margin:0;">(#${editingId})</span>`
+          : `<strong>Editing Article</strong> <span class="sub" style="margin:0;">(#${editingId})</span>`;
+        return;
+      }
+
+      label.classList.add('is-create');
+      label.innerHTML = '<strong>Creating New Article</strong>';
+    }
+
+    function onArticleTypeChange() {
+      syncArticleTypeFields();
+      const nextType = $('#articleType').value;
+      if (!loadedArticleMeta || nextType !== loadedArticleMeta.articleType) {
+        clearEditingIdentity();
+      }
+      updateEditorModeLabel();
+    }
 
     function getSessionPw() { return sessionStorage.getItem(SESSION_KEY) || ''; }
 
@@ -1287,7 +1347,12 @@
     }
 
     function startNewArticle() {
-      $('#articleId').value = '';
+      clearEditingIdentity();
+      $('#articleType').value = 'race-recap';
+      syncArticleTypeFields();
+      $('#raceNumber').value = '';
+      $('#spotlightDriverId').value = '';
+      $('#manualNotes').value = '';
       $('#headline').value = '';
       $('#subheadline').value = '';
       $('#summary').value = '';
@@ -1298,7 +1363,10 @@
       resetArticleImageFields();
       resetSpotlightImageFields();
       $('#previewLink').hidden = true;
+      $('#transcriptDiagnosticsPanel').hidden = true;
+      $('#generationSourcesPanel').hidden = true;
       setMsg('');
+      updateEditorModeLabel();
     }
 
     async function loadArticle(id) {
@@ -1308,6 +1376,7 @@
         const a = data.article;
         if (!a) throw new Error('Article not found.');
         $('#articleId').value = a.id;
+        setLoadedArticleMeta(a);
         $('#articleType').value = a.articleType || 'race-recap';
         syncArticleTypeFields();
         if (a.articleType === 'driver-spotlight') {
@@ -1332,6 +1401,7 @@
           preview.hidden = true;
         }
         setMsg(`Loaded article #${a.id}.`);
+        updateEditorModeLabel();
       } catch (e) {
         setMsg(e.message, true);
       }
@@ -1369,9 +1439,9 @@
 
     function collectFormData() {
       const spotlight = isDriverSpotlightType();
+      const editingId = getEditingArticleId();
       const payload = {
         password: getSessionPw(),
-        id: $('#articleId').value ? Number($('#articleId').value) : undefined,
         articleType: $('#articleType').value,
         spotlightDriverId: $('#spotlightDriverId').value || null,
         headline: $('#headline').value,
@@ -1386,6 +1456,9 @@
         featuredImageDisplayMode: $('#featuredImageDisplayMode')?.value === 'contain' ? 'contain' : 'fill',
         newsTopic: $('#newsTopic').value.trim(),
       };
+      if (editingId && loadedArticleMeta?.id === editingId) {
+        payload.id = editingId;
+      }
       if (spotlight) {
         payload.spotlightImageUrl = $('#spotlightImageUrl').value.trim();
         payload.spotlightImageUpdatedAt = $('#spotlightImageUpdatedAt').value || undefined;
@@ -1539,7 +1612,8 @@
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Save failed');
-        $('#articleId').value = data.id;
+        $('#articleId').value = data.id || '';
+        setLoadedArticleMeta(data);
         if (data.id) {
           loadArticleImageFields(data);
           loadSpotlightImageFields(data);
@@ -1551,6 +1625,7 @@
         }
         await loadArticles();
         setMsg(publish ? 'Article published.' : 'Draft saved.');
+        updateEditorModeLabel();
       } catch (e) {
         setMsg(e.message, true);
       }
@@ -1587,7 +1662,8 @@
     }
 
     $('#loginPw')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') login(); });
-    $('#articleType')?.addEventListener('change', syncArticleTypeFields);
+    $('#articleType')?.addEventListener('change', onArticleTypeChange);
+    $('#headline')?.addEventListener('input', updateEditorModeLabel);
     initSession();
   </script>
 </body>
