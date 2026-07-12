@@ -17,7 +17,8 @@ export function parseLockState(slateRow = {}, options = {}) {
   const lockAt = lockAtRaw ? new Date(lockAtRaw) : null;
   const hasLockSchedule = Boolean(lockAt && Number.isFinite(lockAt.getTime()));
   const raceComplete = Boolean(options.raceComplete);
-  const timeLocked = hasLockSchedule ? Date.now() >= lockAt.getTime() : false;
+  const nowMs = (options.now instanceof Date ? options.now : new Date()).getTime();
+  const timeLocked = hasLockSchedule ? nowMs >= lockAt.getTime() : false;
   const isLocked = raceComplete || timeLocked;
 
   return {

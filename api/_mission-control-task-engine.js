@@ -3,6 +3,7 @@ import { parseScheduleRacesFromHtml } from './_caution-stats.js';
 import { enrichScheduleRaces, getPointsRaceByNumber } from './_schedule-points-races.js';
 import { getEasternDateParts, hasRaceResults, parseScheduleDateParts } from './_race-date-status.js';
 import { parseLockState } from './_fantasy-lineups.js';
+import { buildFantasyLockMonitorAutoReason, buildFantasyLockMissionContext } from './_mission-control-fantasy-lock.js';
 import { resolveFantasySlateProgression } from './_fantasy-slate-progression.js';
 import {
   loadRaceControlReportForRace,
@@ -387,7 +388,7 @@ function getNextRaceFromContext(ctx) {
   return getWorkflowNextRaceRef(ctx) || ctx.nextRace?.race || ctx.nextRace || null;
 }
 
-function getNextRaceSlate(ctx) {
+export function getNextRaceSlate(ctx) {
   const nextRaceNumber = ctx.nextRace?.raceNumber ?? ctx.fantasyProgression?.nextRaceNumber ?? null;
   const active = ctx.fantasyProgression?.activeSlateRow || null;
   if (!active || nextRaceNumber == null) return null;
@@ -696,6 +697,7 @@ export const MISSION_CONTROL_EVALUATORS = {
   'sat-lock-monitor-entries'(ctx) {
     const nextRaceNumber = getWorkflowNextRaceRef(ctx)?.raceNumber ?? ctx.nextRace?.raceNumber ?? null;
     const slate = getNextRaceSlate(ctx);
+    const lockContext = ctx.fantasyLockContext || {};
     if (!slate) {
       return {
         complete: false,
@@ -705,12 +707,30 @@ export const MISSION_CONTROL_EVALUATORS = {
             : 'No published slate for next race.',
       };
     }
-    const lock = parseLockState(slate, { raceComplete: false });
+    const lock = parseLockState(slate, { raceComplete: false, now: ctx.now });
+    const lockPassed = Boolean(
+      lockContext.lockPassed ||
+        (lockContext.lockAt &&
+          ctx.now &&
+          ctx.now.getTime() >= new Date(lockContext.lockAt).getTime()),
+    );
+    const complete = lockPassed
+      ? Boolean(lock.isLocked || !lock.isPlayable)
+      : false;
+
     return {
-      complete: Boolean(lock.hasLockSchedule && lock.isLocked && !lock.raceComplete),
-      reason: lock.isLocked
-        ? `Race ${nextRaceNumber} lineup lock time has passed.`
-        : `Race ${nextRaceNumber} lineups are not locked yet.`,
+      complete,
+      reason: buildFantasyLockMonitorAutoReason(
+        { ...lockContext, lockPassed },
+        lock,
+      ),
+      diagnostics: {
+        workflowRaceNumber: lockContext.workflowRaceNumber ?? nextRaceNumber,
+        slateRaceNumber: lockContext.slateRaceNumber ?? slate.race_number ?? null,
+        slateId: lockContext.slateId ?? slate.id ?? null,
+        lockAt: lockContext.lockAt ?? lock.lockAt,
+        lockPassed,
+      },
     };
   },
 };
@@ -728,6 +748,11 @@ export function evaluateAutomaticTask(taskId, ctx) {
 }
 
 export function isTaskCalendarGated(calendarGate = {}) {
+  if (calendarGate.fantasyLockAt) {
+    const now = calendarGate.now || new Date();
+    return now.getTime() < new Date(calendarGate.fantasyLockAt).getTime();
+  }
+
   const { dueDateKey, todayKey, hasRaceDate } = calendarGate;
   return Boolean(hasRaceDate && dueDateKey && todayKey && dueDateKey > todayKey);
 }
@@ -738,7 +763,9 @@ function buildCalendarGatedCompletion(taskDef, calendarGate = {}) {
     detectionMode: taskDef.detectionMode || DETECTION_MODES.MANUAL,
     completed: false,
     completionSource: null,
-    autoReason: dayLabel ? `Scheduled for ${dayLabel}` : 'Scheduled for a later date',
+    autoReason:
+      calendarGate.autoReason ||
+      (dayLabel ? `Scheduled for ${dayLabel}` : 'Scheduled for a later date'),
     calendarGated: true,
   };
 }
@@ -851,7 +878,7 @@ export async function loadMissionControlDetectionContext(options = {}) {
   const postRaceWindow = getPostRaceWindow(postRaceRace, nextRaceRace);
   const nextRacePrepWindow = getNextRacePrepWindow(nextRaceRace);
 
-  return {
+  const detectionBase = {
     now,
     settings,
     seasonId,
@@ -877,6 +904,13 @@ export async function loadMissionControlDetectionContext(options = {}) {
     publishedPowerRankingWeeks,
     broadcast,
     raceControlReport,
+  };
+
+  const fantasyLockContext = await buildFantasyLockMissionContext(detectionBase);
+
+  return {
+    ...detectionBase,
+    fantasyLockContext,
   };
 }
 

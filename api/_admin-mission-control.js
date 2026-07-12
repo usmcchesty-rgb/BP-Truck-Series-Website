@@ -19,6 +19,9 @@ import {
   easternDateKeyFromParts,
   isWorkflowWindowActive,
 } from './_mission-control-windows.js';
+import {
+  resolveFantasyLockTaskPresentation,
+} from './_mission-control-fantasy-lock.js';
 
 export const MISSION_CONTROL_TASKS = [
   {
@@ -387,8 +390,10 @@ export function buildWorkflowTasks({
   workflow,
   raceNumber,
   raceDate,
+  track = null,
   taskCompletions = new Map(),
   detectionContext = null,
+  fantasyLockContext = null,
   now = new Date(),
   windowContext = null,
 }) {
@@ -397,33 +402,61 @@ export function buildWorkflowTasks({
   const hasRaceDate = Boolean(raceDateParts);
   const dayOrder = getDayOrderForWorkflow(workflow);
   const windowActive = isWorkflowWindowActive(workflow, windowContext);
+  const lockContext = fantasyLockContext || detectionContext?.fantasyLockContext || null;
 
   const tasks = MISSION_CONTROL_TASKS.filter((task) => task.workflow === workflow).map((task) => {
-    const dueDateKey = computeTaskDueDateKey(raceDateParts, workflow, task.day);
+    const genericDueDateKey = computeTaskDueDateKey(raceDateParts, workflow, task.day);
+    const lockPresentation =
+      workflow === 'nextRace' && lockContext
+        ? resolveFantasyLockTaskPresentation({
+            task,
+            lockContext,
+            genericDueDateKey,
+            todayKey,
+            hasRaceDate,
+            now,
+            raceNumber,
+            track,
+          })
+        : null;
+
+    const dueDateKey = lockPresentation?.dueDateKey ?? genericDueDateKey;
+    const dayLabel = lockPresentation?.dayLabel ?? task.dayLabel;
+    const description = lockPresentation?.description ?? task.description;
     const calendarGate = {
       dueDateKey,
       todayKey,
       hasRaceDate,
-      dayLabel: task.dayLabel,
+      dayLabel,
       windowActive,
+      ...(lockPresentation?.calendarGate || {}),
     };
     const completion = detectionContext
       ? resolveTaskCompletionState(task, detectionContext, taskCompletions, calendarGate)
       : resolveTaskCompletionState(task, {}, taskCompletions, calendarGate);
     const completed = Boolean(completion.completed);
-    const status = computeTaskStatus({
-      completed,
-      dueDateKey,
-      todayKey,
-      hasRaceDate,
-      windowActive,
-      workflow,
-      windowContext,
-    });
+    const status = lockPresentation?.statusComputer
+      ? lockPresentation.statusComputer({
+          completed,
+          windowActive,
+          workflow,
+          windowContext,
+        })
+      : computeTaskStatus({
+          completed,
+          dueDateKey,
+          todayKey,
+          hasRaceDate,
+          windowActive,
+          workflow,
+          windowContext,
+        });
     return {
       ...task,
       workflow,
       raceNumber,
+      dayLabel,
+      description,
       status,
       dueDateKey,
       completed,
@@ -436,6 +469,9 @@ export function buildWorkflowTasks({
       autoPending: completion.autoPending === true,
       calendarGated: completion.calendarGated === true,
       detectionDiagnostics: completion.detectionDiagnostics || null,
+      lockDiagnostics: lockPresentation?.lockDiagnostics || null,
+      selectedDueSource: lockPresentation?.selectedDueSource || null,
+      selectedDueDateTime: lockPresentation?.selectedDueDateTime || null,
       windowActive,
       inactiveReason:
         status === 'inactive'
@@ -521,12 +557,16 @@ function buildWorkflowBucket({
   const raceDate = bucket.date || resolveMissionRaceDate(scheduleRaces, bucket.raceNumber);
   const taskCompletions = getWorkflowTaskCompletions(store, seasonId, bucket.raceNumber, workflow);
   const completedTaskIds = Array.from(taskCompletions.keys());
+  const fantasyLockContext =
+    workflow === 'nextRace' ? detectionContext?.fantasyLockContext || null : null;
   const tasks = buildWorkflowTasks({
     workflow,
     raceNumber: bucket.raceNumber,
     raceDate,
+    track: bucket.track || null,
     taskCompletions,
     detectionContext,
+    fantasyLockContext,
     now,
     windowContext,
   });
