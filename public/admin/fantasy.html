@@ -414,6 +414,117 @@
         line-height: 1.5;
       }
 
+      .fantasy-salary-reasons-trigger {
+        appearance: none;
+        border: 0;
+        background: transparent;
+        padding: 0;
+        margin: 0;
+        cursor: pointer;
+        color: #ff8080;
+        font-weight: 700;
+        font-size: 11px;
+        font-family: inherit;
+        text-decoration: underline;
+        text-underline-offset: 2px;
+      }
+
+      .fantasy-salary-reasons-trigger:hover,
+      .fantasy-salary-reasons-trigger:focus-visible {
+        color: #ffb0b0;
+        outline: 2px solid rgba(255, 80, 80, 0.45);
+        outline-offset: 2px;
+      }
+
+      .fantasy-salary-reasons-popover {
+        position: fixed;
+        z-index: 1200;
+        min-width: 320px;
+        max-width: 450px;
+        max-height: 70vh;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 8px;
+        background: linear-gradient(180deg, rgba(18, 18, 18, 0.98) 0%, rgba(8, 8, 8, 0.98) 100%);
+        box-shadow: 0 14px 36px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 48, 48, 0.08);
+        opacity: 0;
+        transform: translateY(4px) scale(0.98);
+        transition: opacity 180ms ease, transform 180ms ease;
+        pointer-events: none;
+        overflow: visible;
+      }
+
+      .fantasy-salary-reasons-popover.is-open {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        pointer-events: auto;
+      }
+
+      .fantasy-salary-reasons-popover.is-mobile {
+        min-width: 0;
+        transform: translateX(-50%) translateY(4px) scale(0.98);
+      }
+
+      .fantasy-salary-reasons-popover.is-mobile.is-open {
+        transform: translateX(-50%) translateY(0) scale(1);
+      }
+
+      .fantasy-salary-reasons-popover__content {
+        max-height: 70vh;
+        overflow-y: auto;
+        overflow-x: hidden;
+        padding: 12px 14px;
+      }
+
+      .fantasy-salary-reasons-popover__list {
+        margin: 0;
+        padding-left: 18px;
+        line-height: 1.55;
+        color: #d8d8d8;
+        font-size: 11px;
+        word-break: break-word;
+        overflow-wrap: anywhere;
+        white-space: normal;
+      }
+
+      .fantasy-salary-reasons-popover__list li + li {
+        margin-top: 8px;
+      }
+
+      .fantasy-salary-reasons-popover__arrow {
+        position: absolute;
+        width: 12px;
+        height: 12px;
+        background: rgba(14, 14, 14, 0.98);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        transform: rotate(45deg);
+        pointer-events: none;
+      }
+
+      .fantasy-salary-reasons-popover[data-placement='bottom'] .fantasy-salary-reasons-popover__arrow {
+        top: -7px;
+      }
+
+      .fantasy-salary-reasons-popover[data-placement='top'] .fantasy-salary-reasons-popover__arrow {
+        bottom: -7px;
+      }
+
+      .fantasy-salary-reasons-popover[data-placement='left'] .fantasy-salary-reasons-popover__arrow,
+      .fantasy-salary-reasons-popover[data-placement='right'] .fantasy-salary-reasons-popover__arrow {
+        top: 18px;
+      }
+
+      .fantasy-salary-reasons-popover[data-placement='right'] .fantasy-salary-reasons-popover__arrow {
+        left: -7px;
+      }
+
+      .fantasy-salary-reasons-popover[data-placement='left'] .fantasy-salary-reasons-popover__arrow {
+        right: -7px;
+      }
+
+      .fantasy-salary-reasons-popover.is-mobile .fantasy-salary-reasons-popover__arrow {
+        display: none;
+      }
+
       .pos { color: var(--green); }
       .neg { color: #ff2323; }
       .flat { color: #cfcfcf; }
@@ -734,7 +845,7 @@
           <div class="admin-card admin-card--full">
             <div class="admin-card-title">Driver Salary Review</div>
             <div id="fantasySalarySummaryCards" class="fantasy-summary-cards" hidden></div>
-            <div class="table-wrap">
+            <div id="fantasySalaryTableWrap" class="table-wrap">
               <table class="fantasy-admin-table">
                 <thead>
                   <tr>
@@ -1593,11 +1704,228 @@
         el.textContent = `${modelVersion}. Score max ${Number(stats.max).toFixed(1)}, avg ${Number(stats.avg).toFixed(1)}, median ${Number(stats.median).toFixed(1)}. Tiers: ${tierLine}. Band violations: ${bandViolations}. Tier-capped: ${cappedCount}. Top Tier eligible: ${topTierEligibleCount}. Elite eligible: ${eliteEligibleCount}. Sparse recent data: ${recentDataSparse}. Top Tier recovery: ${topTierRecovery}. Elite recovery: ${eliteRecovery}. Top Tier unfilled: ${topTierUnfilled}.`;
       }
 
+      const salaryReasonsStore = new Map();
+      let activeSalaryReasonsTrigger = null;
+      let salaryReasonsPopoverOpen = false;
+      let salaryReasonsOpenFrame = null;
+      let salaryReasonsPopoverEl = null;
+      let salaryReasonsPopoverListEl = null;
+      let salaryReasonsPopoverArrowEl = null;
+
+      function ensureSalaryReasonsPopover() {
+        if (salaryReasonsPopoverEl) return salaryReasonsPopoverEl;
+        const el = document.createElement('div');
+        el.id = 'fantasySalaryReasonsPopover';
+        el.className = 'fantasy-salary-reasons-popover';
+        el.setAttribute('role', 'dialog');
+        el.setAttribute('aria-modal', 'true');
+        el.setAttribute('aria-label', 'Salary reasons');
+        el.tabIndex = -1;
+        el.hidden = true;
+        el.innerHTML = `
+          <div class="fantasy-salary-reasons-popover__arrow" aria-hidden="true"></div>
+          <div class="fantasy-salary-reasons-popover__content">
+            <ul class="fantasy-salary-reasons-popover__list"></ul>
+          </div>
+        `;
+        document.body.appendChild(el);
+        salaryReasonsPopoverEl = el;
+        salaryReasonsPopoverListEl = el.querySelector('.fantasy-salary-reasons-popover__list');
+        salaryReasonsPopoverArrowEl = el.querySelector('.fantasy-salary-reasons-popover__arrow');
+        return el;
+      }
+
+      function closeSalaryReasonsPopover({ restoreFocus = true } = {}) {
+        if (!salaryReasonsPopoverEl || !salaryReasonsPopoverOpen) return;
+
+        salaryReasonsPopoverOpen = false;
+        if (salaryReasonsOpenFrame != null) {
+          cancelAnimationFrame(salaryReasonsOpenFrame);
+          salaryReasonsOpenFrame = null;
+        }
+
+        const trigger = activeSalaryReasonsTrigger;
+        salaryReasonsPopoverEl.classList.remove('is-open');
+        if (trigger) {
+          trigger.setAttribute('aria-expanded', 'false');
+          if (restoreFocus) trigger.focus();
+          activeSalaryReasonsTrigger = null;
+        }
+
+        window.setTimeout(() => {
+          if (salaryReasonsPopoverEl && !salaryReasonsPopoverOpen) {
+            salaryReasonsPopoverEl.hidden = true;
+          }
+        }, 200);
+      }
+
+      function positionSalaryReasonsPopover(trigger) {
+        const popover = ensureSalaryReasonsPopover();
+        const arrow = salaryReasonsPopoverArrowEl;
+        const padding = 12;
+        const gap = 10;
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        const mobile = vw <= 760;
+
+        popover.classList.toggle('is-mobile', mobile);
+        popover.style.width = mobile ? `${Math.min(vw * 0.9, 450)}px` : '';
+        popover.style.minWidth = mobile ? '' : '320px';
+        popover.style.maxWidth = mobile ? `${Math.min(vw * 0.9, 450)}px` : '450px';
+
+        if (mobile) {
+          popover.dataset.placement = 'bottom';
+          popover.style.left = '50%';
+          const height = popover.offsetHeight;
+          popover.style.top = `${Math.max(padding, Math.min((vh - height) / 2, vh - height - padding))}px`;
+          if (arrow) arrow.style.display = 'none';
+          return;
+        }
+
+        if (arrow) arrow.style.display = '';
+        const triggerRect = trigger.getBoundingClientRect();
+        const popoverWidth = Math.min(450, Math.max(320, popover.offsetWidth));
+        const popoverHeight = Math.min(vh * 0.7, popover.offsetHeight);
+
+        let placement = 'bottom';
+        let top = triggerRect.bottom + gap;
+        let left = triggerRect.left;
+
+        if (left + popoverWidth > vw - padding) {
+          left = triggerRect.right - popoverWidth;
+        }
+        if (left + popoverWidth > vw - padding && triggerRect.left - gap - popoverWidth >= padding) {
+          left = triggerRect.left - gap - popoverWidth;
+          placement = 'left';
+        }
+        if (left < padding) {
+          left = padding;
+        }
+
+        if (placement === 'bottom' || placement === 'top') {
+          if (top + popoverHeight > vh - padding) {
+            const aboveTop = triggerRect.top - gap - popoverHeight;
+            if (aboveTop >= padding) {
+              top = aboveTop;
+              placement = 'top';
+            }
+          }
+          if (top + popoverHeight > vh - padding) {
+            top = Math.max(padding, vh - padding - popoverHeight);
+          }
+        } else {
+          top = triggerRect.top + triggerRect.height / 2 - 24;
+          top = Math.max(padding, Math.min(top, vh - padding - popoverHeight));
+        }
+
+        popover.style.top = `${Math.max(padding, Math.min(top, vh - padding - popoverHeight))}px`;
+        popover.style.left = `${Math.max(padding, Math.min(left, vw - padding - popoverWidth))}px`;
+        popover.dataset.placement = placement;
+
+        if (!arrow) return;
+        const triggerCenterX = triggerRect.left + triggerRect.width / 2;
+        const resolvedLeft = Math.max(padding, Math.min(left, vw - padding - popoverWidth));
+        if (placement === 'bottom' || placement === 'top') {
+          const arrowLeft = Math.max(16, Math.min(triggerCenterX - resolvedLeft - 6, popoverWidth - 28));
+          arrow.style.left = `${arrowLeft}px`;
+          arrow.style.right = 'auto';
+          arrow.style.top = placement === 'bottom' ? '-7px' : 'auto';
+          arrow.style.bottom = placement === 'top' ? '-7px' : 'auto';
+        } else {
+          arrow.style.left = 'auto';
+          arrow.style.right = '-7px';
+          arrow.style.top = `${Math.max(16, Math.min(triggerRect.top + triggerRect.height / 2 - top - 6, popoverHeight - 28))}px`;
+          arrow.style.bottom = 'auto';
+        }
+      }
+
+      function openSalaryReasonsPopover(trigger, reasons) {
+        if (activeSalaryReasonsTrigger === trigger && salaryReasonsPopoverOpen) {
+          return;
+        }
+
+        const popover = ensureSalaryReasonsPopover();
+        if (activeSalaryReasonsTrigger && activeSalaryReasonsTrigger !== trigger && salaryReasonsPopoverOpen) {
+          closeSalaryReasonsPopover({ restoreFocus: false });
+        }
+
+        if (salaryReasonsOpenFrame != null) {
+          cancelAnimationFrame(salaryReasonsOpenFrame);
+          salaryReasonsOpenFrame = null;
+        }
+
+        activeSalaryReasonsTrigger = trigger;
+        salaryReasonsPopoverOpen = true;
+        trigger.setAttribute('aria-expanded', 'true');
+        trigger.setAttribute('aria-controls', popover.id);
+
+        salaryReasonsPopoverListEl.innerHTML = reasons
+          .map((reason) => `<li>${escapeAdminHtml(reason)}</li>`)
+          .join('');
+
+        popover.hidden = false;
+        popover.classList.remove('is-open');
+        void popover.offsetHeight;
+        positionSalaryReasonsPopover(trigger);
+        salaryReasonsOpenFrame = requestAnimationFrame(() => {
+          salaryReasonsOpenFrame = null;
+          if (!salaryReasonsPopoverOpen || activeSalaryReasonsTrigger !== trigger) return;
+          popover.classList.add('is-open');
+          popover.focus();
+        });
+      }
+
+      function bindSalaryReasonsPopoverEvents() {
+        if (bindSalaryReasonsPopoverEvents.bound) return;
+        bindSalaryReasonsPopoverEvents.bound = true;
+
+        const body = $('#fantasySalaryReviewBody');
+        const tableWrap = $('#fantasySalaryTableWrap');
+
+        body?.addEventListener('click', (event) => {
+          const trigger = event.target.closest('.fantasy-salary-reasons-trigger');
+          if (!trigger) return;
+          event.preventDefault();
+          event.stopPropagation();
+
+          if (trigger === activeSalaryReasonsTrigger && salaryReasonsPopoverOpen) {
+            closeSalaryReasonsPopover();
+            return;
+          }
+
+          const key = trigger.getAttribute('data-driver-key');
+          const reasons = salaryReasonsStore.get(key) || [];
+          openSalaryReasonsPopover(trigger, reasons);
+        });
+
+        document.addEventListener('click', (event) => {
+          if (!salaryReasonsPopoverOpen) return;
+          if (event.target.closest('.fantasy-salary-reasons-popover')) return;
+          if (event.target.closest('.fantasy-salary-reasons-trigger')) return;
+          closeSalaryReasonsPopover();
+        });
+
+        document.addEventListener('keydown', (event) => {
+          if (event.key === 'Escape') closeSalaryReasonsPopover();
+        });
+
+        const reposition = () => {
+          if (activeSalaryReasonsTrigger && salaryReasonsPopoverOpen) {
+            positionSalaryReasonsPopover(activeSalaryReasonsTrigger);
+          }
+        };
+        window.addEventListener('resize', reposition);
+        window.addEventListener('scroll', reposition, true);
+        tableWrap?.addEventListener('scroll', reposition);
+      }
+
       function renderFantasySalaryReview(drivers = [], analytics = null) {
         const body = $('#fantasySalaryReviewBody');
         if (!body) return;
 
         try {
+          closeSalaryReasonsPopover({ restoreFocus: false });
+          salaryReasonsStore.clear();
           renderTopTrackHistoryDrivers(null, safeArray(drivers));
           renderFantasySalarySummary(analytics);
 
@@ -1616,6 +1944,8 @@
               .map((driver) => {
                 if (!driver || typeof driver !== 'object') return '';
                 const reasons = safeArray(driver.salaryReasons);
+                const driverKey = String(driver.driverId || driver.driverName || '');
+                salaryReasonsStore.set(driverKey, reasons);
                 const valueScore = safeToFixed(driver.valueScore, 2);
                 const valueGrade = driver.valueGrade
                   ? `<span class="fantasy-value-grade">${escapeAdminHtml(driver.valueGrade)}</span>`
@@ -1639,12 +1969,13 @@
               <td>${formatTrackRankCellHtml(driver)}</td>
               <td class="salary">${formatFantasySalary(driver.generatedSalary)}</td>
               <td>
-                <details class="fantasy-detail-block">
-                  <summary>${reasons.length} reason${reasons.length === 1 ? '' : 's'}</summary>
-                  <ul class="fantasy-detail-list">${reasons
-                    .map((reason) => `<li>${escapeAdminHtml(reason)}</li>`)
-                    .join('')}</ul>
-                </details>
+                <button
+                  type="button"
+                  class="fantasy-salary-reasons-trigger"
+                  data-driver-key="${escapeAdminHtml(driverKey)}"
+                  aria-expanded="false"
+                  aria-controls="fantasySalaryReasonsPopover"
+                >${reasons.length} reason${reasons.length === 1 ? '' : 's'}</button>
               </td>
             </tr>`;
               })
@@ -3172,6 +3503,7 @@
       });
       $('#postRacePublishSlateBtn')?.addEventListener('click', () => publishFantasySlate());
       $('#backfillHistoricalSlatesBtn')?.addEventListener('click', backfillHistoricalSlates);
+      bindSalaryReasonsPopoverEvents();
 
       initSession();
     </script>
