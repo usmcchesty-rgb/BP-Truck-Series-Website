@@ -14,6 +14,8 @@
     "/admin/power-rankings.html": "/admin/competition#power-rankings",
     "/admin/power-rankings": "/admin/competition#power-rankings",
     "/admin/fantasy.html": "/admin/competition#fantasy",
+    "/admin/provisionals.html": "/admin/competition#provisionals",
+    "/admin/provisionals": "/admin/competition#provisionals",
     "/admin/race-control.html": "/admin/race-operations#race-control",
     "/admin/race-control": "/admin/race-operations#race-control",
     "/admin/transcripts.html": "/admin/race-operations#transcripts",

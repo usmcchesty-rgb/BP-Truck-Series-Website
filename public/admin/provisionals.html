@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Provisionals — BP Admin</title>
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/admin/admin-layout.css">
+  <style>
+    .sub { color: var(--bp-text-secondary); font-size: 12px; margin-bottom: 16px; line-height: 1.45; }
+    .panel { padding: 14px; margin-bottom: 14px; background: rgba(12,12,12,.92); border: 1px solid #333; border-radius: 8px; }
+    .panel h2 { margin: 0 0 12px; font-size: 18px; color: #ff3030; }
+    .field-label { display: block; font-size: 11px; color: #999; font-weight: 900; text-transform: uppercase; margin: 10px 0 4px; }
+    .field-help { display: block; margin: -2px 0 10px; color: var(--bp-text-secondary); font-size: 11px; line-height: 1.45; }
+    .input { width: 100%; max-width: 160px; margin-bottom: 8px; padding: 8px; background: #090909; color: #fff; border: 1px solid #555; border-radius: 4px; font-size: 12px; }
+    .input--wide { max-width: 360px; }
+    .btn-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .btn-small { padding: 4px 10px; font-size: 9px; }
+    .btn-secondary { background: linear-gradient(#1c1c1c, #080808); }
+    #adminMsg, #loginMsg { margin-top: 10px; font-size: 12px; color: #ccc; white-space: pre-wrap; }
+    #adminMsg.error, #loginMsg.error { color: #ff6060; }
+    .pw-row { max-width: 320px; margin-bottom: 14px; }
+    .ledger-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .ledger-table th, .ledger-table td { padding: 8px 6px; border-bottom: 1px solid rgba(255,255,255,.06); text-align: left; vertical-align: top; }
+    .ledger-table th { color: #aaa; font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
+    .warn-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+    .warn-item { padding: 10px 12px; border: 1px solid rgba(255,180,80,.35); background: rgba(255,180,80,.08); color: #ffd9a8; font-size: 12px; border-radius: 6px; }
+    .ledger-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+    .num-cell { font-weight: 900; color: #fff; text-align: center; }
+  </style>
+  <script src="/admin/admin-embed.js"></script>
+</head>
+<body>
+  <div id="admin-nav-root"></div>
+  <script src="/admin/admin-nav.js"></script>
+
+  <main id="loginView" class="wrap" hidden>
+    <h1>League Provisionals</h1>
+    <p class="sub">Enter the admin password to manage the BP provisional ledger.</p>
+    <div class="pw-row">
+      <input id="loginPw" class="input input--wide" type="password" placeholder="Admin password" autocomplete="current-password">
+      <button class="btn" type="button" onclick="login()">Unlock</button>
+      <pre id="loginMsg"></pre>
+    </div>
+  </main>
+
+  <main id="adminView" class="wrap" hidden>
+    <h1>League Provisional Ledger</h1>
+    <p class="sub">BP tracks free, purchased, and admin provisionals. Official race results and fantasy scoring still come from SimRacerHub only.</p>
+
+    <div class="panel">
+      <h2>Race Focus</h2>
+      <div class="btn-row">
+        <label class="field-label" for="raceNumberInput" style="margin:0;">Race #</label>
+        <input id="raceNumberInput" class="input" type="number" min="1" step="1" placeholder="15">
+        <button id="loadLedgerBtn" class="btn btn-small" type="button">Load Ledger</button>
+      </div>
+      <span class="field-help">Set a race number to compare official SimRacerHub provisionals against BP ledger entries and enable per-race actions.</span>
+      <pre id="adminMsg"></pre>
+    </div>
+
+    <div class="panel" id="warningsPanel" hidden>
+      <h2>Warnings</h2>
+      <ul id="warningsList" class="warn-list"></ul>
+    </div>
+
+    <div class="panel">
+      <h2>Driver Allowances</h2>
+      <div style="overflow-x:auto;">
+        <table class="ledger-table">
+          <thead>
+            <tr>
+              <th>Driver</th>
+              <th>Free Used</th>
+              <th>Free Remaining</th>
+              <th>Purchased</th>
+              <th>Admin</th>
+              <th>Total</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="driverLedgerBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Season Ledger Entries</h2>
+      <div style="overflow-x:auto;">
+        <table class="ledger-table">
+          <thead>
+            <tr>
+              <th>Race</th>
+              <th>Driver</th>
+              <th>Type</th>
+              <th>Notes</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="entriesBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const SESSION_KEY = 'bp_admin_pw';
+    const $ = (sel) => document.querySelector(sel);
+
+    function getSessionPw() {
+      return sessionStorage.getItem(SESSION_KEY) || '';
+    }
+
+    function setMsg(text, isError = false) {
+      const el = $('#adminMsg');
+      if (!el) return;
+      el.textContent = text || '';
+      el.classList.toggle('error', Boolean(isError));
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    async function api(action, payload = {}) {
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          password: getSessionPw(),
+          action,
+          ...payload,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+      return data;
+    }
+
+    function currentRaceNumber() {
+      const value = Number($('#raceNumberInput')?.value);
+      return Number.isFinite(value) && value > 0 ? value : null;
+    }
+
+    function renderWarnings(warnings = []) {
+      const panel = $('#warningsPanel');
+      const list = $('#warningsList');
+      if (!panel || !list) return;
+      if (!warnings.length) {
+        panel.hidden = true;
+        list.innerHTML = '';
+        return;
+      }
+      panel.hidden = false;
+      list.innerHTML = warnings
+        .map((warning) => `<li class="warn-item">${escapeHtml(warning.message)}</li>`)
+        .join('');
+    }
+
+    function renderDrivers(drivers = []) {
+      const body = $('#driverLedgerBody');
+      if (!body) return;
+      const raceNumber = currentRaceNumber();
+      body.innerHTML = drivers
+        .map((driver) => {
+          const allowance = driver.allowance || {};
+          const actions = raceNumber
+            ? `<div class="ledger-actions">
+                <button class="btn btn-small" type="button" data-action="free" data-driver-id="${escapeHtml(driver.driverId)}">Use Free</button>
+                <button class="btn btn-small btn-secondary" type="button" data-action="purchased" data-driver-id="${escapeHtml(driver.driverId)}">Use Purchased</button>
+                <button class="btn btn-small btn-secondary" type="button" data-action="admin" data-driver-id="${escapeHtml(driver.driverId)}">Use Admin Override</button>
+              </div>`
+            : '<span class="field-help">Set race # to add entries</span>';
+          return `<tr>
+            <td>${escapeHtml(driver.driverName)}${driver.carNumber ? ` <span class="field-help">#${escapeHtml(driver.carNumber)}</span>` : ''}</td>
+            <td class="num-cell">${allowance.freeProvisionalsUsed ?? 0}</td>
+            <td class="num-cell">${allowance.freeProvisionalsRemaining ?? 0}</td>
+            <td class="num-cell">${allowance.purchasedProvisionalsUsed ?? 0}</td>
+            <td class="num-cell">${allowance.adminProvisionalsUsed ?? 0}</td>
+            <td class="num-cell">${allowance.totalProvisionalsUsed ?? 0}</td>
+            <td>${actions}</td>
+          </tr>`;
+        })
+        .join('');
+
+      body.querySelectorAll('button[data-action]').forEach((button) => {
+        button.addEventListener('click', async () => {
+          const driverId = button.getAttribute('data-driver-id');
+          const type = button.getAttribute('data-action');
+          const race = currentRaceNumber();
+          if (!race) {
+            setMsg('Set a race number before adding a ledger entry.', true);
+            return;
+          }
+          const notes = window.prompt('Notes (optional):', '') ?? '';
+          try {
+            await api('addDriverProvisional', { driverId, raceNumber: race, type, notes });
+            setMsg(`Recorded ${type} provisional for Race ${race}.`);
+            await loadLedger();
+          } catch (error) {
+            setMsg(error.message || 'Failed to add ledger entry.', true);
+          }
+        });
+      });
+    }
+
+    function renderEntries(entries = [], drivers = []) {
+      const body = $('#entriesBody');
+      if (!body) return;
+      const nameById = Object.fromEntries((drivers || []).map((d) => [String(d.driverId), d.driverName]));
+      if (!entries.length) {
+        body.innerHTML = '<tr><td colspan="5" class="field-help">No ledger entries yet.</td></tr>';
+        return;
+      }
+      body.innerHTML = [...entries]
+        .sort((a, b) => Number(a.raceNumber) - Number(b.raceNumber) || String(a.driverName || nameById[a.driverId] || '').localeCompare(String(b.driverName || nameById[b.driverId] || '')))
+        .map((entry) => {
+          const name = nameById[String(entry.driverId)] || `Driver ${entry.driverId}`;
+          return `<tr>
+            <td>${escapeHtml(entry.raceNumber)}</td>
+            <td>${escapeHtml(name)}</td>
+            <td>${escapeHtml(entry.type)}</td>
+            <td><input class="input input--wide" type="text" value="${escapeHtml(entry.notes || '')}" data-notes-for="${escapeHtml(entry.driverId)}:${escapeHtml(entry.raceNumber)}"></td>
+            <td>
+              <div class="ledger-actions">
+                <button class="btn btn-small btn-secondary" type="button" data-save-notes="${escapeHtml(entry.driverId)}:${escapeHtml(entry.raceNumber)}">Save Notes</button>
+                <button class="btn btn-small" type="button" data-remove="${escapeHtml(entry.driverId)}:${escapeHtml(entry.raceNumber)}">Remove</button>
+              </div>
+            </td>
+          </tr>`;
+        })
+        .join('');
+
+      body.querySelectorAll('button[data-save-notes]').forEach((button) => {
+        button.addEventListener('click', async () => {
+          const [driverId, raceNumber] = String(button.getAttribute('data-save-notes') || '').split(':');
+          const input = body.querySelector(`input[data-notes-for="${driverId}:${raceNumber}"]`);
+          try {
+            await api('updateDriverProvisionalNotes', {
+              driverId,
+              raceNumber: Number(raceNumber),
+              notes: input?.value || '',
+            });
+            setMsg('Notes saved.');
+            await loadLedger();
+          } catch (error) {
+            setMsg(error.message || 'Failed to save notes.', true);
+          }
+        });
+      });
+
+      body.querySelectorAll('button[data-remove]').forEach((button) => {
+        button.addEventListener('click', async () => {
+          const [driverId, raceNumber] = String(button.getAttribute('data-remove') || '').split(':');
+          if (!window.confirm(`Remove ledger entry for Race ${raceNumber}?`)) return;
+          try {
+            await api('removeDriverProvisional', { driverId, raceNumber: Number(raceNumber) });
+            setMsg('Ledger entry removed.');
+            await loadLedger();
+          } catch (error) {
+            setMsg(error.message || 'Failed to remove entry.', true);
+          }
+        });
+      });
+    }
+
+    async function loadLedger() {
+      try {
+        const raceNumber = currentRaceNumber();
+        const board = await api('getDriverProvisionalLedger', {
+          raceNumber: raceNumber ?? undefined,
+        });
+        renderWarnings(board.warnings || []);
+        renderDrivers(board.drivers || []);
+        renderEntries(board.entries || [], board.drivers || []);
+        if (raceNumber != null) {
+          const officialCount = (board.officialProvisionalDriverIds || []).length;
+          setMsg(`Race ${raceNumber}: ${officialCount} official SRH provisional${officialCount === 1 ? '' : 's'} detected.`);
+        } else {
+          setMsg('Season ledger loaded. Set a race number to validate against official results.');
+        }
+        window.AdminEmbed?.reportHeight?.();
+      } catch (error) {
+        setMsg(error.message || 'Failed to load ledger.', true);
+      }
+    }
+
+    async function verifyPassword(pw) {
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pw, verifyOnly: true }),
+      });
+      return res.ok;
+    }
+
+    async function login() {
+      const pw = $('#loginPw')?.value || '';
+      const msg = $('#loginMsg');
+      if (!pw) {
+        if (msg) {
+          msg.textContent = 'Enter the admin password.';
+          msg.classList.add('error');
+        }
+        return;
+      }
+      try {
+        const ok = await verifyPassword(pw);
+        if (!ok) throw new Error('Invalid password');
+        sessionStorage.setItem(SESSION_KEY, pw);
+        $('#loginView').hidden = true;
+        $('#adminView').hidden = false;
+        await loadLedger();
+      } catch (error) {
+        if (msg) {
+          msg.textContent = error.message || 'Login failed';
+          msg.classList.add('error');
+        }
+      }
+    }
+
+    (async function init() {
+      if (window.AdminEmbed?.hideWhenEmbed) {
+        window.AdminEmbed.hideWhenEmbed('#admin-nav-root');
+      }
+      $('#loadLedgerBtn')?.addEventListener('click', loadLedger);
+      if (getSessionPw()) {
+        $('#loginView').hidden = true;
+        $('#adminView').hidden = false;
+        await loadLedger();
+      } else {
+        $('#loginView').hidden = false;
+        $('#adminView').hidden = true;
+      }
+    })();
+  </script>
+</body>
+</html>

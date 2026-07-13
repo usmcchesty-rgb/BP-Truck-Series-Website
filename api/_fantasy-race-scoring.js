@@ -10,6 +10,7 @@ import { fetchStandingsRows, buildDriverLookup } from './_standings-rows.js';
 import { getAlignedRaceFinishes } from './_power-rankings-results-audit.js';
 import {
   extractOfficialRaceFinishes,
+  extractOfficialRaceField,
   findScheduleEntryByScheduleId,
   pickOfficialRaceBucket,
 } from './_simracerhub-schedule-results.js';
@@ -223,6 +224,7 @@ export function rankCompetition(lineupTotals = []) {
 const PARTICIPATION_POLICIES = {
   started: { countsTowardAttendance: true, countsTowardFantasy: true },
   dnf: { countsTowardAttendance: true, countsTowardFantasy: true },
+  provisional: { countsTowardAttendance: false, countsTowardFantasy: true },
   dns: { countsTowardAttendance: false, countsTowardFantasy: true },
   dnp: { countsTowardAttendance: false, countsTowardFantasy: true },
   unresolved: { countsTowardAttendance: null, countsTowardFantasy: false },
@@ -299,6 +301,18 @@ export function buildNonParticipantReason(status, raceNumber) {
     : 'Driver did not participate in this race.';
 }
 
+function formatOrdinalLabel(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 1) return 'last place';
+  const mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 13) return `${n}th`;
+  const mod10 = n % 10;
+  if (mod10 === 1) return `${n}st`;
+  if (mod10 === 2) return `${n}nd`;
+  if (mod10 === 3) return `${n}rd`;
+  return `${n}th`;
+}
+
 export function formatPublicDriverScoreLabel(driver = {}) {
   const name = driver.driverName || 'Driver';
   const points = Number(
@@ -310,7 +324,19 @@ export function formatPublicDriverScoreLabel(driver = {}) {
     driver.breakdown?.participation?.participationStatus ||
     driver.breakdown?.participationStatus ||
     null;
+  const finish =
+    driver.finishPosition ??
+    driver.assignedFinishPosition ??
+    driver.breakdown?.assignedFinishPosition ??
+    driver.breakdown?.finish ??
+    null;
 
+  if (status === 'provisional') {
+    const finishLabel = Number.isFinite(Number(finish))
+      ? formatOrdinalLabel(Number(finish))
+      : 'last place';
+    return `${name} — Provisional, ${finishLabel} (${points} pts)`;
+  }
   if (status === 'dnp' || status === 'dns') {
     return `${name} — ${String(status).toUpperCase()} (${points} pts)`;
   }
@@ -358,7 +384,54 @@ export function buildNonParticipantDriverScore(config, options = {}) {
   };
 }
 
+export function calculateProvisionalDriverRacePoints(finish, config = DEFAULT_FANTASY_RACE_SCORING_CONFIG) {
+  const assignedFinish = Number(finish);
+  const basePoints = finishPositionPoints(assignedFinish, config);
+  return {
+    basePoints,
+    bonusPoints: 0,
+    penaltyPoints: 0,
+    totalPoints: basePoints,
+    positionsGained: null,
+    breakdown: {
+      status: 'provisional',
+      assignedFinishPosition: assignedFinish,
+      basePoints,
+      bonuses: null,
+      penalties: null,
+    },
+  };
+}
+
+export function buildProvisionalDriverScore(config, result, raceNumber) {
+  const assignedFinish = Number(result?.finishPosition ?? result?.finish);
+  const computed = calculateProvisionalDriverRacePoints(assignedFinish, config);
+  const participation = buildParticipationMetadata('provisional', {
+    officialResultFound: true,
+    reason: Number.isFinite(assignedFinish)
+      ? `Driver used a league provisional and was scored as the ${assignedFinish}th-place car.`
+      : 'Driver used a league provisional and was scored as a last-place car.',
+    fantasyPoints: computed.totalPoints,
+  });
+
+  return {
+    ...computed,
+    participation,
+    breakdown: mergeBreakdownWithParticipation(
+      {
+        ...computed.breakdown,
+        assignedFinishPosition: assignedFinish,
+        finish: assignedFinish,
+      },
+      participation,
+    ),
+  };
+}
+
 export function classifyRaceParticipation(match, result) {
+  if (match?.participationStatus === 'provisional' || result?.isProvisional) {
+    return 'provisional';
+  }
   if (match?.participationStatus === 'dnp' || match?.raceParticipationStatus === 'dnp') {
     return 'dnp';
   }
@@ -384,12 +457,36 @@ function buildParticipantParticipation(result, raceNumber, fantasyPoints) {
   });
 }
 
+function buildProvisionalParticipation(result, raceNumber, fantasyPoints) {
+  const finish = Number(result?.finishPosition ?? result?.finish);
+  return buildParticipationMetadata('provisional', {
+    officialResultFound: true,
+    reason: Number.isFinite(finish)
+      ? `Driver used a league provisional and was scored as the ${finish}th-place car in Race ${raceNumber}.`
+      : `Driver used a league provisional in Race ${raceNumber}.`,
+    fantasyPoints,
+  });
+}
+
 function buildUnresolvedParticipation() {
   return buildParticipationMetadata('unresolved', {
     officialResultFound: false,
     reason: 'Driver identity could not be resolved for scoring.',
     fantasyPoints: 0,
   });
+}
+
+function resolveMatchParticipation(result) {
+  if (result?.isProvisional || result?.participationStatus === 'provisional') {
+    return {
+      participationStatus: 'provisional',
+      raceParticipationStatus: 'provisional',
+    };
+  }
+  return {
+    participationStatus: 'started',
+    raceParticipationStatus: 'started',
+  };
 }
 
 export function matchFantasyDriverToResult(driver, context = {}) {
@@ -399,13 +496,13 @@ export function matchFantasyDriverToResult(driver, context = {}) {
   const warnings = [];
 
   if (driverId && context.driverResults?.[driverId]) {
+    const result = context.driverResults[driverId];
     return {
       matched: true,
-      method: 'driver_id',
+      method: result.isProvisional ? 'provisional' : 'driver_id',
       driverId,
-      result: context.driverResults[driverId],
-      participationStatus: 'started',
-      raceParticipationStatus: 'started',
+      result,
+      ...resolveMatchParticipation(result),
     };
   }
 
@@ -413,26 +510,26 @@ export function matchFantasyDriverToResult(driver, context = {}) {
   if (profile?.iracing_id != null) {
     const iracingKey = String(profile.iracing_id);
     if (context.driverResults?.[iracingKey]) {
+      const result = context.driverResults[iracingKey];
       return {
         matched: true,
-        method: 'iracing_id',
+        method: result.isProvisional ? 'provisional' : 'iracing_id',
         driverId,
-        result: context.driverResults[iracingKey],
-        participationStatus: 'started',
-        raceParticipationStatus: 'started',
+        result,
+        ...resolveMatchParticipation(result),
       };
     }
   }
 
   const exactNameId = matchDriverIdByName(driverName, context.driverLookup || new Map());
   if (exactNameId && context.driverResults?.[exactNameId]) {
+    const result = context.driverResults[exactNameId];
     return {
       matched: true,
-      method: 'normalized_name',
+      method: result.isProvisional ? 'provisional' : 'normalized_name',
       driverId: exactNameId,
-      result: context.driverResults[exactNameId],
-      participationStatus: 'started',
-      raceParticipationStatus: 'started',
+      result,
+      ...resolveMatchParticipation(result),
     };
   }
 
@@ -444,11 +541,10 @@ export function matchFantasyDriverToResult(driver, context = {}) {
       if (normalizeName(lookupDriver.driverName) === normalizeName(driverName)) {
         return {
           matched: true,
-          method: 'car_number_name',
+          method: result.isProvisional ? 'provisional' : 'car_number_name',
           driverId: candidateId,
           result,
-          participationStatus: 'started',
-          raceParticipationStatus: 'started',
+          ...resolveMatchParticipation(result),
         };
       }
     }
@@ -537,6 +633,7 @@ export async function loadOfficialRaceResultsContext({
 
   let driverResults = {};
   let registeredDriverIds = new Set();
+  let fieldMeta = null;
   if (alignment?.schedulesApiScheduleId) {
     const scheduleEntry = findScheduleEntryByScheduleId(
       standingsResult.schedules,
@@ -547,7 +644,9 @@ export async function loadOfficialRaceResultsContext({
       if (officialBucket?.bucket) {
         registeredDriverIds = new Set(Object.keys(officialBucket.bucket).map(String));
       }
-      driverResults = extractOfficialRaceFinishes(scheduleEntry).driverResults || {};
+      const extracted = extractOfficialRaceField(scheduleEntry);
+      driverResults = extracted.driverResults || {};
+      fieldMeta = extracted.meta || null;
     }
   }
 
@@ -573,6 +672,10 @@ export async function loadOfficialRaceResultsContext({
     driverLookup,
     profileByDriverId: new Map(profiles.map((row) => [String(row.driver_id), row])),
     standingsScheduleId: raceDebug.standingsScheduleId,
+    fieldMeta,
+    officialStarterCount: fieldMeta?.officialStarterCount ?? null,
+    provisionalCount: fieldMeta?.provisionalCount ?? 0,
+    totalScoredFieldCount: fieldMeta?.totalScoredFieldCount ?? null,
   };
 }
 
@@ -673,6 +776,7 @@ export async function scoreFantasySlate(options = {}) {
   const warnings = [];
   const unresolvedDrivers = [];
   const dnpDrivers = [];
+  const provisionalDrivers = [];
   const driverScoreRows = [];
   const scoredDrivers = new Map();
 
@@ -708,6 +812,36 @@ export async function scoreFantasySlate(options = {}) {
           },
           participation,
         ),
+      });
+      continue;
+    }
+
+    if (
+      match.participationStatus === 'provisional' ||
+      match.result?.isProvisional ||
+      match.method === 'provisional'
+    ) {
+      const computed = buildProvisionalDriverScore(config, match.result, raceNumber);
+      provisionalDrivers.push({
+        driverId: driver.driverId,
+        driverName: driver.driverName,
+        participationStatus: 'provisional',
+        participation: computed.participation,
+        assignedFinishPosition: match.result?.finishPosition ?? match.result?.finish ?? null,
+        reason: computed.participation?.reason || 'Official SRH provisional',
+      });
+      scoredDrivers.set(String(driver.driverId), computed);
+      driverScoreRows.push({
+        driverId: String(driver.driverId),
+        finishPosition: match.result?.finishPosition ?? match.result?.finish ?? null,
+        startPosition: null,
+        positionsGained: null,
+        basePoints: computed.basePoints,
+        bonusPoints: computed.bonusPoints,
+        penaltyPoints: computed.penaltyPoints,
+        totalPoints: computed.totalPoints,
+        breakdown: computed.breakdown,
+        participation: computed.participation,
       });
       continue;
     }
@@ -833,6 +967,10 @@ export async function scoreFantasySlate(options = {}) {
     unresolvedDrivers,
     dnpDrivers,
     dnpCount: dnpDrivers.length,
+    provisionalDrivers,
+    provisionalCount: provisionalDrivers.length,
+    officialStarterCount: resultsContext.officialStarterCount ?? null,
+    totalScoredFieldCount: resultsContext.totalScoredFieldCount ?? null,
     warnings,
     source: options.source || 'manual',
     resultsReady: resultsContext.ready,
@@ -852,6 +990,8 @@ export async function scoreFantasySlate(options = {}) {
     unresolvedDrivers,
     dnpDrivers,
     dnpCount: dnpDrivers.length,
+    provisionalDrivers,
+    provisionalCount: provisionalDrivers.length,
     warnings,
     lineups: rankedLineups,
     config,
@@ -893,6 +1033,18 @@ export async function getFantasyRaceScoringStatus(options = {}) {
   else if (scoringMeta?.status === 'needs_review') status = 'needs_review';
   else if (raceComplete && resultsContext.ready) status = 'ready';
 
+  let provisionalLedgerWarnings = [];
+  try {
+    const { getProvisionalLedgerWarningsForRace } = await import('./_driver-provisionals.js');
+    provisionalLedgerWarnings = await getProvisionalLedgerWarningsForRace(
+      seasonId,
+      slateRow.race_number,
+      { settings, scheduleRaces: progression.scheduleRaces },
+    );
+  } catch {
+    provisionalLedgerWarnings = [];
+  }
+
   return {
     status,
     raceComplete,
@@ -910,7 +1062,15 @@ export async function getFantasyRaceScoringStatus(options = {}) {
     unresolvedDrivers: scoringMeta?.unresolvedDrivers || [],
     dnpDrivers: scoringMeta?.dnpDrivers || [],
     dnpCount: scoringMeta?.dnpCount ?? (scoringMeta?.dnpDrivers || []).length,
+    provisionalDrivers: scoringMeta?.provisionalDrivers || [],
+    provisionalCount:
+      scoringMeta?.provisionalCount ?? (scoringMeta?.provisionalDrivers || []).length,
+    officialStarterCount:
+      scoringMeta?.officialStarterCount ?? resultsContext.officialStarterCount ?? null,
+    totalScoredFieldCount:
+      scoringMeta?.totalScoredFieldCount ?? resultsContext.totalScoredFieldCount ?? null,
     warnings: scoringMeta?.warnings || [],
+    provisionalLedgerWarnings,
     alignmentMethod: resultsContext.alignment?.alignmentMethod || null,
     scoringContext: {
       source: resolved.source,

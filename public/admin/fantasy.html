@@ -2077,6 +2077,7 @@
         if (!value) return '—';
         const normalized = String(value).toLowerCase();
         if (normalized === 'dnp' || normalized === 'dns') return normalized.toUpperCase();
+        if (normalized === 'provisional') return 'Provisional';
         if (normalized === 'started') return 'Started';
         if (normalized === 'unresolved') return 'Unresolved';
         return String(value);
@@ -2097,12 +2098,13 @@
               ''
           ).toLowerCase();
           if (status === 'dnp' || status === 'dns') return 'Did not participate';
+          if (status === 'provisional') return 'Official SRH provisional';
           if (status === 'started') return 'Official race result applied';
         }
         return reason.replace(/^Driver /, '');
       }
 
-      function renderFantasyScoringTable(lineups = [], dnpDrivers = [], unresolvedDrivers = []) {
+      function renderFantasyScoringTable(lineups = [], dnpDrivers = [], unresolvedDrivers = [], provisionalDrivers = []) {
         const wrap = $('#fantasyScoringTableWrap');
         if (!wrap) return;
 
@@ -2128,6 +2130,19 @@
             points: 0,
           });
         }
+        for (const driver of provisionalDrivers) {
+          const key = String(driver.driverId || driver.driverName || '');
+          if (!key || seenDrivers.has(key)) continue;
+          seenDrivers.add(key);
+          driverRows.push({
+            driverName: driver.driverName,
+            participationStatus: 'provisional',
+            participation: driver.participation,
+            assignedFinishPosition: driver.assignedFinishPosition,
+            reason: driver.reason || 'Official SRH provisional',
+            points: driver.participation?.fantasyPoints ?? driver.points ?? null,
+          });
+        }
 
         if (!lineups.length && !driverRows.length && !unresolvedDrivers.length) {
           wrap.hidden = true;
@@ -2137,6 +2152,11 @@
 
         wrap.hidden = false;
         const nonParticipantCount = dnpDrivers.length;
+        const provisionalCount = provisionalDrivers.length;
+        const provisionalSummary =
+          provisionalCount > 0
+            ? `<p class="field-help" style="margin-bottom:10px;">${provisionalCount} provisional driver${provisionalCount === 1 ? '' : 's'} received last-place finish points.</p>`
+            : '';
         const dnpSummary =
           nonParticipantCount > 0
             ? `<p class="field-help" style="margin-bottom:10px;">${nonParticipantCount} selected driver${nonParticipantCount === 1 ? '' : 's'} did not participate and received 0 points.</p>`
@@ -2153,13 +2173,15 @@
 
         safeSetInnerHtml(
           wrap,
-          `${dnpSummary}
+          `${provisionalSummary}
+          ${dnpSummary}
           ${unresolvedSummary}
           <table class="fantasy-table" style="margin-bottom:14px;">
             <thead>
               <tr>
                 <th>Driver</th>
                 <th>Participation</th>
+                <th>Finish</th>
                 <th>Points</th>
                 <th>Reason</th>
               </tr>
@@ -2171,6 +2193,7 @@
                   (driver) => `<tr>
                     <td>${escapeAdminHtml(driver.driverName || '—')}</td>
                     <td>${escapeAdminHtml(formatParticipationLabel(driver.participationStatus || driver.participation?.participationStatus || driver.breakdown?.participationStatus || driver.breakdown?.status))}</td>
+                    <td>${escapeAdminHtml(driver.assignedFinishPosition ?? driver.finishPosition ?? driver.breakdown?.assignedFinishPosition ?? driver.breakdown?.finish ?? '—')}</td>
                     <td>${escapeAdminHtml(driver.points ?? driver.fantasyPoints ?? driver.participation?.fantasyPoints ?? driver.breakdown?.totalPoints ?? 0)}</td>
                     <td>${escapeAdminHtml(formatParticipationReason(driver))}</td>
                   </tr>`
@@ -2256,12 +2279,24 @@
               parts.push(
                 `${data.unresolvedDrivers.length} unresolved driver mapping${data.unresolvedDrivers.length === 1 ? '' : 's'} require admin review.`
               );
+            }
+            if ((data.provisionalDrivers || data.scoringMeta?.provisionalDrivers || []).length) {
+              const provCount =
+                data.provisionalCount ??
+                data.scoringMeta?.provisionalCount ??
+                (data.provisionalDrivers || data.scoringMeta?.provisionalDrivers || []).length;
+              parts.push(
+                `${provCount} provisional driver${provCount === 1 ? '' : 's'} received last-place finish points.`
+              );
             } else if ((data.dnpDrivers || []).length) {
               parts.push(
                 `${data.dnpDrivers.length} selected driver${data.dnpDrivers.length === 1 ? '' : 's'} did not participate and received 0 points.`
               );
             }
             if (data.scoringMeta?.warnings?.length) parts.push(data.scoringMeta.warnings.join(' '));
+            for (const warning of data.provisionalLedgerWarnings || []) {
+              if (warning?.message) parts.push(warning.message);
+            }
             messageEl.textContent = parts.join(' ');
           }
           if (rulesEl && data.config) {
@@ -2290,13 +2325,15 @@
             renderFantasyScoringTable(
               merged.length ? merged : [],
               data.dnpDrivers || data.scoringMeta?.dnpDrivers || [],
-              data.unresolvedDrivers || data.scoringMeta?.unresolvedDrivers || []
+              data.unresolvedDrivers || data.scoringMeta?.unresolvedDrivers || [],
+              data.provisionalDrivers || data.scoringMeta?.provisionalDrivers || []
             );
           } else {
             renderFantasyScoringTable(
               [],
               data.dnpDrivers || data.scoringMeta?.dnpDrivers || [],
-              data.unresolvedDrivers || data.scoringMeta?.unresolvedDrivers || []
+              data.unresolvedDrivers || data.scoringMeta?.unresolvedDrivers || [],
+              data.provisionalDrivers || data.scoringMeta?.provisionalDrivers || []
             );
           }
         } catch (error) {
