@@ -9,6 +9,7 @@ create table if not exists driver_provisionals (
   race_number int not null,
   type text not null check (type in ('free', 'purchased', 'admin')),
   notes text,
+  metadata jsonb,
   created_at timestamptz not null default now(),
   created_by text,
   unique (season_id, driver_id, race_number)

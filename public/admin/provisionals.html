@@ -27,6 +27,36 @@
     .warn-item { padding: 10px 12px; border: 1px solid rgba(255,180,80,.35); background: rgba(255,180,80,.08); color: #ffd9a8; font-size: 12px; border-radius: 6px; }
     .ledger-actions { display: flex; flex-wrap: wrap; gap: 6px; }
     .num-cell { font-weight: 900; color: #fff; text-align: center; }
+    .badge-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 9px;
+      font-weight: 900;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      border: 1px solid transparent;
+    }
+    .badge-auto { color: #9fd4ff; border-color: rgba(120,190,255,.45); background: rgba(80,150,255,.12); }
+    .badge-free { color: #9dffb0; border-color: rgba(120,255,150,.35); background: rgba(80,200,100,.1); }
+    .badge-purchased { color: #ffd27a; border-color: rgba(255,200,80,.35); background: rgba(255,180,60,.1); }
+    .badge-admin { color: #d8c4ff; border-color: rgba(180,140,255,.35); background: rgba(140,100,255,.1); }
+    .badge-review { color: #ffb0b0; border-color: rgba(255,120,120,.45); background: rgba(255,80,80,.12); }
+    .auto-sync-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+    .auto-sync-item {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 12px;
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 6px;
+      background: rgba(255,255,255,.02);
+    }
+    .auto-sync-main { min-width: 220px; }
+    .auto-sync-title { font-weight: 900; color: #fff; }
+    .auto-sync-sub { color: #aaa; font-size: 11px; margin-top: 4px; }
   </style>
   <script src="/admin/admin-embed.js"></script>
 </head>
@@ -57,6 +87,11 @@
       </div>
       <span class="field-help">Set a race number to compare official SimRacerHub provisionals against BP ledger entries and enable per-race actions.</span>
       <pre id="adminMsg"></pre>
+    </div>
+
+    <div class="panel" id="autoSyncPanel" hidden>
+      <h2>Auto-Synced This Race</h2>
+      <ul id="autoSyncList" class="auto-sync-list"></ul>
     </div>
 
     <div class="panel" id="warningsPanel" hidden>
@@ -146,6 +181,117 @@
       return Number.isFinite(value) && value > 0 ? value : null;
     }
 
+    function formatOrdinal(value) {
+      const n = Number(value);
+      if (!Number.isFinite(n)) return '—';
+      const mod100 = n % 100;
+      const mod10 = n % 10;
+      if (mod100 >= 11 && mod100 <= 13) return `${n}th`;
+      if (mod10 === 1) return `${n}st`;
+      if (mod10 === 2) return `${n}nd`;
+      if (mod10 === 3) return `${n}rd`;
+      return `${n}th`;
+    }
+
+    function renderBadges(entry = {}) {
+      const badges = [];
+      if (entry.metadata?.autoCreated) badges.push('<span class="badge badge-auto">Auto-Synced</span>');
+      if (entry.type === 'free') badges.push('<span class="badge badge-free">Free</span>');
+      if (entry.type === 'purchased') badges.push('<span class="badge badge-purchased">Purchased</span>');
+      if (entry.type === 'admin') badges.push('<span class="badge badge-admin">Admin Override</span>');
+      if (entry.metadata?.needsReview) badges.push('<span class="badge badge-review">Needs Review</span>');
+      return badges.length ? `<div class="badge-row">${badges.join('')}</div>` : '';
+    }
+
+    function renderTypeControls(entry, raceNumber) {
+      const driverId = entry.driverId;
+      const reviewNote = entry.metadata?.needsReview
+        ? '<div class="auto-sync-sub">Official provisional detected. Free allowance exhausted.</div>'
+        : '';
+      return `${reviewNote}
+        <div class="ledger-actions">
+          <button class="btn btn-small btn-secondary" type="button" data-set-type="purchased" data-driver-id="${escapeHtml(driverId)}" data-race-number="${escapeHtml(raceNumber)}">Change to Purchased</button>
+          <button class="btn btn-small btn-secondary" type="button" data-set-type="admin" data-driver-id="${escapeHtml(driverId)}" data-race-number="${escapeHtml(raceNumber)}">Change to Admin Override</button>
+          <button class="btn btn-small btn-secondary" type="button" data-set-type="free" data-driver-id="${escapeHtml(driverId)}" data-race-number="${escapeHtml(raceNumber)}">Revert to Free</button>
+          <button class="btn btn-small" type="button" data-remove="${escapeHtml(driverId)}:${escapeHtml(raceNumber)}">Remove Entry</button>
+        </div>`;
+    }
+
+    function bindTypeControls(root) {
+      root.querySelectorAll('button[data-set-type]').forEach((button) => {
+        button.addEventListener('click', async () => {
+          const driverId = button.getAttribute('data-driver-id');
+          const raceNumber = Number(button.getAttribute('data-race-number'));
+          const type = button.getAttribute('data-set-type');
+          try {
+            await api('updateDriverProvisionalType', { driverId, raceNumber, type });
+            setMsg(`Updated Race ${raceNumber} provisional to ${type}.`);
+            await loadLedger();
+          } catch (error) {
+            setMsg(error.message || 'Failed to update provisional type.', true);
+          }
+        });
+      });
+
+      root.querySelectorAll('button[data-remove]').forEach((button) => {
+        button.addEventListener('click', async () => {
+          const [driverId, raceNumber] = String(button.getAttribute('data-remove') || '').split(':');
+          if (!window.confirm(`Remove ledger entry for Race ${raceNumber}?`)) return;
+          try {
+            await api('removeDriverProvisional', { driverId, raceNumber: Number(raceNumber) });
+            setMsg('Ledger entry removed.');
+            await loadLedger();
+          } catch (error) {
+            setMsg(error.message || 'Failed to remove entry.', true);
+          }
+        });
+      });
+    }
+
+    function renderAutoSynced(board = {}) {
+      const panel = $('#autoSyncPanel');
+      const list = $('#autoSyncList');
+      if (!panel || !list) return;
+
+      const raceNumber = currentRaceNumber();
+      const officialIds = new Set((board.officialProvisionalDriverIds || []).map(String));
+      const raceEntries = (board.raceEntries || []).filter((entry) =>
+        officialIds.has(String(entry.driverId)),
+      );
+      const officialCount = officialIds.size;
+
+      if (!raceNumber || !officialCount) {
+        panel.hidden = true;
+        list.innerHTML = '';
+        return;
+      }
+
+      panel.hidden = false;
+      if (!raceEntries.length) {
+        list.innerHTML = '<li class="auto-sync-item"><span class="field-help">Official provisionals detected. Sync will create ledger rows on load.</span></li>';
+        return;
+      }
+
+      const nameById = Object.fromEntries((board.drivers || []).map((d) => [String(d.driverId), d.driverName]));
+      list.innerHTML = raceEntries
+        .map((entry) => {
+          const name = nameById[String(entry.driverId)] || `Driver ${entry.driverId}`;
+          const finish = entry.metadata?.officialFinishPosition;
+          const finishLabel = Number.isFinite(Number(finish)) ? formatOrdinal(finish) : 'Provisional';
+          const typeLabel = entry.type === 'free' ? 'Free' : entry.type === 'purchased' ? 'Purchased' : 'Admin Override';
+          return `<li class="auto-sync-item">
+            <div class="auto-sync-main">
+              <div class="auto-sync-title">${escapeHtml(name)} — ${escapeHtml(typeLabel)} — ${escapeHtml(finishLabel)}</div>
+              ${renderBadges(entry)}
+            </div>
+            <div>${renderTypeControls(entry, raceNumber)}</div>
+          </li>`;
+        })
+        .join('');
+
+      bindTypeControls(list);
+    }
+
     function renderWarnings(warnings = []) {
       const panel = $('#warningsPanel');
       const list = $('#warningsList');
@@ -222,11 +368,14 @@
           const name = nameById[String(entry.driverId)] || `Driver ${entry.driverId}`;
           return `<tr>
             <td>${escapeHtml(entry.raceNumber)}</td>
-            <td>${escapeHtml(name)}</td>
+            <td>${escapeHtml(name)}${renderBadges(entry)}</td>
             <td>${escapeHtml(entry.type)}</td>
             <td><input class="input input--wide" type="text" value="${escapeHtml(entry.notes || '')}" data-notes-for="${escapeHtml(entry.driverId)}:${escapeHtml(entry.raceNumber)}"></td>
             <td>
               <div class="ledger-actions">
+                <button class="btn btn-small btn-secondary" type="button" data-set-type="purchased" data-driver-id="${escapeHtml(entry.driverId)}" data-race-number="${escapeHtml(entry.raceNumber)}">Purchased</button>
+                <button class="btn btn-small btn-secondary" type="button" data-set-type="admin" data-driver-id="${escapeHtml(entry.driverId)}" data-race-number="${escapeHtml(entry.raceNumber)}">Admin</button>
+                <button class="btn btn-small btn-secondary" type="button" data-set-type="free" data-driver-id="${escapeHtml(entry.driverId)}" data-race-number="${escapeHtml(entry.raceNumber)}">Free</button>
                 <button class="btn btn-small btn-secondary" type="button" data-save-notes="${escapeHtml(entry.driverId)}:${escapeHtml(entry.raceNumber)}">Save Notes</button>
                 <button class="btn btn-small" type="button" data-remove="${escapeHtml(entry.driverId)}:${escapeHtml(entry.raceNumber)}">Remove</button>
               </div>
@@ -253,19 +402,7 @@
         });
       });
 
-      body.querySelectorAll('button[data-remove]').forEach((button) => {
-        button.addEventListener('click', async () => {
-          const [driverId, raceNumber] = String(button.getAttribute('data-remove') || '').split(':');
-          if (!window.confirm(`Remove ledger entry for Race ${raceNumber}?`)) return;
-          try {
-            await api('removeDriverProvisional', { driverId, raceNumber: Number(raceNumber) });
-            setMsg('Ledger entry removed.');
-            await loadLedger();
-          } catch (error) {
-            setMsg(error.message || 'Failed to remove entry.', true);
-          }
-        });
-      });
+      bindTypeControls(body);
     }
 
     async function loadLedger() {
@@ -275,11 +412,21 @@
           raceNumber: raceNumber ?? undefined,
         });
         renderWarnings(board.warnings || []);
+        renderAutoSynced(board);
         renderDrivers(board.drivers || []);
         renderEntries(board.entries || [], board.drivers || []);
         if (raceNumber != null) {
           const officialCount = (board.officialProvisionalDriverIds || []).length;
-          setMsg(`Race ${raceNumber}: ${officialCount} official SRH provisional${officialCount === 1 ? '' : 's'} detected.`);
+          const syncMessage = board.syncResult?.message;
+          const autoCreated = (board.syncResult?.created || []).length;
+          const base = `Race ${raceNumber}: ${officialCount} official SRH provisional${officialCount === 1 ? '' : 's'} detected.`;
+          if (autoCreated) {
+            setMsg(`${base} ${autoCreated} auto-synced.`);
+          } else if (syncMessage) {
+            setMsg(`${base} ${syncMessage}`);
+          } else {
+            setMsg(base);
+          }
         } else {
           setMsg('Season ledger loaded. Set a race number to validate against official results.');
         }

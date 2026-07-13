@@ -237,6 +237,27 @@ async function runFantasyPostRaceAutomationInternal(seasonId, options = {}) {
     raceNumber: completedRaceNumber,
   });
 
+  if (scoringStatus.resultsReady) {
+    try {
+      const { syncOfficialProvisionalsForRace } = await import('./_driver-provisionals.js');
+      result.provisionalLedgerSync = await syncOfficialProvisionalsForRace(
+        resolvedSeasonId,
+        completedRaceNumber,
+        {
+          settings,
+          scheduleRaces,
+          createdBy: 'auto-sync',
+        },
+      );
+    } catch (error) {
+      result.provisionalLedgerSync = {
+        skipped: true,
+        reason: 'sync_failed',
+        error: error.message || 'provisional_ledger_sync_failed',
+      };
+    }
+  }
+
   if (isCleanlyScored(scoringStatus)) {
     result.scoring = {
       skipped: true,

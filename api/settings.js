@@ -799,6 +799,7 @@ async function handleSettingsRequest(req, res) {
       const settings = await getSettings();
       const seasonId = body.seasonId || settings.seasonId || '27987';
       const { addDriverProvisionalEntry } = await import('./_driver-provisionals.js');
+      const { clearProvisionalSyncCache } = await import('./_driver-provisional-sync.js');
       const entry = await addDriverProvisionalEntry({
         seasonId,
         driverId: body.driverId,
@@ -807,6 +808,7 @@ async function handleSettingsRequest(req, res) {
         notes: body.notes,
         createdBy: body.createdBy || 'admin',
       });
+      clearProvisionalSyncCache(seasonId, body.raceNumber);
       return res.status(200).json({ ok: true, entry });
     } catch (error) {
       return res.status(400).json({ error: error.message || 'Failed to add provisional ledger entry.' });
@@ -831,17 +833,41 @@ async function handleSettingsRequest(req, res) {
     }
   }
 
+  if (action === 'updateDriverProvisionalType') {
+    if (rejectAdminAuth(req, res, body)) return;
+    try {
+      const settings = await getSettings();
+      const seasonId = body.seasonId || settings.seasonId || '27987';
+      const { updateDriverProvisionalType } = await import('./_driver-provisionals.js');
+      const { clearProvisionalSyncCache } = await import('./_driver-provisional-sync.js');
+      const entry = await updateDriverProvisionalType({
+        seasonId,
+        driverId: body.driverId,
+        raceNumber: body.raceNumber,
+        type: body.type,
+        notes: body.notes,
+        updatedBy: body.updatedBy || 'admin',
+      });
+      clearProvisionalSyncCache(seasonId, body.raceNumber);
+      return res.status(200).json({ ok: true, entry });
+    } catch (error) {
+      return res.status(400).json({ error: error.message || 'Failed to update provisional type.' });
+    }
+  }
+
   if (action === 'removeDriverProvisional') {
     if (rejectAdminAuth(req, res, body)) return;
     try {
       const settings = await getSettings();
       const seasonId = body.seasonId || settings.seasonId || '27987';
       const { removeDriverProvisionalEntry } = await import('./_driver-provisionals.js');
+      const { clearProvisionalSyncCache } = await import('./_driver-provisional-sync.js');
       await removeDriverProvisionalEntry({
         seasonId,
         driverId: body.driverId,
         raceNumber: body.raceNumber,
       });
+      clearProvisionalSyncCache(seasonId, body.raceNumber);
       return res.status(200).json({ ok: true });
     } catch (error) {
       return res.status(400).json({ error: error.message || 'Failed to remove provisional ledger entry.' });

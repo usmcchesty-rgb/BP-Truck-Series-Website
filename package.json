@@ -20,6 +20,7 @@
     "test:fantasy-post-race-automation": "node scripts/test-fantasy-post-race-automation.mjs",
     "test:api-imports": "node scripts/test-api-imports.mjs",
     "test:provisional-results": "node scripts/test-provisional-results.mjs",
+    "test:driver-provisional-sync": "node scripts/test-driver-provisional-sync.mjs",
     "diagnose:race15-provisionals": "node scripts/diagnose-race15-provisionals.mjs",
     "test:admin-auth": "node scripts/test-admin-auth.mjs",
     "track-tool": "node server/track-processor.mjs"

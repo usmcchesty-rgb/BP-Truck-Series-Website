@@ -609,6 +609,70 @@ export const MISSION_CONTROL_EVALUATORS = {
     };
   },
 
+  'sun-review-provisional-ledger'(ctx) {
+    const postRace = normalizeRaceRef(ctx.postRace);
+    const sync = ctx.provisionalLedgerSyncStatus || null;
+    const raceNumber = postRace?.raceNumber ?? sync?.raceNumber ?? null;
+
+    if (!raceNumber) {
+      return { complete: false, reason: 'No completed race set for provisional ledger review.' };
+    }
+
+    if (!sync) {
+      return {
+        complete: false,
+        reason: `Provisional ledger sync status unavailable for Race ${raceNumber}.`,
+      };
+    }
+
+    if (!sync.resultsReady) {
+      return {
+        complete: false,
+        reason: sync.reason || 'Official race results are not available yet.',
+      };
+    }
+
+    if (sync.officialCount === 0) {
+      return {
+        complete: true,
+        reason: `No official SimRacerHub provisionals detected for Race ${raceNumber}.`,
+      };
+    }
+
+    if (sync.complete) {
+      const autoCreated = sync.autoCreatedCount || 0;
+      return {
+        complete: true,
+        reason:
+          autoCreated > 0
+            ? `${autoCreated} official provisional${autoCreated === 1 ? '' : 's'} auto-added for Race ${raceNumber}. Ledger is in sync.`
+            : `All official provisionals for Race ${raceNumber} have valid ledger entries.`,
+        diagnostics: sync,
+      };
+    }
+
+    const reviewCount = sync.reviewCount || 0;
+    const unmatchedCount = sync.unmatchedCount || 0;
+    const parts = [];
+    if (sync.autoCreatedCount) {
+      parts.push(`${sync.autoCreatedCount} official provisional${sync.autoCreatedCount === 1 ? '' : 's'} auto-added`);
+    }
+    if (reviewCount) {
+      parts.push(`${reviewCount} require${reviewCount === 1 ? 's' : ''} purchased/admin classification`);
+    }
+    if (unmatchedCount) {
+      parts.push(`${unmatchedCount} driver match${unmatchedCount === 1 ? '' : 'es'} failed`);
+    }
+
+    return {
+      complete: false,
+      reason: parts.length
+        ? `${parts.join('. ')}.`
+        : `Provisional ledger review required for Race ${raceNumber}.`,
+      diagnostics: sync,
+    };
+  },
+
   'sun-prepare-next-race-salaries'(ctx) {
     const scoring = ctx.fantasyScoringStatus || null;
     const automation = ctx.fantasyPostRaceAutomationStatus || null;
@@ -1044,6 +1108,7 @@ export async function loadMissionControlDetectionContext(options = {}) {
 
   let fantasyScoringStatus = null;
   let fantasyPostRaceAutomationStatus = null;
+  let provisionalLedgerSyncStatus = null;
   if (postRaceNumber != null) {
     fantasyScoringStatus = await getFantasyRaceScoringStatus({
       seasonId,
@@ -1055,6 +1120,65 @@ export async function loadMissionControlDetectionContext(options = {}) {
       settings,
       now,
     });
+
+    try {
+      const { syncOfficialProvisionalsForRace } = await import('./_driver-provisionals.js');
+      const {
+        buildOfficialProvisionalRows,
+        summarizeProvisionalLedgerSyncStatus,
+      } = await import('./_driver-provisional-sync.js');
+      const { listDriverProvisionalsForSeason } = await import('./_driver-provisionals.js');
+      const { getDriverProfiles } = await import('./_lib.js');
+
+      const syncResult = await syncOfficialProvisionalsForRace(seasonId, postRaceNumber, {
+        settings,
+        scheduleRaces,
+        createdBy: 'auto-sync',
+      });
+
+      const entries = await listDriverProvisionalsForSeason(seasonId);
+      const profiles = await getDriverProfiles();
+      const driverLookup = new Map(
+        profiles.map((profile) => [
+          String(profile.driver_id),
+          {
+            driverName: profile.display_name || profile.iracing_name || `Driver ${profile.driver_id}`,
+          },
+        ]),
+      );
+      const { loadOfficialRaceResultsContext } = await import('./_fantasy-race-scoring.js');
+      const resultsContext = await loadOfficialRaceResultsContext({
+        raceNumber: postRaceNumber,
+        settings,
+        scheduleRaces,
+      });
+      const officialRows = buildOfficialProvisionalRows(
+        resultsContext.driverResults,
+        resultsContext.driverLookup || driverLookup,
+      );
+      const raceEntries = entries.filter((entry) => Number(entry.raceNumber) === Number(postRaceNumber));
+
+      provisionalLedgerSyncStatus = {
+        raceNumber: postRaceNumber,
+        resultsReady: resultsContext.ready,
+        reason: resultsContext.reason,
+        ...summarizeProvisionalLedgerSyncStatus({
+          officialProvisionalRows: officialRows,
+          raceEntries,
+          syncWarnings: syncResult.warnings || [],
+          needsReview: syncResult.needsReview || [],
+        }),
+        syncResult,
+      };
+    } catch (error) {
+      provisionalLedgerSyncStatus = {
+        raceNumber: postRaceNumber,
+        resultsReady: false,
+        complete: false,
+        needsReview: true,
+        reason: error.message || 'provisional_ledger_sync_failed',
+      };
+    }
   }
 
   return {
@@ -1062,6 +1186,7 @@ export async function loadMissionControlDetectionContext(options = {}) {
     fantasyLockContext,
     fantasyScoringStatus,
     fantasyPostRaceAutomationStatus,
+    provisionalLedgerSyncStatus,
   };
 }
 
