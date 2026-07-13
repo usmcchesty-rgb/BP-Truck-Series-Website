@@ -1,5 +1,11 @@
 import * as cheerio from 'cheerio';
 import { getDriverProfiles } from './_lib.js';
+import {
+  buildStandingsCacheKey,
+  fetchCachedHtml,
+  getCachedStandings,
+  setCachedStandings,
+} from './_fantasy-srh-cache.js';
 
 function cleanText(value) {
   return String(value || '')
@@ -12,9 +18,10 @@ async function detectLatestScheduleId(settings) {
   const fallbackScheduleId = settings.scheduleId || '346493';
 
   try {
-    const scheduleHtml = await fetch(settings.scheduleUrl, {
-      headers: { 'user-agent': 'BP-Truck-Series-Website/1.0' },
-    }).then((r) => (r.ok ? r.text() : ''));
+    const scheduleHtml = await fetchCachedHtml(settings.scheduleUrl, async (url) => {
+      const r = await fetch(url, { headers: { 'user-agent': 'BP-Truck-Series-Website/1.0' } });
+      return r.ok ? await r.text() : '';
+    });
 
     if (!scheduleHtml) return fallbackScheduleId;
 
@@ -59,6 +66,9 @@ async function detectLatestScheduleId(settings) {
 export async function fetchStandingsRows(settings, scheduleId = null) {
   const seasonId = settings.seasonId || '27987';
   const resolvedScheduleId = scheduleId || (await detectLatestScheduleId(settings));
+  const cacheKey = buildStandingsCacheKey(seasonId, resolvedScheduleId);
+  const cached = getCachedStandings(cacheKey);
+  if (cached) return cached;
 
   const response = await fetch(
     `https://www.simracerhub.com/scoring/get_standings.php?season_id=${seasonId}&schedule_id=${resolvedScheduleId}`,
@@ -106,13 +116,15 @@ export async function fetchStandingsRows(settings, scheduleId = null) {
     .filter((r) => r.position >= 1)
     .sort((a, b) => a.position - b.position);
 
-  return {
+  const result = {
     rows,
     scheduleId: resolvedScheduleId,
     seasonName: data.lss?.season_name || null,
     schedules: data.schedules || {},
     lss: data.lss || null,
   };
+  setCachedStandings(cacheKey, result);
+  return result;
 }
 
 export function buildDriverLookup(standings, profiles) {

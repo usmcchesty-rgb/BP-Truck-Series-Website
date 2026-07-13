@@ -1,8 +1,7 @@
-import { getSettings, supabase, fetchHtml } from './_lib.js';
-import { parseScheduleRacesFromHtml } from './_caution-stats.js';
-import { enrichScheduleRaces } from './_schedule-points-races.js';
+import { getSettings, supabase } from './_lib.js';
 import { getEffectivePointsRaceProgression } from './_race-date-status.js';
 import { resolveMissionControlRaces } from './_admin-mission-control.js';
+import { loadFantasyScheduleContext } from './_fantasy-slate-progression.js';
 import {
   generateFantasyDraftSlate,
   loadFantasyDraftSlate,
@@ -10,6 +9,8 @@ import {
 import { SALARY_ENGINE_VERSION } from './_fantasy-salary-guardrails.js';
 
 const automationInflight = new Map();
+const automationResultCache = new Map();
+const AUTOMATION_CACHE_TTL_MS = 60_000;
 
 function parseSlateMeta(row) {
   const meta = row?.meta;
@@ -201,8 +202,7 @@ async function runFantasyPostRaceAutomationInternal(seasonId, options = {}) {
   const { getFantasyRaceScoringStatus, scoreFantasySlate, loadFantasyLineupScoresForSlate } =
     await loadRaceScoringModule();
 
-  const scheduleHtml = await fetchHtml(settings.scheduleUrl);
-  const scheduleRaces = enrichScheduleRaces(parseScheduleRacesFromHtml(scheduleHtml));
+  const { scheduleRaces } = await loadFantasyScheduleContext({ settings, now: options.now });
   const pointsProgression = getEffectivePointsRaceProgression(scheduleRaces, {
     settings,
     now: options.now,
@@ -317,13 +317,29 @@ async function runFantasyPostRaceAutomationInternal(seasonId, options = {}) {
 
 export async function runFantasyPostRaceAutomation(seasonId, options = {}) {
   const lockKey = String(seasonId || options.seasonId || 'default');
+
+  if (!options.force) {
+    const cached = automationResultCache.get(lockKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.result;
+    }
+  }
+
   if (automationInflight.has(lockKey)) {
     return automationInflight.get(lockKey);
   }
 
-  const runPromise = runFantasyPostRaceAutomationInternal(seasonId, options).finally(() => {
-    automationInflight.delete(lockKey);
-  });
+  const runPromise = runFantasyPostRaceAutomationInternal(seasonId, options)
+    .then((result) => {
+      automationResultCache.set(lockKey, {
+        result,
+        expiresAt: Date.now() + AUTOMATION_CACHE_TTL_MS,
+      });
+      return result;
+    })
+    .finally(() => {
+      automationInflight.delete(lockKey);
+    });
   automationInflight.set(lockKey, runPromise);
   return runPromise;
 }
@@ -333,8 +349,7 @@ export async function getFantasyPostRaceAutomationStatus(seasonId, options = {})
   const resolvedSeasonId = String(seasonId || settings.seasonId || '27987');
   const { getFantasyRaceScoringStatus, loadFantasyLineupScoresForSlate } = await loadRaceScoringModule();
 
-  const scheduleHtml = await fetchHtml(settings.scheduleUrl);
-  const scheduleRaces = enrichScheduleRaces(parseScheduleRacesFromHtml(scheduleHtml));
+  const { scheduleRaces } = await loadFantasyScheduleContext({ settings, now: options.now });
   const missionRaces = resolveMissionControlRaces(scheduleRaces, { settings, now: options.now });
   const completedRaceNumber = missionRaces.postRace?.raceNumber ?? null;
 

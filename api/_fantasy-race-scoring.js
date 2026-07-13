@@ -38,6 +38,70 @@ async function listSubmittedLineupsForSlateId(slateId) {
   return listSubmittedLineupsForSlate(slateId);
 }
 
+export function isScoringEligibleSlate(row, progression) {
+  if (!row) return false;
+  if (row.status !== 'published') return false;
+  if (progression?.archivedSlateRow?.id === row.id) return true;
+  return isFantasyRaceComplete(progression?.scheduleRaces || [], row.race_number);
+}
+
+export async function resolveCompletedScoringSlate(seasonId, options = {}) {
+  const settings = options.settings || (await getSettings());
+  const resolvedSeasonId = String(seasonId || settings.seasonId || '27987');
+  const progression =
+    options.progression ||
+    (await resolveFantasySlateProgression(resolvedSeasonId, { settings, ...options }));
+
+  if (options.raceNumber != null) {
+    const sb = supabase();
+    if (sb) {
+      const { data } = await sb
+        .from('fantasy_slates')
+        .select('*')
+        .eq('season_id', resolvedSeasonId)
+        .eq('race_number', Number(options.raceNumber))
+        .eq('status', 'published')
+        .maybeSingle();
+      if (data && isScoringEligibleSlate(data, progression)) {
+        return { slateRow: data, progression, source: 'race_number' };
+      }
+    }
+  }
+
+  if (options.slateId) {
+    const candidate = await loadSlateRowById(options.slateId);
+    if (candidate && isScoringEligibleSlate(candidate, progression)) {
+      return { slateRow: candidate, progression, source: 'slate_id' };
+    }
+  }
+
+  if (progression.archivedSlateRow) {
+    return { slateRow: progression.archivedSlateRow, progression, source: 'archived' };
+  }
+
+  const { getEffectivePointsRaceProgression } = await import('./_race-date-status.js');
+  const pointsProgression = getEffectivePointsRaceProgression(progression.scheduleRaces, { settings });
+  const completedRaceNumber =
+    pointsProgression.latestCompletedPointsRace?.officialPointsRaceNumber ?? null;
+  if (completedRaceNumber != null) {
+    const sb = supabase();
+    if (sb) {
+      const { data } = await sb
+        .from('fantasy_slates')
+        .select('*')
+        .eq('season_id', resolvedSeasonId)
+        .eq('race_number', Number(completedRaceNumber))
+        .eq('status', 'published')
+        .maybeSingle();
+      if (data) {
+        return { slateRow: data, progression, source: 'latest_completed' };
+      }
+    }
+  }
+
+  return { slateRow: null, progression, source: 'none' };
+}
+
 function normalizeName(value) {
   return String(value || '')
     .toLowerCase()
@@ -575,28 +639,20 @@ export async function scoreFantasySlate(options = {}) {
   const settings = options.settings || (await getSettings());
   const config = resolveFantasyRaceScoringConfig(settings);
   const scoringVersion = config.version || FANTASY_RACE_SCORING_VERSION;
+  const seasonId = String(options.seasonId || settings.seasonId || '27987');
 
-  let slateRow = null;
-  if (options.slateId) {
-    slateRow = await loadSlateRowById(options.slateId);
-  } else if (options.raceNumber != null) {
-    const { data } = await sb
-      .from('fantasy_slates')
-      .select('*')
-      .eq('season_id', String(options.seasonId || settings.seasonId || '27987'))
-      .eq('race_number', Number(options.raceNumber))
-      .eq('status', 'published')
-      .maybeSingle();
-    slateRow = data || null;
-  }
-
+  const resolved = await resolveCompletedScoringSlate(seasonId, {
+    settings,
+    slateId: options.slateId,
+    raceNumber: options.raceNumber,
+  });
+  const slateRow = resolved.slateRow;
   if (!slateRow) {
     throw new Error('Published fantasy slate not found for scoring.');
   }
 
-  const seasonId = String(slateRow.season_id);
   const raceNumber = Number(slateRow.race_number);
-  const progression = await resolveFantasySlateProgression(seasonId, { settings });
+  const progression = resolved.progression;
   const raceComplete = isFantasyRaceComplete(progression.scheduleRaces, raceNumber);
 
   if (!raceComplete && !options.adminOverride) {
@@ -807,33 +863,22 @@ export async function getFantasyRaceScoringStatus(options = {}) {
   const seasonId = String(options.seasonId || settings.seasonId || '27987');
   const sb = supabase();
 
-  let slateRow = null;
-  if (options.slateId) {
-    slateRow = await loadSlateRowById(options.slateId);
-  } else if (options.raceNumber != null) {
-    if (!sb) return { status: 'not_ready', reason: 'Database not configured.' };
-    const { data } = await sb
-      .from('fantasy_slates')
-      .select('*')
-      .eq('season_id', seasonId)
-      .eq('race_number', Number(options.raceNumber))
-      .eq('status', 'published')
-      .maybeSingle();
-    slateRow = data || null;
-  } else {
-    const progression = await resolveFantasySlateProgression(seasonId, { settings });
-    slateRow = progression.archivedSlateRow || progression.activeSlateRow || null;
-  }
+  const resolved = await resolveCompletedScoringSlate(seasonId, {
+    settings,
+    slateId: options.slateId,
+    raceNumber: options.raceNumber,
+  });
+  const slateRow = resolved.slateRow;
+  const progression = resolved.progression;
 
   if (!slateRow) {
     return {
       status: 'not_ready',
       reason: 'No published fantasy slate found.',
       slate: null,
+      scoringContext: { source: resolved.source },
     };
   }
-
-  const progression = await resolveFantasySlateProgression(seasonId, { settings });
   const raceComplete = isFantasyRaceComplete(progression.scheduleRaces, slateRow.race_number);
   const scoringMeta = getSlateScoringMeta(slateRow);
   const lineups = sb ? await listSubmittedLineupsForSlateId(slateRow.id) : [];
@@ -867,6 +912,10 @@ export async function getFantasyRaceScoringStatus(options = {}) {
     dnpCount: scoringMeta?.dnpCount ?? (scoringMeta?.dnpDrivers || []).length,
     warnings: scoringMeta?.warnings || [],
     alignmentMethod: resultsContext.alignment?.alignmentMethod || null,
+    scoringContext: {
+      source: resolved.source,
+      raceNumber: slateRow.race_number,
+    },
   };
 }
 

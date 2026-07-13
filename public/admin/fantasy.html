@@ -1935,10 +1935,9 @@
         await loadPostRaceAutomation();
       }
 
-      function formatPostRaceScoringLabel(scoring = {}, lastAutomation = {}) {
+      function formatPostRaceScoringLabel(scoring = {}) {
         if (scoring.status === 'scored') {
-          const source = scoring.scoringMeta?.source || lastAutomation?.scoring?.scored ? 'auto' : null;
-          return source === 'auto' || lastAutomation?.scoring?.scored ? 'Scored Automatically' : 'Scored';
+          return scoring.scoringMeta?.source === 'auto' ? 'Scored Automatically' : 'Scored';
         }
         if (scoring.status === 'needs_review') return 'Needs Review';
         if (scoring.status === 'ready') return 'Ready to Score';
@@ -1992,7 +1991,7 @@
             resultsEl.textContent = scoring.resultsReady ? 'Detected / Complete' : 'Missing';
           }
           if (scoringEl) {
-            scoringEl.textContent = formatPostRaceScoringLabel(scoring, data.lastAutomation);
+            scoringEl.textContent = formatPostRaceScoringLabel(scoring);
           }
           if (lineupsEl) {
             lineupsEl.textContent = String(scoring.scoringMeta?.lineupCount ?? scoring.lineupCount ?? 0);
@@ -2233,7 +2232,6 @@
             body: JSON.stringify({
               password: getSessionPw(),
               action: 'getFantasyRaceScoringStatus',
-              slateId: currentFantasySlateId,
             }),
           });
           const data = await res.json();
@@ -2277,7 +2275,7 @@
               body: JSON.stringify({
                 password: getSessionPw(),
                 action: 'getFantasySubmittedLineups',
-                slateId: data.slate?.id || currentFantasySlateId,
+                slateId: data.slate?.id,
               }),
             });
             const scoreData = scoreRes.ok ? await scoreRes.json() : { lineups: [] };
@@ -2322,7 +2320,6 @@
             body: JSON.stringify({
               password: getSessionPw(),
               action: 'scoreFantasyRace',
-              slateId: currentFantasySlateId,
             }),
           });
           const data = await res.json();

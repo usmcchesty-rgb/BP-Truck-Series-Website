@@ -8,6 +8,7 @@ import {
   buildParticipationMetadata,
   classifyNonParticipantStatus,
   formatPublicDriverScoreLabel,
+  isScoringEligibleSlate,
 } from '../api/_fantasy-race-scoring.js';
 import {
   finishPositionPoints,
@@ -377,6 +378,40 @@ import { evaluateAutomaticTask } from '../api/_mission-control-task-engine.js';
   });
   assert.equal(review.complete, false);
   assert.match(review.reason, /unresolved driver mapping/i);
+}
+
+// Scoring slate eligibility — draft slates must never score
+{
+  const progression = {
+    archivedSlateRow: { id: 15, status: 'published', race_number: 15 },
+    scheduleRaces: [{ officialPointsRaceNumber: 15, winner: 'Driver A' }],
+  };
+  assert.equal(
+    isScoringEligibleSlate({ id: 16, status: 'draft', race_number: 16 }, progression),
+    false,
+    'draft slate rejected',
+  );
+  assert.equal(
+    isScoringEligibleSlate({ id: 15, status: 'published', race_number: 15 }, progression),
+    true,
+    'archived published slate accepted',
+  );
+  assert.equal(
+    isScoringEligibleSlate({ id: 14, status: 'published', race_number: 14 }, {
+      archivedSlateRow: null,
+      scheduleRaces: [{ officialPointsRaceNumber: 14, winner: 'Driver A' }],
+    }),
+    true,
+    'published completed race accepted',
+  );
+  assert.equal(
+    isScoringEligibleSlate({ id: 16, status: 'published', race_number: 16 }, {
+      archivedSlateRow: { id: 15 },
+      scheduleRaces: [{ officialPointsRaceNumber: 16, resultsPosted: false }],
+    }),
+    false,
+    'upcoming published slate without results rejected',
+  );
 }
 
 console.log('test-fantasy-race-scoring.mjs: all scenarios passed');

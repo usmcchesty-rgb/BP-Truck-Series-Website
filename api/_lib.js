@@ -93,9 +93,12 @@ export async function getDriverProfiles() {
 }
 
 export async function fetchHtml(url) {
-  const r = await fetch(url, { headers: { 'user-agent': 'BP-Truck-Series-Website/1.0' } });
-  if (!r.ok) throw new Error(`Fetch failed ${r.status}`);
-  return await r.text();
+  const { fetchCachedHtml } = await import('./_fantasy-srh-cache.js');
+  return fetchCachedHtml(url, async (resolvedUrl) => {
+    const r = await fetch(resolvedUrl, { headers: { 'user-agent': 'BP-Truck-Series-Website/1.0' } });
+    if (!r.ok) throw new Error(`Fetch failed ${r.status}`);
+    return await r.text();
+  });
 }
 
 export function slugify(name='') {

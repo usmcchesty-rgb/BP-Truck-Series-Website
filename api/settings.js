@@ -765,13 +765,10 @@ async function handleSettingsRequest(req, res) {
     try {
       const settings = await getSettings();
       const seasonId = body.seasonId || settings.seasonId || '27987';
-      const { runFantasyPostRaceAutomation } = await import('./_fantasy-post-race-automation.js');
-      await runFantasyPostRaceAutomation(seasonId, { settings });
       const { getFantasyRaceScoringStatus } = await loadFantasyRaceScoringModule();
       const status = await getFantasyRaceScoringStatus({
         seasonId,
         settings,
-        slateId: body.slateId,
         raceNumber: body.raceNumber,
       });
       return res.status(200).json(status);
@@ -785,12 +782,9 @@ async function handleSettingsRequest(req, res) {
     try {
       const settings = await getSettings();
       const seasonId = body.seasonId || settings.seasonId || '27987';
-      const { runFantasyPostRaceAutomation, getFantasyPostRaceAutomationStatus } = await import(
-        './_fantasy-post-race-automation.js'
-      );
-      const automation = await runFantasyPostRaceAutomation(seasonId, { settings });
+      const { getFantasyPostRaceAutomationStatus } = await import('./_fantasy-post-race-automation.js');
       const status = await getFantasyPostRaceAutomationStatus(seasonId, { settings });
-      return res.status(200).json({ ...status, lastAutomation: automation });
+      return res.status(200).json(status);
     } catch (error) {
       return res.status(500).json({ error: error.message || 'Failed to load post-race automation status.' });
     }
@@ -828,13 +822,10 @@ async function handleSettingsRequest(req, res) {
       const result = await scoreFantasySlate({
         seasonId,
         settings,
-        slateId: body.slateId,
         raceNumber: body.raceNumber,
         adminOverride: body.adminOverride === true,
         source: 'admin',
       });
-      const { runFantasyPostRaceAutomation } = await import('./_fantasy-post-race-automation.js');
-      await runFantasyPostRaceAutomation(seasonId, { settings, raceNumber: result.raceNumber });
       return res.status(200).json({ ok: true, ...result });
     } catch (error) {
       return res.status(500).json({ error: error.message || 'Fantasy scoring failed.' });

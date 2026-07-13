@@ -2,6 +2,7 @@ import { fetchHtml, getSettings, supabase } from './_lib.js';
 import { parseScheduleRacesFromHtml } from './_caution-stats.js';
 import { enrichScheduleRaces, getPointsRaceByNumber } from './_schedule-points-races.js';
 import { findEffectiveNextPointsRace, hasRaceResults } from './_race-date-status.js';
+import { getCachedScheduleRaces, setCachedScheduleRaces } from './_fantasy-srh-cache.js';
 
 function isBackfilledSlate(row) {
   const meta = row?.meta;
@@ -50,8 +51,15 @@ async function loadPublishedSlatesForSeason(seasonId) {
 export async function loadFantasyScheduleContext(options = {}) {
   const settings = options.settings || (await getSettings());
   const now = options.now || new Date();
-  const scheduleHtml = await fetchHtml(settings.scheduleUrl);
-  const scheduleRaces = enrichScheduleRaces(parseScheduleRacesFromHtml(scheduleHtml));
+  const seasonId = String(settings.seasonId || '27987');
+
+  let scheduleRaces = options.scheduleRaces || getCachedScheduleRaces(seasonId);
+  if (!scheduleRaces?.length) {
+    const scheduleHtml = await fetchHtml(settings.scheduleUrl);
+    scheduleRaces = enrichScheduleRaces(parseScheduleRacesFromHtml(scheduleHtml));
+    setCachedScheduleRaces(seasonId, scheduleRaces);
+  }
+
   const upcomingRace =
     findEffectiveNextPointsRace(scheduleRaces, { now, settings })?.race || null;
 
