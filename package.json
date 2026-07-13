@@ -18,6 +18,7 @@
     "test:mission-control-fantasy-lock": "node scripts/test-mission-control-fantasy-lock.mjs",
     "test:fantasy-race-scoring": "node scripts/test-fantasy-race-scoring.mjs",
     "test:fantasy-post-race-automation": "node scripts/test-fantasy-post-race-automation.mjs",
+    "test:api-imports": "node scripts/test-api-imports.mjs",
     "test:admin-auth": "node scripts/test-admin-auth.mjs",
     "track-tool": "node server/track-processor.mjs"
   },

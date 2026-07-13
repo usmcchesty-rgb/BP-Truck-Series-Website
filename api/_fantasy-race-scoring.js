@@ -10,7 +10,6 @@ import { fetchStandingsRows, buildDriverLookup } from './_standings-rows.js';
 import { getAlignedRaceFinishes } from './_power-rankings-results-audit.js';
 import {
   extractOfficialRaceFinishes,
-  extractOfficialRaceField,
   findScheduleEntryByScheduleId,
   pickOfficialRaceBucket,
 } from './_simracerhub-schedule-results.js';
@@ -644,7 +643,7 @@ export async function loadOfficialRaceResultsContext({
       if (officialBucket?.bucket) {
         registeredDriverIds = new Set(Object.keys(officialBucket.bucket).map(String));
       }
-      const extracted = extractOfficialRaceField(scheduleEntry);
+      const extracted = extractOfficialRaceFinishes(scheduleEntry);
       driverResults = extracted.driverResults || {};
       fieldMeta = extracted.meta || null;
     }
