@@ -11,6 +11,7 @@ import { getAlignedRaceFinishes } from './_power-rankings-results-audit.js';
 import {
   extractOfficialRaceFinishes,
   findScheduleEntryByScheduleId,
+  pickOfficialRaceBucket,
 } from './_simracerhub-schedule-results.js';
 import { matchDriverIdByName } from './_power-rankings-recent-form.js';
 import {
@@ -155,6 +156,178 @@ export function rankCompetition(lineupTotals = []) {
   });
 }
 
+const PARTICIPATION_POLICIES = {
+  started: { countsTowardAttendance: true, countsTowardFantasy: true },
+  dnf: { countsTowardAttendance: true, countsTowardFantasy: true },
+  dns: { countsTowardAttendance: false, countsTowardFantasy: true },
+  dnp: { countsTowardAttendance: false, countsTowardFantasy: true },
+  unresolved: { countsTowardAttendance: null, countsTowardFantasy: false },
+};
+
+export function buildParticipationMetadata(status, options = {}) {
+  const policy = PARTICIPATION_POLICIES[status] || PARTICIPATION_POLICIES.unresolved;
+  return {
+    participationStatus: status,
+    officialResultFound: Boolean(options.officialResultFound),
+    reason: options.reason || null,
+    countsTowardAttendance: policy.countsTowardAttendance,
+    countsTowardFantasy: policy.countsTowardFantasy,
+    fantasyPoints: Number(options.fantasyPoints ?? 0),
+  };
+}
+
+function mergeBreakdownWithParticipation(breakdown = {}, participation = {}) {
+  return {
+    ...breakdown,
+    participationStatus: participation.participationStatus,
+    officialResultFound: participation.officialResultFound,
+    reason: participation.reason,
+    countsTowardAttendance: participation.countsTowardAttendance,
+    countsTowardFantasy: participation.countsTowardFantasy,
+    fantasyPoints: participation.fantasyPoints,
+    participation,
+  };
+}
+
+function buildDriverIdentityKeys(driver, context = {}) {
+  const driverId = String(driver.driverId || driver.driver_id || '').trim();
+  const keys = new Set();
+  if (driverId) keys.add(driverId);
+
+  const profile = context.profileByDriverId?.get(driverId);
+  if (profile?.iracing_id != null) keys.add(String(profile.iracing_id));
+
+  const nameId = matchDriverIdByName(
+    driver.driverName || driver.driver_name || '',
+    context.driverLookup || new Map(),
+  );
+  if (nameId) keys.add(String(nameId));
+
+  return [...keys];
+}
+
+/**
+ * DNS vs DNP policy:
+ * - DNS: driver appears in the official RACE bucket but has no countable finish row.
+ * - DNP: valid slate driver absent from the official race field entirely.
+ * When registration evidence is unavailable, DNP is the canonical "did not participate" status.
+ */
+export function classifyNonParticipantStatus(driver, context = {}) {
+  const identityKeys = buildDriverIdentityKeys(driver, context);
+  const registered = context.registeredDriverIds || new Set();
+  const hasResult = identityKeys.some((key) => context.driverResults?.[key]);
+  if (hasResult) return 'started';
+
+  const registeredButAbsent = identityKeys.some(
+    (key) => registered.has(key) && !context.driverResults?.[key],
+  );
+  return registeredButAbsent ? 'dns' : 'dnp';
+}
+
+export function buildNonParticipantReason(status, raceNumber) {
+  if (status === 'dns') {
+    return raceNumber != null
+      ? `Driver was entered but did not start Race ${raceNumber}.`
+      : 'Driver was entered but did not start this race.';
+  }
+  return raceNumber != null
+    ? `Driver did not participate in Race ${raceNumber}.`
+    : 'Driver did not participate in this race.';
+}
+
+export function formatPublicDriverScoreLabel(driver = {}) {
+  const name = driver.driverName || 'Driver';
+  const points = Number(
+    driver.points ?? driver.fantasyPoints ?? driver.participation?.fantasyPoints ?? 0,
+  );
+  const status =
+    driver.participation?.participationStatus ||
+    driver.participationStatus ||
+    driver.breakdown?.participation?.participationStatus ||
+    driver.breakdown?.participationStatus ||
+    null;
+
+  if (status === 'dnp' || status === 'dns') {
+    return `${name} — ${String(status).toUpperCase()} (${points} pts)`;
+  }
+  return `${name} — ${points} pts`;
+}
+
+export function isValidFantasyDriverIdentity(driver, context = {}) {
+  const driverId = String(driver.driverId || driver.driver_id || '').trim();
+  const driverName = driver.driverName || driver.driver_name || '';
+
+  if (!driverId) return false;
+  if (context.profileByDriverId?.has(driverId)) return true;
+  if (context.driverLookup?.has(driverId)) return true;
+
+  const nameId = matchDriverIdByName(driverName, context.driverLookup || new Map());
+  return Boolean(nameId);
+}
+
+export function buildNonParticipantDriverScore(config, options = {}) {
+  const participationStatus = options.participationStatus || 'dnp';
+  const raceNumber = options.raceNumber ?? null;
+  const fantasyPoints = Number(config.dnpPoints ?? config.dnsPoints ?? 0);
+  const participation = buildParticipationMetadata(participationStatus, {
+    officialResultFound: false,
+    reason: options.reason || buildNonParticipantReason(participationStatus, raceNumber),
+    fantasyPoints,
+  });
+
+  return {
+    basePoints: 0,
+    bonusPoints: 0,
+    penaltyPoints: 0,
+    totalPoints: fantasyPoints,
+    positionsGained: null,
+    breakdown: mergeBreakdownWithParticipation(
+      {
+        basePoints: 0,
+        bonusPoints: 0,
+        penaltyPoints: 0,
+        totalPoints: fantasyPoints,
+      },
+      participation,
+    ),
+    participation,
+  };
+}
+
+export function classifyRaceParticipation(match, result) {
+  if (match?.participationStatus === 'dnp' || match?.raceParticipationStatus === 'dnp') {
+    return 'dnp';
+  }
+  if (match?.participationStatus === 'dns' || match?.raceParticipationStatus === 'dns') {
+    return 'dns';
+  }
+  if (!result?.finish) {
+    return 'dns';
+  }
+  return Number(result.finish) > 0 ? 'started' : 'dns';
+}
+
+function buildParticipantParticipation(result, raceNumber, fantasyPoints) {
+  const finish = Number(result?.finish);
+  const reason = Number.isFinite(finish)
+    ? `Finished ${finish} in Race ${raceNumber}.`
+    : `Official result recorded for Race ${raceNumber}.`;
+
+  return buildParticipationMetadata('started', {
+    officialResultFound: true,
+    reason,
+    fantasyPoints,
+  });
+}
+
+function buildUnresolvedParticipation() {
+  return buildParticipationMetadata('unresolved', {
+    officialResultFound: false,
+    reason: 'Driver identity could not be resolved for scoring.',
+    fantasyPoints: 0,
+  });
+}
+
 export function matchFantasyDriverToResult(driver, context = {}) {
   const driverId = String(driver.driverId || driver.driver_id || '').trim();
   const driverName = driver.driverName || driver.driver_name || '';
@@ -167,6 +340,8 @@ export function matchFantasyDriverToResult(driver, context = {}) {
       method: 'driver_id',
       driverId,
       result: context.driverResults[driverId],
+      participationStatus: 'started',
+      raceParticipationStatus: 'started',
     };
   }
 
@@ -179,6 +354,8 @@ export function matchFantasyDriverToResult(driver, context = {}) {
         method: 'iracing_id',
         driverId,
         result: context.driverResults[iracingKey],
+        participationStatus: 'started',
+        raceParticipationStatus: 'started',
       };
     }
   }
@@ -190,6 +367,8 @@ export function matchFantasyDriverToResult(driver, context = {}) {
       method: 'normalized_name',
       driverId: exactNameId,
       result: context.driverResults[exactNameId],
+      participationStatus: 'started',
+      raceParticipationStatus: 'started',
     };
   }
 
@@ -204,9 +383,23 @@ export function matchFantasyDriverToResult(driver, context = {}) {
           method: 'car_number_name',
           driverId: candidateId,
           result,
+          participationStatus: 'started',
+          raceParticipationStatus: 'started',
         };
       }
     }
+  }
+
+  if (isValidFantasyDriverIdentity(driver, context)) {
+    const participationStatus = classifyNonParticipantStatus(driver, context);
+    return {
+      matched: true,
+      method: participationStatus,
+      driverId,
+      result: null,
+      participationStatus,
+      raceParticipationStatus: participationStatus,
+    };
   }
 
   warnings.push(`Unresolved driver mapping for ${driverName || driverId || 'unknown driver'}`);
@@ -279,12 +472,17 @@ export async function loadOfficialRaceResultsContext({
     alignedRaces.find((row) => Number(row.pointsRaceNumber) === Number(raceNumber)) || null;
 
   let driverResults = {};
+  let registeredDriverIds = new Set();
   if (alignment?.schedulesApiScheduleId) {
     const scheduleEntry = findScheduleEntryByScheduleId(
       standingsResult.schedules,
       alignment.schedulesApiScheduleId,
     );
     if (scheduleEntry) {
+      const officialBucket = pickOfficialRaceBucket(scheduleEntry);
+      if (officialBucket?.bucket) {
+        registeredDriverIds = new Set(Object.keys(officialBucket.bucket).map(String));
+      }
       driverResults = extractOfficialRaceFinishes(scheduleEntry).driverResults || {};
     }
   }
@@ -306,6 +504,7 @@ export async function loadOfficialRaceResultsContext({
       : 'Official results exist on schedule but SimRacerHub race finishes could not be aligned.',
     race,
     driverResults,
+    registeredDriverIds,
     alignment,
     driverLookup,
     profileByDriverId: new Map(profiles.map((row) => [String(row.driver_id), row])),
@@ -417,6 +616,7 @@ export async function scoreFantasySlate(options = {}) {
   const lineups = await listSubmittedLineupsForSlateId(slateRow.id);
   const warnings = [];
   const unresolvedDrivers = [];
+  const dnpDrivers = [];
   const driverScoreRows = [];
   const scoredDrivers = new Map();
 
@@ -433,19 +633,79 @@ export async function scoreFantasySlate(options = {}) {
       raceNumber,
     });
     if (match.warnings?.length) warnings.push(...match.warnings);
+
     if (!match.matched) {
       unresolvedDrivers.push({
         driverId: driver.driverId,
         driverName: driver.driverName,
       });
+      const participation = buildUnresolvedParticipation();
       scoredDrivers.set(String(driver.driverId), {
-        totalPoints: Number(config.dnsPoints ?? 0),
-        breakdown: { status: 'unresolved', points: Number(config.dnsPoints ?? 0) },
+        totalPoints: 0,
+        participation,
+        breakdown: mergeBreakdownWithParticipation(
+          {
+            basePoints: 0,
+            bonusPoints: 0,
+            penaltyPoints: 0,
+            totalPoints: 0,
+          },
+          participation,
+        ),
+      });
+      continue;
+    }
+
+    if (
+      match.participationStatus === 'dnp' ||
+      match.participationStatus === 'dns' ||
+      match.method === 'dnp' ||
+      match.method === 'dns'
+    ) {
+      const participationStatus =
+        match.participationStatus || match.method || classifyNonParticipantStatus(driver, resultsContext);
+      const computed = buildNonParticipantDriverScore(config, {
+        raceNumber,
+        participationStatus,
+      });
+      dnpDrivers.push({
+        driverId: driver.driverId,
+        driverName: driver.driverName,
+        participationStatus,
+        participation: computed.participation,
+        reason: computed.participation?.reason || null,
+      });
+      scoredDrivers.set(String(driver.driverId), computed);
+      driverScoreRows.push({
+        driverId: String(driver.driverId),
+        finishPosition: null,
+        startPosition: null,
+        positionsGained: null,
+        basePoints: computed.basePoints,
+        bonusPoints: computed.bonusPoints,
+        penaltyPoints: computed.penaltyPoints,
+        totalPoints: computed.totalPoints,
+        breakdown: computed.breakdown,
+        participation: computed.participation,
       });
       continue;
     }
 
     const computed = calculateDriverRacePoints(match.result, config);
+    const participation = buildParticipantParticipation(
+      match.result,
+      raceNumber,
+      computed.totalPoints,
+    );
+    computed.participation = participation;
+    computed.breakdown = mergeBreakdownWithParticipation(
+      {
+        ...computed.breakdown,
+        finish: match.result?.finish ?? null,
+        start: match.result?.startingPos ?? null,
+      },
+      participation,
+    );
     scoredDrivers.set(String(driver.driverId), computed);
     driverScoreRows.push({
       driverId: String(driver.driverId),
@@ -457,19 +717,36 @@ export async function scoreFantasySlate(options = {}) {
       penaltyPoints: computed.penaltyPoints,
       totalPoints: computed.totalPoints,
       breakdown: computed.breakdown,
+      participation,
     });
   }
 
   const lineupTotals = lineups.map((lineup) => {
     const driverBreakdown = (lineup.drivers || []).map((driver) => {
       const scored = scoredDrivers.get(String(driver.driverId)) || {
-        totalPoints: Number(config.dnsPoints ?? 0),
-        breakdown: { status: 'missing' },
+        totalPoints: 0,
+        breakdown: mergeBreakdownWithParticipation({}, buildUnresolvedParticipation()),
+        participation: buildUnresolvedParticipation(),
       };
+      const participation =
+        scored.participation ||
+        scored.breakdown?.participation ||
+        buildParticipationMetadata(
+          scored.breakdown?.participationStatus || 'unresolved',
+          {
+            officialResultFound: Boolean(scored.breakdown?.officialResultFound),
+            reason: scored.breakdown?.reason || null,
+            fantasyPoints: Number(scored.totalPoints || 0),
+          },
+        );
       return {
         driverId: driver.driverId,
         driverName: driver.driverName,
         points: scored.totalPoints,
+        fantasyPoints: participation.fantasyPoints,
+        participationStatus: participation.participationStatus,
+        participation,
+        reason: participation.reason,
         breakdown: scored.breakdown,
       };
     });
@@ -498,6 +775,8 @@ export async function scoreFantasySlate(options = {}) {
     lineupCount: lineups.length,
     driverCount: driverScoreRows.length,
     unresolvedDrivers,
+    dnpDrivers,
+    dnpCount: dnpDrivers.length,
     warnings,
     source: options.source || 'manual',
     resultsReady: resultsContext.ready,
@@ -515,6 +794,8 @@ export async function scoreFantasySlate(options = {}) {
     lineupCount: lineups.length,
     scoredLineups: rankedLineups.length,
     unresolvedDrivers,
+    dnpDrivers,
+    dnpCount: dnpDrivers.length,
     warnings,
     lineups: rankedLineups,
     config,
@@ -582,6 +863,8 @@ export async function getFantasyRaceScoringStatus(options = {}) {
     },
     lineupCount: lineups.length,
     unresolvedDrivers: scoringMeta?.unresolvedDrivers || [],
+    dnpDrivers: scoringMeta?.dnpDrivers || [],
+    dnpCount: scoringMeta?.dnpCount ?? (scoringMeta?.dnpDrivers || []).length,
     warnings: scoringMeta?.warnings || [],
     alignmentMethod: resultsContext.alignment?.alignmentMethod || null,
   };

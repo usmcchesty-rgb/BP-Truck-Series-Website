@@ -2673,6 +2673,22 @@ body.fantasy-page main.fantasy-app-page{
   color:#fff;
 }
 
+.fantasy-standings-driver-details summary{
+  cursor:pointer;
+  list-style:none;
+}
+
+.fantasy-standings-driver-details summary::-webkit-details-marker{
+  display:none;
+}
+
+.fantasy-standings-driver-list{
+  margin:8px 0 0;
+  padding-left:18px;
+  color:rgba(255,255,255,.78);
+  font-size:13px;
+}
+
 .fantasy-admin-lineups-table{
   width:100%;
   border-collapse:collapse;

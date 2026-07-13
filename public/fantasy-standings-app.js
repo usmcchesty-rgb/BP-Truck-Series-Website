@@ -31,6 +31,39 @@
     return status || '—';
   }
 
+  function formatDriverScoreLine(driver = {}) {
+    const name = driver.driverName || 'Driver';
+    const points = Number(driver.points ?? driver.fantasyPoints ?? 0);
+    const status =
+      driver.participation?.participationStatus ||
+      driver.participationStatus ||
+      driver.breakdown?.participation?.participationStatus ||
+      driver.breakdown?.participationStatus ||
+      null;
+    if (status === 'dnp' || status === 'dns') {
+      return `${name} — ${String(status).toUpperCase()} (${points} pts)`;
+    }
+    return `${name} — ${points} pts`;
+  }
+
+  function renderEntryDriversCell(entry, scoringPhase) {
+    const drivers = entry.drivers || [];
+    const breakdownDrivers = entry.breakdown?.drivers || [];
+    if (!drivers.length) return '—';
+    if (scoringPhase !== 'scored' || !breakdownDrivers.length) {
+      return drivers.map((d) => escapeHtml(d.driverName)).join(', ');
+    }
+
+    const lines = breakdownDrivers.map((driver) => escapeHtml(formatDriverScoreLine(driver)));
+    const summary = drivers.map((d) => escapeHtml(d.driverName)).join(', ');
+    return `<details class="fantasy-standings-driver-details">
+      <summary>${summary}</summary>
+      <ul class="fantasy-standings-driver-list">
+        ${lines.map((line) => `<li>${line}</li>`).join('')}
+      </ul>
+    </details>`;
+  }
+
   function renderStandings(data) {
     const slate = data?.slate || null;
     const entries = data?.entries || [];
@@ -98,7 +131,7 @@
                           <td class="salary">${formatMoney(entry.totalSalary)}</td>
                           <td>${entry.racePoints != null ? escapeHtml(entry.racePoints) : '—'}</td>
                           <td>${entry.totalPoints != null ? escapeHtml(entry.totalPoints) : '—'}</td>
-                          <td>${(entry.drivers || []).map((d) => escapeHtml(d.driverName)).join(', ') || '—'}</td>
+                          <td>${renderEntryDriversCell(entry, scoringPhase)}</td>
                         </tr>`
                       )
                       .join('')}

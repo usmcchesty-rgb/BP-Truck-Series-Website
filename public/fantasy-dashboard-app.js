@@ -40,17 +40,38 @@
     </article>`;
   }
 
-  function lineupDriverCards(lineup) {
+  function formatDriverScoreLine(driver = {}) {
+    const points = Number(driver.points ?? driver.fantasyPoints ?? 0);
+    const status =
+      driver.participation?.participationStatus ||
+      driver.participationStatus ||
+      driver.breakdown?.participation?.participationStatus ||
+      driver.breakdown?.participationStatus ||
+      null;
+    if (status === 'dnp' || status === 'dns') {
+      return `${String(status).toUpperCase()} — ${points} pts`;
+    }
+    return `${points} pts`;
+  }
+
+  function lineupDriverCards(lineup, scoringBreakdown = null) {
     if (!lineup?.drivers?.length) return '';
+    const scoreByDriverId = new Map();
+    for (const driver of scoringBreakdown?.drivers || []) {
+      scoreByDriverId.set(String(driver.driverId), driver);
+    }
+
     return `<div class="fantasy-dashboard-lineup-cards">
       ${lineup.drivers
-        .map(
-          (driver, index) => `<article class="fantasy-dashboard-lineup-card">
+        .map((driver, index) => {
+          const scored = scoreByDriverId.get(String(driver.driverId));
+          const scoreLine = scored ? formatDriverScoreLine(scored) : '';
+          return `<article class="fantasy-dashboard-lineup-card">
             <span class="fantasy-dashboard-lineup-card__slot">${index + 1}</span>
             <strong>${escapeHtml(driver.driverName)}</strong>
-            <span class="salary">${formatMoney(driver.salary)}</span>
-          </article>`
-        )
+            <span class="salary">${scoreLine || formatMoney(driver.salary)}</span>
+          </article>`;
+        })
         .join('')}
     </div>`;
   }
@@ -129,7 +150,7 @@
           lineup?.drivers?.length
             ? `<div class="fantasy-dashboard-lineup-summary">
                 <p class="fantasy-app-copy">${formatMoney(lineup.totalSalary)} spent · ${lineup.drivers.length} drivers · submitted ${escapeHtml(formatDate(lineup.submittedAt))}</p>
-                ${lineupDriverCards(lineup)}
+                ${lineupDriverCards(lineup, scoring?.breakdown)}
               </div>`
             : `<p class="fantasy-app-copy">${notSubmittedCopy}</p>`
         }

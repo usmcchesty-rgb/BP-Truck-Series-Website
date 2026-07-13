@@ -2074,42 +2074,145 @@
         return 'Not Ready';
       }
 
-      function renderFantasyScoringTable(lineups = []) {
+      function formatParticipationLabel(value) {
+        if (!value) return '—';
+        const normalized = String(value).toLowerCase();
+        if (normalized === 'dnp' || normalized === 'dns') return normalized.toUpperCase();
+        if (normalized === 'started') return 'Started';
+        if (normalized === 'unresolved') return 'Unresolved';
+        return String(value);
+      }
+
+      function formatParticipationReason(driver = {}) {
+        const reason =
+          driver.reason ||
+          driver.participation?.reason ||
+          driver.breakdown?.participation?.reason ||
+          driver.breakdown?.reason ||
+          '';
+        if (!reason) {
+          const status = String(
+            driver.participationStatus ||
+              driver.participation?.participationStatus ||
+              driver.breakdown?.participationStatus ||
+              ''
+          ).toLowerCase();
+          if (status === 'dnp' || status === 'dns') return 'Did not participate';
+          if (status === 'started') return 'Official race result applied';
+        }
+        return reason.replace(/^Driver /, '');
+      }
+
+      function renderFantasyScoringTable(lineups = [], dnpDrivers = [], unresolvedDrivers = []) {
         const wrap = $('#fantasyScoringTableWrap');
         if (!wrap) return;
-        if (!lineups.length) {
+
+        const driverRows = [];
+        const seenDrivers = new Set();
+        for (const lineup of lineups) {
+          for (const driver of lineup.breakdown?.drivers || []) {
+            const key = String(driver.driverId || driver.driverName || '');
+            if (!key || seenDrivers.has(key)) continue;
+            seenDrivers.add(key);
+            driverRows.push(driver);
+          }
+        }
+        for (const driver of dnpDrivers) {
+          const key = String(driver.driverId || driver.driverName || '');
+          if (!key || seenDrivers.has(key)) continue;
+          seenDrivers.add(key);
+          driverRows.push({
+            driverName: driver.driverName,
+            participationStatus: driver.participationStatus || 'dnp',
+            participation: driver.participation,
+            reason: driver.reason,
+            points: 0,
+          });
+        }
+
+        if (!lineups.length && !driverRows.length && !unresolvedDrivers.length) {
           wrap.hidden = true;
           safeSetInnerHtml(wrap, '');
           return;
         }
+
         wrap.hidden = false;
+        const nonParticipantCount = dnpDrivers.length;
+        const dnpSummary =
+          nonParticipantCount > 0
+            ? `<p class="field-help" style="margin-bottom:10px;">${nonParticipantCount} selected driver${nonParticipantCount === 1 ? '' : 's'} did not participate and received 0 points.</p>`
+            : '';
+        const unresolvedSummary =
+          unresolvedDrivers.length > 0
+            ? `<div class="field-help" style="margin-bottom:10px;color:#ffb4b4;">
+                <strong>Unresolved identity mappings (${unresolvedDrivers.length})</strong><br>
+                ${unresolvedDrivers
+                  .map((driver) => escapeAdminHtml(driver.driverName || driver.driverId || 'Unknown driver'))
+                  .join(', ')}
+              </div>`
+            : '';
+
         safeSetInnerHtml(
           wrap,
-          `<table class="fantasy-table">
+          `${dnpSummary}
+          ${unresolvedSummary}
+          <table class="fantasy-table" style="margin-bottom:14px;">
             <thead>
               <tr>
-                <th>Rank</th>
-                <th>Player</th>
-                <th>Total Pts</th>
-                <th>Driver Points</th>
+                <th>Driver</th>
+                <th>Participation</th>
+                <th>Points</th>
+                <th>Reason</th>
               </tr>
             </thead>
             <tbody>
-              ${lineups
-                .map((row) => {
-                  const drivers = (row.breakdown?.drivers || [])
-                    .map((d) => `${escapeAdminHtml(d.driverName)}: ${escapeAdminHtml(d.points)}`)
-                    .join('<br>');
-                  return `<tr>
-                    <td>${escapeAdminHtml(row.rank)}</td>
-                    <td>${escapeAdminHtml(row.displayName || 'Player')}</td>
-                    <td><strong>${escapeAdminHtml(row.totalPoints)}</strong></td>
-                    <td>${drivers || '—'}</td>
-                  </tr>`;
-                })
+              ${driverRows
+                .sort((a, b) => String(a.driverName || '').localeCompare(String(b.driverName || '')))
+                .map(
+                  (driver) => `<tr>
+                    <td>${escapeAdminHtml(driver.driverName || '—')}</td>
+                    <td>${escapeAdminHtml(formatParticipationLabel(driver.participationStatus || driver.participation?.participationStatus || driver.breakdown?.participationStatus || driver.breakdown?.status))}</td>
+                    <td>${escapeAdminHtml(driver.points ?? driver.fantasyPoints ?? driver.participation?.fantasyPoints ?? driver.breakdown?.totalPoints ?? 0)}</td>
+                    <td>${escapeAdminHtml(formatParticipationReason(driver))}</td>
+                  </tr>`
+                )
                 .join('')}
             </tbody>
-          </table>`
+          </table>
+          ${
+            lineups.length
+              ? `<table class="fantasy-table">
+                  <thead>
+                    <tr>
+                      <th>Rank</th>
+                      <th>Player</th>
+                      <th>Total Pts</th>
+                      <th>Driver Points</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${lineups
+                      .map((row) => {
+                        const drivers = (row.breakdown?.drivers || [])
+                          .map((d) => {
+                            const participation = formatParticipationLabel(
+                              d.participationStatus || d.breakdown?.participationStatus || d.breakdown?.status
+                            );
+                            return `${escapeAdminHtml(d.driverName)} (${participation}): ${escapeAdminHtml(d.points)}`;
+                          })
+                          .join('<br>');
+                        return `<tr>
+                          <td>${escapeAdminHtml(row.rank)}</td>
+                          <td>${escapeAdminHtml(row.displayName || 'Player')}</td>
+                          <td><strong>${escapeAdminHtml(row.totalPoints)}</strong></td>
+                          <td>${drivers || '—'}</td>
+                        </tr>`;
+                      })
+                      .join('')}
+                  </tbody>
+                </table>`
+              : ''
+          }`
         );
       }
 
@@ -2149,7 +2252,19 @@
             unresolvedEl.textContent = String((data.unresolvedDrivers || []).length);
           }
           if (messageEl) {
-            messageEl.textContent = data.resultsReason || data.scoringMeta?.warnings?.join(' ') || '';
+            const parts = [];
+            if (data.resultsReason && !data.resultsReady) parts.push(data.resultsReason);
+            if ((data.unresolvedDrivers || []).length) {
+              parts.push(
+                `${data.unresolvedDrivers.length} unresolved driver mapping${data.unresolvedDrivers.length === 1 ? '' : 's'} require admin review.`
+              );
+            } else if ((data.dnpDrivers || []).length) {
+              parts.push(
+                `${data.dnpDrivers.length} selected driver${data.dnpDrivers.length === 1 ? '' : 's'} did not participate and received 0 points.`
+              );
+            }
+            if (data.scoringMeta?.warnings?.length) parts.push(data.scoringMeta.warnings.join(' '));
+            messageEl.textContent = parts.join(' ');
           }
           if (rulesEl && data.config) {
             rulesEl.textContent = `${data.config.label || 'Default'} — Win +${data.config.bonuses?.win}, Top5 +${data.config.bonuses?.top5}, Top10 +${data.config.bonuses?.top10}, positions gained +${data.config.bonuses?.positionGainedPer} each. Finish: 40/35/34 then -1. DNS/DNP = ${data.config.dnsPoints}. Admin-configurable in site settings.`;
@@ -2174,9 +2289,17 @@
               totalPoints: entry.racePoints,
               breakdown: entry.breakdown,
             }));
-            renderFantasyScoringTable(merged.length ? merged : []);
+            renderFantasyScoringTable(
+              merged.length ? merged : [],
+              data.dnpDrivers || data.scoringMeta?.dnpDrivers || [],
+              data.unresolvedDrivers || data.scoringMeta?.unresolvedDrivers || []
+            );
           } else {
-            renderFantasyScoringTable([]);
+            renderFantasyScoringTable(
+              [],
+              data.dnpDrivers || data.scoringMeta?.dnpDrivers || [],
+              data.unresolvedDrivers || data.scoringMeta?.unresolvedDrivers || []
+            );
           }
         } catch (error) {
           if (statusEl) statusEl.textContent = '—';
