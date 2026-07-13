@@ -696,12 +696,16 @@
 
     function formatDriverError(res, data) {
       const err = data?.error || '';
+      const diagnostics = data?.diagnostics;
+      const diagnosticText = diagnostics
+        ? `\n\nDiagnostics:\n${JSON.stringify(diagnostics, null, 2)}`
+        : '';
       if (res.status === 401) return 'Bad password';
       if (res.status === 400 && /missing driver_id/i.test(err)) return 'Missing driver_id';
       if (res.status === 400 && /supabase not configured/i.test(err)) return err;
-      if (res.status === 500 && /supabase error/i.test(err)) return err;
-      if (res.status === 500) return `Supabase error: ${err || 'Unknown error'}`;
-      return err || `Save failed (${res.status})`;
+      if (res.status === 500 && /supabase error/i.test(err)) return `${err}${diagnosticText}`;
+      if (res.status === 500) return `Supabase error: ${err || 'Unknown error'}${diagnosticText}`;
+      return `${err || `Save failed (${res.status})`}${diagnosticText}`;
     }
 
     async function postDriver(body) {
