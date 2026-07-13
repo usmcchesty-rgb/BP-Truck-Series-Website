@@ -542,6 +542,9 @@
       if (window.AdminMissionTaskSummary) {
         window.AdminMissionTaskSummary.setMissionControl(missionControl);
       }
+      if (window.AdminMissionOperations?.setMissionControl) {
+        window.AdminMissionOperations.setMissionControl(missionControl);
+      }
       refresh({ skipFetch: true, missionControl });
     },
     observeTarget(target) {

@@ -5,10 +5,67 @@
   "description": "Local desktop GUI for the BP Recruit Scanner",
   "main": "electron/main.js",
   "type": "module",
+  "author": "Blazing Pedals",
   "scripts": {
-    "start": "electron ."
+    "prepare-bundle": "node scripts/prepare-bundle.js",
+    "prestart": "npm run prepare-bundle",
+    "start": "electron .",
+    "build": "npm run prepare-bundle && electron-builder --dir",
+    "pack": "npm run prepare-bundle && electron-builder --dir",
+    "dist": "npm run prepare-bundle && electron-builder"
   },
   "dependencies": {
-    "electron": "^35.0.0"
+    "@supabase/supabase-js": "^2.45.4",
+    "dotenv": "^16.4.7",
+    "playwright": "^1.51.1"
+  },
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.blazingpedals.recruit-scanner",
+    "productName": "BP Recruit Scanner",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron/**/*",
+      "renderer/**/*",
+      "recruit-scanner/**/*",
+      "package.json",
+      "!recruit-scanner/.env",
+      "!recruit-scanner/browser-profile/**",
+      "!**/node_modules/.cache/**"
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/playwright/**",
+      "node_modules/playwright-core/**"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "portable": {
+      "artifactName": "BP-Recruit-Scanner-${version}-portable.exe"
+    },
+    "nsis": {
+      "artifactName": "BP-Recruit-Scanner-${version}-setup.exe",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
   }
 }

@@ -1,10 +1,11 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { app, BrowserWindow, ipcMain, shell } from 'electron';
-import { setBrowserAdapter, resetBrowserAdapter } from '../../recruit-scanner/browser-adapter.js';
-import { createPlaywrightBrowserAdapter } from '../../recruit-scanner/iracing-browser-playwright.js';
-import { createScannerService } from '../../recruit-scanner/scanner-service.js';
-import { readEnvFile, writeEnvFile, SCANNER_ENV_PATH } from '../../recruit-scanner/env-file.js';
+import { setBrowserAdapter, resetBrowserAdapter } from '../recruit-scanner/browser-adapter.js';
+import { createPlaywrightBrowserAdapter } from '../recruit-scanner/iracing-browser-playwright.js';
+import { createScannerService } from '../recruit-scanner/scanner-service.js';
+import { readEnvFile, writeEnvFile } from '../recruit-scanner/env-file.js';
+import { initScannerPaths } from './paths.js';
 import {
   readAppSettings,
   writeAppSettings,
@@ -20,6 +21,7 @@ import {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const RENDERER_DIR = path.join(__dirname, '..', 'renderer');
+const SCANNER_ENV_PATH = initScannerPaths();
 
 let mainWindow = null;
 let scanner = null;
@@ -88,6 +90,7 @@ function applyBrowserMode(useEmbeddedBrowser) {
 function getScanner() {
   if (!scanner) {
     scanner = createScannerService({
+      envPath: SCANNER_ENV_PATH,
       onLog: (message) => sendToRenderer('scanner-log', message),
       onError: (message) => sendToRenderer('scanner-error', message),
     });
@@ -123,6 +126,7 @@ function createMainWindow() {
   mainWindow.on('unmaximize', requestBrowserBoundsUpdate);
 
   mainWindow.webContents.on('did-finish-load', () => {
+    sendToRenderer('scanner-log', `Scanner env path: ${SCANNER_ENV_PATH}`);
     setTimeout(requestBrowserBoundsUpdate, 50);
   });
 
@@ -158,19 +162,23 @@ app.on('window-all-closed', async () => {
 
 ipcMain.handle('get-settings', async () => {
   return {
-    ...readEnvFile(),
+    ...readEnvFile(SCANNER_ENV_PATH),
     ...readAppSettings(),
+    envPath: SCANNER_ENV_PATH,
     appSettingsPath: getAppSettingsPath(),
     sessionStoragePath: embeddedBrowser?.getSessionStoragePath(app.getPath('userData')),
   };
 });
 
 ipcMain.handle('save-settings', async (_event, settings) => {
-  writeEnvFile({
-    SUPABASE_URL: String(settings?.SUPABASE_URL ?? '').trim(),
-    SUPABASE_SERVICE_ROLE_KEY: String(settings?.SUPABASE_SERVICE_ROLE_KEY ?? '').trim(),
-    CHROME_EXECUTABLE_PATH: String(settings?.CHROME_EXECUTABLE_PATH ?? '').trim(),
-  });
+  writeEnvFile(
+    {
+      SUPABASE_URL: String(settings?.SUPABASE_URL ?? '').trim(),
+      SUPABASE_SERVICE_ROLE_KEY: String(settings?.SUPABASE_SERVICE_ROLE_KEY ?? '').trim(),
+      CHROME_EXECUTABLE_PATH: String(settings?.CHROME_EXECUTABLE_PATH ?? '').trim(),
+    },
+    SCANNER_ENV_PATH
+  );
 
   const appSettings = writeAppSettings({
     useEmbeddedBrowser: settings?.useEmbeddedBrowser !== false,

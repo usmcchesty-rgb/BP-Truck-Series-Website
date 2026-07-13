@@ -618,7 +618,8 @@
 
     function renderDriverRow(d) {
       const id = escapeAttr(d.driver_id);
-      return `<tr data-driver-id="${id}" data-roster-status="${escapeAttr(d.roster_status || '')}">
+      const srhId = escapeAttr(d.srh_driver_id || d.standings_driver_id || '');
+      return `<tr data-driver-id="${id}" data-srh-driver-id="${srhId}" data-roster-status="${escapeAttr(d.roster_status || '')}">
           <td class="readonly">${escapeHtml(d.driver_id)}</td>
           <td class="readonly">${rosterBadgeHtml(d.roster_status, d)}</td>
           <td><input type="text" name="iracing_customer_id" value="${escapeAttr(d.iracing_customer_id || d.iracingCustomerId || '')}"></td>
@@ -679,6 +680,9 @@
       return {
         password: getSessionPw(),
         driver_id: rowEl.dataset.driverId,
+        srh_driver_id: rowEl.dataset.srhDriverId || '',
+        standings_driver_id: rowEl.dataset.srhDriverId || '',
+        in_standings: rowEl.dataset.rosterStatus === 'current',
         iracing_customer_id: rowInput(rowEl, 'iracing_customer_id')?.value ?? '',
         iracing_name: rowEl.querySelector('.iracing-name')?.textContent.trim() || '',
         display_name: rowInput(rowEl, 'display_name')?.value ?? '',

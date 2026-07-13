@@ -15,7 +15,14 @@ import {
 } from './iracing-urls.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const BROWSER_PROFILE_DIR = path.join(__dirname, 'browser-profile');
+
+export function getBrowserProfileDir() {
+  if (process.env.BP_SCANNER_USER_DATA) {
+    return path.join(process.env.BP_SCANNER_USER_DATA, 'browser-profile');
+  }
+
+  return path.join(__dirname, 'browser-profile');
+}
 
 const DEFAULT_CHROME_EXECUTABLES = [
   'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
@@ -43,10 +50,6 @@ export function resolveChromeExecutable() {
   throw new Error(
     'Google Chrome not found. Install Chrome or set CHROME_EXECUTABLE_PATH in .env.'
   );
-}
-
-export function getBrowserProfileDir() {
-  return BROWSER_PROFILE_DIR;
 }
 
 async function getActivePage() {
@@ -79,13 +82,15 @@ async function pageLooksLikeLogin(page) {
 }
 
 function profileHasStoredSession() {
-  if (!fs.existsSync(BROWSER_PROFILE_DIR)) {
+  const profileDir = getBrowserProfileDir();
+
+  if (!fs.existsSync(profileDir)) {
     return false;
   }
 
   const cookiePaths = [
-    path.join(BROWSER_PROFILE_DIR, 'Default', 'Network', 'Cookies'),
-    path.join(BROWSER_PROFILE_DIR, 'Default', 'Cookies'),
+    path.join(profileDir, 'Default', 'Network', 'Cookies'),
+    path.join(profileDir, 'Default', 'Cookies'),
   ];
 
   return cookiePaths.some((cookiePath) => fs.existsSync(cookiePath));
@@ -125,9 +130,10 @@ export function createPlaywrightBrowserAdapter() {
         throw new Error(`Chrome executable not found: ${executablePath}`);
       }
 
-      fs.mkdirSync(BROWSER_PROFILE_DIR, { recursive: true });
+      const profileDir = getBrowserProfileDir();
+      fs.mkdirSync(profileDir, { recursive: true });
 
-      browserContext = await chromium.launchPersistentContext(BROWSER_PROFILE_DIR, {
+      browserContext = await chromium.launchPersistentContext(profileDir, {
         executablePath,
         headless: isHeadless(),
         viewport: null,
@@ -152,7 +158,7 @@ export function createPlaywrightBrowserAdapter() {
 
     async clearSession() {
       await this.close();
-      fs.rmSync(BROWSER_PROFILE_DIR, { recursive: true, force: true });
+      fs.rmSync(getBrowserProfileDir(), { recursive: true, force: true });
       logMessage('Saved iRacing session cleared (browser-profile/).');
     },
 

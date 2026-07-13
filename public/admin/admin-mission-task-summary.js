@@ -32,6 +32,7 @@
     updatedAt: null,
     loading: false,
     mounts: new Map(),
+    timelineDayFilter: null,
   };
 
   function sectionTasksLib() {
@@ -61,14 +62,23 @@
   }
 
   function getPanelTasks(sectionId) {
+    let tasks = [];
     if (window.AdminAttention?.getSectionPanelTasks) {
-      return window.AdminAttention.getSectionPanelTasks(sectionId);
+      tasks = window.AdminAttention.getSectionPanelTasks(sectionId);
+    } else {
+      const lib = sectionTasksLib();
+      if (lib?.getSectionAttentionTasks) {
+        tasks = lib.getSectionAttentionTasks(state.data, sectionId);
+      }
     }
-    const lib = sectionTasksLib();
-    if (lib?.getSectionAttentionTasks) {
-      return lib.getSectionAttentionTasks(state.data, sectionId);
-    }
-    return [];
+    if (!state.timelineDayFilter) return tasks;
+    const filterDay = state.timelineDayFilter;
+    return tasks.filter((task) => {
+      if (filterDay === 'race') {
+        return task.day === 'saturday' || task.day === 'sunday';
+      }
+      return task.day === filterDay;
+    });
   }
 
   function getNavBadgeCount(sectionId) {
@@ -294,6 +304,9 @@
       sectionId === 'analytics' ? 'done' : tasks.length ? worstStatus(tasks) : 'done';
     const priorityLabel = SEVERITY_LABELS[priorityStatus] || 'Complete';
     const highlightTaskId = consumeHighlight(sectionId, tasks);
+    const timelineFilterLabel = state.timelineDayFilter
+      ? ` · ${state.timelineDayFilter.charAt(0).toUpperCase()}${state.timelineDayFilter.slice(1)}`
+      : '';
 
     if (sectionTasksLib()?.assertPanelMatchesBadge) {
       sectionTasksLib().assertPanelMatchesBadge(sectionId, badgeCount, tasks, state.data);
@@ -312,7 +325,7 @@
       mountEl.innerHTML = `
         <section class="admin-mission-summary" aria-live="polite">
           <div class="admin-mission-summary__header">
-            <h2 class="admin-mission-summary__title">Action Required</h2>
+            <h2 class="admin-mission-summary__title">Action Required${escapeHtml(timelineFilterLabel)}</h2>
             <span class="admin-mission-summary__priority is-complete">Priority: Complete</span>
           </div>
           <div class="admin-mission-summary__clear">
@@ -331,7 +344,7 @@
     mountEl.innerHTML = `
       <section class="admin-mission-summary" aria-live="polite">
         <div class="admin-mission-summary__header">
-          <h2 class="admin-mission-summary__title">Action Required</h2>
+          <h2 class="admin-mission-summary__title">Action Required${escapeHtml(timelineFilterLabel)}</h2>
           <span class="admin-mission-summary__priority is-${escapeHtml(priorityStatus)}">Priority: ${escapeHtml(priorityLabel)}</span>
         </div>
         ${raceGroups}
@@ -465,10 +478,16 @@
     });
   }
 
+  function setTimelineDayFilter(dayKey) {
+    state.timelineDayFilter = dayKey || null;
+    renderAll();
+  }
+
   window.AdminMissionTaskSummary = {
     init,
     refresh: ensureData,
     setMissionControl,
+    setTimelineDayFilter,
     renderAll,
     storeHighlight,
     resolveHrefTarget,

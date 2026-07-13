@@ -12,6 +12,7 @@ const chromePath = document.getElementById('chromePath');
 const customerIdInput = document.getElementById('customerIdInput');
 const useEmbeddedBrowser = document.getElementById('useEmbeddedBrowser');
 const zoomPercent = document.getElementById('zoomPercent');
+const envPathHint = document.getElementById('envPathHint');
 
 const ZOOM_STEP = 0.05;
 
@@ -147,6 +148,12 @@ async function focusBrowserPanel() {
   scheduleBoundsUpdate();
 }
 
+function setEnvPathHint(envPath) {
+  if (envPathHint && envPath) {
+    envPathHint.textContent = envPath;
+  }
+}
+
 async function loadSettings() {
   const settings = await window.scannerApp.getSettings();
   supabaseUrl.value = settings.SUPABASE_URL || '';
@@ -154,6 +161,7 @@ async function loadSettings() {
   chromePath.value = settings.CHROME_EXECUTABLE_PATH || '';
   useEmbeddedBrowser.checked = settings.useEmbeddedBrowser !== false;
   updateZoomDisplay(settings.browserZoomFactor ?? 1.25);
+  setEnvPathHint(settings.envPath);
 }
 
 async function refreshStatus() {
@@ -329,13 +337,17 @@ function formatPreview(result) {
 document.getElementById('btnSaveSettings').addEventListener('click', async () => {
   setSettingsMessage('Saving...');
   try {
-    await window.scannerApp.saveSettings({
+    const result = await window.scannerApp.saveSettings({
       SUPABASE_URL: supabaseUrl.value.trim(),
       SUPABASE_SERVICE_ROLE_KEY: supabaseKey.value.trim(),
       CHROME_EXECUTABLE_PATH: chromePath.value.trim(),
       useEmbeddedBrowser: useEmbeddedBrowser.checked,
     });
-    setSettingsMessage('Settings saved.', 'success');
+    setEnvPathHint(result?.envPath);
+    setSettingsMessage(
+      result?.envPath ? `Settings saved to ${result.envPath}.` : 'Settings saved.',
+      'success'
+    );
     scheduleBoundsUpdate();
   } catch (error) {
     setSettingsMessage(error.message, 'error');

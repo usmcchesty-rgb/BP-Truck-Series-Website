@@ -1,5 +1,5 @@
 import { BrowserWindow, session, WebContentsView } from 'electron';
-import { logMessage } from '../../recruit-scanner/logger.js';
+import { logMessage } from '../recruit-scanner/logger.js';
 import {
   CAPTURE_VISIBLE_TEXT_SCRIPT,
   DETECT_LOGIN_FORM_SCRIPT,
@@ -10,7 +10,7 @@ import {
   NAVIGATION_TIMEOUT_MS,
   PAGE_SETTLE_MS,
   urlLooksLikeLogin,
-} from '../../recruit-scanner/iracing-urls.js';
+} from '../recruit-scanner/iracing-urls.js';
 import {
   BROWSER_ZOOM_DEFAULT,
   BROWSER_FIT_MODE_DEFAULT,

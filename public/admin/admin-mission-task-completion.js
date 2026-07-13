@@ -94,6 +94,9 @@
     if (window.AdminMissionTaskSummary?.setMissionControl) {
       window.AdminMissionTaskSummary.setMissionControl(data);
     }
+    if (window.AdminMissionOperations?.setMissionControl) {
+      window.AdminMissionOperations.setMissionControl(data);
+    }
     if (window.AdminMissionControl?.applyPayload) {
       window.AdminMissionControl.applyPayload(data);
     }

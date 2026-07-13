@@ -222,6 +222,9 @@
     if (window.AdminMissionTaskSummary?.setMissionControl) {
       window.AdminMissionTaskSummary.setMissionControl(data);
     }
+    if (window.AdminMissionOperations?.setMissionControl) {
+      window.AdminMissionOperations.setMissionControl(data);
+    }
   }
 
   function isManualTask(task) {

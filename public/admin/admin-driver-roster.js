@@ -23,6 +23,52 @@
     return 'new_approved';
   }
 
+  function slugifyName(value) {
+    return String(value || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '');
+  }
+
+  function findIdentityMatchForStandingsRow(row, profileList) {
+    const standingsDriverId = String(row?.driverId || '').trim();
+    const rowName = normalizeSyncName(row?.driver || row?.driverName);
+    const rowSlug = slugifyName(row?.driver || row?.driverName);
+
+    const byDriverId = profileList.find(
+      (profile) => String(profile.driver_id) === standingsDriverId
+    );
+    if (byDriverId) {
+      return { profile: byDriverId, matchMethod: 'driver_id' };
+    }
+
+    if (rowSlug) {
+      const bySlug = profileList.find((profile) => {
+        const profileSlug = slugifyName(
+          profile.slug || profile.display_name || profile.iracing_name || profile.driver_id
+        );
+        return profileSlug && profileSlug === rowSlug;
+      });
+      if (bySlug) {
+        return { profile: bySlug, matchMethod: 'slug' };
+      }
+    }
+
+    if (rowName) {
+      const nameMatches = profileList.filter((profile) => {
+        const names = [profile.iracing_name, profile.display_name, profile.driver_name]
+          .map(normalizeSyncName)
+          .filter(Boolean);
+        return names.includes(rowName);
+      });
+      if (nameMatches.length === 1) {
+        return { profile: nameMatches[0], matchMethod: 'normalized_name' };
+      }
+    }
+
+    return null;
+  }
+
   function findStandingsMatchForProfile(profile, standingsList, profileList) {
     const name = normalizeSyncName(profile?.iracing_name || profile?.display_name);
     const customerId = normalizeCustomerId(
@@ -70,13 +116,16 @@
     const active = profile?.active !== false;
     const inStandings = Boolean(options.in_standings);
     const applicationSynced = Boolean(options.application_synced);
+    const profileCustomerId = normalizeCustomerId(
+      profile?.iracing_customer_id || profile?.iracingCustomerId
+    );
+    const explicitCustomerId = normalizeCustomerId(options.iracing_customer_id);
 
     return {
-      driver_id: String(options.driver_id || row?.driverId || profile?.driver_id || ''),
-      iracing_customer_id:
-        profile?.iracing_customer_id ||
-        profile?.iracingCustomerId ||
-        normalizeCustomerId(options.iracing_customer_id || row?.driverId || ''),
+      driver_id: String(options.driver_id || profile?.driver_id || row?.driverId || ''),
+      srh_driver_id: String(options.srh_driver_id || row?.driverId || ''),
+      standings_driver_id: String(options.standings_driver_id || row?.driverId || ''),
+      iracing_customer_id: profileCustomerId || explicitCustomerId || '',
       iracing_name: row?.driver || profile?.iracing_name || profile?.display_name || 'Unknown Driver',
       display_name: profile?.display_name || row?.driver || profile?.iracing_name || 'Unknown Driver',
       form_email: profile?.form_email || profile?.formEmail || '',
@@ -108,6 +157,7 @@
       source_application_id:
         profile?.source_application_id || profile?.sourceApplicationId || null,
       application_synced: applicationSynced,
+      identity_match_method: options.identity_match_method || null,
       roster_status:
         options.roster_status || resolveRosterStatus({ active, inStandings }),
     };
@@ -118,19 +168,15 @@
     const standingsList = Array.isArray(standingsRows) ? standingsRows : [];
     const byId = Object.fromEntries(profileList.map((p) => [String(p.driver_id), p]));
     const standingsDriverIds = new Set(standingsList.map((row) => String(row.driverId)));
-    const standingsCustomerIds = new Set();
     const usedProfileIds = new Set();
     const list = [];
 
     for (const row of standingsList) {
-      const profile = byId[String(row.driverId)] || null;
-      if (profile) {
-        usedProfileIds.add(String(profile.driver_id));
-        const customerId = normalizeCustomerId(
-          profile.iracing_customer_id || profile.iracingCustomerId
-        );
-        if (customerId) standingsCustomerIds.add(customerId);
-      }
+      const directProfile = byId[String(row.driverId)] || null;
+      const identityMatch = directProfile
+        ? { profile: directProfile, matchMethod: 'driver_id' }
+        : findIdentityMatchForStandingsRow(row, profileList);
+      const profile = identityMatch?.profile || null;
       const active = profile?.active !== false;
       const applicationSynced = Boolean(
         profile?.source_application_id ||
@@ -138,12 +184,35 @@
           profile?.approved_application_at ||
           profile?.approvedApplicationAt
       );
+
+      if (profile) {
+        usedProfileIds.add(String(profile.driver_id));
+        list.push(
+          profileFromRow(profile, row, {
+            driver_id: String(profile.driver_id),
+            srh_driver_id: String(row.driverId),
+            standings_driver_id: String(row.driverId),
+            iracing_customer_id: normalizeCustomerId(
+              profile.iracing_customer_id || profile.iracingCustomerId
+            ),
+            in_standings: true,
+            application_synced: applicationSynced,
+            identity_match_method: identityMatch.matchMethod,
+            roster_status: resolveRosterStatus({ active, inStandings: true }),
+          })
+        );
+        continue;
+      }
+
       list.push(
-        profileFromRow(profile, row, {
+        profileFromRow(null, row, {
           driver_id: String(row.driverId),
+          srh_driver_id: String(row.driverId),
+          standings_driver_id: String(row.driverId),
+          iracing_customer_id: '',
           in_standings: true,
-          application_synced: applicationSynced,
-          roster_status: resolveRosterStatus({ active, inStandings: true }),
+          application_synced: false,
+          roster_status: resolveRosterStatus({ active: true, inStandings: true }),
         })
       );
     }
@@ -152,17 +221,6 @@
       const driverId = String(profile.driver_id || '').trim();
       if (!driverId || usedProfileIds.has(driverId)) continue;
 
-      if (
-        shouldHideDuplicateApprovedProfile(
-          profile,
-          standingsList,
-          profileList,
-          standingsDriverIds
-        )
-      ) {
-        continue;
-      }
-
       usedProfileIds.add(driverId);
 
       const customerId = normalizeCustomerId(
@@ -170,15 +228,15 @@
       );
       const standingsMatch = findStandingsMatchForProfile(profile, standingsList, profileList);
       const inStandings =
-        standingsDriverIds.has(driverId) ||
-        (customerId && standingsCustomerIds.has(customerId)) ||
-        Boolean(standingsMatch);
+        standingsDriverIds.has(driverId) || Boolean(standingsMatch);
       const active = profile.active !== false;
 
       list.push(
         profileFromRow(profile, standingsMatch, {
           driver_id: driverId,
           iracing_customer_id: customerId,
+          srh_driver_id: standingsMatch ? String(standingsMatch.driverId || '') : '',
+          standings_driver_id: standingsMatch ? String(standingsMatch.driverId || '') : '',
           in_standings: inStandings,
           application_synced: inStandings && Boolean(profile.source_application_id),
           roster_status: resolveRosterStatus({ active, inStandings }),
@@ -249,8 +307,10 @@
     ROSTER_STATUS_ORDER,
     normalizeCustomerId,
     normalizeSyncName,
+    slugifyName,
     stripPhotoUrlQuery,
     resolveRosterStatus,
+    findIdentityMatchForStandingsRow,
     findStandingsMatchForProfile,
     shouldHideDuplicateApprovedProfile,
     profileFromRow,

@@ -26,15 +26,21 @@ import {
   validateAdminPassword,
 } from './_admin-auth.js';
 import { stripPrivateDriverProfileFields } from './_driver-profile-privacy.js';
+import {
+  mergeDriverProfilePatch,
+  resolveExistingProfileForDriverWrite,
+  sanitizeIncomingCustomerId,
+} from './_drivers-write-identity.js';
 
 export { stripPrivateDriverProfileFields } from './_driver-profile-privacy.js';
 
-const DRIVERS_WRITE_INSTRUMENTATION_VERSION = 'drivers-write-instrumentation-v1';
+const DRIVERS_WRITE_INSTRUMENTATION_VERSION = 'drivers-write-instrumentation-v2';
 
 const DRIVERS_WRITE_PATHS = {
-  POST_DRIVER_UPSERT: 'api/drivers.js:handler:POST:upsertDriver',
-  UPSERT_BY_DRIVER_ID: 'api/drivers.js:upsertDriver:upsert:onConflict=driver_id',
-  UPSERT_BY_SLUG_FALLBACK: 'api/drivers.js:upsertDriver:upsert:onConflict=slug',
+  POST_DRIVER_WRITE: 'api/drivers.js:handler:POST:writeDriverProfile',
+  UPDATE_BY_RESOLVED_IDENTITY: 'api/drivers.js:writeDriverProfile:update:by_resolved_identity',
+  INSERT_NEW_PROFILE: 'api/drivers.js:writeDriverProfile:insert:new_profile',
+  RECOVERED_UPDATE: 'api/drivers.js:writeDriverProfile:update:recovered_duplicate_key',
 };
 
 function captureDriversWriteStack(label = 'drivers-write') {
@@ -66,6 +72,12 @@ function buildDriversWriteTrace(body = {}, row = {}, options = {}) {
   return {
     instrumentationVersion: DRIVERS_WRITE_INSTRUMENTATION_VERSION,
     operationName: options.operationName || 'driver_profiles_write',
+    incomingDriverId: options.incomingDriverId || row?.driver_id || body?.driver_id || null,
+    incomingIracingCustomerId:
+      options.incomingIracingCustomerId ||
+      row?.iracing_customer_id ||
+      normalizeCustomerId(body?.iracing_customer_id ?? body?.iracingCustomerId) ||
+      null,
     driver_id: row?.driver_id || body?.driver_id || null,
     iracing_customer_id:
       row?.iracing_customer_id ||
@@ -74,14 +86,20 @@ function buildDriversWriteTrace(body = {}, row = {}, options = {}) {
     display_name: row?.display_name || body?.display_name || body?.iracing_name || null,
     source: inferDriverWriteSource(body),
     operationChosen: options.operationChosen || null,
+    operationTargetDriverId: options.operationTargetDriverId || null,
+    matchMethod: options.matchMethod || null,
     writePathSelected: options.writePathSelected || null,
     upsertExecuted: options.upsertExecuted === true,
+    insertExecuted: options.insertExecuted === true,
+    updateExecuted: options.updateExecuted === true,
     insertLikely: options.insertLikely === true,
     existingProfileDriverId: options.existingProfileDriverId || null,
     existingProfileSlug: options.existingProfileSlug || null,
     rowPayload: row || null,
+    updatePayload: options.updatePayload || null,
     supabaseResult: options.supabaseResult || null,
     duplicateKeyError: options.duplicateKeyError || null,
+    identityConflict: options.identityConflict || null,
     currentFunction: options.currentFunction || null,
     currentSourceDriver: {
       driver_id: body?.driver_id || null,
@@ -412,7 +430,7 @@ function buildUpsertRow(b) {
     twitch_url: normalizeOptionalText(b.twitch_url ?? b.twitchUrl),
     tiktok_url: normalizeOptionalText(b.tiktok_url ?? b.tiktokUrl),
     car_image_url: stripPhotoUrlQuery(b.car_image_url ?? b.carImageUrl ?? ''),
-    iracing_customer_id: normalizeCustomerId(b.iracing_customer_id ?? b.iracingCustomerId),
+    iracing_customer_id: sanitizeIncomingCustomerId(b, null) || '',
     updated_at: new Date().toISOString(),
   };
 
@@ -452,163 +470,287 @@ function buildUpsertRow(b) {
   return row;
 }
 
-function isConflictConstraintError(error) {
-  const msg = error?.message || '';
-  return /on conflict|no unique|exclusion constraint|constraint matching/i.test(msg);
+function buildIdentityConflictError(resolution = {}) {
+  const error = new Error(
+    'Identity conflict: multiple existing driver profiles match this incoming row.'
+  );
+  error.code = 'IDENTITY_CONFLICT';
+  error.status = 409;
+  error.matches = resolution.matches || [];
+  return error;
 }
 
-async function upsertDriver(sb, row, context = {}) {
+async function recoverProfileFromDuplicateKey(sb, error, incoming = {}, row = {}) {
+  const details = String(error?.details || error?.detail || '');
+  const resolution = await resolveExistingProfileForDriverWrite(sb, incoming);
+  if (resolution.conflict || !resolution.profile) {
+    return null;
+  }
+
+  if (details.includes('(slug)=')) {
+    const slugMatch = resolution.matches.find((entry) => entry.methods.includes('slug'));
+    if (slugMatch?.profile) return { profile: slugMatch.profile, matchMethod: 'slug' };
+  }
+
+  if (details.includes('(iracing_customer_id)=')) {
+    const customerMatch = resolution.matches.find((entry) =>
+      entry.methods.includes('iracing_customer_id')
+    );
+    if (customerMatch?.profile) {
+      return { profile: customerMatch.profile, matchMethod: 'iracing_customer_id' };
+    }
+  }
+
+  if (details.includes('(driver_id)=') || error.constraint === 'driver_profiles_pkey') {
+    return { profile: resolution.profile, matchMethod: resolution.matchMethod || 'driver_id' };
+  }
+
+  return { profile: resolution.profile, matchMethod: resolution.matchMethod };
+}
+
+async function writeDriverProfile(sb, row, context = {}) {
   const traces = [];
-  const baseTrace = buildDriversWriteTrace(context.requestBody || {}, row, {
-    operationName: 'driver_profiles_upsert',
-    currentFunction: 'upsertDriver',
+  const requestBody = context.requestBody || {};
+  const incomingDriverId = String(requestBody.driver_id || row.driver_id || '').trim();
+  const incomingCustomerId = normalizeCustomerId(
+    requestBody.iracing_customer_id ?? requestBody.iracingCustomerId
+  );
+
+  const resolution = await resolveExistingProfileForDriverWrite(sb, requestBody);
+  const resolutionTrace = buildDriversWriteTrace(requestBody, row, {
+    operationName: 'driver_profiles_identity_resolution',
+    incomingDriverId,
+    incomingIracingCustomerId: incomingCustomerId,
+    existingProfileDriverId: resolution.profile?.driver_id || null,
+    existingProfileSlug: resolution.profile?.slug || null,
+    matchMethod: resolution.matchMethod || null,
+    operationChosen: resolution.conflict
+      ? 'CONFLICT'
+      : resolution.profile
+        ? 'UPDATE'
+        : 'INSERT',
+    operationTargetDriverId: resolution.profile?.driver_id || null,
+    identityConflict: resolution.conflict ? resolution.matches : null,
+    currentFunction: 'writeDriverProfile',
     currentSourceDriver: context.currentSourceDriver || null,
+    notes: resolution.conflict
+      ? ['multiple_identity_matches_detected']
+      : resolution.profile
+        ? [`resolved_existing_profile:${resolution.profile.driver_id}`, `match_method:${resolution.matchMethod}`]
+        : ['no_existing_profile_match'],
   });
+  logDriversWriteTrace(resolutionTrace);
+  traces.push(resolutionTrace);
 
-  let existingByDriverId = null;
-  let existingBySlug = null;
-  try {
-    const [{ data: byId }, { data: bySlug }] = await Promise.all([
-      sb.from('driver_profiles').select('driver_id,slug,iracing_customer_id,display_name').eq('driver_id', String(row.driver_id || '')).maybeSingle(),
-      row.slug
-        ? sb.from('driver_profiles').select('driver_id,slug,iracing_customer_id,display_name').eq('slug', String(row.slug)).maybeSingle()
-        : Promise.resolve({ data: null }),
-    ]);
-    existingByDriverId = byId || null;
-    existingBySlug = bySlug || null;
-  } catch (lookupError) {
-    baseTrace.notes = [
-      ...(baseTrace.notes || []),
-      `existing_profile_lookup_failed:${lookupError.message || 'unknown'}`,
-    ];
-  }
-
-  const operationChosen = existingByDriverId ? 'UPDATE' : 'INSERT';
-  const driverIdTrace = buildDriversWriteTrace(context.requestBody || {}, row, {
-    operationName: 'driver_profiles_upsert_by_driver_id',
-    source: baseTrace.source,
-    operationChosen,
-    writePathSelected: DRIVERS_WRITE_PATHS.UPSERT_BY_DRIVER_ID,
-    insertLikely: !existingByDriverId,
-    existingProfileDriverId: existingByDriverId?.driver_id || null,
-    existingProfileSlug: existingByDriverId?.slug || existingBySlug?.slug || null,
-    currentFunction: 'upsertDriver',
-    currentSourceDriver: context.currentSourceDriver || baseTrace.currentSourceDriver,
-    notes: [
-      existingByDriverId
-        ? 'pre_write_lookup_found_existing_driver_id'
-        : 'pre_write_lookup_no_existing_driver_id',
-      existingBySlug && existingBySlug.driver_id !== row.driver_id
-        ? `slug_owned_by_other_driver_id:${existingBySlug.driver_id}`
-        : null,
-    ].filter(Boolean),
-  });
-  driverIdTrace.rowPayload = row;
-  logDriversWriteTrace(driverIdTrace);
-  traces.push(driverIdTrace);
-
-  driverIdTrace.upsertExecuted = true;
-  const byDriverId = await sb
-    .from('driver_profiles')
-    .upsert(row, { onConflict: 'driver_id' })
-    .select()
-    .single();
-
-  driverIdTrace.supabaseResult = {
-    ok: !byDriverId.error,
-    errorCode: byDriverId.error?.code || null,
-    errorMessage: byDriverId.error?.message || null,
-    errorConstraint: byDriverId.error?.constraint || null,
-  };
-  logDriversWriteTrace(driverIdTrace, byDriverId.error ? 'error' : 'info');
-
-  if (!byDriverId.error) {
-    return { ...byDriverId, instrumentation: { traces, finalPath: DRIVERS_WRITE_PATHS.UPSERT_BY_DRIVER_ID } };
-  }
-
-  if (isDuplicateKeyError(byDriverId.error)) {
-    const duplicateKeyError = buildDuplicateKeyDiagnostics(byDriverId.error, {
-      attemptedDriverId: row.driver_id,
-      attemptedIracingCustomerId: row.iracing_customer_id,
-      insertPayload: row,
-      writePathSelected: DRIVERS_WRITE_PATHS.UPSERT_BY_DRIVER_ID,
-      currentFunction: 'upsertDriver',
-      currentSourceDriver: context.currentSourceDriver || baseTrace.currentSourceDriver,
-    });
-    driverIdTrace.duplicateKeyError = duplicateKeyError;
-    driverIdTrace.stackTrace = duplicateKeyError.stackTrace;
-    logDriversWriteTrace(driverIdTrace, 'error');
+  if (resolution.conflict) {
+    const conflictError = buildIdentityConflictError(resolution);
     return {
       data: null,
-      error: byDriverId.error,
-      instrumentation: { traces, duplicateKeyError, finalPath: DRIVERS_WRITE_PATHS.UPSERT_BY_DRIVER_ID },
+      error: conflictError,
+      instrumentation: {
+        traces,
+        finalPath: DRIVERS_WRITE_PATHS.POST_DRIVER_WRITE,
+        identityConflict: resolution.matches,
+      },
     };
   }
 
-  if (!isConflictConstraintError(byDriverId.error)) {
+  if (resolution.profile) {
+    const targetId = String(resolution.profile.driver_id);
+    const updatePayload = mergeDriverProfilePatch(resolution.profile, row, requestBody);
+    const updateTrace = buildDriversWriteTrace(requestBody, row, {
+      operationName: 'driver_profiles_update_by_resolved_identity',
+      incomingDriverId,
+      incomingIracingCustomerId: incomingCustomerId,
+      existingProfileDriverId: resolution.profile.driver_id,
+      existingProfileSlug: resolution.profile.slug || null,
+      matchMethod: resolution.matchMethod,
+      operationChosen: 'UPDATE',
+      operationTargetDriverId: targetId,
+      writePathSelected: DRIVERS_WRITE_PATHS.UPDATE_BY_RESOLVED_IDENTITY,
+      updateExecuted: true,
+      updatePayload,
+      currentFunction: 'writeDriverProfile',
+      currentSourceDriver: context.currentSourceDriver || null,
+      notes: ['explicit_update_by_existing_profile_driver_id'],
+    });
+    logDriversWriteTrace(updateTrace);
+    traces.push(updateTrace);
+
+    const updateResult = await sb
+      .from('driver_profiles')
+      .update(updatePayload)
+      .eq('driver_id', targetId)
+      .select()
+      .single();
+
+    updateTrace.supabaseResult = {
+      ok: !updateResult.error,
+      errorCode: updateResult.error?.code || null,
+      errorMessage: updateResult.error?.message || null,
+      errorConstraint: updateResult.error?.constraint || null,
+    };
+    logDriversWriteTrace(updateTrace, updateResult.error ? 'error' : 'info');
+
+    if (!updateResult.error) {
+      return {
+        ...updateResult,
+        instrumentation: {
+          traces,
+          finalPath: DRIVERS_WRITE_PATHS.UPDATE_BY_RESOLVED_IDENTITY,
+          matchMethod: resolution.matchMethod,
+          operationTargetDriverId: targetId,
+        },
+      };
+    }
+
+    if (isDuplicateKeyError(updateResult.error)) {
+      const duplicateKeyError = buildDuplicateKeyDiagnostics(updateResult.error, {
+        attemptedDriverId: targetId,
+        attemptedIracingCustomerId: updatePayload.iracing_customer_id,
+        insertPayload: updatePayload,
+        writePathSelected: DRIVERS_WRITE_PATHS.UPDATE_BY_RESOLVED_IDENTITY,
+        currentFunction: 'writeDriverProfile',
+        currentSourceDriver: context.currentSourceDriver || null,
+      });
+      updateTrace.duplicateKeyError = duplicateKeyError;
+      updateTrace.stackTrace = duplicateKeyError.stackTrace;
+      logDriversWriteTrace(updateTrace, 'error');
+      return {
+        data: null,
+        error: updateResult.error,
+        instrumentation: { traces, duplicateKeyError, finalPath: DRIVERS_WRITE_PATHS.UPDATE_BY_RESOLVED_IDENTITY },
+      };
+    }
+
     return {
       data: null,
-      error: byDriverId.error,
-      instrumentation: { traces, finalPath: DRIVERS_WRITE_PATHS.UPSERT_BY_DRIVER_ID },
+      error: updateResult.error,
+      instrumentation: { traces, finalPath: DRIVERS_WRITE_PATHS.UPDATE_BY_RESOLVED_IDENTITY },
     };
   }
 
-  const slugTrace = buildDriversWriteTrace(context.requestBody || {}, row, {
-    operationName: 'driver_profiles_upsert_by_slug_fallback',
-    source: baseTrace.source,
-    operationChosen: existingBySlug ? 'UPDATE' : 'INSERT',
-    writePathSelected: DRIVERS_WRITE_PATHS.UPSERT_BY_SLUG_FALLBACK,
-    insertLikely: !existingBySlug,
-    existingProfileDriverId: existingBySlug?.driver_id || null,
-    existingProfileSlug: existingBySlug?.slug || row.slug || null,
-    currentFunction: 'upsertDriver',
-    currentSourceDriver: context.currentSourceDriver || baseTrace.currentSourceDriver,
-    notes: [
-      'driver_id_upsert_failed_conflict_constraint_retrying_slug',
-      `first_error:${byDriverId.error?.message || 'unknown'}`,
-    ],
-  });
-  slugTrace.rowPayload = row;
-  logDriversWriteTrace(slugTrace, 'warn');
-  traces.push(slugTrace);
-
-  slugTrace.upsertExecuted = true;
-  const bySlug = await sb
-    .from('driver_profiles')
-    .upsert(row, { onConflict: 'slug' })
-    .select()
-    .single();
-
-  slugTrace.supabaseResult = {
-    ok: !bySlug.error,
-    errorCode: bySlug.error?.code || null,
-    errorMessage: bySlug.error?.message || null,
-    errorConstraint: bySlug.error?.constraint || null,
+  const insertRow = {
+    ...row,
+    iracing_customer_id:
+      sanitizeIncomingCustomerId(requestBody, null) || row.iracing_customer_id || null,
   };
-  logDriversWriteTrace(slugTrace, bySlug.error ? 'error' : 'info');
+  const insertTrace = buildDriversWriteTrace(requestBody, insertRow, {
+    operationName: 'driver_profiles_insert_new',
+    incomingDriverId,
+    incomingIracingCustomerId: incomingCustomerId,
+    operationChosen: 'INSERT',
+    writePathSelected: DRIVERS_WRITE_PATHS.INSERT_NEW_PROFILE,
+    insertExecuted: true,
+    insertLikely: true,
+    currentFunction: 'writeDriverProfile',
+    currentSourceDriver: context.currentSourceDriver || null,
+    notes: ['no_identity_match_explicit_insert'],
+  });
+  logDriversWriteTrace(insertTrace);
+  traces.push(insertTrace);
 
-  if (bySlug.error && isDuplicateKeyError(bySlug.error)) {
-    const duplicateKeyError = buildDuplicateKeyDiagnostics(bySlug.error, {
-      attemptedDriverId: row.driver_id,
-      attemptedIracingCustomerId: row.iracing_customer_id,
-      insertPayload: row,
-      writePathSelected: DRIVERS_WRITE_PATHS.UPSERT_BY_SLUG_FALLBACK,
-      currentFunction: 'upsertDriver',
-      currentSourceDriver: context.currentSourceDriver || baseTrace.currentSourceDriver,
+  const insertResult = await sb.from('driver_profiles').insert(insertRow).select().single();
+  insertTrace.supabaseResult = {
+    ok: !insertResult.error,
+    errorCode: insertResult.error?.code || null,
+    errorMessage: insertResult.error?.message || null,
+    errorConstraint: insertResult.error?.constraint || null,
+  };
+  logDriversWriteTrace(insertTrace, insertResult.error ? 'error' : 'info');
+
+  if (!insertResult.error) {
+    return {
+      ...insertResult,
+      instrumentation: { traces, finalPath: DRIVERS_WRITE_PATHS.INSERT_NEW_PROFILE },
+    };
+  }
+
+  if (isDuplicateKeyError(insertResult.error)) {
+    const recovery = await recoverProfileFromDuplicateKey(
+      sb,
+      insertResult.error,
+      requestBody,
+      insertRow
+    );
+    if (recovery?.profile) {
+      const recoveredPayload = mergeDriverProfilePatch(recovery.profile, row, requestBody);
+      const recoveredTrace = buildDriversWriteTrace(requestBody, insertRow, {
+        operationName: 'driver_profiles_recovered_update',
+        incomingDriverId,
+        incomingIracingCustomerId: incomingCustomerId,
+        existingProfileDriverId: recovery.profile.driver_id,
+        existingProfileSlug: recovery.profile.slug || null,
+        matchMethod: recovery.matchMethod || 'recovered_duplicate_key',
+        operationChosen: 'UPDATE',
+        operationTargetDriverId: recovery.profile.driver_id,
+        writePathSelected: DRIVERS_WRITE_PATHS.RECOVERED_UPDATE,
+        updateExecuted: true,
+        updatePayload: recoveredPayload,
+        currentFunction: 'writeDriverProfile',
+        currentSourceDriver: context.currentSourceDriver || null,
+        notes: ['recovered_duplicate_key_to_update'],
+      });
+      logDriversWriteTrace(recoveredTrace, 'warn');
+      traces.push(recoveredTrace);
+
+      const recoveredResult = await sb
+        .from('driver_profiles')
+        .update(recoveredPayload)
+        .eq('driver_id', recovery.profile.driver_id)
+        .select()
+        .single();
+
+      recoveredTrace.supabaseResult = {
+        ok: !recoveredResult.error,
+        errorCode: recoveredResult.error?.code || null,
+        errorMessage: recoveredResult.error?.message || null,
+        errorConstraint: recoveredResult.error?.constraint || null,
+      };
+      logDriversWriteTrace(recoveredTrace, recoveredResult.error ? 'error' : 'info');
+
+      if (!recoveredResult.error) {
+        return {
+          ...recoveredResult,
+          instrumentation: {
+            traces,
+            finalPath: DRIVERS_WRITE_PATHS.RECOVERED_UPDATE,
+            matchMethod: recovery.matchMethod,
+            operationTargetDriverId: recovery.profile.driver_id,
+            recovered: true,
+          },
+        };
+      }
+
+      return {
+        data: null,
+        error: recoveredResult.error,
+        instrumentation: { traces, finalPath: DRIVERS_WRITE_PATHS.RECOVERED_UPDATE },
+      };
+    }
+
+    const duplicateKeyError = buildDuplicateKeyDiagnostics(insertResult.error, {
+      attemptedDriverId: insertRow.driver_id,
+      attemptedIracingCustomerId: insertRow.iracing_customer_id,
+      insertPayload: insertRow,
+      writePathSelected: DRIVERS_WRITE_PATHS.INSERT_NEW_PROFILE,
+      currentFunction: 'writeDriverProfile',
+      currentSourceDriver: context.currentSourceDriver || null,
     });
-    slugTrace.duplicateKeyError = duplicateKeyError;
-    slugTrace.stackTrace = duplicateKeyError.stackTrace;
-    logDriversWriteTrace(slugTrace, 'error');
+    insertTrace.duplicateKeyError = duplicateKeyError;
+    insertTrace.stackTrace = duplicateKeyError.stackTrace;
+    logDriversWriteTrace(insertTrace, 'error');
     return {
       data: null,
-      error: bySlug.error,
-      instrumentation: { traces, duplicateKeyError, finalPath: DRIVERS_WRITE_PATHS.UPSERT_BY_SLUG_FALLBACK },
+      error: insertResult.error,
+      instrumentation: { traces, duplicateKeyError, finalPath: DRIVERS_WRITE_PATHS.INSERT_NEW_PROFILE },
     };
   }
 
   return {
-    ...bySlug,
-    instrumentation: { traces, finalPath: DRIVERS_WRITE_PATHS.UPSERT_BY_SLUG_FALLBACK },
+    data: null,
+    error: insertResult.error,
+    instrumentation: { traces, finalPath: DRIVERS_WRITE_PATHS.INSERT_NEW_PROFILE },
   };
 }
 
@@ -813,17 +955,32 @@ export default async function handler(req, res) {
 
   const postTrace = buildDriversWriteTrace(b, row, {
     operationName: 'POST /api/drivers',
-    writePathSelected: DRIVERS_WRITE_PATHS.POST_DRIVER_UPSERT,
+    incomingDriverId: String(b.driver_id || ''),
+    incomingIracingCustomerId: normalizeCustomerId(b.iracing_customer_id ?? b.iracingCustomerId) || null,
+    writePathSelected: DRIVERS_WRITE_PATHS.POST_DRIVER_WRITE,
     currentFunction: 'handler:POST',
     currentSourceDriver: writeContext.currentSourceDriver,
-    notes: ['post_handler_invoking_upsertDriver'],
+    notes: ['post_handler_invoking_writeDriverProfile'],
   });
   logDriversWriteTrace(postTrace);
 
-  const upsertResult = await upsertDriver(sb, row, writeContext);
-  const { data, error, instrumentation } = upsertResult;
+  const writeResult = await writeDriverProfile(sb, row, writeContext);
+  const { data, error, instrumentation } = writeResult;
 
   if (error) {
+    if (error.code === 'IDENTITY_CONFLICT') {
+      return res.status(409).json({
+        error: error.message,
+        diagnostics: {
+          instrumentationVersion: DRIVERS_WRITE_INSTRUMENTATION_VERSION,
+          postTrace,
+          finalPath: instrumentation?.finalPath || null,
+          traces: instrumentation?.traces || [],
+          identityConflict: instrumentation?.identityConflict || error.matches || null,
+        },
+      });
+    }
+
     const duplicateKeyError =
       instrumentation?.duplicateKeyError ||
       (isDuplicateKeyError(error)
@@ -831,7 +988,7 @@ export default async function handler(req, res) {
             attemptedDriverId: row.driver_id,
             attemptedIracingCustomerId: row.iracing_customer_id,
             insertPayload: row,
-            writePathSelected: instrumentation?.finalPath || DRIVERS_WRITE_PATHS.POST_DRIVER_UPSERT,
+            writePathSelected: instrumentation?.finalPath || DRIVERS_WRITE_PATHS.POST_DRIVER_WRITE,
             currentFunction: 'handler:POST',
             currentSourceDriver: writeContext.currentSourceDriver,
           })
@@ -845,17 +1002,34 @@ export default async function handler(req, res) {
         finalPath: instrumentation?.finalPath || null,
         traces: instrumentation?.traces || [],
         duplicateKeyError,
+        matchMethod: instrumentation?.matchMethod || null,
+        operationTargetDriverId: instrumentation?.operationTargetDriverId || null,
       },
     });
   }
+
+  const primaryTrace = instrumentation?.traces?.[instrumentation.traces.length - 1] || postTrace;
 
   return res.status(200).json({
     ...attachBpNumber(buildAdminDriverProfile(data), data, await loadBpNumberContext(sb)),
     diagnostics: {
       instrumentationVersion: DRIVERS_WRITE_INSTRUMENTATION_VERSION,
       postTrace,
-      finalPath: instrumentation?.finalPath || DRIVERS_WRITE_PATHS.UPSERT_BY_DRIVER_ID,
+      finalPath: instrumentation?.finalPath || DRIVERS_WRITE_PATHS.UPDATE_BY_RESOLVED_IDENTITY,
       traces: instrumentation?.traces || [],
+      incomingDriverId: primaryTrace.incomingDriverId || String(b.driver_id || ''),
+      incomingIracingCustomerId:
+        primaryTrace.incomingIracingCustomerId ||
+        normalizeCustomerId(b.iracing_customer_id ?? b.iracingCustomerId) ||
+        null,
+      existingProfileDriverId: primaryTrace.existingProfileDriverId || null,
+      existingProfileSlug: primaryTrace.existingProfileSlug || null,
+      matchMethod: instrumentation?.matchMethod || primaryTrace.matchMethod || null,
+      operationChosen: primaryTrace.operationChosen || null,
+      operationTargetDriverId:
+        instrumentation?.operationTargetDriverId || primaryTrace.operationTargetDriverId || null,
+      insertExecuted: instrumentation?.traces?.some((trace) => trace.insertExecuted) || false,
+      updateExecuted: instrumentation?.traces?.some((trace) => trace.updateExecuted) || false,
     },
   });
 }

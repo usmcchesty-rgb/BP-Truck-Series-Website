@@ -1,6 +1,6 @@
 import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
-import { loadScannerEnv, SCANNER_ENV_PATH } from './env-file.js';
+import { loadScannerEnv, getScannerEnvPath } from './env-file.js';
 import {
   clearBrowserProfile,
   closeBrowser,
@@ -80,6 +80,7 @@ export class RecruitScannerService {
     this.onLog = options.onLog;
     this.onError = options.onError;
     this.workerName = options.workerName || WORKER_NAME;
+    this.envPath = options.envPath || null;
     this.supabase = null;
     this.realtimeChannel = null;
     this.running = false;
@@ -112,17 +113,25 @@ export class RecruitScannerService {
     }
   }
 
+  resolveEnvPath() {
+    return this.envPath || getScannerEnvPath();
+  }
+
   loadEnvironment() {
-    dotenv.config({ path: SCANNER_ENV_PATH, override: true });
-    const envValues = loadScannerEnv();
+    const envPath = this.resolveEnvPath();
+    dotenv.config({ path: envPath, override: true });
+    const envValues = loadScannerEnv(envPath);
     applyEnvToProcess(envValues);
     return envValues;
   }
 
   ensureSupabaseConfigured() {
+    const envPath = this.resolveEnvPath();
     const envValues = this.loadEnvironment();
     if (!envValues.SUPABASE_URL || !envValues.SUPABASE_SERVICE_ROLE_KEY) {
-      throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in tools/recruit-scanner/.env');
+      throw new Error(
+        `Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in ${envPath}`
+      );
     }
 
     this.supabase = createClient(envValues.SUPABASE_URL, envValues.SUPABASE_SERVICE_ROLE_KEY);

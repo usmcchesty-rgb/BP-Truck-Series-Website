@@ -16,6 +16,10 @@ import {
   summarizeTopTrackHistoryDrivers,
   summarizeTopProvenTrackHistoryDrivers,
 } from './_fantasy-tier-scoring.js';
+import {
+  applyV26TierScoreAdjustments,
+  SALARY_ENGINE_VERSION,
+} from './_fantasy-salary-guardrails.js';
 import { buildFantasySalaryReasons } from './_fantasy-salary-reasons.js';
 
 export { FANTASY_MODEL_VERSION };
@@ -120,6 +124,12 @@ export function buildFantasyDriverSalaries({
     effectiveWeights,
     recentDataSparse: sparseInfo.recentDataSparse,
   });
+
+  for (const driver of rawDrivers) {
+    driver._alignedRaces = alignedRaces;
+  }
+  applyV26TierScoreAdjustments(rawDrivers);
+
   const drivers = finalizeFantasySlateSalaries(rawDrivers);
   const tierRecovery = drivers.tierRecoveryMeta || {
     topTierRecoveryApplied: 0,
@@ -165,6 +175,7 @@ export function summarizeFantasySlateMeta(drivers = []) {
 
   return {
     modelVersion: FANTASY_MODEL_VERSION,
+    salaryEngineVersion: SALARY_ENGINE_VERSION,
     driverCount: drivers.length,
     avgSalary: salaries.length ? Math.round(total / salaries.length) : null,
     minSalary: salaries.length ? Math.min(...salaries) : null,
