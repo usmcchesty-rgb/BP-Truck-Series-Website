@@ -567,13 +567,17 @@ export const MISSION_CONTROL_EVALUATORS = {
 
     if (scoring.status === 'scored') {
       const count = scoring.scoringMeta?.lineupCount ?? scoring.lineupCount ?? 0;
+      const autoSource = scoring.scoringMeta?.source === 'auto';
       return {
         complete: true,
-        reason: `Fantasy scoring completed for Race ${raceNumber}. ${count} lineups scored.`,
+        reason: autoSource
+          ? `Fantasy scoring completed automatically for Race ${raceNumber}. ${count} lineups scored.`
+          : `Fantasy scoring completed for Race ${raceNumber}. ${count} lineups scored.`,
         diagnostics: {
           workflowRaceNumber: raceNumber,
           scoringVersion: scoring.scoringMeta?.scoringVersion ?? null,
           scoredAt: scoring.scoringMeta?.scoredAt ?? null,
+          source: scoring.scoringMeta?.source ?? null,
         },
       };
     }
@@ -602,6 +606,71 @@ export const MISSION_CONTROL_EVALUATORS = {
       complete: false,
       reason: scoring.resultsReason || 'Fantasy scoring is not ready.',
       diagnostics: { status: scoring.status },
+    };
+  },
+
+  'sun-prepare-next-race-salaries'(ctx) {
+    const scoring = ctx.fantasyScoringStatus || null;
+    const automation = ctx.fantasyPostRaceAutomationStatus || null;
+    const nextRace = getWorkflowNextRaceRef(ctx) || normalizeRaceRef(ctx.nextRace);
+
+    if (!scoring) {
+      return { complete: false, reason: 'Waiting for completed race fantasy scoring status.' };
+    }
+
+    if (scoring.status !== 'scored' || (scoring.unresolvedDrivers || []).length) {
+      return {
+        complete: false,
+        reason: 'Waiting for completed race fantasy scoring.',
+        diagnostics: { status: scoring.status, unresolved: (scoring.unresolvedDrivers || []).length },
+      };
+    }
+
+    if (!nextRace?.raceNumber) {
+      return { complete: false, reason: 'No upcoming race identified for salary draft.' };
+    }
+
+    const salaryDraft = automation?.salaryDraft || null;
+    if (salaryDraft?.published) {
+      return {
+        complete: true,
+        reason: 'Next slate is already published. Salaries were not regenerated.',
+        diagnostics: { nextRaceNumber: nextRace.raceNumber },
+      };
+    }
+
+    if (salaryDraft?.needsRegeneration) {
+      return {
+        complete: false,
+        reason: 'Salary draft needs regeneration due to manual edits or new official results.',
+        diagnostics: { nextRaceNumber: nextRace.raceNumber, needsRegeneration: true },
+      };
+    }
+
+    if (salaryDraft?.meta?.lastAutoGenerationError) {
+      return {
+        complete: false,
+        reason: `Salary draft generation failed: ${salaryDraft.meta.lastAutoGenerationError}`,
+        diagnostics: { nextRaceNumber: nextRace.raceNumber },
+      };
+    }
+
+    if (salaryDraft?.draft) {
+      return {
+        complete: true,
+        reason: `Salary draft generated for Race ${nextRace.raceNumber}. Admin review required.`,
+        diagnostics: {
+          nextRaceNumber: nextRace.raceNumber,
+          slateId: salaryDraft.draft.id,
+          salaryEngineVersion: automation?.salaryEngineVersion || null,
+        },
+      };
+    }
+
+    return {
+      complete: false,
+      reason: 'Waiting for next-race salary draft generation.',
+      diagnostics: { nextRaceNumber: nextRace.raceNumber },
     };
   },
 
@@ -974,11 +1043,17 @@ export async function loadMissionControlDetectionContext(options = {}) {
   const fantasyLockContext = await buildFantasyLockMissionContext(detectionBase);
 
   let fantasyScoringStatus = null;
+  let fantasyPostRaceAutomationStatus = null;
   if (postRaceNumber != null) {
     fantasyScoringStatus = await getFantasyRaceScoringStatus({
       seasonId,
       settings,
       raceNumber: postRaceNumber,
+    });
+    const { getFantasyPostRaceAutomationStatus } = await import('./_fantasy-post-race-automation.js');
+    fantasyPostRaceAutomationStatus = await getFantasyPostRaceAutomationStatus(seasonId, {
+      settings,
+      now,
     });
   }
 
@@ -986,6 +1061,7 @@ export async function loadMissionControlDetectionContext(options = {}) {
     ...detectionBase,
     fantasyLockContext,
     fantasyScoringStatus,
+    fantasyPostRaceAutomationStatus,
   };
 }
 

@@ -379,21 +379,28 @@ export async function getFantasyPublicStandings(seasonId, options = {}) {
   const resolvedSeasonId = String(seasonId || settings.seasonId || '27987');
 
   if (options.autoScore !== false) {
-    const { maybeAutoScoreFantasySlates } = await loadFantasyRaceScoringModule();
-    await maybeAutoScoreFantasySlates(resolvedSeasonId, { settings });
+    const { runFantasyPostRaceAutomation } = await import('./_fantasy-post-race-automation.js');
+    await runFantasyPostRaceAutomation(resolvedSeasonId, { settings });
   }
 
   const progression = await resolveFantasySlateProgression(resolvedSeasonId, { settings });
-  const slateRow = progression.archivedSlateRow || progression.activeSlateRow;
+  let slateRow = progression.archivedSlateRow || progression.activeSlateRow;
   if (!slateRow?.id) {
     return {
       slate: null,
       entries: [],
       scoringAvailable: false,
+      scoringPhase: 'pending',
       progression: buildFantasyProgressionMeta(progression),
       message: 'Standings will appear after a slate is published and race scoring is complete.',
     };
   }
+
+  const { refreshPublishedSlateRow, resolveStandingsDisplayState } = await import(
+    './_fantasy-post-race-automation.js'
+  );
+  const refreshedSlate = await refreshPublishedSlateRow(slateRow.id);
+  if (refreshedSlate) slateRow = refreshedSlate;
 
   const raceComplete = isFantasyRaceComplete(progression.scheduleRaces, slateRow.race_number);
   const lock = parseLockState(slateRow, { raceComplete });
@@ -404,43 +411,34 @@ export async function getFantasyPublicStandings(seasonId, options = {}) {
   const scoreByLineupId = new Map(lineupScores.map((row) => [String(row.lineup_id), row]));
   const seasonTotals = await loadFantasySeasonPointTotals(resolvedSeasonId);
   const scoringMeta = parseSlateScoringMeta(slateRow);
-  const scoringAvailable = scoringMeta?.status === 'scored' && lineupScores.length > 0;
+  const displayState = resolveStandingsDisplayState(scoringMeta, lineupScores);
 
   const entries = lineups
     .map((entry) => {
       const scored = scoreByLineupId.get(String(entry.lineupId)) || null;
+      const showPoints = displayState.showPoints && scored;
       return {
-        rank: scored?.rank ?? null,
+        rank: showPoints ? Number(scored.rank) : null,
         lineupId: entry.lineupId,
         displayName: entry.displayName,
         totalSalary: entry.totalSalary,
         submittedAt: entry.submittedAt,
         status: lock.isLocked && entry.status !== 'locked' ? 'locked' : entry.status,
-        racePoints: scored ? Number(scored.total_points) : null,
-        totalPoints: scored
+        racePoints: showPoints ? Number(scored.total_points) : null,
+        totalPoints: showPoints
           ? Number((seasonTotals.get(String(entry.userId)) || scored.total_points).toFixed(2))
           : null,
         driverCount: entry.drivers.length,
-        breakdown: scored?.breakdown || null,
+        breakdown: showPoints ? scored?.breakdown || null : null,
         drivers: entry.drivers,
       };
     })
     .sort((a, b) => {
-      if (scoringAvailable) {
+      if (displayState.showPoints) {
         return Number(a.rank || 999) - Number(b.rank || 999);
       }
       return new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime();
     });
-
-  if (scoringAvailable) {
-    entries.forEach((entry, index) => {
-      if (entry.rank == null) entry.rank = index + 1;
-    });
-  } else {
-    entries.forEach((entry, index) => {
-      entry.rank = index + 1;
-    });
-  }
 
   return {
     slate: {
@@ -453,18 +451,18 @@ export async function getFantasyPublicStandings(seasonId, options = {}) {
       slatePhase: raceComplete ? 'race-complete' : progression.slatePhase,
       raceComplete,
       scoringStatus: scoringMeta?.status || null,
+      scoringPhase: displayState.phase,
+      scoringLabel: displayState.label,
       scoredAt: scoringMeta?.scoredAt || null,
       ...lock,
     },
     entries,
-    scoringAvailable,
+    scoringAvailable: displayState.scoringAvailable,
+    scoringPhase: displayState.phase,
+    scoringLabel: displayState.label,
     scoringMeta,
     progression: buildFantasyProgressionMeta(progression),
-    message: scoringAvailable
-      ? `Fantasy scoring complete for Race ${slateRow.race_number}.`
-      : raceComplete
-        ? 'Race scoring pending.'
-        : 'Race scoring is not live yet. Player ranks reflect submission order until points are posted.',
+    message: displayState.message,
   };
 }
 
@@ -605,26 +603,39 @@ export async function getFantasyLaunchDashboard(user) {
   const settings = await getSettings();
   const seasonId = String(settings.seasonId || '27987');
   const progression = await resolveFantasySlateProgression(seasonId);
-  const { maybeAutoScoreFantasySlates, loadFantasyLineupScoresForSlate, loadFantasySeasonPointTotals } =
-    await loadFantasyRaceScoringModule();
-  await maybeAutoScoreFantasySlates(seasonId, { settings });
+  const { runFantasyPostRaceAutomation } = await import('./_fantasy-post-race-automation.js');
+  await runFantasyPostRaceAutomation(seasonId, { settings });
   const profile = user ? await ensureFantasyProfile(user) : null;
   const lineupState = user
     ? await getUserLineupForCurrentSlate(user.id, seasonId)
     : { slate: null, lineup: null, lock: null, progression: buildFantasyProgressionMeta(progression) };
 
   let scoring = null;
+  let scoringPhase = 'pending';
+  let scoringLabel = 'Pending';
   if (lineupState.lineup?.id && lineupState.slate?.id) {
+    const { loadFantasyLineupScoresForSlate, loadFantasySeasonPointTotals } =
+      await loadFantasyRaceScoringModule();
+    const { refreshPublishedSlateRow, resolveStandingsDisplayState } = await import(
+      './_fantasy-post-race-automation.js'
+    );
+    const refreshedSlate = await refreshPublishedSlateRow(lineupState.slate.id);
+    const scoringMeta = parseSlateScoringMeta(refreshedSlate || lineupState.slate);
     const scores = await loadFantasyLineupScoresForSlate(lineupState.slate.id);
+    const displayState = resolveStandingsDisplayState(scoringMeta, scores);
+    scoringPhase = displayState.phase;
+    scoringLabel = displayState.label;
     const mine = scores.find((row) => String(row.lineup_id) === String(lineupState.lineup.id));
     const seasonTotals = await loadFantasySeasonPointTotals(seasonId);
-    if (mine) {
+    if (displayState.showPoints && mine) {
       scoring = {
         racePoints: Number(mine.total_points),
         raceRank: Number(mine.rank),
         seasonPoints: Number(seasonTotals.get(String(user.id)) || mine.total_points),
         breakdown: mine.breakdown || null,
         scoredAt: mine.scored_at || null,
+        scoringPhase: displayState.phase,
+        scoringLabel: displayState.label,
       };
     }
   }
@@ -659,6 +670,8 @@ export async function getFantasyLaunchDashboard(user) {
       : null,
     progression: buildFantasyProgressionMeta(progression),
     scoring,
+    scoringPhase,
+    scoringLabel,
     ...lineupState,
   };
 }

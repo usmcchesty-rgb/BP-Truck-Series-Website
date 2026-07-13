@@ -35,6 +35,11 @@
     const slate = data?.slate || null;
     const entries = data?.entries || [];
     const raceComplete = Boolean(slate?.raceComplete || slate?.slatePhase === 'race-complete');
+    const scoringPhase = data?.scoringPhase || slate?.scoringPhase || (data?.scoringAvailable ? 'scored' : 'pending');
+    const scoringLabel =
+      data?.scoringLabel ||
+      slate?.scoringLabel ||
+      (scoringPhase === 'scored' ? 'Scoring Complete' : scoringPhase === 'needs_review' ? 'Needs Review' : 'Pending');
     const root = $('#fantasyStandingsRoot');
     if (!root) return;
 
@@ -60,7 +65,7 @@
         <div class="fantasy-slate-meta-grid">
           <div><span>Lock</span><strong>${escapeHtml(slate.lockTime || 'TBD')}</strong></div>
           <div><span>Entries</span><strong>${entries.length}</strong></div>
-          <div><span>Scoring</span><strong>${data.scoringAvailable ? 'Live' : raceComplete ? 'Pending' : 'Pending'}</strong></div>
+          <div><span>Scoring</span><strong>${escapeHtml(scoringLabel)}</strong></div>
           <div><span>Slate</span><strong>${raceComplete ? 'Race complete' : 'Published'}</strong></div>
         </div>
         <p class="fantasy-app-copy">${escapeHtml(data.message || '')}</p>
@@ -87,7 +92,7 @@
                     ${entries
                       .map(
                         (entry) => `<tr>
-                          <td>${escapeHtml(entry.rank)}</td>
+                          <td>${entry.rank != null ? escapeHtml(entry.rank) : '—'}</td>
                           <td>${escapeHtml(entry.displayName)}</td>
                           <td>${escapeHtml(statusLabel(entry.status))}</td>
                           <td class="salary">${formatMoney(entry.totalSalary)}</td>
@@ -100,7 +105,13 @@
                   </tbody>
                 </table>
               </div>
-              <p class="fantasy-app-copy muted">${data.scoringAvailable ? 'Points reflect official race results.' : 'Race scoring pending — no fantasy points posted yet.'}</p>`
+              <p class="fantasy-app-copy muted">${
+                scoringPhase === 'scored'
+                  ? 'Points reflect official race results.'
+                  : scoringPhase === 'needs_review'
+                    ? 'Race scoring is under review. Standings will update after admin approval.'
+                    : 'Race scoring pending — no fantasy points posted yet.'
+              }</p>`
             : `<p class="fantasy-app-copy">No lineups submitted yet for this race. Be the first — <a class="fantasy-driver-link" href="/fantasy/lineup.html">build your lineup</a>.</p>`
         }
       </section>

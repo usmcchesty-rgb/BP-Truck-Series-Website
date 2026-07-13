@@ -763,9 +763,11 @@ async function handleSettingsRequest(req, res) {
   if (action === 'getFantasyRaceScoringStatus') {
     if (rejectAdminAuth(req, res, body)) return;
     try {
-      const { getFantasyRaceScoringStatus } = await loadFantasyRaceScoringModule();
       const settings = await getSettings();
       const seasonId = body.seasonId || settings.seasonId || '27987';
+      const { runFantasyPostRaceAutomation } = await import('./_fantasy-post-race-automation.js');
+      await runFantasyPostRaceAutomation(seasonId, { settings });
+      const { getFantasyRaceScoringStatus } = await loadFantasyRaceScoringModule();
       const status = await getFantasyRaceScoringStatus({
         seasonId,
         settings,
@@ -775,6 +777,45 @@ async function handleSettingsRequest(req, res) {
       return res.status(200).json(status);
     } catch (error) {
       return res.status(500).json({ error: error.message || 'Failed to load fantasy scoring status.' });
+    }
+  }
+
+  if (action === 'getFantasyPostRaceAutomationStatus') {
+    if (rejectAdminAuth(req, res, body)) return;
+    try {
+      const settings = await getSettings();
+      const seasonId = body.seasonId || settings.seasonId || '27987';
+      const { runFantasyPostRaceAutomation, getFantasyPostRaceAutomationStatus } = await import(
+        './_fantasy-post-race-automation.js'
+      );
+      const automation = await runFantasyPostRaceAutomation(seasonId, { settings });
+      const status = await getFantasyPostRaceAutomationStatus(seasonId, { settings });
+      return res.status(200).json({ ...status, lastAutomation: automation });
+    } catch (error) {
+      return res.status(500).json({ error: error.message || 'Failed to load post-race automation status.' });
+    }
+  }
+
+  if (action === 'retryFantasySalaryDraft') {
+    if (rejectAdminAuth(req, res, body)) return;
+    try {
+      const settings = await getSettings();
+      const seasonId = body.seasonId || settings.seasonId || '27987';
+      const { getFantasyPostRaceAutomationStatus, maybeAutoGenerateNextRaceSalaryDraft } = await import(
+        './_fantasy-post-race-automation.js'
+      );
+      const status = await getFantasyPostRaceAutomationStatus(seasonId, { settings });
+      const completedRaceNumber = status.completedRace?.raceNumber;
+      if (completedRaceNumber == null) {
+        return res.status(400).json({ error: 'No completed race available for salary draft generation.' });
+      }
+      const result = await maybeAutoGenerateNextRaceSalaryDraft(seasonId, completedRaceNumber, {
+        settings,
+        adminRegenerate: body.confirmOverwrite === true,
+      });
+      return res.status(200).json({ ok: true, ...result });
+    } catch (error) {
+      return res.status(500).json({ error: error.message || 'Salary draft retry failed.' });
     }
   }
 
@@ -792,6 +833,8 @@ async function handleSettingsRequest(req, res) {
         adminOverride: body.adminOverride === true,
         source: 'admin',
       });
+      const { runFantasyPostRaceAutomation } = await import('./_fantasy-post-race-automation.js');
+      await runFantasyPostRaceAutomation(seasonId, { settings, raceNumber: result.raceNumber });
       return res.status(200).json({ ok: true, ...result });
     } catch (error) {
       return res.status(500).json({ error: error.message || 'Fantasy scoring failed.' });
@@ -800,15 +843,12 @@ async function handleSettingsRequest(req, res) {
 
   if (action === 'getAdminMissionControl') {
     try {
-      const { maybeAutoScoreFantasySlates } = await loadFantasyRaceScoringModule();
       const settings = await getSettings();
       const seasonId = body.seasonId || settings.seasonId || '27987';
-      const progression = await resolveFantasySlateProgression(seasonId, { settings });
-      const postRaceNumber = progression.latestCompletedPointsRace?.officialPointsRaceNumber ?? null;
-      if (postRaceNumber != null) {
-        await maybeAutoScoreFantasySlates(seasonId, { settings, raceNumber: postRaceNumber });
-      }
+      const { runFantasyPostRaceAutomation } = await import('./_fantasy-post-race-automation.js');
+      await runFantasyPostRaceAutomation(seasonId, { settings });
       const missionControl = await buildAdminMissionControlResponse({ seasonId, settings });
+      const progression = await resolveFantasySlateProgression(seasonId, { settings });
       const lineupSlateId =
         progression.activeSlateRow?.id ||
         progression.archivedSlateRow?.id ||

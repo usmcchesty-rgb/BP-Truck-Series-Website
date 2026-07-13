@@ -55,7 +55,7 @@
     </div>`;
   }
 
-  function lineupStatusCard(profile, slate, lineup, lock, progression = {}, scoring = null) {
+  function lineupStatusCard(profile, slate, lineup, lock, progression = {}, scoring = null, scoringPhase = 'pending') {
     if (!profile) {
       return `
         <section class="fantasy-app-section fantasy-dashboard-auth-panel fantasy-glass-panel">
@@ -79,7 +79,9 @@
     if (raceComplete && lineup?.drivers?.length) {
       statusText = scoring
         ? `Scored — ${scoring.racePoints} pts (Rank ${scoring.raceRank})`
-        : 'Race complete — scoring pending';
+        : scoringPhase === 'needs_review'
+          ? 'Race complete — scoring under review'
+          : 'Race complete — scoring pending';
       statusClass = scoring ? 'is-submitted' : 'is-locked';
     } else if (raceComplete) {
       statusText = 'Race complete';
@@ -196,6 +198,8 @@
     const lineup = launchData?.lineup || null;
     const lock = launchData?.lock || {};
     const scoring = launchData?.scoring || null;
+    const scoringPhase = launchData?.scoringPhase || scoring?.scoringPhase || 'pending';
+    const scoringLabel = launchData?.scoringLabel || scoring?.scoringLabel || 'Pending';
     const progression = launchData?.progression || slateData?.progression || {};
     const drivers = slateData?.drivers || [];
     const power = slateData?.fantasyPowerRankings || [];
@@ -218,15 +222,21 @@
                 <div><span>Slate</span><strong>${escapeHtml(raceComplete ? 'Race complete' : 'Active')}</strong></div>
                 <div><span>Salary Cap</span><strong>${formatMoney(slate.salaryCap ?? 50000)}</strong></div>
               </div>
-              ${raceComplete && !scoring ? '<p class="fantasy-app-copy">This race has results posted. Fantasy scoring is pending for this slate.</p>' : ''}
-              ${scoring ? `<p class="fantasy-app-copy">Your lineup scored <strong>${escapeHtml(scoring.racePoints)}</strong> points (Race rank ${escapeHtml(scoring.raceRank)}). Season total: <strong>${escapeHtml(scoring.seasonPoints)}</strong>.</p>` : ''}`
+              ${raceComplete && !scoring
+                ? `<p class="fantasy-app-copy">${
+                    scoringPhase === 'needs_review'
+                      ? 'This race has results posted. Fantasy scoring is under admin review.'
+                      : 'This race has results posted. Fantasy scoring is pending for this slate.'
+                  }</p>`
+                : ''}
+              ${scoring ? `<p class="fantasy-app-copy">Your lineup scored <strong>${escapeHtml(scoring.racePoints)}</strong> points (Race rank ${escapeHtml(scoring.raceRank)}). Season total: <strong>${escapeHtml(scoring.seasonPoints)}</strong>. ${escapeHtml(scoringLabel)}.</p>` : ''}`
             : `<p class="fantasy-app-copy"><strong>No active fantasy slate.</strong> The next BP Fantasy slate has not been published yet.</p>`
         }
       </section>
 
       ${hasActiveSlate ? '' : renderNoActiveSlatePanel(progression, slate)}
 
-      ${lineupStatusCard(profile, slate, lineup, lock, progression, scoring)}
+      ${lineupStatusCard(profile, slate, lineup, lock, progression, scoring, scoringPhase)}
 
       ${
         hasActiveSlate

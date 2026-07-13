@@ -803,6 +803,33 @@
             <div id="backfillHistoricalOutput" class="fantasy-backtest-output" hidden></div>
           </div>
 
+          <!-- Post-Race Automation -->
+          <div class="admin-card admin-card--full" id="post-race-automation">
+            <div class="admin-card-title">Post-Race Automation</div>
+            <span class="field-help">Automatic fantasy scoring and next-race salary draft generation after official results. Salaries remain draft until admin publishes.</span>
+            <div class="fantasy-slate-meta-grid" style="margin-top:12px;">
+              <div><span>Completed Race</span><strong id="postRaceCompletedLabel">—</strong></div>
+              <div><span>Official Results</span><strong id="postRaceResultsLabel">—</strong></div>
+              <div><span>Fantasy Scoring</span><strong id="postRaceScoringLabel">—</strong></div>
+              <div><span>Lineups Scored</span><strong id="postRaceLineupsScored">—</strong></div>
+              <div><span>Unresolved Drivers</span><strong id="postRaceUnresolved">—</strong></div>
+              <div><span>Season Standings</span><strong id="postRaceSeasonStandings">—</strong></div>
+              <div><span>Next Race</span><strong id="postRaceNextRaceLabel">—</strong></div>
+              <div><span>Next Salary Draft</span><strong id="postRaceSalaryDraftLabel">—</strong></div>
+              <div><span>Salary Engine</span><strong id="postRaceSalaryEngine">—</strong></div>
+            </div>
+            <p id="postRaceAutomationMessage" class="field-help" style="margin-top:10px;"></p>
+            <div class="fantasy-generate-row" style="margin-top:12px;">
+              <button id="postRaceReviewScoresBtn" class="btn btn-secondary" type="button">Review Race Scores</button>
+              <button id="postRaceRecalculateBtn" class="btn btn-secondary" type="button">Recalculate Scores</button>
+              <button id="postRaceReviewDraftBtn" class="btn btn-secondary" type="button">Review Salary Draft</button>
+              <button id="postRaceCompareSalariesBtn" class="btn btn-secondary" type="button">Compare Salary Changes</button>
+              <button id="postRaceRegenerateDraftBtn" class="btn" type="button">Regenerate Draft</button>
+              <button id="postRacePublishSlateBtn" class="btn" type="button">Publish Slate</button>
+              <span id="postRaceAutomationActionStatus" class="fantasy-generate-status"></span>
+            </div>
+          </div>
+
           <!-- Race Scoring -->
           <div class="admin-card admin-card--full" id="race-scoring">
             <div class="admin-card-title">Race Scoring</div>
@@ -1905,6 +1932,139 @@
           console.error('[Fantasy Admin] Stats load failed:', error);
         }
         await loadFantasyRaceScoring();
+        await loadPostRaceAutomation();
+      }
+
+      function formatPostRaceScoringLabel(scoring = {}, lastAutomation = {}) {
+        if (scoring.status === 'scored') {
+          const source = scoring.scoringMeta?.source || lastAutomation?.scoring?.scored ? 'auto' : null;
+          return source === 'auto' || lastAutomation?.scoring?.scored ? 'Scored Automatically' : 'Scored';
+        }
+        if (scoring.status === 'needs_review') return 'Needs Review';
+        if (scoring.status === 'ready') return 'Ready to Score';
+        if (!scoring.resultsReady) return 'Results Missing';
+        return 'Not Ready';
+      }
+
+      function formatSalaryDraftLabel(salaryDraft = {}) {
+        if (salaryDraft.published) return 'Already Published';
+        if (salaryDraft.needsRegeneration) return 'Needs Regeneration';
+        if (salaryDraft.draft) return 'Generated — Review Required';
+        if (salaryDraft.meta?.lastAutoGenerationError) return 'Generation Failed';
+        return 'Waiting';
+      }
+
+      async function loadPostRaceAutomation() {
+        const completedEl = $('#postRaceCompletedLabel');
+        const resultsEl = $('#postRaceResultsLabel');
+        const scoringEl = $('#postRaceScoringLabel');
+        const lineupsEl = $('#postRaceLineupsScored');
+        const unresolvedEl = $('#postRaceUnresolved');
+        const seasonEl = $('#postRaceSeasonStandings');
+        const nextRaceEl = $('#postRaceNextRaceLabel');
+        const draftEl = $('#postRaceSalaryDraftLabel');
+        const engineEl = $('#postRaceSalaryEngine');
+        const messageEl = $('#postRaceAutomationMessage');
+
+        try {
+          const res = await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              password: getSessionPw(),
+              action: 'getFantasyPostRaceAutomationStatus',
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Post-race automation unavailable');
+
+          const completed = data.completedRace;
+          const nextRace = data.nextRace;
+          const scoring = data.scoring || {};
+          const salaryDraft = data.salaryDraft || {};
+
+          if (completedEl) {
+            completedEl.textContent = completed?.raceNumber
+              ? `Race ${completed.raceNumber}${completed.track ? ` — ${completed.track}` : ''}`
+              : '—';
+          }
+          if (resultsEl) {
+            resultsEl.textContent = scoring.resultsReady ? 'Detected / Complete' : 'Missing';
+          }
+          if (scoringEl) {
+            scoringEl.textContent = formatPostRaceScoringLabel(scoring, data.lastAutomation);
+          }
+          if (lineupsEl) {
+            lineupsEl.textContent = String(scoring.scoringMeta?.lineupCount ?? scoring.lineupCount ?? 0);
+          }
+          if (unresolvedEl) {
+            unresolvedEl.textContent = String((scoring.unresolvedDrivers || []).length);
+          }
+          if (seasonEl) {
+            seasonEl.textContent = scoring.status === 'scored' ? 'Updated' : 'Pending';
+          }
+          if (nextRaceEl) {
+            nextRaceEl.textContent = nextRace?.raceNumber
+              ? `Race ${nextRace.raceNumber}${nextRace.track ? ` — ${nextRace.track}` : ''}`
+              : '—';
+          }
+          if (draftEl) {
+            draftEl.textContent = formatSalaryDraftLabel(salaryDraft);
+          }
+          if (engineEl) {
+            engineEl.textContent = data.salaryEngineVersion || '—';
+          }
+          if (messageEl) {
+            const parts = [];
+            if (scoring.resultsReason && !scoring.resultsReady) parts.push(scoring.resultsReason);
+            if (salaryDraft.warning) parts.push(salaryDraft.warning);
+            if (salaryDraft.needsRegeneration) {
+              parts.push('New official results are available. Salary draft needs regeneration.');
+            }
+            if (salaryDraft.meta?.lastAutoGenerationError) {
+              parts.push(`Salary draft error: ${salaryDraft.meta.lastAutoGenerationError}`);
+            }
+            messageEl.textContent = parts.join(' ');
+          }
+        } catch (error) {
+          if (messageEl) messageEl.textContent = error.message || 'Could not load post-race automation.';
+        }
+      }
+
+      async function retryPostRaceSalaryDraft({ confirmOverwrite = false } = {}) {
+        const statusEl = $('#postRaceAutomationActionStatus');
+        const btn = $('#postRaceRegenerateDraftBtn');
+        if (btn) btn.disabled = true;
+        if (statusEl) {
+          statusEl.textContent = 'Regenerating salary draft...';
+          statusEl.classList.remove('error');
+        }
+        try {
+          const res = await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              password: getSessionPw(),
+              action: 'retryFantasySalaryDraft',
+              confirmOverwrite,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Salary draft regeneration failed');
+          if (statusEl) {
+            statusEl.textContent = data.generated
+              ? `Salary draft generated for Race ${data.raceNumber}.`
+              : data.message || data.reason || 'Salary draft unchanged.';
+          }
+          await Promise.all([loadPostRaceAutomation(), loadFantasyDraftSlate(), loadFantasyAdminStats()]);
+        } catch (error) {
+          if (statusEl) {
+            statusEl.textContent = error.message || 'Salary draft regeneration failed.';
+            statusEl.classList.add('error');
+          }
+        } finally {
+          if (btn) btn.disabled = false;
+        }
       }
 
       function formatScoringStatusLabel(status) {
@@ -2047,7 +2207,12 @@
           if (statusEl) {
             statusEl.textContent = `Scored ${data.scoredLineups ?? data.lineupCount ?? 0} lineups for Race ${data.raceNumber}.`;
           }
-          await Promise.all([loadFantasyRaceScoring(), loadFantasyAdminStats(), loadSubmittedLineups()]);
+          await Promise.all([
+            loadFantasyRaceScoring(),
+            loadFantasyAdminStats(),
+            loadSubmittedLineups(),
+            loadPostRaceAutomation(),
+          ]);
         } catch (error) {
           if (statusEl) {
             statusEl.textContent = error.message || 'Scoring failed';
@@ -2826,6 +2991,29 @@
       $('#runFantasyBacktestBtn')?.addEventListener('click', runFantasySeasonBacktest);
       $('#scoreFantasyRaceBtn')?.addEventListener('click', () => runFantasyRaceScoring({ recalculate: false }));
       $('#recalculateFantasyRaceBtn')?.addEventListener('click', () => runFantasyRaceScoring({ recalculate: true }));
+      $('#postRaceReviewScoresBtn')?.addEventListener('click', () => {
+        document.getElementById('race-scoring')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        loadFantasyRaceScoring();
+      });
+      $('#postRaceRecalculateBtn')?.addEventListener('click', () => runFantasyRaceScoring({ recalculate: true }));
+      $('#postRaceReviewDraftBtn')?.addEventListener('click', () => {
+        document.querySelector('.admin-card-title')?.parentElement;
+        const draftCard = document.getElementById('fantasySlateStatus')?.closest('.admin-card');
+        draftCard?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        loadFantasyDraftSlate();
+      });
+      $('#postRaceCompareSalariesBtn')?.addEventListener('click', () => {
+        const salaryCard = document.getElementById('fantasySalarySummaryCards')?.closest('.admin-card');
+        salaryCard?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+      $('#postRaceRegenerateDraftBtn')?.addEventListener('click', async () => {
+        const confirmed = window.confirm(
+          'Regenerate the next-race salary draft using the latest official results? Manual salary edits will be overwritten.'
+        );
+        if (!confirmed) return;
+        await retryPostRaceSalaryDraft({ confirmOverwrite: true });
+      });
+      $('#postRacePublishSlateBtn')?.addEventListener('click', () => publishFantasySlate());
       $('#backfillHistoricalSlatesBtn')?.addEventListener('click', backfillHistoricalSlates);
 
       initSession();
