@@ -190,7 +190,7 @@ export async function loadDisplayFantasySlate(seasonId) {
   };
 }
 
-export async function buildFantasyPublicSlateResponse(seasonId) {
+export async function buildFantasyPublicSlateResponse(seasonId, options = {}) {
   const progression = await resolveFantasySlateProgression(seasonId);
   const payload = await loadDisplayFantasySlate(seasonId);
   if (!payload?.slate || payload.slate.status !== 'published') return null;
@@ -207,7 +207,9 @@ export async function buildFantasyPublicSlateResponse(seasonId) {
     track: payload.slate.track || 'TBD',
   };
 
-  const analysis = buildPublicAnalysis(rawDrivers, slateMeta);
+  const analysis = buildPublicAnalysis(rawDrivers, slateMeta, {
+    includeDashboardDiagnostics: Boolean(options.includeDashboardDiagnostics),
+  });
   const cards = buildPublicSlateCards(rawDrivers, payload.slate.meta || payload.meta || null, analysis);
   const publicDrivers = rawDrivers.map((driver) => enrichPublicDriver(driver, analysis));
 
@@ -241,8 +243,12 @@ export async function buildFantasyPublicSlateResponse(seasonId) {
     cards,
     fantasyPowerRankings: analysis.fantasyPowerRankings,
     spotlightCards: analysis.spotlightCards,
+    dashboardCards: analysis.dashboardCards,
     ownershipProjection: analysis.ownershipProjection,
     weeklyBreakdown: analysis.weeklyBreakdown,
+    ...(analysis.dashboardDiagnostics
+      ? { dashboardDiagnostics: analysis.dashboardDiagnostics }
+      : {}),
     salaryMovers: {
       biggestRisers: cards.biggestRisers,
       biggestFallers: cards.biggestFallers,

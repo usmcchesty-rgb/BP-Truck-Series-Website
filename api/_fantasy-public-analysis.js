@@ -212,6 +212,278 @@ export function buildFantasyPowerRankings(drivers = [], ownershipByDriver = new 
   });
 }
 
+export function parseFiniteNumeric(value) {
+  if (value == null || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+export function isDashboardEligibleDriver(driver = {}) {
+  const driverId = String(driver.driverId ?? '').trim();
+  const driverName = String(driver.driverName ?? '').trim();
+  if (!driverId || !driverName) return false;
+
+  const salary = num(driver.finalSalary ?? driver.generatedSalary);
+  if (!Number.isFinite(salary) || salary <= 0) return false;
+
+  const activity = deriveDriverActivityStatus(driver);
+  if (activity.status === 'Inactive') return false;
+
+  return true;
+}
+
+export function dedupeDriversById(drivers = []) {
+  const seen = new Set();
+  const deduped = [];
+  for (const driver of drivers) {
+    const id = String(driver?.driverId ?? '').trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    deduped.push(driver);
+  }
+  return deduped;
+}
+
+function driverSalary(driver = {}) {
+  return num(driver.finalSalary ?? driver.generatedSalary);
+}
+
+function compareTopFantasyPickCandidates(a, b, rankByDriver = new Map()) {
+  const rankA = rankByDriver.get(String(a.driverId)) ?? 99999;
+  const rankB = rankByDriver.get(String(b.driverId)) ?? 99999;
+  if (rankA !== rankB) return rankA - rankB;
+
+  const tierDiff = num(b.fantasyTierScore, -Infinity) - num(a.fantasyTierScore, -Infinity);
+  if (tierDiff !== 0) return tierDiff;
+
+  const valueA = parseFiniteNumeric(a.valueScore) ?? -Infinity;
+  const valueB = parseFiniteNumeric(b.valueScore) ?? -Infinity;
+  const valueDiff = valueB - valueA;
+  if (valueDiff !== 0) return valueDiff;
+
+  const salaryA = driverSalary(a);
+  const salaryB = driverSalary(b);
+  if (salaryA !== salaryB) return salaryA - salaryB;
+
+  return String(a.driverName).localeCompare(String(b.driverName));
+}
+
+function compareBestFantasyValueCandidates(a, b, rankByDriver = new Map()) {
+  const valueA = parseFiniteNumeric(a.valueScore) ?? -Infinity;
+  const valueB = parseFiniteNumeric(b.valueScore) ?? -Infinity;
+  const valueDiff = valueB - valueA;
+  if (valueDiff !== 0) return valueDiff;
+
+  const rankA = rankByDriver.get(String(a.driverId)) ?? 99999;
+  const rankB = rankByDriver.get(String(b.driverId)) ?? 99999;
+  if (rankA !== rankB) return rankA - rankB;
+
+  const salaryA = driverSalary(a);
+  const salaryB = driverSalary(b);
+  if (salaryA !== salaryB) return salaryA - salaryB;
+
+  return String(a.driverName).localeCompare(String(b.driverName));
+}
+
+function summarizeDashboardCandidate(driver, rankByDriver = new Map(), rank = null) {
+  const fantasyRank = rank ?? rankByDriver.get(String(driver.driverId)) ?? null;
+  return {
+    driverId: driver.driverId,
+    driverName: driver.driverName,
+    salary: driverSalary(driver),
+    fantasyRank,
+    fantasyTierScore: num(driver.fantasyTierScore),
+    valueScore: parseFiniteNumeric(driver.valueScore),
+    valueGrade: driver.valueGrade ?? null,
+    candidateRank: rank,
+  };
+}
+
+export function selectTopFantasyPick(drivers = [], options = {}) {
+  const rankByDriver = options.rankByDriver || buildFantasyRankByDriver(drivers);
+  const eligible = dedupeDriversById(drivers.filter(isDashboardEligibleDriver));
+
+  if (!eligible.length) {
+    return {
+      pick: null,
+      selectionMetric: null,
+      candidates: [],
+    };
+  }
+
+  const sorted = [...eligible].sort((a, b) => compareTopFantasyPickCandidates(a, b, rankByDriver));
+  const winner = sorted[0];
+  const fantasyRank = rankByDriver.get(String(winner.driverId)) ?? null;
+  const fantasyTierScore = num(winner.fantasyTierScore);
+  const selectionMetric = fantasyRank != null ? 'fantasyRank' : 'fantasyTierScore';
+
+  return {
+    pick: {
+      driverId: winner.driverId,
+      driverName: winner.driverName,
+      carNumber: winner.carNumber || null,
+      salary: driverSalary(winner),
+      fantasyRank,
+      fantasyTierScore,
+      valueScore: parseFiniteNumeric(winner.valueScore),
+      valueGrade: winner.valueGrade ?? null,
+      selectionMetric,
+      selectionReason:
+        fantasyRank != null
+          ? `Highest overall BP Fantasy projection (Fantasy Rank #${fantasyRank}).`
+          : `Highest Fantasy Tier Score (${fantasyTierScore?.toFixed(1)}).`,
+      displayMetric:
+        fantasyRank != null
+          ? { label: 'Fantasy Rank', value: `#${fantasyRank}` }
+          : { label: 'Fantasy Tier Score', value: fantasyTierScore?.toFixed(1) || '—' },
+    },
+    selectionMetric,
+    candidates: sorted.slice(0, 5).map((driver, index) =>
+      summarizeDashboardCandidate(driver, rankByDriver, index + 1)
+    ),
+  };
+}
+
+export function selectBestFantasyValue(drivers = [], options = {}) {
+  const rankByDriver = options.rankByDriver || buildFantasyRankByDriver(drivers);
+  const excludeDriverId =
+    options.excludeDriverId != null ? String(options.excludeDriverId).trim() : null;
+
+  const eligible = dedupeDriversById(
+    drivers.filter((driver) => {
+      if (!isDashboardEligibleDriver(driver)) return false;
+      const salary = driverSalary(driver);
+      const valueScore = parseFiniteNumeric(driver.valueScore);
+      if (valueScore == null) return false;
+      if (salary < MIN_BEST_VALUE_SALARY) return false;
+      if (excludeDriverId && String(driver.driverId) === excludeDriverId) return false;
+      return true;
+    })
+  );
+
+  if (!eligible.length) {
+    return {
+      pick: null,
+      unavailable: true,
+      unavailableReason: 'No eligible drivers with a valid value score on this slate.',
+      validCandidateCount: 0,
+      topPickExcluded: Boolean(excludeDriverId),
+      duplicateSuppressed: false,
+      candidates: [],
+    };
+  }
+
+  const sorted = [...eligible].sort((a, b) =>
+    compareBestFantasyValueCandidates(a, b, rankByDriver)
+  );
+  const winner = sorted[0];
+  const valueScore = parseFiniteNumeric(winner.valueScore);
+  const fantasyRank = rankByDriver.get(String(winner.driverId)) ?? null;
+
+  return {
+    pick: {
+      driverId: winner.driverId,
+      driverName: winner.driverName,
+      carNumber: winner.carNumber || null,
+      salary: driverSalary(winner),
+      valueScore,
+      valueGrade: winner.valueGrade ?? null,
+      fantasyRank,
+      selectionMetric: 'valueScore',
+      selectionReason: `${winner.driverName} leads eligible drivers with a Value Score of ${valueScore?.toFixed(2)} (${winner.valueGrade || 'ungraded'}).`,
+      displayMetric: {
+        label: 'Value Score',
+        value: valueScore?.toFixed(2) || '—',
+        grade: winner.valueGrade ?? null,
+      },
+    },
+    unavailable: false,
+    validCandidateCount: eligible.length,
+    topPickExcluded: Boolean(excludeDriverId),
+    duplicateSuppressed: Boolean(excludeDriverId),
+    candidates: sorted.slice(0, 5).map((driver, index) =>
+      summarizeDashboardCandidate(driver, rankByDriver, index + 1)
+    ),
+  };
+}
+
+export function buildDashboardCards(drivers = [], options = {}) {
+  const rankByDriver = options.rankByDriver || buildFantasyRankByDriver(drivers);
+  const topResult = selectTopFantasyPick(drivers, { rankByDriver });
+  const initialBestResult = selectBestFantasyValue(drivers, { rankByDriver });
+
+  let bestResult = initialBestResult;
+  let duplicateSuppressed = false;
+  let sameDriverOnlyOption = false;
+
+  if (
+    topResult.pick &&
+    initialBestResult.pick &&
+    String(topResult.pick.driverId) === String(initialBestResult.pick.driverId)
+  ) {
+    const alternateBest = selectBestFantasyValue(drivers, {
+      rankByDriver,
+      excludeDriverId: topResult.pick.driverId,
+    });
+
+    if (alternateBest.pick) {
+      duplicateSuppressed = true;
+      bestResult = alternateBest;
+    } else {
+      sameDriverOnlyOption = true;
+      bestResult = initialBestResult;
+    }
+  }
+
+  const publicCards = {
+    topPick: topResult.pick,
+    bestValue: bestResult.unavailable ? null : bestResult.pick,
+    bestValueUnavailable: Boolean(bestResult.unavailable),
+    bestValueUnavailableMessage: bestResult.unavailable ? 'Value analysis unavailable' : null,
+    duplicateSuppressed,
+    sameDriverOnlyOption,
+  };
+
+  const diagnostics = {
+    topPick: {
+      selected: topResult.pick,
+      selectionMetric: topResult.selectionMetric,
+      metricValue:
+        topResult.pick?.fantasyRank != null
+          ? topResult.pick.fantasyRank
+          : topResult.pick?.fantasyTierScore ?? null,
+      candidateRank: 1,
+      topCandidates: topResult.candidates,
+    },
+    bestValue: {
+      selected: bestResult.pick,
+      valueScore: bestResult.pick?.valueScore ?? null,
+      valueGrade: bestResult.pick?.valueGrade ?? null,
+      candidateRank: bestResult.pick
+        ? (() => {
+            const idx = initialBestResult.candidates.findIndex(
+              (row) => String(row.driverId) === String(bestResult.pick.driverId)
+            );
+            return idx >= 0 ? idx + 1 : null;
+          })()
+        : null,
+      topPickExcluded: Boolean(bestResult.topPickExcluded),
+      duplicateSuppressed,
+      sameDriverOnlyOption,
+      validCandidateCount: bestResult.validCandidateCount,
+      unavailable: Boolean(bestResult.unavailable),
+      unavailableReason: bestResult.unavailableReason || null,
+      topCandidates: initialBestResult.candidates,
+      finalCandidates: bestResult.candidates,
+    },
+  };
+
+  return {
+    cards: publicCards,
+    diagnostics,
+  };
+}
+
 function spotlightDriver(driver, extra = {}) {
   if (!driver) return null;
   return {
@@ -220,16 +492,18 @@ function spotlightDriver(driver, extra = {}) {
     carNumber: driver.carNumber || null,
     salary: driver.finalSalary ?? driver.generatedSalary ?? null,
     tier: driver.computedTier || '',
+    valueScore: parseFiniteNumeric(driver.valueScore),
+    valueGrade: driver.valueGrade ?? null,
     ...extra,
   };
 }
 
 export function buildSpotlightCards(drivers = []) {
-  const eligibleValue = drivers.filter((d) => {
-    const salary = num(d.finalSalary ?? d.generatedSalary, 0);
-    return num(d.valueScore) != null && salary >= MIN_BEST_VALUE_SALARY;
-  });
-  const bestValue = [...eligibleValue].sort((a, b) => num(b.valueScore) - num(a.valueScore))[0];
+  const bestValueResult = selectBestFantasyValue(drivers);
+  const bestValue = bestValueResult.pick
+    ? drivers.find((driver) => String(driver.driverId) === String(bestValueResult.pick.driverId)) ||
+      bestValueResult.pick
+    : null;
 
   const hottest = [...drivers].sort((a, b) => {
     const scoreA = recentFormScore(a) + (a.salaryChangeDirection === 'up' ? 8 : 0);
@@ -461,11 +735,12 @@ export function buildSalaryHistoryInsights(slates = [], latestDrivers = []) {
   };
 }
 
-export function buildPublicAnalysis(drivers = [], slate = {}) {
+export function buildPublicAnalysis(drivers = [], slate = {}, options = {}) {
   const { projections, byDriverId } = buildOwnershipProjections(drivers);
   const rankByDriver = buildFantasyRankByDriver(drivers);
   const fantasyPowerRankings = buildFantasyPowerRankings(drivers, byDriverId);
   const spotlightCards = buildSpotlightCards(drivers);
+  const dashboard = buildDashboardCards(drivers, { rankByDriver });
 
   const ownershipProjection = projections.sort(
     (a, b) => b.projectedOwnershipPct - a.projectedOwnershipPct
@@ -474,8 +749,13 @@ export function buildPublicAnalysis(drivers = [], slate = {}) {
   const analysisCore = {
     fantasyPowerRankings,
     spotlightCards,
+    dashboardCards: dashboard.cards,
     ownershipProjection,
   };
+
+  if (options.includeDashboardDiagnostics) {
+    analysisCore.dashboardDiagnostics = dashboard.diagnostics;
+  }
 
   const weeklyBreakdown = buildWeeklyBreakdown(drivers, slate, {
     ...analysisCore,

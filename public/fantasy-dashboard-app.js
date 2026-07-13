@@ -40,6 +40,35 @@
     </article>`;
   }
 
+  function formatDashboardMetricLine(card) {
+    if (!card?.displayMetric) return '';
+    const metric = card.displayMetric;
+    if (metric.label === 'Value Score') {
+      const grade = metric.grade ? renderFantasyGradePill(metric.grade) : '';
+      const score = metric.value && metric.value !== '—' ? `Value Score ${escapeHtml(metric.value)}` : '';
+      if (score && grade) return `${score} · ${grade}`;
+      return score || grade || '';
+    }
+    return `${escapeHtml(metric.label)} ${escapeHtml(metric.value || '—')}`;
+  }
+
+  function renderDashboardPickCard(label, pick, { unavailable = false, unavailableMessage = '' } = {}) {
+    if (unavailable) {
+      return statCard(label, `<p class="muted">${escapeHtml(unavailableMessage || 'Unavailable')}</p>`);
+    }
+    if (!pick?.driverName) {
+      return statCard(label, '<p class="muted">—</p>');
+    }
+    const metricLine = formatDashboardMetricLine(pick);
+    const body = [
+      `${driverLink(pick, pick.driverName)} · ${formatMoney(pick.salary)}`,
+      metricLine ? `<div class="fantasy-dashboard-stat-card__metric">${metricLine}</div>` : '',
+    ]
+      .filter(Boolean)
+      .join('');
+    return statCard(label, body);
+  }
+
   function formatDriverScoreLine(driver = {}) {
     const points = Number(driver.points ?? driver.fantasyPoints ?? 0);
     const status =
@@ -222,10 +251,12 @@
     const scoringPhase = launchData?.scoringPhase || scoring?.scoringPhase || 'pending';
     const scoringLabel = launchData?.scoringLabel || scoring?.scoringLabel || 'Pending';
     const progression = launchData?.progression || slateData?.progression || {};
-    const drivers = slateData?.drivers || [];
-    const power = slateData?.fantasyPowerRankings || [];
-    const topPick = power[0] || null;
-    const bestValue = slateData?.spotlightCards?.bestValue || null;
+    const dashboardCards = slateData?.dashboardCards || {};
+    const topPick = dashboardCards.topPick || null;
+    const bestValue = dashboardCards.bestValue || null;
+    const bestValueUnavailable = Boolean(dashboardCards.bestValueUnavailable);
+    const bestValueUnavailableMessage =
+      dashboardCards.bestValueUnavailableMessage || 'Value analysis unavailable';
     const hasPublishedSlate = Boolean(slate?.raceNumber);
     const raceComplete = Boolean(slate?.raceComplete || progression?.slatePhase === 'race-complete');
     const playable = progression?.isPlayable !== false && slate?.playable !== false;
@@ -264,18 +295,11 @@
           ? `<section class="fantasy-app-section">
               <h2 class="fantasy-app-section-title">This Week at a Glance</h2>
               <div class="fantasy-dashboard-stat-grid">
-                ${statCard(
-                  'Top BP Fantasy Pick',
-                  topPick
-                    ? `${driverLink(topPick, topPick.driverName)} · ${formatMoney(topPick.salary)}`
-                    : '<p class="muted">—</p>'
-                )}
-                ${statCard(
-                  'Best Fantasy Value',
-                  bestValue?.driverName
-                    ? `${driverLink(bestValue, bestValue.driverName)} · ${renderFantasyGradePill(bestValue.valueGrade || '')}`
-                    : '<p class="muted">—</p>'
-                )}
+                ${renderDashboardPickCard('Top BP Fantasy Pick', topPick)}
+                ${renderDashboardPickCard('Best Fantasy Value', bestValue, {
+                  unavailable: bestValueUnavailable,
+                  unavailableMessage: bestValueUnavailableMessage,
+                })}
               </div>
             </section>`
           : ''

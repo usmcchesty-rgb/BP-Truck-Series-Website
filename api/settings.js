@@ -424,7 +424,11 @@ async function handleSettingsRequest(req, res) {
       try {
         const settings = await getSettings();
         const seasonId = req.query?.seasonId || settings.seasonId || '27987';
-        const slate = await buildFantasyPublicSlateResponse(seasonId);
+        const includeDashboardDiagnostics =
+          String(req.query?.dashboardDiagnostics || '').trim() === '1';
+        const slate = await buildFantasyPublicSlateResponse(seasonId, {
+          includeDashboardDiagnostics,
+        });
         if (!slate) {
           return res.status(404).json({ error: 'No fantasy slate found.' });
         }
