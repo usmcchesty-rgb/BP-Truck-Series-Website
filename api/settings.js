@@ -793,6 +793,19 @@ async function handleSettingsRequest(req, res) {
     }
   }
 
+  if (action === 'validateDriverProvisionalLedgerSeason') {
+    if (rejectAdminAuth(req, res, body)) return;
+    try {
+      const settings = await getSettings();
+      const seasonId = body.seasonId || settings.seasonId || '27987';
+      const { validateEntireSeasonProvisionalLedger } = await import('./_driver-provisionals.js');
+      const result = await validateEntireSeasonProvisionalLedger(seasonId, { settings });
+      return res.status(200).json(result);
+    } catch (error) {
+      return res.status(500).json({ error: error.message || 'Failed to validate provisional ledger season.' });
+    }
+  }
+
   if (action === 'addDriverProvisional') {
     if (rejectAdminAuth(req, res, body)) return;
     try {

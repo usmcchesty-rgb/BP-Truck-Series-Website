@@ -84,8 +84,9 @@
         <label class="field-label" for="raceNumberInput" style="margin:0;">Race #</label>
         <input id="raceNumberInput" class="input" type="number" min="1" step="1" placeholder="15">
         <button id="loadLedgerBtn" class="btn btn-small" type="button">Load Ledger</button>
+        <button id="validateSeasonBtn" class="btn btn-small btn-secondary" type="button">Validate Entire Season</button>
       </div>
-      <span class="field-help">Set a race number to compare official SimRacerHub provisionals against BP ledger entries and enable per-race actions.</span>
+      <span class="field-help">Set a race number to validate ledger entries against official SimRacerHub results for that race only. Full-season validation runs on demand.</span>
       <pre id="adminMsg"></pre>
     </div>
 
@@ -292,19 +293,28 @@
       bindTypeControls(list);
     }
 
-    function renderWarnings(warnings = []) {
+    function renderWarnings(warnings = [], diagnostics = null) {
       const panel = $('#warningsPanel');
       const list = $('#warningsList');
       if (!panel || !list) return;
-      if (!warnings.length) {
+
+      const displayWarnings =
+        diagnostics?.validationMode === 'none'
+          ? (warnings || []).filter((warning) => warning.code === 'free_limit_exceeded')
+          : warnings || [];
+
+      if (!displayWarnings.length) {
         panel.hidden = true;
         list.innerHTML = '';
         return;
       }
       panel.hidden = false;
-      list.innerHTML = warnings
+      const header = diagnostics
+        ? `<li class="warn-item">Validation: ${escapeHtml(diagnostics.validationMode)} · checked ${escapeHtml(diagnostics.validatedLedgerRowCount)} ledger row(s) · ${escapeHtml(diagnostics.officialProvisionalCount)} official provisional(s) · ${escapeHtml(diagnostics.warningCount)} warning(s)</li>`
+        : '';
+      list.innerHTML = `${header}${displayWarnings
         .map((warning) => `<li class="warn-item">${escapeHtml(warning.message)}</li>`)
-        .join('');
+        .join('')}`;
     }
 
     function renderDrivers(drivers = []) {
@@ -411,7 +421,7 @@
         const board = await api('getDriverProvisionalLedger', {
           raceNumber: raceNumber ?? undefined,
         });
-        renderWarnings(board.warnings || []);
+        renderWarnings(board.warnings || [], board.diagnostics || null);
         renderAutoSynced(board);
         renderDrivers(board.drivers || []);
         renderEntries(board.entries || [], board.drivers || []);
@@ -428,11 +438,26 @@
             setMsg(base);
           }
         } else {
-          setMsg('Season ledger loaded. Set a race number to validate against official results.');
+          setMsg('Select a race to validate ledger entries against official results.');
         }
         window.AdminEmbed?.reportHeight?.();
       } catch (error) {
         setMsg(error.message || 'Failed to load ledger.', true);
+      }
+    }
+
+    async function validateEntireSeason() {
+      try {
+        setMsg('Validating entire season against official SimRacerHub results...');
+        const result = await api('validateDriverProvisionalLedgerSeason');
+        renderWarnings(result.warnings || [], result.diagnostics || null);
+        const progress = result.progress || {};
+        setMsg(
+          `Season validation complete. Checked ${progress.racesValidated ?? 0} race(s), skipped ${progress.racesSkipped ?? 0}, ${(result.warnings || []).length} warning(s).`,
+        );
+        window.AdminEmbed?.reportHeight?.();
+      } catch (error) {
+        setMsg(error.message || 'Failed to validate entire season.', true);
       }
     }
 
@@ -475,6 +500,7 @@
         window.AdminEmbed.hideWhenEmbed('#admin-nav-root');
       }
       $('#loadLedgerBtn')?.addEventListener('click', loadLedger);
+      $('#validateSeasonBtn')?.addEventListener('click', validateEntireSeason);
       if (getSessionPw()) {
         $('#loginView').hidden = true;
         $('#adminView').hidden = false;

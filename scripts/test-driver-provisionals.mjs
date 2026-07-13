@@ -78,6 +78,8 @@ function buildRace15Fixture() {
     officialProvisionalDriverIds: ['85687'],
     raceNumber: 15,
     driverLookup: new Map([['85687', { driverName: 'Logan M Wilson' }]]),
+    officialDataLoaded: true,
+    validationMode: 'single_race',
   });
   assert.equal(warnings.length, 1);
   assert.equal(warnings[0].code, 'missing_ledger_entry');
@@ -91,8 +93,78 @@ function buildRace15Fixture() {
     officialProvisionalDriverIds: [],
     raceNumber: 15,
     driverLookup: new Map([['36764', { driverName: 'Matthew Kleinschmidt' }]]),
+    officialDataLoaded: true,
+    validationMode: 'single_race',
   });
   assert.equal(warnings[0].code, 'missing_official_provisional');
+}
+
+// No race selected: do not flood mismatch warnings for season ledger
+{
+  const warnings = buildLedgerValidationWarnings({
+    ledgerEntries: [
+      { driverId: '36764', raceNumber: 1, type: 'free' },
+      { driverId: '85687', raceNumber: 15, type: 'free' },
+    ],
+    officialProvisionalDriverIds: [],
+    raceNumber: null,
+    driverLookup: new Map([
+      ['36764', { driverName: 'Matthew Kleinschmidt' }],
+      ['85687', { driverName: 'Logan M Wilson' }],
+    ]),
+    officialDataLoaded: false,
+    validationMode: 'none',
+  });
+  assert.equal(
+    warnings.some((warning) => warning.code === 'missing_official_provisional'),
+    false,
+  );
+  assert.equal(warnings.some((warning) => warning.code === 'missing_ledger_entry'), false);
+}
+
+// Single race validation ignores other races
+{
+  const warnings = buildLedgerValidationWarnings({
+    ledgerEntries: [
+      { driverId: '36764', raceNumber: 1, type: 'free' },
+      { driverId: '85687', raceNumber: 15, type: 'free' },
+      { driverId: '99999', raceNumber: 15, type: 'free' },
+    ],
+    officialProvisionalDriverIds: ['85687', '36764'],
+    raceNumber: 15,
+    driverLookup: new Map([
+      ['36764', { driverName: 'Matthew Kleinschmidt2' }],
+      ['85687', { driverName: 'Logan M Wilson' }],
+      ['99999', { driverName: 'Other Driver' }],
+    ]),
+    officialDataLoaded: true,
+    validationMode: 'single_race',
+  });
+  assert.equal(
+    warnings.filter((warning) => warning.code === 'missing_official_provisional').length,
+    1,
+  );
+  assert.equal(warnings[0].driverId, '99999');
+  assert.equal(
+    warnings.some((warning) => warning.raceNumber === 1),
+    false,
+  );
+}
+
+// Official data not loaded: no mismatch warnings
+{
+  const warnings = buildLedgerValidationWarnings({
+    ledgerEntries: [{ driverId: '36764', raceNumber: 15, type: 'free' }],
+    officialProvisionalDriverIds: [],
+    raceNumber: 15,
+    driverLookup: new Map([['36764', { driverName: 'Matthew Kleinschmidt' }]]),
+    officialDataLoaded: false,
+    validationMode: 'single_race',
+  });
+  assert.equal(
+    warnings.some((warning) => warning.code === 'missing_official_provisional'),
+    false,
+  );
 }
 
 // More than two free provisionals warning

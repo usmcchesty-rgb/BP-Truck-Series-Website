@@ -249,13 +249,22 @@ export function buildLedgerValidationWarnings({
   officialProvisionalDriverIds = [],
   raceNumber = null,
   driverLookup = new Map(),
+  officialDataLoaded = false,
+  validationMode = 'none',
 }) {
   const warnings = [];
   const officialSet = new Set((officialProvisionalDriverIds || []).map(String));
   const entries = Array.isArray(ledgerEntries) ? ledgerEntries : [];
-  const raceScoped = raceNumber != null
-    ? entries.filter((row) => Number(row.raceNumber) === Number(raceNumber))
-    : entries;
+  const resolvedRaceNumber =
+    raceNumber != null && Number.isFinite(Number(raceNumber)) ? Number(raceNumber) : null;
+  const raceScoped =
+    resolvedRaceNumber != null
+      ? entries.filter((row) => Number(row.raceNumber) === resolvedRaceNumber)
+      : [];
+  const canValidateRaceMismatches =
+    (validationMode === 'single_race' || validationMode === 'full_season') &&
+    officialDataLoaded &&
+    resolvedRaceNumber != null;
 
   const byDriver = new Map();
   for (const row of entries) {
@@ -276,6 +285,10 @@ export function buildLedgerValidationWarnings({
         message: `${name} has more than two free provisionals recorded in the BP ledger.`,
       });
     }
+  }
+
+  if (!canValidateRaceMismatches) {
+    return warnings;
   }
 
   for (const row of raceScoped) {
@@ -301,13 +314,31 @@ export function buildLedgerValidationWarnings({
         severity: 'warning',
         driverId,
         driverName: name,
-        raceNumber,
+        raceNumber: resolvedRaceNumber,
         message: 'Official provisional detected with no BP ledger entry.',
       });
     }
   }
 
   return warnings;
+}
+
+export function buildProvisionalLedgerDiagnostics({
+  raceNumber = null,
+  validationMode = 'none',
+  officialDataLoaded = false,
+  validatedLedgerRowCount = 0,
+  officialProvisionalCount = 0,
+  warningCount = 0,
+} = {}) {
+  return {
+    selectedRaceNumber: raceNumber != null ? Number(raceNumber) : null,
+    validationMode,
+    officialDataLoaded: Boolean(officialDataLoaded),
+    validatedLedgerRowCount,
+    officialProvisionalCount,
+    warningCount,
+  };
 }
 
 export async function buildDriverProvisionalLedgerBoard(seasonId, options = {}) {
@@ -416,11 +447,14 @@ export async function buildDriverProvisionalLedgerBoard(seasonId, options = {}) 
     ? entries.filter((row) => Number(row.raceNumber) === Number(raceNumber))
     : [];
 
+  const validationMode = raceNumber != null ? 'single_race' : 'none';
   const warnings = buildLedgerValidationWarnings({
     ledgerEntries: entries,
     officialProvisionalDriverIds: official.officialProvisionalDriverIds,
     raceNumber,
     driverLookup,
+    officialDataLoaded: raceNumber != null ? Boolean(official.resultsReady) : false,
+    validationMode,
   });
 
   if (syncResult?.warnings?.length) {
@@ -453,6 +487,120 @@ export async function buildDriverProvisionalLedgerBoard(seasonId, options = {}) 
     officialResultsReady: official.resultsReady,
     syncResult,
     warnings,
+    diagnostics: buildProvisionalLedgerDiagnostics({
+      raceNumber,
+      validationMode,
+      officialDataLoaded: raceNumber != null ? Boolean(official.resultsReady) : false,
+      validatedLedgerRowCount: raceEntries.length,
+      officialProvisionalCount: official.officialProvisionalDriverIds.length,
+      warningCount: warnings.length,
+    }),
+  };
+}
+
+export async function validateEntireSeasonProvisionalLedger(seasonId, options = {}) {
+  const settings = options.settings || (await getSettings());
+  const resolvedSeasonId = String(seasonId || settings.seasonId || '27987');
+  const [profiles, entries] = await Promise.all([
+    getDriverProfiles(),
+    listDriverProvisionalsForSeason(resolvedSeasonId),
+  ]);
+
+  const driverLookup = new Map(
+    profiles.map((profile) => [
+      String(profile.driver_id),
+      {
+        driverId: String(profile.driver_id),
+        driverName: profile.display_name || profile.iracing_name || `Driver ${profile.driver_id}`,
+        carNumber: profile.car_number || '',
+      },
+    ]),
+  );
+
+  const seasonWarnings = buildLedgerValidationWarnings({
+    ledgerEntries: entries,
+    officialProvisionalDriverIds: [],
+    raceNumber: null,
+    driverLookup,
+    officialDataLoaded: false,
+    validationMode: 'none',
+  });
+
+  const raceNumbers = [
+    ...new Set(entries.map((row) => Number(row.raceNumber)).filter((value) => Number.isFinite(value))),
+  ].sort((a, b) => a - b);
+
+  const { loadFantasyScheduleContext } = await import('./_fantasy-slate-progression.js');
+  const { scheduleRaces } = await loadFantasyScheduleContext({ settings });
+
+  const warnings = [...seasonWarnings];
+  const byRace = [];
+  let validatedLedgerRowCount = 0;
+  let officialProvisionalCount = 0;
+  let racesValidated = 0;
+  let racesSkipped = 0;
+
+  for (const raceNumber of raceNumbers) {
+    const official = await loadOfficialProvisionalContextForRace(resolvedSeasonId, raceNumber, {
+      settings,
+      scheduleRaces,
+    });
+
+    if (!official.resultsReady) {
+      racesSkipped += 1;
+      byRace.push({
+        raceNumber,
+        officialDataLoaded: false,
+        validatedLedgerRowCount: 0,
+        officialProvisionalCount: 0,
+        warnings: [],
+        skipped: true,
+        reason: 'official_results_not_ready',
+      });
+      continue;
+    }
+
+    const raceEntries = entries.filter((row) => Number(row.raceNumber) === Number(raceNumber));
+    const raceWarnings = buildLedgerValidationWarnings({
+      ledgerEntries: entries,
+      officialProvisionalDriverIds: official.officialProvisionalDriverIds,
+      raceNumber,
+      driverLookup: official.driverLookup.size ? official.driverLookup : driverLookup,
+      officialDataLoaded: true,
+      validationMode: 'full_season',
+    }).filter((warning) => warning.code !== 'free_limit_exceeded');
+
+    validatedLedgerRowCount += raceEntries.length;
+    officialProvisionalCount += official.officialProvisionalDriverIds.length;
+    racesValidated += 1;
+    warnings.push(...raceWarnings);
+    byRace.push({
+      raceNumber,
+      officialDataLoaded: true,
+      validatedLedgerRowCount: raceEntries.length,
+      officialProvisionalCount: official.officialProvisionalDriverIds.length,
+      warnings: raceWarnings,
+      skipped: false,
+    });
+  }
+
+  return {
+    seasonId: resolvedSeasonId,
+    warnings,
+    byRace,
+    progress: {
+      racesTotal: raceNumbers.length,
+      racesValidated,
+      racesSkipped,
+    },
+    diagnostics: buildProvisionalLedgerDiagnostics({
+      raceNumber: null,
+      validationMode: 'full_season',
+      officialDataLoaded: racesValidated > 0,
+      validatedLedgerRowCount,
+      officialProvisionalCount,
+      warningCount: warnings.length,
+    }),
   };
 }
 
