@@ -27,14 +27,6 @@ import {
   getUserLineupForCurrentSlate,
   submitFantasyLineup,
 } from './_fantasy-lineups.js';
-import {
-  getFantasyRaceScoringStatus,
-  loadFantasyLineupScoresForSlate,
-  loadFantasySeasonPointTotals,
-  maybeAutoScoreFantasySlates,
-  scoreFantasySlate,
-} from './_fantasy-race-scoring.js';
-import { resolveFantasyRaceScoringConfig } from './_fantasy-race-scoring-config.js';
 import { loadLatestFantasySlate } from './_fantasy-public-slate.js';
 import {
   computeFantasyLockAt,
@@ -76,7 +68,7 @@ import {
   syncApprovedApplicationsToDriverProfiles,
   updateDriverApplication,
 } from './_driver-applications.js';
-import { stripPrivateDriverProfileFields } from './drivers.js';
+import { stripPrivateDriverProfileFields } from './_driver-profile-privacy.js';
 import { getLatestIracingSnapshotForApplication } from './_driver-application-iracing-snapshots.js';
 import { getLatestIracingStatsSnapshotForApplication } from './_driver-application-iracing-stats-snapshots.js';
 import {
@@ -108,6 +100,10 @@ function rejectAdminAuth(req, res, body = {}) {
   if (validation.ok) return false;
   res.status(401).json(adminAuthFailurePayload(validation));
   return true;
+}
+
+async function loadFantasyRaceScoringModule() {
+  return import('./_fantasy-race-scoring.js');
 }
 
 async function handleDriverApplicationRoutes(req, res) {
@@ -403,6 +399,19 @@ async function handleGetFantasyDraftSlate(req, res) {
 }
 
 export default async function handler(req, res) {
+  try {
+    return await handleSettingsRequest(req, res);
+  } catch (err) {
+    console.error('[settings.js] unhandled error:', err);
+    return res.status(500).json({
+      success: false,
+      error: err?.message || 'Internal server error',
+      stack: process.env.NODE_ENV !== 'production' ? err?.stack : undefined,
+    });
+  }
+}
+
+async function handleSettingsRequest(req, res) {
   if (await handleDriverApplicationRoutes(req, res)) return;
 
   const queryAction = String(req.query?.action || '').trim();
@@ -566,10 +575,30 @@ export default async function handler(req, res) {
 
   const adminAuth = validateAdminPassword(req, body);
   if (!adminAuth.ok) {
+    if (body.verifyOnly) {
+      return res.status(401).json({
+        success: false,
+        message: adminAuth.error,
+        ...adminAuthFailurePayload(adminAuth),
+      });
+    }
     return res.status(401).json(adminAuthFailurePayload(adminAuth));
   }
   if (body.verifyOnly) {
-    return res.status(200).json({ ok: true, ...adminAuth.diagnostics });
+    try {
+      return res.status(200).json({
+        success: true,
+        ok: true,
+        ...adminAuth.diagnostics,
+      });
+    } catch (err) {
+      console.error('[settings.js] verifyOnly failed:', err);
+      return res.status(500).json({
+        success: false,
+        error: err?.message || 'verifyOnly failed',
+        stack: process.env.NODE_ENV !== 'production' ? err?.stack : undefined,
+      });
+    }
   }
 
   if (action === 'getAnalyticsOverview') {
@@ -734,6 +763,7 @@ export default async function handler(req, res) {
   if (action === 'getFantasyRaceScoringStatus') {
     if (rejectAdminAuth(req, res, body)) return;
     try {
+      const { getFantasyRaceScoringStatus } = await loadFantasyRaceScoringModule();
       const settings = await getSettings();
       const seasonId = body.seasonId || settings.seasonId || '27987';
       const status = await getFantasyRaceScoringStatus({
@@ -751,6 +781,7 @@ export default async function handler(req, res) {
   if (action === 'scoreFantasyRace') {
     if (rejectAdminAuth(req, res, body)) return;
     try {
+      const { scoreFantasySlate } = await loadFantasyRaceScoringModule();
       const settings = await getSettings();
       const seasonId = body.seasonId || settings.seasonId || '27987';
       const result = await scoreFantasySlate({
@@ -769,6 +800,7 @@ export default async function handler(req, res) {
 
   if (action === 'getAdminMissionControl') {
     try {
+      const { maybeAutoScoreFantasySlates } = await loadFantasyRaceScoringModule();
       const settings = await getSettings();
       const seasonId = body.seasonId || settings.seasonId || '27987';
       const progression = await resolveFantasySlateProgression(seasonId, { settings });
