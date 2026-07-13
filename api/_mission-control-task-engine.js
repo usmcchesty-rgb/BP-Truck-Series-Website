@@ -4,6 +4,7 @@ import { enrichScheduleRaces, getPointsRaceByNumber } from './_schedule-points-r
 import { getEasternDateParts, hasRaceResults, parseScheduleDateParts } from './_race-date-status.js';
 import { parseLockState } from './_fantasy-lineups.js';
 import { buildFantasyLockMonitorAutoReason, buildFantasyLockMissionContext } from './_mission-control-fantasy-lock.js';
+import { getFantasyRaceScoringStatus } from './_fantasy-race-scoring.js';
 import { resolveFantasySlateProgression } from './_fantasy-slate-progression.js';
 import {
   loadRaceControlReportForRace,
@@ -536,8 +537,72 @@ export const MISSION_CONTROL_EVALUATORS = {
     return findPowerRankingsForRace(ctx.publishedPowerRankingWeeks, postRace, window);
   },
 
-  'sun-score-fantasy-lineups'() {
-    return { complete: false, reason: 'Fantasy scoring automation pending.' };
+  'sun-score-fantasy-lineups'(ctx) {
+    const postRace = normalizeRaceRef(ctx.postRace);
+    const scoring = ctx.fantasyScoringStatus || null;
+    const raceNumber = postRace?.raceNumber ?? scoring?.slate?.raceNumber ?? null;
+
+    if (!raceNumber) {
+      return { complete: false, reason: 'No completed race set for fantasy scoring check.' };
+    }
+
+    if (!scoring) {
+      return {
+        complete: false,
+        reason: 'Fantasy scoring status unavailable.',
+      };
+    }
+
+    if (!scoring.raceComplete || !scoring.resultsReady) {
+      return {
+        complete: false,
+        reason: scoring.resultsReason || 'Official race results are not available yet.',
+        diagnostics: {
+          workflowRaceNumber: ctx.postRace?.raceNumber ?? null,
+          slateRaceNumber: scoring.slate?.raceNumber ?? null,
+          status: scoring.status,
+        },
+      };
+    }
+
+    if (scoring.status === 'scored') {
+      const count = scoring.scoringMeta?.lineupCount ?? scoring.lineupCount ?? 0;
+      return {
+        complete: true,
+        reason: `Fantasy scoring completed for Race ${raceNumber}. ${count} lineups scored.`,
+        diagnostics: {
+          workflowRaceNumber: raceNumber,
+          scoringVersion: scoring.scoringMeta?.scoringVersion ?? null,
+          scoredAt: scoring.scoringMeta?.scoredAt ?? null,
+        },
+      };
+    }
+
+    if (scoring.status === 'ready') {
+      return {
+        complete: false,
+        reason: 'Official results are available. Fantasy scoring is ready.',
+        diagnostics: { status: scoring.status, lineupCount: scoring.lineupCount },
+      };
+    }
+
+    if (scoring.status === 'needs_review') {
+      const unresolved = (scoring.unresolvedDrivers || []).length;
+      return {
+        complete: false,
+        reason:
+          unresolved > 0
+            ? `Fantasy scoring completed with ${unresolved} unresolved driver mapping(s).`
+            : 'Fantasy scoring needs review.',
+        diagnostics: { status: scoring.status, unresolvedDrivers: scoring.unresolvedDrivers },
+      };
+    }
+
+    return {
+      complete: false,
+      reason: scoring.resultsReason || 'Fantasy scoring is not ready.',
+      diagnostics: { status: scoring.status },
+    };
   },
 
   'thu-confirm-next-race-schedule'(ctx) {
@@ -908,9 +973,19 @@ export async function loadMissionControlDetectionContext(options = {}) {
 
   const fantasyLockContext = await buildFantasyLockMissionContext(detectionBase);
 
+  let fantasyScoringStatus = null;
+  if (postRaceNumber != null) {
+    fantasyScoringStatus = await getFantasyRaceScoringStatus({
+      seasonId,
+      settings,
+      raceNumber: postRaceNumber,
+    });
+  }
+
   return {
     ...detectionBase,
     fantasyLockContext,
+    fantasyScoringStatus,
   };
 }
 

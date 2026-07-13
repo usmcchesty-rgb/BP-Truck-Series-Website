@@ -80,6 +80,7 @@
                       <th>Lineup Salary</th>
                       <th>Race Pts</th>
                       <th>Total Pts</th>
+                      <th>Drivers</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -92,13 +93,14 @@
                           <td class="salary">${formatMoney(entry.totalSalary)}</td>
                           <td>${entry.racePoints != null ? escapeHtml(entry.racePoints) : '—'}</td>
                           <td>${entry.totalPoints != null ? escapeHtml(entry.totalPoints) : '—'}</td>
+                          <td>${(entry.drivers || []).map((d) => escapeHtml(d.driverName)).join(', ') || '—'}</td>
                         </tr>`
                       )
                       .join('')}
                   </tbody>
                 </table>
               </div>
-              <p class="fantasy-app-copy muted">Submitted ${escapeHtml(formatDate(entries[0]?.submittedAt))} through ${escapeHtml(formatDate(entries[entries.length - 1]?.submittedAt))}. Points will populate after race scoring.</p>`
+              <p class="fantasy-app-copy muted">${data.scoringAvailable ? 'Points reflect official race results.' : 'Race scoring pending — no fantasy points posted yet.'}</p>`
             : `<p class="fantasy-app-copy">No lineups submitted yet for this race. Be the first — <a class="fantasy-driver-link" href="/fantasy/lineup.html">build your lineup</a>.</p>`
         }
       </section>

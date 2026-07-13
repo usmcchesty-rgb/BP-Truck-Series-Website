@@ -19,6 +19,7 @@ import {
   easternDateKeyFromParts,
   isWorkflowWindowActive,
 } from './_mission-control-windows.js';
+import { buildMissionControlOperations } from './_mission-control-operations.js';
 import {
   resolveFantasyLockTaskPresentation,
 } from './_mission-control-fantasy-lock.js';
@@ -52,7 +53,7 @@ export const MISSION_CONTROL_TASKS = [
     dayLabel: 'Sunday',
     title: 'Score fantasy lineups if results are available',
     description: 'Run fantasy scoring once official results are confirmed.',
-    href: '/admin/fantasy.html',
+    href: '/admin/competition?tab=fantasy#race-scoring',
   },
   {
     id: 'mon-upload-transcript',
@@ -209,7 +210,7 @@ export const MISSION_CONTROL_TASKS = [
 const TASK_DETECTION_MODES = {
   'sun-upload-race-control-pdf': DETECTION_MODES.AUTOMATIC,
   'sun-confirm-race-results': DETECTION_MODES.AUTOMATIC,
-  'sun-score-fantasy-lineups': DETECTION_MODES.PLACEHOLDER,
+  'sun-score-fantasy-lineups': DETECTION_MODES.AUTOMATIC,
   'mon-upload-transcript': DETECTION_MODES.MANUAL,
   'mon-publish-race-recap': DETECTION_MODES.AUTOMATIC,
   'wed-generate-power-rankings': DETECTION_MODES.MANUAL,
@@ -696,6 +697,19 @@ export async function buildAdminMissionControlResponse(options = {}) {
     allTasks.filter((task) => task.status !== 'inactive'),
   );
 
+  const operations = buildMissionControlOperations({
+    tasks: allTasks,
+    postRace,
+    nextRace,
+    windowContext,
+    detectionContext,
+    detectionSummary,
+    store,
+    seasonId,
+    settings,
+    now,
+  });
+
   return {
     seasonId,
     fantasyPhase: resolveFantasyPhaseLabel(fantasyProgression),
@@ -706,6 +720,7 @@ export async function buildAdminMissionControlResponse(options = {}) {
     summary,
     detectionSummary,
     windowContext,
+    operations,
     hasRaceDate: Boolean(postRace.hasRaceDate || nextRace.hasRaceDate),
     workflows: {
       postRace,

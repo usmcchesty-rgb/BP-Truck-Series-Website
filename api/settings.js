@@ -27,6 +27,14 @@ import {
   getUserLineupForCurrentSlate,
   submitFantasyLineup,
 } from './_fantasy-lineups.js';
+import {
+  getFantasyRaceScoringStatus,
+  loadFantasyLineupScoresForSlate,
+  loadFantasySeasonPointTotals,
+  maybeAutoScoreFantasySlates,
+  scoreFantasySlate,
+} from './_fantasy-race-scoring.js';
+import { resolveFantasyRaceScoringConfig } from './_fantasy-race-scoring-config.js';
 import { loadLatestFantasySlate } from './_fantasy-public-slate.js';
 import {
   computeFantasyLockAt,
@@ -739,11 +747,51 @@ export default async function handler(req, res) {
     }
   }
 
+  if (action === 'getFantasyRaceScoringStatus') {
+    if (!isAdminPasswordValid(req)) return res.status(401).json({ error: 'Bad password' });
+    try {
+      const settings = await getSettings();
+      const seasonId = body.seasonId || settings.seasonId || '27987';
+      const status = await getFantasyRaceScoringStatus({
+        seasonId,
+        settings,
+        slateId: body.slateId,
+        raceNumber: body.raceNumber,
+      });
+      return res.status(200).json(status);
+    } catch (error) {
+      return res.status(500).json({ error: error.message || 'Failed to load fantasy scoring status.' });
+    }
+  }
+
+  if (action === 'scoreFantasyRace') {
+    if (!isAdminPasswordValid(req)) return res.status(401).json({ error: 'Bad password' });
+    try {
+      const settings = await getSettings();
+      const seasonId = body.seasonId || settings.seasonId || '27987';
+      const result = await scoreFantasySlate({
+        seasonId,
+        settings,
+        slateId: body.slateId,
+        raceNumber: body.raceNumber,
+        adminOverride: body.adminOverride === true,
+        source: 'admin',
+      });
+      return res.status(200).json({ ok: true, ...result });
+    } catch (error) {
+      return res.status(500).json({ error: error.message || 'Fantasy scoring failed.' });
+    }
+  }
+
   if (action === 'getAdminMissionControl') {
     try {
       const settings = await getSettings();
       const seasonId = body.seasonId || settings.seasonId || '27987';
       const progression = await resolveFantasySlateProgression(seasonId, { settings });
+      const postRaceNumber = progression.latestCompletedPointsRace?.officialPointsRaceNumber ?? null;
+      if (postRaceNumber != null) {
+        await maybeAutoScoreFantasySlates(seasonId, { settings, raceNumber: postRaceNumber });
+      }
       const missionControl = await buildAdminMissionControlResponse({ seasonId, settings });
       const lineupSlateId =
         progression.activeSlateRow?.id ||

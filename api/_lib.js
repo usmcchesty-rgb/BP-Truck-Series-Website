@@ -30,6 +30,7 @@ export const DEFAULTS = {
   fantasyHeaderLogoTopPercent: 21,
   fantasyHeaderLogoWidthVw: 32,
   fantasyHeaderLogoMaxWidthPx: 560,
+  fantasyRaceScoringConfig: {},
 };
 
 export function supabase() {

@@ -803,6 +803,31 @@
             <div id="backfillHistoricalOutput" class="fantasy-backtest-output" hidden></div>
           </div>
 
+          <!-- Race Scoring -->
+          <div class="admin-card admin-card--full" id="race-scoring">
+            <div class="admin-card-title">Race Scoring</div>
+            <span class="field-help">Score submitted lineups using official SimRacerHub race results. Idempotent — safe to recalculate if results change. Does not modify submitted lineups.</span>
+            <div class="fantasy-slate-meta-grid" style="margin-top:12px;">
+              <div><span>Status</span><strong id="fantasyScoringStatusLabel">—</strong></div>
+              <div><span>Results</span><strong id="fantasyScoringResultsLabel">—</strong></div>
+              <div><span>Lineups</span><strong id="fantasyScoringLineupCount">—</strong></div>
+              <div><span>Last Scored</span><strong id="fantasyScoringLastScored">—</strong></div>
+              <div><span>Scoring Version</span><strong id="fantasyScoringVersion">—</strong></div>
+              <div><span>Unresolved</span><strong id="fantasyScoringUnresolved">—</strong></div>
+            </div>
+            <p id="fantasyScoringMessage" class="field-help" style="margin-top:10px;"></p>
+            <details style="margin-top:10px;">
+              <summary class="field-label" style="cursor:pointer;">Scoring rules (default NASCAR-style)</summary>
+              <p class="field-help" id="fantasyScoringRulesCopy" style="margin-top:8px;"></p>
+            </details>
+            <div class="fantasy-generate-row" style="margin-top:12px;">
+              <button id="scoreFantasyRaceBtn" class="btn" type="button">Score Race</button>
+              <button id="recalculateFantasyRaceBtn" class="btn btn-secondary" type="button">Recalculate Scores</button>
+              <span id="fantasyScoringActionStatus" class="fantasy-generate-status"></span>
+            </div>
+            <div id="fantasyScoringTableWrap" class="fantasy-table-wrap" style="margin-top:14px;" hidden></div>
+          </div>
+
           <!-- Fantasy Backtest -->
           <div class="admin-card admin-card--full">
             <div class="admin-card-title">Fantasy Backtest</div>
@@ -1879,6 +1904,158 @@
           if (countEl) countEl.textContent = '—';
           console.error('[Fantasy Admin] Stats load failed:', error);
         }
+        await loadFantasyRaceScoring();
+      }
+
+      function formatScoringStatusLabel(status) {
+        if (status === 'scored') return 'Scored';
+        if (status === 'ready') return 'Ready';
+        if (status === 'needs_review') return 'Needs Review';
+        return 'Not Ready';
+      }
+
+      function renderFantasyScoringTable(lineups = []) {
+        const wrap = $('#fantasyScoringTableWrap');
+        if (!wrap) return;
+        if (!lineups.length) {
+          wrap.hidden = true;
+          safeSetInnerHtml(wrap, '');
+          return;
+        }
+        wrap.hidden = false;
+        safeSetInnerHtml(
+          wrap,
+          `<table class="fantasy-table">
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Player</th>
+                <th>Total Pts</th>
+                <th>Driver Points</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${lineups
+                .map((row) => {
+                  const drivers = (row.breakdown?.drivers || [])
+                    .map((d) => `${escapeAdminHtml(d.driverName)}: ${escapeAdminHtml(d.points)}`)
+                    .join('<br>');
+                  return `<tr>
+                    <td>${escapeAdminHtml(row.rank)}</td>
+                    <td>${escapeAdminHtml(row.displayName || 'Player')}</td>
+                    <td><strong>${escapeAdminHtml(row.totalPoints)}</strong></td>
+                    <td>${drivers || '—'}</td>
+                  </tr>`;
+                })
+                .join('')}
+            </tbody>
+          </table>`
+        );
+      }
+
+      async function loadFantasyRaceScoring() {
+        const statusEl = $('#fantasyScoringStatusLabel');
+        const resultsEl = $('#fantasyScoringResultsLabel');
+        const countEl = $('#fantasyScoringLineupCount');
+        const lastEl = $('#fantasyScoringLastScored');
+        const versionEl = $('#fantasyScoringVersion');
+        const unresolvedEl = $('#fantasyScoringUnresolved');
+        const messageEl = $('#fantasyScoringMessage');
+        const rulesEl = $('#fantasyScoringRulesCopy');
+
+        try {
+          const res = await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              password: getSessionPw(),
+              action: 'getFantasyRaceScoringStatus',
+              slateId: currentFantasySlateId,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Scoring status unavailable');
+
+          if (statusEl) statusEl.textContent = formatScoringStatusLabel(data.status);
+          if (resultsEl) resultsEl.textContent = data.resultsReady ? 'Detected' : 'Missing';
+          if (countEl) countEl.textContent = String(data.lineupCount ?? 0);
+          if (lastEl) {
+            lastEl.textContent = data.scoringMeta?.scoredAt
+              ? new Date(data.scoringMeta.scoredAt).toLocaleString()
+              : '—';
+          }
+          if (versionEl) versionEl.textContent = data.scoringMeta?.scoringVersion || data.config?.version || '—';
+          if (unresolvedEl) {
+            unresolvedEl.textContent = String((data.unresolvedDrivers || []).length);
+          }
+          if (messageEl) {
+            messageEl.textContent = data.resultsReason || data.scoringMeta?.warnings?.join(' ') || '';
+          }
+          if (rulesEl && data.config) {
+            rulesEl.textContent = `${data.config.label || 'Default'} — Win +${data.config.bonuses?.win}, Top5 +${data.config.bonuses?.top5}, Top10 +${data.config.bonuses?.top10}, positions gained +${data.config.bonuses?.positionGainedPer} each. Finish: 40/35/34 then -1. DNS/DNP = ${data.config.dnsPoints}. Admin-configurable in site settings.`;
+          }
+
+          if (data.status === 'scored' || data.status === 'needs_review') {
+            const scoreRes = await fetch('/api/settings', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                password: getSessionPw(),
+                action: 'getFantasySubmittedLineups',
+                slateId: data.slate?.id || currentFantasySlateId,
+              }),
+            });
+            const scoreData = scoreRes.ok ? await scoreRes.json() : { lineups: [] };
+            const standingsRes = await fetch('/api/settings?action=getFantasyStandings');
+            const standings = standingsRes.ok ? await standingsRes.json() : { entries: [] };
+            const merged = (standings.entries || []).map((entry) => ({
+              rank: entry.rank,
+              displayName: entry.displayName,
+              totalPoints: entry.racePoints,
+              breakdown: entry.breakdown,
+            }));
+            renderFantasyScoringTable(merged.length ? merged : []);
+          } else {
+            renderFantasyScoringTable([]);
+          }
+        } catch (error) {
+          if (statusEl) statusEl.textContent = '—';
+          if (messageEl) messageEl.textContent = error.message || 'Could not load scoring status.';
+        }
+      }
+
+      async function runFantasyRaceScoring({ recalculate = false } = {}) {
+        const statusEl = $('#fantasyScoringActionStatus');
+        const btn = recalculate ? $('#recalculateFantasyRaceBtn') : $('#scoreFantasyRaceBtn');
+        if (btn) btn.disabled = true;
+        if (statusEl) {
+          statusEl.textContent = recalculate ? 'Recalculating...' : 'Scoring...';
+          statusEl.classList.remove('error');
+        }
+        try {
+          const res = await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              password: getSessionPw(),
+              action: 'scoreFantasyRace',
+              slateId: currentFantasySlateId,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Scoring failed');
+          if (statusEl) {
+            statusEl.textContent = `Scored ${data.scoredLineups ?? data.lineupCount ?? 0} lineups for Race ${data.raceNumber}.`;
+          }
+          await Promise.all([loadFantasyRaceScoring(), loadFantasyAdminStats(), loadSubmittedLineups()]);
+        } catch (error) {
+          if (statusEl) {
+            statusEl.textContent = error.message || 'Scoring failed';
+            statusEl.classList.add('error');
+          }
+        } finally {
+          if (btn) btn.disabled = false;
+        }
       }
 
       async function loadSubmittedLineups() {
@@ -2647,6 +2824,8 @@
       $('#useLockOverride')?.addEventListener('change', scheduleLockPreview);
       $('#runFantasyOptimizerBtn')?.addEventListener('click', runFantasyLineupOptimizer);
       $('#runFantasyBacktestBtn')?.addEventListener('click', runFantasySeasonBacktest);
+      $('#scoreFantasyRaceBtn')?.addEventListener('click', () => runFantasyRaceScoring({ recalculate: false }));
+      $('#recalculateFantasyRaceBtn')?.addEventListener('click', () => runFantasyRaceScoring({ recalculate: true }));
       $('#backfillHistoricalSlatesBtn')?.addEventListener('click', backfillHistoricalSlates);
 
       initSession();
