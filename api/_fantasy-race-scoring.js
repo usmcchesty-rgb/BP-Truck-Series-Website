@@ -6,7 +6,7 @@ import {
   getPointsRaceByNumber,
 } from './_schedule-points-races.js';
 import { hasRaceResults } from './_race-date-status.js';
-import { fetchStandingsRows, buildDriverLookup } from './power-rankings-generate.js';
+import { fetchStandingsRows, buildDriverLookup } from './_standings-rows.js';
 import { getAlignedRaceFinishes } from './_power-rankings-results-audit.js';
 import {
   extractOfficialRaceFinishes,

@@ -1,20 +1,30 @@
 export function parseRequestBody(req) {
-  if (!req?.body) return {};
-  if (typeof req.body === 'string') {
+  let raw;
+  try {
+    raw = req?.body;
+  } catch {
+    return {};
+  }
+
+  if (raw == null || raw === '') return {};
+  if (typeof raw === 'string') {
     try {
-      return JSON.parse(req.body);
+      return JSON.parse(raw);
     } catch {
       return {};
     }
   }
-  if (Buffer.isBuffer(req.body)) {
+  if (Buffer.isBuffer(raw)) {
     try {
-      return JSON.parse(req.body.toString('utf8'));
+      return JSON.parse(raw.toString('utf8'));
     } catch {
       return {};
     }
   }
-  return req.body;
+  if (typeof raw === 'object') {
+    return raw;
+  }
+  return {};
 }
 
 export function getConfiguredAdminPassword() {

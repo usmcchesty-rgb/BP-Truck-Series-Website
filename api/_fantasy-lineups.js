@@ -7,11 +7,10 @@ import {
   isFantasyRaceComplete,
   resolveFantasySlateProgression,
 } from './_fantasy-slate-progression.js';
-import {
-  loadFantasyLineupScoresForSlate,
-  loadFantasySeasonPointTotals,
-  maybeAutoScoreFantasySlates,
-} from './_fantasy-race-scoring.js';
+
+async function loadFantasyRaceScoringModule() {
+  return import('./_fantasy-race-scoring.js');
+}
 
 const SALARY_CAP = 50000;
 const LINEUP_SIZE = 5;
@@ -380,6 +379,7 @@ export async function getFantasyPublicStandings(seasonId, options = {}) {
   const resolvedSeasonId = String(seasonId || settings.seasonId || '27987');
 
   if (options.autoScore !== false) {
+    const { maybeAutoScoreFantasySlates } = await loadFantasyRaceScoringModule();
     await maybeAutoScoreFantasySlates(resolvedSeasonId, { settings });
   }
 
@@ -398,6 +398,8 @@ export async function getFantasyPublicStandings(seasonId, options = {}) {
   const raceComplete = isFantasyRaceComplete(progression.scheduleRaces, slateRow.race_number);
   const lock = parseLockState(slateRow, { raceComplete });
   const lineups = await listSubmittedLineupsForSlate(slateRow.id);
+  const { loadFantasyLineupScoresForSlate, loadFantasySeasonPointTotals } =
+    await loadFantasyRaceScoringModule();
   const lineupScores = await loadFantasyLineupScoresForSlate(slateRow.id);
   const scoreByLineupId = new Map(lineupScores.map((row) => [String(row.lineup_id), row]));
   const seasonTotals = await loadFantasySeasonPointTotals(resolvedSeasonId);
@@ -603,6 +605,8 @@ export async function getFantasyLaunchDashboard(user) {
   const settings = await getSettings();
   const seasonId = String(settings.seasonId || '27987');
   const progression = await resolveFantasySlateProgression(seasonId);
+  const { maybeAutoScoreFantasySlates, loadFantasyLineupScoresForSlate, loadFantasySeasonPointTotals } =
+    await loadFantasyRaceScoringModule();
   await maybeAutoScoreFantasySlates(seasonId, { settings });
   const profile = user ? await ensureFantasyProfile(user) : null;
   const lineupState = user
