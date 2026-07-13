@@ -2694,6 +2694,14 @@ a.home-news-item:hover h4{color:#fff}
 }
 .results-row.is-winner .results-driver-link span,
 .results-row.is-winner .results-finish{color:#fff}
+.results-row.is-provisional{
+  background:rgba(255,255,255,.03);
+}
+.results-field-summary{
+  margin:0 0 12px;
+  color:rgba(255,255,255,.72);
+  font-size:.95rem;
+}
 .results-pos{font-weight:900;color:#fff;width:48px}
 .results-driver{min-width:220px}
 .results-driver-link{

@@ -186,26 +186,34 @@ function buildFinishingOrderRows(finishRace, standingsRows, profiles) {
             photoCacheVersion(profile.updated_at)
           )
         : `/assets/drivers/${slugify(driverName)}.png`);
+    const finish = Number(result.finishPosition ?? result.finish);
+    const isProvisional = Boolean(result.isProvisional);
 
     return {
       driverId: String(driverId),
       driverName,
       carNumber: standingsRow?.carNumber || profile?.car_number || '',
       photoUrl,
-      startingPos: result.startingPos,
-      finish: result.finish,
+      startingPos: result.startPosition ?? result.startingPos,
+      finish,
       lapsLed: result.lapsLed,
       incidents: result.incidents,
       points: result.points,
-      isWinner: Number(result.finish) === 1,
+      isWinner: finish === 1,
+      isProvisional,
+      status: isProvisional ? 'Provisional' : result.status || 'Finished',
+      participationStatus: result.participationStatus || (isProvisional ? 'provisional' : 'started'),
     };
   });
 
   return rows
     .filter((row) => Number.isFinite(row.finish) && row.finish >= 1)
-    .sort((a, b) => a.finish - b.finish)
-    .map((row, index) => ({
-      position: index + 1,
+    .sort((a, b) => {
+      if (a.isProvisional !== b.isProvisional) return a.isProvisional ? 1 : -1;
+      return a.finish - b.finish;
+    })
+    .map((row) => ({
+      position: row.finish,
       ...row,
     }));
 }
@@ -362,6 +370,9 @@ export async function buildRaceResultsPayload({
     selectedRaceDate: selectedRace.date || null,
     selectedRaceWinner: selectedRace.winner || null,
     resultRowsCount: rows.length,
+    officialStarterCount: finishRace?.officialStarterCount ?? null,
+    provisionalCount: finishRace?.provisionalCount ?? 0,
+    totalScoredFieldCount: finishRace?.totalScoredFieldCount ?? rows.length,
     dataSource: rows.length ? 'simracerhub-schedules-api' : 'none',
     alignmentMethod: alignedRace?.alignmentMethod || 'none',
     latestCompletedRaceNumber: latestCompletedRace?.officialPointsRaceNumber ?? null,

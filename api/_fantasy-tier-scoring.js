@@ -6,8 +6,12 @@ import {
   explainSeasonPerformanceScore,
 } from './_power-rankings-scoring.js';
 import { getCompletedPointsRaces } from './_schedule-points-races.js';
+import {
+  applyV26SalaryGuardrails,
+  mapScoreToSalaryInBandWithTierCap,
+} from './_fantasy-salary-guardrails.js';
 
-export const FANTASY_MODEL_VERSION = 'fantasy-salary-v2.5.0';
+export const FANTASY_MODEL_VERSION = 'fantasy-salary-v2.6';
 
 export const FANTASY_TIER_WEIGHTS = {
   seasonPerformance: 0.35,
@@ -251,6 +255,7 @@ export function applySalarySmoothing(computedSalary, priorSalary, priorWeight = 
 export function buildFantasyRecentFormRaw(grounding, alignedRaces, driverId) {
   const windowSize = Array.isArray(alignedRaces) ? alignedRaces.length : 0;
   const recentFinishes = (grounding?.recentRaceFinishes || [])
+    .filter((race) => !race.isProvisional)
     .map((race) => Number(race.finish))
     .filter((finish) => Number.isFinite(finish) && finish >= 1);
 
@@ -317,8 +322,8 @@ export function buildFantasyAttendanceContext({
     (validLast5RaceNumbers instanceof Set
       ? validLast5RaceNumbers.size
       : validLast5RaceNumbers.length);
-  const validLast5Starts = (driverRaceRows || []).filter((row) =>
-    validLast5RaceNumbers.has(Number(row.pointsRaceNumber))
+  const validLast5Starts = (driverRaceRows || []).filter(
+    (row) => validLast5RaceNumbers.has(Number(row.pointsRaceNumber)) && !row.isProvisional,
   ).length;
   const validLast5Misses =
     validLast5WindowSize > 0 ? Math.max(0, validLast5WindowSize - validLast5Starts) : 0;
@@ -340,8 +345,8 @@ export function buildFantasyAttendanceContext({
     (validLast3RaceNumbers instanceof Set
       ? validLast3RaceNumbers.size
       : validLast3RaceNumbers.length);
-  const validLast3Starts = (driverRaceRows || []).filter((row) =>
-    validLast3RaceNumbers.has(Number(row.pointsRaceNumber))
+  const validLast3Starts = (driverRaceRows || []).filter(
+    (row) => validLast3RaceNumbers.has(Number(row.pointsRaceNumber)) && !row.isProvisional,
   ).length;
   const validLast3Misses =
     validLast3WindowSize > 0 ? Math.max(0, validLast3WindowSize - validLast3Starts) : 0;
@@ -373,6 +378,7 @@ export function buildFantasyAttendanceContext({
   );
 
   const startedRaceNumbers = (driverRaceRows || [])
+    .filter((row) => !row.isProvisional)
     .map((row) => Number(row.pointsRaceNumber))
     .filter(Number.isFinite);
   const lastStartRaceNumber = startedRaceNumbers.length
@@ -1357,11 +1363,16 @@ export function computeFantasySlateSalaries(drivers = []) {
     const tierScores = group.map((driver) => driver.fantasyTierScore);
 
     for (const driver of group) {
-      driver.baseSalaryInBand = mapScoreToSalaryInTierBand(
+      const bandMapping = mapScoreToSalaryInBandWithTierCap(
         tier,
         tierScores,
-        driver.fantasyTierScore
+        driver.fantasyTierScore,
+        driver.recentStarts ?? driver.attendanceContext?.validLast5Starts ?? 0,
       );
+      driver.baseSalaryInBand = bandMapping.salary;
+      driver.tierProgressCapApplied = bandMapping.tierProgressCapApplied;
+      driver.tierProgressCapMax = bandMapping.tierProgressCapMax;
+      driver.uncappedBandSalary = bandMapping.uncappedBandSalary;
 
       const trackAdjustment = driver.trackAdjustment || {
         tier: 'neutral',
@@ -1375,7 +1386,7 @@ export function computeFantasySlateSalaries(drivers = []) {
       const unclampedSalary = driver.smoothing.salary;
       const band = driver.salaryBand || { min: SALARY_GLOBAL_MIN, max: SALARY_GLOBAL_MAX };
       const preBandSalary = roundSalary(unclampedSalary);
-      const generatedSalary = roundSalaryInBand(unclampedSalary, band);
+      let generatedSalary = roundSalaryInBand(unclampedSalary, band);
 
       driver.bandEnforcement = {
         applied: preBandSalary !== generatedSalary,
@@ -1383,6 +1394,11 @@ export function computeFantasySlateSalaries(drivers = []) {
         generatedSalary,
       };
 
+      driver.generatedSalary = generatedSalary;
+      generatedSalary = applyV26SalaryGuardrails(
+        driver,
+        driver._alignedRaces || [],
+      );
       driver.generatedSalary = generatedSalary;
       driver.salaryOverride = driver.salaryOverride ?? null;
       driver.finalSalary = driver.salaryOverride ?? driver.generatedSalary;

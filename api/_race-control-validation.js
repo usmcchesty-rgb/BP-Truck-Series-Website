@@ -64,20 +64,37 @@ function resolveExpectedFieldSize({
   const positionsComplete = analysis.positionsComplete;
   const officialStarters = officialContext?.officialStarters ?? null;
   const officialFinishers = officialContext?.officialFieldSize ?? null;
+  const provisionalCount = officialContext?.provisionalCount ?? 0;
+  const totalScoredFieldCount = officialContext?.totalScoredFieldCount ?? null;
+
+  if (officialFinishers != null && officialFinishers === parsedCount) {
+    return {
+      expected: parsedCount,
+      source: 'official_physical_starters',
+      confident: true,
+      infoMessage:
+        provisionalCount > 0
+          ? `PDF matches ${officialFinishers} physical starters. SimRacerHub also lists ${provisionalCount} provisional${provisionalCount === 1 ? '' : 's'} (${totalScoredFieldCount} total scored field).`
+          : null,
+    };
+  }
 
   if (officialStarters != null && officialStarters === parsedCount) {
     return {
       expected: parsedCount,
       source: 'official_race_bucket',
       confident: true,
-      infoMessage: null,
+      infoMessage:
+        provisionalCount > 0
+          ? `PDF matches race bucket count. ${provisionalCount} provisional driver${provisionalCount === 1 ? '' : 's'} excluded from PDF comparison.`
+          : null,
     };
   }
 
-  if (officialFinishers != null && officialFinishers === parsedCount) {
+  if (totalScoredFieldCount != null && totalScoredFieldCount === parsedCount) {
     return {
       expected: parsedCount,
-      source: 'official_finish_count',
+      source: 'official_total_scored_field',
       confident: true,
       infoMessage: null,
     };
@@ -187,6 +204,8 @@ export async function loadOfficialRaceContext(settings, raceNumber) {
 
   let officialFieldSize = null;
   let officialStarters = null;
+  let provisionalCount = 0;
+  let totalScoredFieldCount = null;
   let officialWinner = scheduleRace?.winner || null;
 
   if (raceDebug.standingsScheduleId) {
@@ -202,10 +221,18 @@ export async function loadOfficialRaceContext(settings, raceNumber) {
       const starterCounts = countOfficialRaceStarters(entry);
       officialStarters = starterCounts.starterCount ?? null;
       officialFieldSize = starterCounts.finisherCount ?? null;
+      provisionalCount = starterCounts.provisionalCount ?? 0;
+      totalScoredFieldCount = starterCounts.totalScoredFieldCount ?? null;
 
       const { finishes, meta } = extractOfficialRaceFinishes(entry);
       if (officialFieldSize == null) {
-        officialFieldSize = meta?.driverCount ?? null;
+        officialFieldSize = meta?.officialStarterCount ?? meta?.driverCount ?? null;
+      }
+      if (totalScoredFieldCount == null) {
+        totalScoredFieldCount = meta?.totalScoredFieldCount ?? null;
+      }
+      if (provisionalCount == null) {
+        provisionalCount = meta?.provisionalCount ?? 0;
       }
 
       const winnerDriverId = meta?.winnerDriverId;
@@ -229,6 +256,8 @@ export async function loadOfficialRaceContext(settings, raceNumber) {
     officialTrack: scheduleRace?.track || raceDebug.currentRaceName || null,
     officialFieldSize,
     officialStarters,
+    provisionalCount,
+    totalScoredFieldCount,
     hasOfficialResults: Boolean(scheduleRace?.winner || officialFieldSize || officialStarters),
     standingsScheduleId: raceDebug.standingsScheduleId || null,
   };
@@ -351,17 +380,24 @@ export function validateRaceControlReport({
   if (expectedFieldSize != null && pdfDriverCount > 0) {
     const passed = pdfDriverCount === expectedFieldSize;
     const usingFallback = fieldSizeResolution.source.startsWith('race_control');
+    const provisionalOnlyGap =
+      !passed &&
+      officialContext?.provisionalCount > 0 &&
+      officialContext?.officialFieldSize === pdfDriverCount;
     checks.push(
       buildCheck({
         id: 'driver_count_match',
         label: 'Driver count matches official field size',
-        passed: passed || (usingFallback && analysis.positionsComplete),
-        severity: usingFallback ? 'info' : 'error',
+        passed: passed || provisionalOnlyGap || (usingFallback && analysis.positionsComplete),
+        severity: provisionalOnlyGap || usingFallback ? 'info' : 'error',
         message: passed
           ? fieldSizeResolution.infoMessage
-          : usingFallback
-            ? fieldSizeResolution.infoMessage
-            : `PDF driver count (${pdfDriverCount}) differs from expected field size (${expectedFieldSize}).`,
+          : provisionalOnlyGap
+            ? fieldSizeResolution.infoMessage ||
+              `PDF driver count (${pdfDriverCount}) matches physical starters. ${officialContext.provisionalCount} provisional driver${officialContext.provisionalCount === 1 ? '' : 's'} appear only in SimRacerHub.`
+            : usingFallback
+              ? fieldSizeResolution.infoMessage
+              : `PDF driver count (${pdfDriverCount}) differs from expected field size (${expectedFieldSize}).`,
       })
     );
     if (!passed && !usingFallback && checks[checks.length - 1].message) {

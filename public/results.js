@@ -79,14 +79,28 @@ function renderFeaturedHeader(raceResults) {
   </section>`;
 }
 
-function renderResultsTable(rows) {
+function renderResultsTable(rows, raceResults = {}) {
   if (!rows?.length) {
     return `<p class="results-empty">Detailed results are not available for this race.</p>`;
   }
 
+  const fieldSummary =
+    raceResults.officialStarterCount != null
+      ? `<p class="results-field-summary">Official starters: ${raceResults.officialStarterCount}${
+          raceResults.provisionalCount
+            ? ` · Provisionals: ${raceResults.provisionalCount}`
+            : ''
+        } · Total scored field: ${raceResults.totalScoredFieldCount ?? rows.length}</p>`
+      : '';
+
   const body = rows
     .map((row) => {
-      const rowClass = row.isWinner ? "results-row is-winner" : "results-row";
+      const rowClass = row.isWinner
+        ? 'results-row is-winner'
+        : row.isProvisional
+          ? 'results-row is-provisional'
+          : 'results-row';
+      const statusLabel = row.isProvisional ? 'Provisional' : row.status || 'Finished';
       return `<tr class="${rowClass}">
         <td class="results-pos">${escapeHtml(String(row.position))}</td>
         <td class="results-driver">
@@ -102,22 +116,24 @@ function renderResultsTable(rows) {
           </a>
         </td>
         <td>${escapeHtml(formatCell(row.carNumber))}</td>
-        <td>${row.startingPos ? escapeHtml(formatOrdinal(row.startingPos)) : "—"}</td>
+        <td>${escapeHtml(statusLabel)}</td>
+        <td>${row.startingPos ? escapeHtml(formatOrdinal(row.startingPos)) : '—'}</td>
         <td class="results-finish">${escapeHtml(formatOrdinal(row.finish))}</td>
         <td>${formatCell(row.lapsLed)}</td>
         <td>${formatCell(row.incidents)}</td>
         <td>${formatCell(row.points)}</td>
       </tr>`;
     })
-    .join("");
+    .join('');
 
-  return `<div class="results-table-wrap">
+  return `${fieldSummary}<div class="results-table-wrap">
     <table class="results-table">
       <thead>
         <tr>
           <th>Pos</th>
           <th>Driver</th>
           <th>Car #</th>
+          <th>Status</th>
           <th>Start</th>
           <th>Finish</th>
           <th>Laps Led</th>
@@ -148,7 +164,7 @@ function renderPage(raceResults) {
   page.innerHTML = `
     ${renderFeaturedHeader(raceResults)}
     <section class="results-table-section">
-      ${renderResultsTable(raceResults.rows)}
+      ${renderResultsTable(raceResults.rows, raceResults)}
     </section>
   `;
 

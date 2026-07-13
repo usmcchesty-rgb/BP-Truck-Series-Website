@@ -153,7 +153,11 @@ export function countConsecutiveDnps(alignedRaces = [], driverId) {
 export function isDriverDnpInRace(race, driverId) {
   // Attendance/DNP streaks derive from official aligned race finishes, not fantasy score metadata.
   if (!race) return true;
-  const finish = Number(race.finishes?.[String(driverId)]);
+  const id = String(driverId);
+  if (race.provisionalDriverIds?.includes?.(id) || race.driverResults?.[id]?.isProvisional) {
+    return true;
+  }
+  const finish = Number(race.finishes?.[id]);
   return !Number.isFinite(finish) || finish < 1;
 }
 

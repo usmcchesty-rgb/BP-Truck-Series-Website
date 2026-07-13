@@ -7,6 +7,7 @@
  *
  * Reliable per-race fields (race-specific, RACE session):
  *   finish_pos, qualify_pos, laps_led, incidents, avg_pos, arp (average running position)
+ *   provisional ('Y'|'N'), status ('Provisional' for league provisionals)
  *
  * Season-only fields (rps row — NOT race-specific):
  *   wins, t5, t10, led, inc, tpts, pos2, etc.
@@ -25,7 +26,15 @@ export const SIMRACERHUB_DATA_AUDIT = {
     'incidents',
     'avg_pos',
     'arp',
+    'provisional',
+    'status',
   ],
+  provisionalFields: {
+    flag: 'provisional',
+    flagValue: 'Y',
+    status: 'status',
+    statusValue: 'Provisional',
+  },
   seasonOnlyFields: ['wins', 't5', 't10', 'led', 'inc', 'tpts', 'pos2'],
   segmentOnlyUnreliable: true,
 };
@@ -35,9 +44,19 @@ function parseFinish(value) {
   return Number.isFinite(finish) && finish >= 1 ? finish : null;
 }
 
+export function isProvisionalRawResult(result) {
+  if (!result || typeof result !== 'object') return false;
+  if (String(result.provisional || '').toUpperCase() === 'Y') return true;
+  return String(result.status || '').trim().toLowerCase() === 'provisional';
+}
+
 export function sampleResultFromBucket(bucket) {
   if (!bucket || typeof bucket !== 'object') return null;
-  return Object.values(bucket).find((result) => result?.finish_pos != null) || null;
+  return (
+    Object.values(bucket).find((result) => result?.finish_pos != null) ||
+    Object.values(bucket).find((result) => isProvisionalRawResult(result)) ||
+    null
+  );
 }
 
 export function pickOfficialRaceBucket(schedule) {
@@ -67,46 +86,137 @@ export function pickOfficialRaceBucket(schedule) {
   return buckets.sort((a, b) => b.sessionNum - a.sessionNum)[0];
 }
 
-export function normalizeDriverRaceResult(result) {
-  if (!result || typeof result !== 'object') return null;
+function readRawStatus(result) {
+  const status = String(result?.status || '').trim();
+  return status || null;
+}
 
-  const finish = parseFinish(result.finish_pos ?? result.finish);
-  if (!finish) return null;
+function inferProvisionalType(rawResult) {
+  const explicit = String(rawResult?.provisional_type || rawResult?.provisionalType || '').toLowerCase();
+  if (explicit === 'free' || explicit === 'purchased') return explicit;
+  return null;
+}
 
-  const startingPos = Number(result.qualify_pos);
-  const lapsLed = Number(result.laps_led);
-  const incidents = Number(result.incidents);
-  const avgPos = Number(result.avg_pos);
-  const arp = Number(result.arp);
-  const totalPoints = Number(result.total_points ?? result.points ?? result.race_points);
+export function buildCanonicalOfficialRaceResult(driverId, rawResult, options = {}) {
+  const finish = options.assignedFinishPosition ?? parseFinish(rawResult?.finish_pos ?? rawResult?.finish);
+  const isProvisional = Boolean(options.isProvisional ?? isProvisionalRawResult(rawResult));
+  const startingPosRaw = Number(rawResult?.qualify_pos);
+  const startingPos =
+    Number.isFinite(startingPosRaw) && startingPosRaw > 0 ? startingPosRaw : null;
+  const lapsLed = Number(rawResult?.laps_led);
+  const incidents = Number(rawResult?.incidents);
+  const avgPos = Number(rawResult?.avg_pos);
+  const arp = Number(rawResult?.arp);
+  const totalPoints = Number(rawResult?.total_points ?? rawResult?.points ?? rawResult?.race_points);
+  const rawStatus = readRawStatus(rawResult);
+  const participationStatus = isProvisional
+    ? 'provisional'
+    : finish
+      ? 'started'
+      : rawStatus
+        ? String(rawStatus).toLowerCase()
+        : 'dns';
 
   return {
+    driverId: String(driverId),
+    iracingId: rawResult?.driver_id != null ? String(rawResult.driver_id) : String(driverId),
+    driverName: null,
+    carNumber: null,
+    startPosition: startingPos,
+    finishPosition: finish,
     finish,
-    startingPos: Number.isFinite(startingPos) && startingPos > 0 ? startingPos : null,
+    startingPos,
+    status: isProvisional ? 'Provisional' : rawStatus,
+    participationStatus,
+    isProvisional,
+    provisionalType: isProvisional ? inferProvisionalType(rawResult) : null,
+    officialResultFound: true,
+    source: 'simracerhub',
     lapsLed: Number.isFinite(lapsLed) ? lapsLed : null,
     incidents: Number.isFinite(incidents) ? incidents : null,
     points: Number.isFinite(totalPoints) ? totalPoints : null,
     averageRunningPosition: Number.isFinite(arp) ? arp : Number.isFinite(avgPos) ? avgPos : null,
     avgPos: Number.isFinite(avgPos) ? avgPos : null,
-    session: result.session ?? null,
-    countStats: result.count_stats ?? null,
-    raceId: result.race_id ?? null,
+    session: rawResult?.session ?? null,
+    countStats: rawResult?.count_stats ?? null,
+    raceId: rawResult?.race_id ?? null,
+    assignedFinishPosition: isProvisional ? finish : null,
+    rawProvisional: rawResult?.provisional ?? null,
+    rawStatus,
   };
 }
 
-export function extractOfficialRaceFinishes(schedule) {
+export function normalizeDriverRaceResult(result, options = {}) {
+  if (!result || typeof result !== 'object') return null;
+
+  const isProvisional = Boolean(options.isProvisional ?? isProvisionalRawResult(result));
+  const finish = isProvisional
+    ? options.assignedFinishPosition ?? null
+    : parseFinish(result.finish_pos ?? result.finish);
+
+  if (!isProvisional && !finish) return null;
+  if (isProvisional && !Number.isFinite(Number(options.assignedFinishPosition))) return null;
+
+  return buildCanonicalOfficialRaceResult(String(options.driverId || result.driver_id || ''), result, {
+    isProvisional,
+    assignedFinishPosition: isProvisional ? Number(options.assignedFinishPosition) : finish,
+  });
+}
+
+export function extractOfficialRaceField(schedule) {
   const official = pickOfficialRaceBucket(schedule);
-  if (!official) return { finishes: {}, driverResults: {}, meta: null };
+  if (!official) {
+    return {
+      finishes: {},
+      driverResults: {},
+      meta: null,
+    };
+  }
+
+  const physicalEntries = [];
+  const provisionalEntries = [];
+
+  for (const [driverId, rawResult] of Object.entries(official.bucket)) {
+    if (isProvisionalRawResult(rawResult)) {
+      provisionalEntries.push({ driverId: String(driverId), rawResult });
+      continue;
+    }
+    const finish = parseFinish(rawResult.finish_pos ?? rawResult.finish);
+    if (finish) {
+      physicalEntries.push({ driverId: String(driverId), rawResult, finish });
+    }
+  }
+
+  physicalEntries.sort((a, b) => a.finish - b.finish);
+
+  const officialStarterCount = physicalEntries.length;
+  const provisionalCount = provisionalEntries.length;
+  const totalScoredFieldCount = officialStarterCount + provisionalCount;
 
   const finishes = {};
   const driverResults = {};
 
-  for (const [driverId, result] of Object.entries(official.bucket)) {
-    const normalized = normalizeDriverRaceResult(result);
+  for (const entry of physicalEntries) {
+    const normalized = normalizeDriverRaceResult(entry.rawResult, {
+      driverId: entry.driverId,
+      isProvisional: false,
+    });
     if (!normalized) continue;
-    finishes[String(driverId)] = normalized.finish;
-    driverResults[String(driverId)] = normalized;
+    finishes[entry.driverId] = normalized.finish;
+    driverResults[entry.driverId] = normalized;
   }
+
+  provisionalEntries.forEach((entry, index) => {
+    const assignedFinish = officialStarterCount + index + 1;
+    const normalized = normalizeDriverRaceResult(entry.rawResult, {
+      driverId: entry.driverId,
+      isProvisional: true,
+      assignedFinishPosition: assignedFinish,
+    });
+    if (!normalized) return;
+    finishes[entry.driverId] = assignedFinish;
+    driverResults[entry.driverId] = normalized;
+  });
 
   const winnerEntry = Object.entries(finishes).find(([, finish]) => finish === 1);
 
@@ -119,9 +229,23 @@ export function extractOfficialRaceFinishes(schedule) {
       session: official.sample?.session ?? null,
       sessionNum: official.sample?.session_num ?? null,
       countStats: official.sample?.count_stats ?? null,
-      driverCount: Object.keys(finishes).length,
+      bucketDriverCount: Object.keys(official.bucket).length,
+      driverCount: totalScoredFieldCount,
+      officialStarterCount,
+      provisionalCount,
+      totalScoredFieldCount,
+      provisionalDriverIds: provisionalEntries.map((entry) => entry.driverId),
       winnerDriverId: winnerEntry?.[0] ?? null,
     },
+  };
+}
+
+export function extractOfficialRaceFinishes(schedule) {
+  const field = extractOfficialRaceField(schedule);
+  return {
+    finishes: field.finishes,
+    driverResults: field.driverResults,
+    meta: field.meta,
   };
 }
 
@@ -131,16 +255,20 @@ export function countOfficialRaceStarters(schedule) {
     return {
       starterCount: null,
       finisherCount: null,
+      provisionalCount: null,
+      totalScoredFieldCount: null,
       bucketKey: null,
     };
   }
 
-  const { meta } = extractOfficialRaceFinishes(schedule);
+  const field = extractOfficialRaceField(schedule);
 
   return {
-    starterCount: Object.keys(official.bucket).length,
-    finisherCount: meta?.driverCount ?? null,
-    bucketKey: official.bucketKey,
+    starterCount: field.meta?.bucketDriverCount ?? Object.keys(official.bucket).length,
+    finisherCount: field.meta?.officialStarterCount ?? null,
+    provisionalCount: field.meta?.provisionalCount ?? 0,
+    totalScoredFieldCount: field.meta?.totalScoredFieldCount ?? null,
+    bucketKey: field.meta?.bucketKey ?? official.bucketKey,
   };
 }
 
@@ -185,7 +313,7 @@ export function extractFinishRacesFromSchedules(schedules) {
   const races = [];
 
   for (const [scheduleKey, schedule] of Object.entries(schedules || {})) {
-    const { finishes, driverResults, meta } = extractOfficialRaceFinishes(schedule);
+    const { finishes, driverResults, meta } = extractOfficialRaceField(schedule);
     if (!Object.keys(finishes).length || !meta) continue;
 
     races.push({
@@ -198,7 +326,11 @@ export function extractFinishRacesFromSchedules(schedules) {
       winnerDriverId: meta.winnerDriverId,
       session: meta.session,
       countStats: meta.countStats,
-      driverCount: meta.driverCount,
+      driverCount: meta.totalScoredFieldCount,
+      officialStarterCount: meta.officialStarterCount,
+      provisionalCount: meta.provisionalCount,
+      totalScoredFieldCount: meta.totalScoredFieldCount,
+      provisionalDriverIds: meta.provisionalDriverIds || [],
     });
   }
 

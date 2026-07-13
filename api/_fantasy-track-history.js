@@ -319,10 +319,15 @@ export function alignAllCompletedPointsRaces(scheduleRaces, schedules, driverLoo
 }
 
 function raceResultForDriver(alignedRace, driverId, schedules) {
-  const finish = alignedRace.finishes?.[String(driverId)];
+  const id = String(driverId);
+  const result = alignedRace.driverResults?.[id] || null;
+  if (result?.isProvisional || alignedRace.provisionalDriverIds?.includes?.(id)) {
+    return null;
+  }
+
+  const finish = alignedRace.finishes?.[id];
   if (!Number.isFinite(finish)) return null;
 
-  const result = alignedRace.driverResults?.[String(driverId)] || null;
   const trackMatch = matchTrackToCatalog(alignedRace.track);
   return {
     track: alignedRace.track,
