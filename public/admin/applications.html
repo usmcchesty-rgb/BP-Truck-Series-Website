@@ -393,8 +393,12 @@
     function formatSyncApprovedDriversSummary(data) {
       const summary = data.summary || {};
       const lines = [
-        `Created: ${summary.created ?? 0}`,
-        `Updated: ${summary.updated ?? 0}`,
+        `Sync version: ${data.syncVersion || 'unknown'}`,
+        `Added: ${summary.added ?? summary.created ?? 0}`,
+        `Updated existing current profiles: ${summary.updatedExistingCurrentProfiles ?? summary.updated ?? 0}`,
+        `Already current: ${summary.alreadyCurrent ?? 0}`,
+        `Recovered duplicate collisions: ${summary.recoveredDuplicateCollisions ?? 0}`,
+        `Conflicts: ${summary.conflicts ?? 0}`,
         `Skipped: ${summary.skipped ?? 0}`,
         `Errors: ${summary.errors ?? 0}`,
       ];
@@ -406,7 +410,13 @@
               `Matched existing profile: ${row.matched_existing_profile || 'No'}`,
               `Action: ${row.action || '—'}`,
               `Reason: ${row.reason || row.error || '—'}`,
-            ].join('\n')
+              row.diagnostics
+                ? `Diagnostics: ${JSON.stringify(row.diagnostics)}`
+                : null,
+              row.recovery ? `Recovery: ${JSON.stringify(row.recovery)}` : null,
+            ]
+              .filter(Boolean)
+              .join('\n')
           )
         : [];
       return `${lines.join('\n')}${details.length ? `\n\n${details.join('\n\n')}` : ''}`;

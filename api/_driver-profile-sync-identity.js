@@ -1,5 +1,7 @@
 import { normalizeCustomerId } from './_driver-number-reservations.js';
 
+export const DRIVER_PROFILE_SYNC_VERSION = 'driver-profile-sync-v2';
+
 export function normalizeSyncEmail(value) {
   const email = String(value ?? '').trim().toLowerCase();
   return email || null;
@@ -11,6 +13,12 @@ export function normalizeSyncName(value) {
     .replace(/[^a-z0-9\s]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+export function resolveIncomingDriverId(syncInput = {}) {
+  const customerId = normalizeCustomerId(syncInput.iracing_customer_id);
+  const srhDriverId = String(syncInput.srh_driver_id || syncInput.matched_driver_id || '').trim();
+  return srhDriverId || customerId || null;
 }
 
 function collectProfileNames(profile = {}) {
@@ -41,6 +49,14 @@ export function pickBestProfileNameMatch(candidates = [], customerId = null) {
     if (scoreDiff !== 0) return scoreDiff;
     return String(a.driver_id).localeCompare(String(b.driver_id));
   })[0];
+}
+
+export function buildStandingsDriverIdSet(standingsRows = []) {
+  return new Set(
+    standingsRows
+      .map((row) => String(row.driverId || row.driver_id || '').trim())
+      .filter(Boolean)
+  );
 }
 
 export function buildDriverProfileLookupMaps(profiles = []) {
@@ -98,36 +114,81 @@ export function registerProfileInLookupMaps(maps, profile) {
   return buildDriverProfileLookupMaps(maps.all);
 }
 
-export function resolveExistingProfileFromMaps(syncInput = {}, maps = {}) {
+function addProfileCandidate(candidates, profile, matchedBy) {
+  if (!profile?.driver_id) return;
+  const driverId = String(profile.driver_id);
+  if (candidates.some((entry) => String(entry.profile.driver_id) === driverId)) return;
+  candidates.push({ profile, matchedBy });
+}
+
+export function pickCanonicalProfileMatch(
+  candidates = [],
+  standingsDriverIds = new Set(),
+  customerId = null
+) {
+  if (!candidates.length) return null;
+
+  return [...candidates].sort((a, b) => {
+    const aInStandings = standingsDriverIds.has(String(a.profile.driver_id)) ? 1 : 0;
+    const bInStandings = standingsDriverIds.has(String(b.profile.driver_id)) ? 1 : 0;
+    if (bInStandings !== aInStandings) return bInStandings - aInStandings;
+
+    const aCustomerPk = customerId && String(a.profile.driver_id) === customerId ? 0 : 1;
+    const bCustomerPk = customerId && String(b.profile.driver_id) === customerId ? 0 : 1;
+    if (bCustomerPk !== aCustomerPk) return bCustomerPk - aCustomerPk;
+
+    const scoreDiff =
+      profileScoreForNameTiebreak(b.profile, customerId) -
+      profileScoreForNameTiebreak(a.profile, customerId);
+    if (scoreDiff !== 0) return scoreDiff;
+
+    return String(a.profile.driver_id).localeCompare(String(b.profile.driver_id));
+  })[0];
+}
+
+export function resolveExistingProfileFromMaps(syncInput = {}, maps = {}, options = {}) {
+  const standingsDriverIds = options.standingsDriverIds || new Set();
   const customerId = normalizeCustomerId(syncInput.iracing_customer_id);
   const applicationId = String(syncInput.id || syncInput.application_id || '').trim();
   const srhDriverId = String(syncInput.srh_driver_id || syncInput.matched_driver_id || '').trim();
+  const incomingDriverId = resolveIncomingDriverId(syncInput);
   const email = normalizeSyncEmail(syncInput.email);
+  const candidates = [];
 
-  if (customerId && maps.byIracingCustomerId?.has(customerId)) {
-    return {
-      profile: maps.byIracingCustomerId.get(customerId),
-      matchedBy: 'iracing_customer_id',
-    };
+  if (incomingDriverId && maps.byDriverId?.has(incomingDriverId)) {
+    addProfileCandidate(
+      candidates,
+      maps.byDriverId.get(incomingDriverId),
+      'incoming_driver_id'
+    );
   }
 
   if (srhDriverId && maps.byDriverId?.has(srhDriverId)) {
-    return { profile: maps.byDriverId.get(srhDriverId), matchedBy: 'srh_driver_id' };
+    addProfileCandidate(candidates, maps.byDriverId.get(srhDriverId), 'srh_driver_id');
+  }
+
+  if (customerId && maps.byIracingCustomerId?.has(customerId)) {
+    addProfileCandidate(
+      candidates,
+      maps.byIracingCustomerId.get(customerId),
+      'iracing_customer_id'
+    );
   }
 
   if (customerId && maps.byDriverId?.has(customerId)) {
-    return { profile: maps.byDriverId.get(customerId), matchedBy: 'driver_id' };
+    addProfileCandidate(candidates, maps.byDriverId.get(customerId), 'driver_id');
   }
 
   if (applicationId && maps.bySourceApplicationId?.has(applicationId)) {
-    return {
-      profile: maps.bySourceApplicationId.get(applicationId),
-      matchedBy: 'source_application_id',
-    };
+    addProfileCandidate(
+      candidates,
+      maps.bySourceApplicationId.get(applicationId),
+      'source_application_id'
+    );
   }
 
   if (email && maps.byEmail?.has(email)) {
-    return { profile: maps.byEmail.get(email), matchedBy: 'form_email' };
+    addProfileCandidate(candidates, maps.byEmail.get(email), 'form_email');
   }
 
   const nameKeys = [
@@ -136,22 +197,57 @@ export function resolveExistingProfileFromMaps(syncInput = {}, maps = {}) {
   ].filter(Boolean);
 
   for (const name of [...new Set(nameKeys)]) {
-    const candidates = maps.byName?.get(name) || [];
-    if (!candidates.length) continue;
-
-    const profile = pickBestProfileNameMatch(candidates, customerId);
-    if (profile) {
-      return { profile, matchedBy: 'normalized_name' };
+    const nameCandidates = maps.byName?.get(name) || [];
+    for (const profile of nameCandidates) {
+      addProfileCandidate(candidates, profile, 'normalized_name');
     }
   }
 
-  return { profile: null, matchedBy: null };
+  const best = pickCanonicalProfileMatch(candidates, standingsDriverIds, customerId);
+  return best || { profile: null, matchedBy: null };
 }
 
 function mergeApplicationField(existingValue, incomingValue) {
   const existing = String(existingValue ?? '').trim();
   const incoming = String(incomingValue ?? '').trim();
   return incoming || existing || null;
+}
+
+export function enrichSyncInputsWithStandings(syncInputs = [], standingsRows = [], maps = {}) {
+  const standingsByName = new Map();
+  const standingsByCustomerId = new Map();
+
+  for (const row of standingsRows) {
+    const driverId = String(row.driverId || row.driver_id || '').trim();
+    const name = normalizeSyncName(row.driverName || row.driver);
+    if (name && !standingsByName.has(name)) {
+      standingsByName.set(name, row);
+    }
+    const profile = maps.byDriverId?.get(driverId);
+    const customerId = normalizeCustomerId(profile?.iracing_customer_id);
+    if (customerId && !standingsByCustomerId.has(customerId)) {
+      standingsByCustomerId.set(customerId, row);
+    }
+  }
+
+  return syncInputs.map((input) => {
+    const customerId = normalizeCustomerId(input.iracing_customer_id);
+    const name = normalizeSyncName(input.iracing_display_name || input.driver_name);
+    const standingsRow =
+      (customerId && standingsByCustomerId.get(customerId)) ||
+      (name && standingsByName.get(name)) ||
+      null;
+    const standingsDriverId = standingsRow
+      ? String(standingsRow.driverId || standingsRow.driver_id || '').trim()
+      : null;
+
+    return {
+      ...input,
+      srh_driver_id: mergeApplicationField(input.srh_driver_id, standingsDriverId),
+      standings_driver_id: standingsDriverId,
+      in_current_standings: Boolean(standingsDriverId),
+    };
+  });
 }
 
 export function mergeApprovedSyncInputs(applications = [], srhByApplicationId = new Map()) {
@@ -194,5 +290,78 @@ export function mergeApprovedSyncInputs(applications = [], srhByApplicationId = 
 
   return [...merged.values()].sort((a, b) =>
     String(a.created_at || '').localeCompare(String(b.created_at || ''))
+  );
+}
+
+export function buildSyncDiagnostics(syncInput = {}, match = {}, operation = 'update') {
+  return {
+    applicationId: syncInput.id || null,
+    applicationDriverName:
+      syncInput.iracing_display_name || syncInput.driver_name || null,
+    incomingDriverId: resolveIncomingDriverId(syncInput),
+    incomingIracingCustomerId: normalizeCustomerId(syncInput.iracing_customer_id) || null,
+    matchedSrhDriverId:
+      syncInput.srh_driver_id || syncInput.standings_driver_id || null,
+    existingProfileDriverId: match.profile?.driver_id || null,
+    matchMethod: match.matchedBy || null,
+    operation,
+  };
+}
+
+export function profileMatchesStandingsDriver(profile = {}, standingsDriverIds = new Set()) {
+  const driverId = String(profile.driver_id || '').trim();
+  return driverId ? standingsDriverIds.has(driverId) : false;
+}
+
+export function resolveRosterStatusForProfile(
+  profile = {},
+  standingsDriverIds = new Set(),
+  identityMaps = null,
+  syncInput = null
+) {
+  const active = profile?.active !== false;
+  const inStandings = profileMatchesStandingsDriver(profile, standingsDriverIds);
+
+  if (!active) return 'inactive';
+  if (inStandings) return 'current';
+
+  if (identityMaps && syncInput) {
+    const match = resolveExistingProfileFromMaps(syncInput, identityMaps, {
+      standingsDriverIds,
+    });
+    if (
+      match.profile &&
+      standingsDriverIds.has(String(match.profile.driver_id)) &&
+      String(match.profile.driver_id) !== String(profile.driver_id)
+    ) {
+      return 'current';
+    }
+  }
+
+  return 'new_approved';
+}
+
+export function shouldHideDuplicateApprovedProfile(
+  profile = {},
+  standingsDriverIds = new Set(),
+  identityMaps = null,
+  syncInput = null
+) {
+  if (
+    !profile?.source_application_id &&
+    !profile?.approved_application_at
+  ) {
+    return false;
+  }
+  if (profileMatchesStandingsDriver(profile, standingsDriverIds)) return false;
+  if (!identityMaps || !syncInput) return false;
+
+  const match = resolveExistingProfileFromMaps(syncInput, identityMaps, {
+    standingsDriverIds,
+  });
+  return Boolean(
+    match.profile &&
+      standingsDriverIds.has(String(match.profile.driver_id)) &&
+      String(match.profile.driver_id) !== String(profile.driver_id)
   );
 }

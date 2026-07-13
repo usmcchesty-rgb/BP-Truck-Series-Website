@@ -68,6 +68,7 @@
     .roster-badge--current { color: #7fd99a; border-color: #385; }
     .roster-badge--new { color: #9ec5ff; border-color: #456; }
     .roster-badge--inactive { color: #aaa; border-color: #555; }
+    .roster-badge--synced { color: #d4b15a; border-color: #765; }
     .drivers-table .roster-group-row td {
       background: #121212;
       color: #ff3030;
@@ -130,7 +131,10 @@
       border-top: 1px solid #333;
     }
   </style>
+  <link rel="stylesheet" href="/admin/admin-mission-operations.css">
   <script src="/admin/admin-embed.js"></script>
+  <script src="/admin/admin-mission-countdown.js" defer></script>
+  <script src="/admin/admin-mission-operations.js" defer></script>
 </head>
 <body>
   <div id="admin-nav-root"></div>
@@ -149,6 +153,7 @@
   <main id="adminView" class="wrap" hidden>
     <h1 class="admin-embed-hide">Admin</h1>
     <p class="sub admin-embed-hide">Password is checked by the server. Settings and driver profiles save to Supabase after you add Supabase keys in Vercel.</p>
+    <div id="adminMissionOperationsRoot" class="admin-embed-hide"></div>
     <div id="adminMissionSummaryRoot" class="admin-embed-hide"></div>
 
     <div id="settingsSection" class="admin-section active">
@@ -305,6 +310,19 @@
       $('#loginPw').focus();
     }
 
+    function initDashboardMissionOperations() {
+      const root = $('#adminMissionOperationsRoot');
+      if (!root || new URLSearchParams(location.search).get('embed') === '1') return;
+      const boot = () => {
+        if (!window.AdminMissionOperations) return;
+        if (window.__bpPendingMissionControl) {
+          window.AdminMissionOperations.setMissionControl(window.__bpPendingMissionControl);
+        }
+      };
+      if (window.AdminMissionOperations) boot();
+      else document.querySelector('script[src="/admin/admin-mission-operations.js"]')?.addEventListener('load', boot, { once: true });
+    }
+
     function initDashboardMissionSummary() {
       const root = $('#adminMissionSummaryRoot');
       if (!root || new URLSearchParams(location.search).get('embed') === '1') return;
@@ -321,6 +339,7 @@
       $('#adminView').hidden = false;
       if (window.AdminNav) AdminNav.setLoggedIn(true);
       else if ($('#logoutBtn')) $('#logoutBtn').hidden = false;
+      initDashboardMissionOperations();
       initDashboardMissionSummary();
       applyAdminHash();
       loadSettings();
@@ -544,18 +563,24 @@
     let rosterDrivers = [];
     let rosterFilter = 'all';
 
-    function rosterStatusLabel(status) {
+    function rosterStatusLabel(status, driver = null) {
+      if (driver?.application_synced) return 'APPLICATION SYNCED';
       if (status === 'current') return 'CURRENT';
       if (status === 'new_approved') return 'NEW / APPROVED';
       if (status === 'inactive') return 'INACTIVE';
       return String(status || '').toUpperCase();
     }
 
-    function rosterBadgeHtml(status) {
+    function rosterBadgeHtml(status, driver = null) {
       const safe = String(status || '').trim().toLowerCase();
-      const label = rosterStatusLabel(safe);
-      const modifier =
-        safe === 'current' ? 'current' : safe === 'new_approved' ? 'new' : 'inactive';
+      const label = rosterStatusLabel(safe, driver);
+      const modifier = driver?.application_synced
+        ? 'synced'
+        : safe === 'current'
+          ? 'current'
+          : safe === 'new_approved'
+            ? 'new'
+            : 'inactive';
       return `<span class="roster-badge roster-badge--${modifier}">${escapeHtml(label)}</span>`;
     }
 
@@ -595,7 +620,7 @@
       const id = escapeAttr(d.driver_id);
       return `<tr data-driver-id="${id}" data-roster-status="${escapeAttr(d.roster_status || '')}">
           <td class="readonly">${escapeHtml(d.driver_id)}</td>
-          <td class="readonly">${rosterBadgeHtml(d.roster_status)}</td>
+          <td class="readonly">${rosterBadgeHtml(d.roster_status, d)}</td>
           <td><input type="text" name="iracing_customer_id" value="${escapeAttr(d.iracing_customer_id || d.iracingCustomerId || '')}"></td>
           <td class="readonly iracing-name">${escapeHtml(d.iracing_name)}</td>
           <td class="display-name-cell"><input type="text" name="display_name" value="${escapeAttr(d.display_name || '')}"></td>
