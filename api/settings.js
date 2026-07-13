@@ -97,30 +97,17 @@ import {
   trackPageView,
 } from './_site-analytics.js';
 
-function parseRequestBody(req) {
-  if (!req.body) return {};
-  if (typeof req.body === 'string') {
-    try {
-      return JSON.parse(req.body);
-    } catch {
-      return {};
-    }
-  }
-  return req.body;
-}
+import {
+  adminAuthFailurePayload,
+  parseRequestBody,
+  validateAdminPassword,
+} from './_admin-auth.js';
 
-function adminPasswordFromRequest(req, body = {}) {
-  return String(
-    body.password ||
-      req.query?.password ||
-      req.headers['x-admin-password'] ||
-      req.headers['X-Admin-Password'] ||
-      ''
-  ).trim();
-}
-
-function isAdminPasswordValid(req, body = {}) {
-  return adminPasswordFromRequest(req, body) === process.env.ADMIN_PASSWORD;
+function rejectAdminAuth(req, res, body = {}) {
+  const validation = validateAdminPassword(req, body);
+  if (validation.ok) return false;
+  res.status(401).json(adminAuthFailurePayload(validation));
+  return true;
 }
 
 async function handleDriverApplicationRoutes(req, res) {
@@ -157,8 +144,7 @@ async function handleDriverApplicationRoutes(req, res) {
     req.method === 'GET' &&
     (action === 'listDriverApplications' || queryAction === 'listDriverApplications')
   ) {
-    if (!isAdminPasswordValid(req, body)) {
-      res.status(401).json({ error: 'Bad password' });
+    if (rejectAdminAuth(req, res, body)) {
       return true;
     }
     try {
@@ -175,8 +161,7 @@ async function handleDriverApplicationRoutes(req, res) {
     req.method === 'POST' &&
     (action === 'syncApprovedDrivers' || queryAction === 'syncApprovedDrivers')
   ) {
-    if (!isAdminPasswordValid(req, body)) {
-      res.status(401).json({ error: 'Bad password' });
+    if (rejectAdminAuth(req, res, body)) {
       return true;
     }
     try {
@@ -197,8 +182,7 @@ async function handleDriverApplicationRoutes(req, res) {
       queryAction === 'getDriverApplication' ||
       queryAction === 'driverApplication');
   if (isApplicationDetailGet) {
-    if (!isAdminPasswordValid(req, body)) {
-      res.status(401).json({ error: 'Bad password' });
+    if (rejectAdminAuth(req, res, body)) {
       return true;
     }
     try {
@@ -242,8 +226,7 @@ async function handleDriverApplicationRoutes(req, res) {
       action === 'updateDriverApplication' ||
       queryAction === 'updateDriverApplication')
   ) {
-    if (!isAdminPasswordValid(req, body)) {
-      res.status(401).json({ error: 'Bad password' });
+    if (rejectAdminAuth(req, res, body)) {
       return true;
     }
     try {
@@ -275,8 +258,7 @@ async function handleDriverApplicationRoutes(req, res) {
       queryAction === 'refreshIracingLookup' ||
       queryAction === 'refreshDriverApplicationIracing');
   if (isIracingRefresh) {
-    if (!isAdminPasswordValid(req, body)) {
-      res.status(401).json({ error: 'Bad password' });
+    if (rejectAdminAuth(req, res, body)) {
       return true;
     }
     try {
@@ -310,8 +292,7 @@ async function handleDriverApplicationRoutes(req, res) {
       queryAction === 'refreshDriverApplicationSrh' ||
       queryAction === 'refreshSrhCareerStats');
   if (isSrhRefresh) {
-    if (!isAdminPasswordValid(req, body)) {
-      res.status(401).json({ error: 'Bad password' });
+    if (rejectAdminAuth(req, res, body)) {
       return true;
     }
     try {
@@ -337,8 +318,7 @@ async function handleDriverApplicationRoutes(req, res) {
     applicationId &&
     (action === 'releaseApplicationNumber' || queryAction === 'releaseApplicationNumber');
   if (isReleaseNumber) {
-    if (!isAdminPasswordValid(req, body)) {
-      res.status(401).json({ error: 'Bad password' });
+    if (rejectAdminAuth(req, res, body)) {
       return true;
     }
     try {
@@ -363,8 +343,7 @@ async function handleDriverApplicationRoutes(req, res) {
     applicationId &&
     (action === 'assignApplicationNumber' || queryAction === 'assignApplicationNumber');
   if (isAssignNumber) {
-    if (!isAdminPasswordValid(req, body)) {
-      res.status(401).json({ error: 'Bad password' });
+    if (rejectAdminAuth(req, res, body)) {
       return true;
     }
     try {
@@ -386,8 +365,7 @@ async function handleDriverApplicationRoutes(req, res) {
     applicationId &&
     (action === 'deleteDriverApplication' || queryAction === 'deleteDriverApplication');
   if (isDeleteApplication) {
-    if (!isAdminPasswordValid(req, body)) {
-      res.status(401).json({ error: 'Bad password' });
+    if (rejectAdminAuth(req, res, body)) {
       return true;
     }
     try {
@@ -538,7 +516,8 @@ export default async function handler(req, res) {
       queryAction === 'getAnalyticsDevices' ||
       queryAction === 'getAnalyticsDailyTraffic'
     ) {
-      if (!isAdminPasswordValid(req)) return res.status(401).json({ error: 'Bad password' });
+      const getBody = parseRequestBody(req);
+      if (rejectAdminAuth(req, res, getBody)) return;
       try {
         if (queryAction === 'getAnalyticsOverview') {
           return res.status(200).json(await getAnalyticsOverview(req));
@@ -562,7 +541,7 @@ export default async function handler(req, res) {
 
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const body = req.body || {};
+  const body = parseRequestBody(req);
   const action = String(body.action || req.query?.action || '').trim();
 
   if (action === 'trackPageView') {
@@ -585,8 +564,13 @@ export default async function handler(req, res) {
     }
   }
 
-  if (body.password !== process.env.ADMIN_PASSWORD) return res.status(401).json({ error: 'Bad password' });
-  if (body.verifyOnly) return res.status(200).json({ ok: true });
+  const adminAuth = validateAdminPassword(req, body);
+  if (!adminAuth.ok) {
+    return res.status(401).json(adminAuthFailurePayload(adminAuth));
+  }
+  if (body.verifyOnly) {
+    return res.status(200).json({ ok: true, ...adminAuth.diagnostics });
+  }
 
   if (action === 'getAnalyticsOverview') {
     try {
@@ -748,7 +732,7 @@ export default async function handler(req, res) {
   }
 
   if (action === 'getFantasyRaceScoringStatus') {
-    if (!isAdminPasswordValid(req)) return res.status(401).json({ error: 'Bad password' });
+    if (rejectAdminAuth(req, res, body)) return;
     try {
       const settings = await getSettings();
       const seasonId = body.seasonId || settings.seasonId || '27987';
@@ -765,7 +749,7 @@ export default async function handler(req, res) {
   }
 
   if (action === 'scoreFantasyRace') {
-    if (!isAdminPasswordValid(req)) return res.status(401).json({ error: 'Bad password' });
+    if (rejectAdminAuth(req, res, body)) return;
     try {
       const settings = await getSettings();
       const seasonId = body.seasonId || settings.seasonId || '27987';

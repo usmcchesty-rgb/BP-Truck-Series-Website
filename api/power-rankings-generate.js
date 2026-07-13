@@ -50,21 +50,14 @@ import {
   stripOptionalFromWriteupPayload,
 } from './_power-rankings-compact-context.js';
 import { buildPowerRankingSelection, SEASON_RAW_TARGET_MAX } from './_power-rankings-scoring.js';
+import {
+  adminAuthFailurePayload,
+  parseRequestBody,
+  validateAdminPassword,
+} from './_admin-auth.js';
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function parseBody(req) {
-  if (!req.body) return {};
-  if (typeof req.body === 'string') {
-    try {
-      return JSON.parse(req.body);
-    } catch {
-      return {};
-    }
-  }
-  return req.body;
 }
 
 function cleanText(value) {
@@ -2529,10 +2522,11 @@ export default async function handler(req, res) {
   }
 
   try {
-    const body = parseBody(req);
+    const body = parseRequestBody(req);
 
-    if (body.password !== process.env.ADMIN_PASSWORD) {
-      return res.status(401).json({ error: 'Bad password' });
+    const adminAuth = validateAdminPassword(req, body);
+    if (!adminAuth.ok) {
+      return res.status(401).json(adminAuthFailurePayload(adminAuth));
     }
 
     const raceNumber = Number(body.raceNumber ?? body.race_number);

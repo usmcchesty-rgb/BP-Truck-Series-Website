@@ -19,6 +19,12 @@ import {
   isIracingConfigured,
   normalizeCustomerId,
 } from './_iracing.js';
+import {
+  adminAuthFailurePayload,
+  isAdminPasswordValid,
+  parseRequestBody,
+  validateAdminPassword,
+} from './_admin-auth.js';
 
 async function handleIracingMemberLookup(req, res) {
   const customerId = normalizeCustomerId(
@@ -56,18 +62,6 @@ async function handleIracingMemberLookup(req, res) {
       customer_id: customerId || null,
     });
   }
-}
-
-function parseBody(req) {
-  if (!req.body) return {};
-  if (typeof req.body === 'string') {
-    try {
-      return JSON.parse(req.body);
-    } catch {
-      return {};
-    }
-  }
-  return req.body;
 }
 
 function normalizeBoolean(value, fallback = false) {
@@ -170,16 +164,8 @@ function normalizeStandingCrop(row = {}) {
   };
 }
 
-function adminPasswordFromRequest(req, body = {}) {
-  const header =
-    req.headers['x-admin-password'] ||
-    req.headers['X-Admin-Password'] ||
-    req.headers['x-admin-password'.toLowerCase()];
-  return String(header || body.password || req.query?.password || '').trim();
-}
-
 function isAdminDriversRequest(req, body = {}) {
-  return adminPasswordFromRequest(req, body) === process.env.ADMIN_PASSWORD;
+  return isAdminPasswordValid(req, body);
 }
 
 function normalizeDriverProfile(row, options = {}) {
@@ -532,10 +518,11 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const b = parseBody(req);
+  const b = parseRequestBody(req);
 
-  if (b.password !== process.env.ADMIN_PASSWORD) {
-    return res.status(401).json({ error: 'Bad password' });
+  const adminAuth = validateAdminPassword(req, b);
+  if (!adminAuth.ok) {
+    return res.status(401).json(adminAuthFailurePayload(adminAuth));
   }
 
   const action = String(b.action || '').trim().toLowerCase();

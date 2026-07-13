@@ -12,18 +12,11 @@ import {
   movementTypeFromStored,
   parseMovementInput,
 } from './_power-rankings-movement.js';
-
-function parseBody(req) {
-  if (!req.body) return {};
-  if (typeof req.body === 'string') {
-    try {
-      return JSON.parse(req.body);
-    } catch {
-      return {};
-    }
-  }
-  return req.body;
-}
+import {
+  adminAuthFailurePayload,
+  parseRequestBody,
+  validateAdminPassword,
+} from './_admin-auth.js';
 
 async function loadDriverProfiles() {
   const sb = supabase();
@@ -400,9 +393,10 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const body = parseBody(req);
-  if (body.password !== process.env.ADMIN_PASSWORD) {
-    return res.status(401).json({ error: 'Bad password' });
+  const body = parseRequestBody(req);
+  const adminAuth = validateAdminPassword(req, body);
+  if (!adminAuth.ok) {
+    return res.status(401).json(adminAuthFailurePayload(adminAuth));
   }
 
   const action = body.action || 'save';

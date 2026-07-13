@@ -16,18 +16,11 @@ import {
   getSiteOrigin,
 } from './_share-html.js';
 import { resolveOgImageMeta } from './_share-image-meta.js';
-
-function parseBody(req) {
-  if (!req.body) return {};
-  if (typeof req.body === 'string') {
-    try {
-      return JSON.parse(req.body);
-    } catch {
-      return {};
-    }
-  }
-  return req.body;
-}
+import {
+  adminAuthFailurePayload,
+  parseRequestBody,
+  validateAdminPassword,
+} from './_admin-auth.js';
 
 function resolveAction(req, body = {}) {
   return String(req.query?.action || body.action || '').trim().toLowerCase();
@@ -438,9 +431,10 @@ async function handleGenerate(body) {
 }
 
 async function handlePost(req, res) {
-  const body = parseBody(req);
-  if (body.password !== process.env.ADMIN_PASSWORD) {
-    return res.status(401).json({ error: 'Bad password' });
+  const body = parseRequestBody(req);
+  const adminAuth = validateAdminPassword(req, body);
+  if (!adminAuth.ok) {
+    return res.status(401).json(adminAuthFailurePayload(adminAuth));
   }
 
   const action = resolveAction(req, body) || 'save';
