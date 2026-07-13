@@ -97,8 +97,11 @@ export function isCleanlyScored(status = {}) {
 export async function maybeAutoGenerateNextRaceSalaryDraft(seasonId, completedRaceNumber, options = {}) {
   const settings = options.settings || (await getSettings());
   const resolvedSeasonId = String(seasonId || settings.seasonId || '27987');
-  const scheduleHtml = await fetchHtml(settings.scheduleUrl);
-  const scheduleRaces = enrichScheduleRaces(parseScheduleRacesFromHtml(scheduleHtml));
+  const { scheduleRaces } = await loadFantasyScheduleContext({
+    settings,
+    now: options.now,
+    scheduleRaces: options.scheduleRaces,
+  });
   const races = resolveMissionControlRaces(scheduleRaces, { settings, now: options.now || new Date() });
   const nextRace = races.nextRace;
 
@@ -330,7 +333,7 @@ async function runFantasyPostRaceAutomationInternal(seasonId, options = {}) {
   result.salaryDraft = await maybeAutoGenerateNextRaceSalaryDraft(
     resolvedSeasonId,
     completedRaceNumber,
-    { settings, now: options.now },
+    { settings, now: options.now, scheduleRaces },
   );
 
   return result;

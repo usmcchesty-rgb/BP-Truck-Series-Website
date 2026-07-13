@@ -1110,16 +1110,31 @@ export async function loadMissionControlDetectionContext(options = {}) {
   let fantasyPostRaceAutomationStatus = null;
   let provisionalLedgerSyncStatus = null;
   if (postRaceNumber != null) {
-    fantasyScoringStatus = await getFantasyRaceScoringStatus({
-      seasonId,
-      settings,
-      raceNumber: postRaceNumber,
-    });
-    const { getFantasyPostRaceAutomationStatus } = await import('./_fantasy-post-race-automation.js');
-    fantasyPostRaceAutomationStatus = await getFantasyPostRaceAutomationStatus(seasonId, {
-      settings,
-      now,
-    });
+    try {
+      fantasyScoringStatus = await getFantasyRaceScoringStatus({
+        seasonId,
+        settings,
+        raceNumber: postRaceNumber,
+      });
+    } catch (error) {
+      fantasyScoringStatus = {
+        error: error.message || 'fantasy_scoring_status_failed',
+        detector: 'fantasyScoringStatus',
+      };
+    }
+
+    try {
+      const { getFantasyPostRaceAutomationStatus } = await import('./_fantasy-post-race-automation.js');
+      fantasyPostRaceAutomationStatus = await getFantasyPostRaceAutomationStatus(seasonId, {
+        settings,
+        now,
+      });
+    } catch (error) {
+      fantasyPostRaceAutomationStatus = {
+        error: error.message || 'fantasy_post_race_automation_status_failed',
+        detector: 'fantasyPostRaceAutomationStatus',
+      };
+    }
 
     try {
       const { syncOfficialProvisionalsForRace } = await import('./_driver-provisionals.js');
@@ -1176,6 +1191,8 @@ export async function loadMissionControlDetectionContext(options = {}) {
         resultsReady: false,
         complete: false,
         needsReview: true,
+        detector: 'provisionalLedgerSync',
+        error: error.message || 'provisional_ledger_sync_failed',
         reason: error.message || 'provisional_ledger_sync_failed',
       };
     }

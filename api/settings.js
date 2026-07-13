@@ -933,8 +933,16 @@ async function handleSettingsRequest(req, res) {
     try {
       const settings = await getSettings();
       const seasonId = body.seasonId || settings.seasonId || '27987';
-      const { runFantasyPostRaceAutomation } = await import('./_fantasy-post-race-automation.js');
-      await runFantasyPostRaceAutomation(seasonId, { settings });
+      let postRaceAutomation = null;
+      try {
+        const { runFantasyPostRaceAutomation } = await import('./_fantasy-post-race-automation.js');
+        postRaceAutomation = await runFantasyPostRaceAutomation(seasonId, { settings });
+      } catch (error) {
+        postRaceAutomation = {
+          error: error.message || 'fantasy_post_race_automation_failed',
+          detector: 'runFantasyPostRaceAutomation',
+        };
+      }
       const missionControl = await buildAdminMissionControlResponse({ seasonId, settings });
       const progression = await resolveFantasySlateProgression(seasonId, { settings });
       const lineupSlateId =
@@ -942,7 +950,7 @@ async function handleSettingsRequest(req, res) {
         progression.archivedSlateRow?.id ||
         null;
       const lineupCount = lineupSlateId ? await countLineupsForSlate(lineupSlateId) : 0;
-      return res.status(200).json({ ...missionControl, lineupCount });
+      return res.status(200).json({ ...missionControl, lineupCount, postRaceAutomation });
     } catch (error) {
       return res.status(500).json({ error: error.message || 'Failed to load mission control.' });
     }
