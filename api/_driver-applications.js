@@ -1,6 +1,12 @@
 import { slugify, supabase } from './_lib.js';
 import { createSrhCareerSnapshotForApplication } from './_driver-application-srh-career-snapshots.js';
 import {
+  buildDriverProfileLookupMaps,
+  mergeApprovedSyncInputs,
+  registerProfileInLookupMaps,
+  resolveExistingProfileFromMaps,
+} from './_driver-profile-sync-identity.js';
+import {
   ANY_PREFERRED_NUMBER,
   assertNumberAvailableForApplication,
   assignReservationForApplication,
@@ -52,42 +58,46 @@ function normalizeExactDisplayName(value) {
   return String(value ?? '').trim();
 }
 
-async function findProfileByExactField(sb, field, value) {
-  const exact = normalizeExactDisplayName(value);
-  if (!exact) return null;
-
-  const { data, error } = await sb.from('driver_profiles').select('*').eq(field, exact).limit(1);
-  if (error) throw new Error(error.message || `Failed to look up driver profile by ${field}.`);
-  return data?.[0] || null;
+async function loadAllDriverProfiles(sb) {
+  const { data, error } = await sb.from('driver_profiles').select('*');
+  if (error) throw new Error(error.message || 'Failed to load driver profiles.');
+  return data || [];
 }
 
-async function findExistingDriverProfileForApplication(sb, application) {
-  const customerId = normalizeCustomerId(application?.iracing_customer_id);
-  const applicationId = String(application?.id || '').trim();
-  const displayName = normalizeExactDisplayName(application?.iracing_display_name);
+async function loadLatestSrhSnapshotsByApplicationId(sb, applicationIds = []) {
+  const ids = [...new Set(applicationIds.map((id) => String(id || '').trim()).filter(Boolean))];
+  if (!ids.length) return new Map();
 
-  if (customerId) {
-    const byCustomerId = await findProfileByExactField(sb, 'iracing_customer_id', customerId);
-    if (byCustomerId) return { profile: byCustomerId, matchedBy: 'iracing_customer_id' };
+  const { data, error } = await sb
+    .from('driver_application_srh_career_snapshots')
+    .select('application_id, matched_driver_id, matched_driver_name, created_at')
+    .in('application_id', ids)
+    .order('created_at', { ascending: false });
 
-    const byDriverId = await findProfileByExactField(sb, 'driver_id', customerId);
-    if (byDriverId) return { profile: byDriverId, matchedBy: 'driver_id' };
+  if (error) {
+    const message = String(error.message || '');
+    const missingTable = error.code === '42P01' || /does not exist/i.test(message);
+    if (missingTable) return new Map();
+    throw new Error(error.message || 'Failed to load SRH career snapshots.');
   }
 
-  if (displayName) {
-    const byIracingName = await findProfileByExactField(sb, 'iracing_name', displayName);
-    if (byIracingName) return { profile: byIracingName, matchedBy: 'iracing_display_name' };
-
-    const byDisplayName = await findProfileByExactField(sb, 'display_name', displayName);
-    if (byDisplayName) return { profile: byDisplayName, matchedBy: 'iracing_display_name' };
+  const byApplicationId = new Map();
+  for (const row of data || []) {
+    const applicationId = String(row.application_id || '').trim();
+    if (!applicationId || byApplicationId.has(applicationId)) continue;
+    byApplicationId.set(applicationId, row);
   }
 
-  if (applicationId) {
-    const byApplicationId = await findProfileByExactField(sb, 'source_application_id', applicationId);
-    if (byApplicationId) return { profile: byApplicationId, matchedBy: 'source_application_id' };
+  return byApplicationId;
+}
+
+async function findExistingDriverProfileForApplication(sb, application, options = {}) {
+  if (options.profileMaps) {
+    return resolveExistingProfileFromMaps(application, options.profileMaps);
   }
 
-  return { profile: null, matchedBy: null };
+  const maps = buildDriverProfileLookupMaps(await loadAllDriverProfiles(sb));
+  return resolveExistingProfileFromMaps(application, maps);
 }
 
 function buildSyncLogEntry(application, match, result) {
@@ -199,13 +209,28 @@ async function updateExistingDriverProfileFromApplication(sb, existing, applicat
   };
 }
 
-async function createDriverProfileFromApplication(sb, application, carNumber, now) {
+async function createDriverProfileFromApplication(sb, application, carNumber, now, options = {}) {
   const customerId = normalizeCustomerId(application?.iracing_customer_id);
+  const srhDriverId = normalizeOptionalText(application?.srh_driver_id || application?.matched_driver_id);
   const displayName = String(
     application.iracing_display_name || application.driver_name || `Driver ${customerId}`
   ).trim();
+
+  if (options.profileMaps) {
+    const existingMatch = resolveExistingProfileFromMaps(application, options.profileMaps);
+    if (existingMatch.profile) {
+      return updateExistingDriverProfileFromApplication(
+        sb,
+        existingMatch.profile,
+        application,
+        carNumber,
+        now
+      );
+    }
+  }
+
   const row = {
-    driver_id: customerId,
+    driver_id: srhDriverId || customerId,
     iracing_name: displayName,
     ...buildApplicationDriverProfilePatch(application, carNumber, now),
   };
@@ -214,7 +239,7 @@ async function createDriverProfileFromApplication(sb, application, carNumber, no
 
   if (error) {
     if (error.code === '23505') {
-      const match = await findExistingDriverProfileForApplication(sb, application);
+      const match = await findExistingDriverProfileForApplication(sb, application, options);
       if (match.profile) {
         return updateExistingDriverProfileFromApplication(
           sb,
@@ -227,9 +252,9 @@ async function createDriverProfileFromApplication(sb, application, carNumber, no
       return {
         ok: false,
         action: 'Error',
-        reason: 'Driver profile already exists for this iRacing Customer ID.',
+        reason: 'Driver profile already exists for this identity.',
         status: 409,
-        error: 'Driver profile already exists for this iRacing Customer ID.',
+        error: 'Driver profile already exists for this identity.',
       };
     }
     return {
@@ -285,7 +310,9 @@ export async function syncApplicationToDriverProfile(sb, application, options = 
   }
 
   const now = new Date().toISOString();
-  const match = await findExistingDriverProfileForApplication(sb, application);
+  const match =
+    options.precomputedMatch ||
+    (await findExistingDriverProfileForApplication(sb, application, options));
   if (match.profile) {
     return updateExistingDriverProfileFromApplication(
       sb,
@@ -296,7 +323,7 @@ export async function syncApplicationToDriverProfile(sb, application, options = 
     );
   }
 
-  return createDriverProfileFromApplication(sb, application, carNumber, now);
+  return createDriverProfileFromApplication(sb, application, carNumber, now, options);
 }
 
 async function promoteApprovedApplicationToDriverProfile(sb, application, options = {}) {
@@ -316,16 +343,29 @@ export async function syncApprovedApplicationsToDriverProfiles() {
   if (error) throw new Error(error.message || 'Failed to load approved applications.');
 
   const applications = data || [];
+  let profileMaps = buildDriverProfileLookupMaps(await loadAllDriverProfiles(sb));
+  const srhByApplicationId = await loadLatestSrhSnapshotsByApplicationId(
+    sb,
+    applications.map((application) => application.id)
+  );
+  const syncQueue = mergeApprovedSyncInputs(applications, srhByApplicationId);
+
   const summary = { created: 0, updated: 0, skipped: 0, errors: 0 };
   const results = [];
 
-  for (const application of applications) {
-    const match = await findExistingDriverProfileForApplication(sb, application);
+  for (const application of syncQueue) {
+    const match = resolveExistingProfileFromMaps(application, profileMaps);
     const syncResult = await syncApplicationToDriverProfile(sb, application, {
       enforceNumberCheck: false,
+      profileMaps,
+      precomputedMatch: match,
     });
     const logEntry = buildSyncLogEntry(application, match, syncResult);
     results.push(logEntry);
+
+    if (syncResult.ok && syncResult.driverProfile) {
+      profileMaps = registerProfileInLookupMaps(profileMaps, syncResult.driverProfile);
+    }
 
     const action = String(syncResult.action || '').toLowerCase();
     if (!syncResult.ok) summary.errors += 1;
@@ -339,7 +379,8 @@ export async function syncApprovedApplicationsToDriverProfiles() {
     ok: true,
     summary,
     results,
-    total: applications.length,
+    total: syncQueue.length,
+    sourceApplications: applications.length,
   };
 }
 

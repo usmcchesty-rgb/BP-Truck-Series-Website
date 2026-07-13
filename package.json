@@ -18,6 +18,7 @@
     "test:mission-control-fantasy-lock": "node scripts/test-mission-control-fantasy-lock.mjs",
     "test:fantasy-race-scoring": "node scripts/test-fantasy-race-scoring.mjs",
     "test:fantasy-dashboard-cards": "node scripts/test-fantasy-dashboard-cards.mjs",
+    "test:driver-profile-sync-identity": "node scripts/test-driver-profile-sync-identity.mjs",
     "test:fantasy-post-race-automation": "node scripts/test-fantasy-post-race-automation.mjs",
     "test:api-imports": "node scripts/test-api-imports.mjs",
     "test:provisional-results": "node scripts/test-provisional-results.mjs",
