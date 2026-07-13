@@ -11,6 +11,15 @@ import {
   resolveExistingProfileFromMaps,
   resolveIncomingDriverId,
 } from './_driver-profile-sync-identity.js';
+import {
+  SYNC_INSERT_PATHS,
+  attachRuntimeTraceToResult,
+  buildDuplicateKeyCapture,
+  buildPerApplicationTrace,
+  buildSyncRuntimeBuildInfo,
+  logSyncRuntimeTrace,
+  summarizeProfileMapStats,
+} from './_driver-profile-sync-instrumentation.js';
 import { fetchStandingsRows } from './_standings-rows.js';
 import {
   ANY_PREFERRED_NUMBER,
@@ -128,6 +137,7 @@ function buildSyncLogEntry(application, match, result, diagnostics = null) {
     diagnostics: diagnostics || result.diagnostics || null,
     recovery: result.recovery || null,
     merged_fields: result.mergedFields || null,
+    runtimeTrace: result.runtimeTrace || null,
   };
 }
 
@@ -226,6 +236,18 @@ async function updateExistingDriverProfileFromApplication(
     profile: existing,
     matchedBy: options.matchMethod || 'update',
   }, 'update');
+  const runtimeTrace = buildPerApplicationTrace(application, { profile: existing, matchedBy: options.matchMethod || 'update' }, {
+    incomingDriverId: resolveIncomingDriverId(application),
+    incomingIracingCustomerId: normalizeCustomerId(application?.iracing_customer_id),
+    operationChosen: 'UPDATE',
+    insertPathSelected: null,
+    insertExecuted: false,
+    insertPayload: null,
+    profileMapStats: options.profileMapStats || null,
+    standingsDriverCount: options.standingsDriverCount ?? null,
+    notes: options.runtimeNotes || [],
+  });
+  logSyncRuntimeTrace(runtimeTrace);
 
   const { data, error } = await sb
     .from('driver_profiles')
@@ -236,7 +258,17 @@ async function updateExistingDriverProfileFromApplication(
 
   if (error) {
     if (error.code === '23505') {
-      return {
+      const duplicateKeyError = buildDuplicateKeyCapture(error, {
+        attemptedDriverId: existing.driver_id,
+        attemptedIracingCustomerId: normalizeCustomerId(application?.iracing_customer_id),
+        insertInitiatorFunction: 'updateExistingDriverProfileFromApplication',
+        insertPathSelected: 'api/_driver-applications.js:updateExistingDriverProfileFromApplication:230',
+        insertPayload: patch,
+      });
+      runtimeTrace.duplicateKeyError = duplicateKeyError;
+      runtimeTrace.stackTrace = duplicateKeyError.stackTrace;
+      logSyncRuntimeTrace(runtimeTrace, 'error');
+      return attachRuntimeTraceToResult({
         ok: false,
         action: 'Conflict',
         reason: 'Cannot link this iRacing Customer ID — it is already assigned to another driver profile.',
@@ -251,19 +283,22 @@ async function updateExistingDriverProfileFromApplication(
           applicationId: application.id || null,
           matchMethod: options.matchMethod || null,
         },
-      };
+      }, runtimeTrace);
     }
-    return {
+    runtimeTrace.notes = [...(runtimeTrace.notes || []), `update_error:${error.message || 'unknown'}`];
+    runtimeTrace.stackTrace = new Error(error.message || 'update failed').stack;
+    logSyncRuntimeTrace(runtimeTrace, 'error');
+    return attachRuntimeTraceToResult({
       ok: false,
       action: 'Error',
       reason: error.message || 'Driver profile update failed.',
       status: 500,
       error: error.message || 'Application approved, but driver profile update failed.',
       diagnostics,
-    };
+    }, runtimeTrace);
   }
 
-  return {
+  return attachRuntimeTraceToResult({
     ok: true,
     action: options.recovered ? 'RecoveredUpdate' : 'Updated',
     reason: options.recovered
@@ -275,7 +310,7 @@ async function updateExistingDriverProfileFromApplication(
     diagnostics,
     mergedFields: Object.keys(patch).filter((key) => key !== 'updated_at'),
     recovery: options.recovery || null,
-  };
+  }, runtimeTrace);
 }
 
 async function createDriverProfileFromApplication(sb, application, carNumber, now, options = {}) {
@@ -286,6 +321,7 @@ async function createDriverProfileFromApplication(sb, application, carNumber, no
   ).trim();
   const profileMaps = options.profileMaps || null;
   const standingsDriverIds = options.standingsDriverIds || new Set();
+  const runtimeNotes = [];
 
   let match =
     options.precomputedMatch ||
@@ -293,23 +329,34 @@ async function createDriverProfileFromApplication(sb, application, carNumber, no
       standingsDriverIds,
     });
 
+  if (options.precomputedMatch) {
+    runtimeNotes.push('precomputedMatch_passed_to_createDriverProfileFromApplication');
+  }
+
   if (!match.profile && attemptedDriverId && profileMaps?.byDriverId?.has(attemptedDriverId)) {
     match = {
       profile: profileMaps.byDriverId.get(attemptedDriverId),
       matchedBy: 'incoming_driver_id_precheck',
     };
+    runtimeNotes.push('incoming_driver_id_precheck_matched_existing_profile');
   }
 
   const diagnostics = buildSyncDiagnostics(application, match, 'insert');
 
   if (match.profile) {
+    runtimeNotes.push('createDriverProfileFromApplication_redirected_to_update_existing_match');
     return updateExistingDriverProfileFromApplication(
       sb,
       match.profile,
       application,
       carNumber,
       now,
-      { matchMethod: match.matchedBy }
+      {
+        matchMethod: match.matchedBy,
+        profileMapStats: options.profileMapStats || null,
+        standingsDriverCount: options.standingsDriverCount ?? null,
+        runtimeNotes,
+      }
     );
   }
 
@@ -319,10 +366,41 @@ async function createDriverProfileFromApplication(sb, application, carNumber, no
     ...buildApplicationDriverProfilePatch(application, carNumber, now),
   };
 
+  const runtimeTrace = buildPerApplicationTrace(application, match, {
+    incomingDriverId: attemptedDriverId,
+    incomingIracingCustomerId: customerId,
+    operationChosen: 'INSERT',
+    insertPathSelected: SYNC_INSERT_PATHS.CREATE_PROFILE_NO_MATCH,
+    insertPayload: row,
+    insertExecuted: false,
+    precomputedMatchPassed: Boolean(options.precomputedMatch),
+    profileMapStats: options.profileMapStats || null,
+    standingsDriverCount: options.standingsDriverCount ?? null,
+    notes: [
+      ...runtimeNotes,
+      'insert_selected_because_no_existing_profile_match_after_precheck',
+    ],
+  });
+  logSyncRuntimeTrace(runtimeTrace);
+
   const { data, error } = await sb.from('driver_profiles').insert(row).select('*').single();
+  runtimeTrace.insertExecuted = true;
+  runtimeTrace.insertPathSelected = SYNC_INSERT_PATHS.CREATE_PROFILE_INSERT_EXECUTED;
+  logSyncRuntimeTrace(runtimeTrace);
 
   if (error) {
     if (error.code === '23505') {
+      const duplicateKeyError = buildDuplicateKeyCapture(error, {
+        attemptedDriverId,
+        attemptedIracingCustomerId: customerId,
+        insertInitiatorFunction: 'createDriverProfileFromApplication',
+        insertPathSelected: SYNC_INSERT_PATHS.CREATE_PROFILE_INSERT_EXECUTED,
+        insertPayload: row,
+      });
+      runtimeTrace.duplicateKeyError = duplicateKeyError;
+      runtimeTrace.stackTrace = duplicateKeyError.stackTrace;
+      logSyncRuntimeTrace(runtimeTrace, 'error');
+
       const recoveredProfile =
         (attemptedDriverId && (await fetchProfileByDriverId(sb, attemptedDriverId, profileMaps))) ||
         (
@@ -333,6 +411,7 @@ async function createDriverProfileFromApplication(sb, application, carNumber, no
         ).profile;
 
       if (recoveredProfile) {
+        runtimeNotes.push('pkey_recovery_redirected_to_update');
         return updateExistingDriverProfileFromApplication(
           sb,
           recoveredProfile,
@@ -342,6 +421,9 @@ async function createDriverProfileFromApplication(sb, application, carNumber, no
           {
             recovered: true,
             matchMethod: 'pkey_recovery',
+            profileMapStats: options.profileMapStats || null,
+            standingsDriverCount: options.standingsDriverCount ?? null,
+            runtimeNotes,
             recovery: {
               constraint: error.constraint || 'driver_profiles_pkey',
               attemptedDriverId,
@@ -353,7 +435,7 @@ async function createDriverProfileFromApplication(sb, application, carNumber, no
         );
       }
 
-      return {
+      return attachRuntimeTraceToResult({
         ok: false,
         action: 'Conflict',
         reason: 'Driver profile already exists for this identity.',
@@ -367,19 +449,22 @@ async function createDriverProfileFromApplication(sb, application, carNumber, no
           applicationId: application.id || null,
           matchMethod: null,
         },
-      };
+      }, runtimeTrace);
     }
-    return {
+    runtimeTrace.notes = [...(runtimeTrace.notes || []), `insert_error:${error.message || 'unknown'}`];
+    runtimeTrace.stackTrace = new Error(error.message || 'insert failed').stack;
+    logSyncRuntimeTrace(runtimeTrace, 'error');
+    return attachRuntimeTraceToResult({
       ok: false,
       action: 'Error',
       reason: error.message || 'Driver profile creation failed.',
       status: 500,
       error: error.message || 'Application approved, but driver profile creation failed.',
       diagnostics,
-    };
+    }, runtimeTrace);
   }
 
-  return {
+  return attachRuntimeTraceToResult({
     ok: true,
     action: 'Created',
     reason: 'No existing driver profile found; created a new profile.',
@@ -387,7 +472,7 @@ async function createDriverProfileFromApplication(sb, application, carNumber, no
     driverProfileAction: 'created',
     message: 'Driver created',
     diagnostics,
-  };
+  }, runtimeTrace);
 }
 
 export async function syncApplicationToDriverProfile(sb, application, options = {}) {
@@ -433,6 +518,10 @@ export async function syncApplicationToDriverProfile(sb, application, options = 
     match,
     match.profile ? 'update' : 'insert'
   );
+  const sharedRuntimeOptions = {
+    profileMapStats: options.profileMapStats || null,
+    standingsDriverCount: options.standingsDriverCount ?? null,
+  };
 
   if (match.profile) {
     const updateResult = await updateExistingDriverProfileFromApplication(
@@ -441,16 +530,31 @@ export async function syncApplicationToDriverProfile(sb, application, options = 
       application,
       carNumber,
       now,
-      { matchMethod: match.matchedBy }
+      { matchMethod: match.matchedBy, ...sharedRuntimeOptions }
     );
     return { ...updateResult, diagnostics: updateResult.diagnostics || diagnostics };
   }
 
-  return createDriverProfileFromApplication(sb, application, carNumber, now, {
+  const createTrace = buildPerApplicationTrace(application, match, {
+    incomingDriverId: resolveIncomingDriverId(application),
+    incomingIracingCustomerId: customerId,
+    operationChosen: 'INSERT',
+    insertPathSelected: SYNC_INSERT_PATHS.SYNC_APPLICATION_NO_MATCH,
+    insertExecuted: false,
+    precomputedMatchPassed: Boolean(options.precomputedMatch),
+    profileMapStats: options.profileMapStats || null,
+    standingsDriverCount: options.standingsDriverCount ?? null,
+    notes: ['syncApplicationToDriverProfile_no_match_redirecting_to_create'],
+  });
+  logSyncRuntimeTrace(createTrace);
+
+  const createResult = await createDriverProfileFromApplication(sb, application, carNumber, now, {
     ...options,
     standingsDriverIds,
     precomputedMatch: match,
+    ...sharedRuntimeOptions,
   });
+  return { ...createResult, diagnostics: createResult.diagnostics || diagnostics };
 }
 
 async function promoteApprovedApplicationToDriverProfile(sb, application, options = {}) {
@@ -460,6 +564,17 @@ async function promoteApprovedApplicationToDriverProfile(sb, application, option
 export async function syncApprovedApplicationsToDriverProfiles() {
   const sb = supabase();
   if (!sb) throw new Error('Supabase not configured yet.');
+
+  const instrumentation = {
+    build: buildSyncRuntimeBuildInfo(),
+    startedAt: new Date().toISOString(),
+    runtimeTraces: [],
+  };
+  logSyncRuntimeTrace({
+    ...instrumentation.build,
+    tag: 'driver-profile-sync-start',
+    startedAt: instrumentation.startedAt,
+  });
 
   const { data, error } = await sb
     .from('driver_applications')
@@ -471,23 +586,31 @@ export async function syncApprovedApplicationsToDriverProfiles() {
 
   const applications = data || [];
   let profileMaps = buildDriverProfileLookupMaps(await loadAllDriverProfiles(sb));
+  instrumentation.profileMapStats = summarizeProfileMapStats(profileMaps);
 
   let standingsRows = [];
+  let standingsFetchError = null;
   try {
     const settings = await getSettings();
     const standingsResult = await fetchStandingsRows(settings);
     standingsRows = standingsResult?.rows || [];
-  } catch {
+  } catch (standingsError) {
+    standingsFetchError = standingsError?.message || String(standingsError);
     standingsRows = [];
   }
 
   const standingsDriverIds = buildStandingsDriverIdSet(standingsRows);
+  instrumentation.standingsDrivers = standingsRows.length;
+  instrumentation.standingsFetchError = standingsFetchError;
+
   const srhByApplicationId = await loadLatestSrhSnapshotsByApplicationId(
     sb,
     applications.map((application) => application.id)
   );
   const mergedApplications = mergeApprovedSyncInputs(applications, srhByApplicationId);
   const syncQueue = enrichSyncInputsWithStandings(mergedApplications, standingsRows, profileMaps);
+  instrumentation.approvedApplications = applications.length;
+  instrumentation.syncQueueLength = syncQueue.length;
 
   const summary = {
     added: 0,
@@ -509,15 +632,35 @@ export async function syncApprovedApplicationsToDriverProfiles() {
       match,
       match.profile ? 'update' : 'insert'
     );
+    const loopTrace = buildPerApplicationTrace(application, match, {
+      incomingDriverId: resolveIncomingDriverId(application),
+      incomingIracingCustomerId: normalizeCustomerId(application?.iracing_customer_id),
+      operationChosen: match.profile ? 'UPDATE' : 'INSERT',
+      insertPathSelected: match.profile
+        ? null
+        : SYNC_INSERT_PATHS.SYNC_APPLICATION_NO_MATCH,
+      insertExecuted: false,
+      precomputedMatchPassed: true,
+      profileMapStats: summarizeProfileMapStats(profileMaps),
+      standingsDriverCount: standingsDriverIds.size,
+      notes: ['syncApprovedApplicationsToDriverProfiles_loop_pre_sync'],
+    });
+    logSyncRuntimeTrace(loopTrace);
+    instrumentation.runtimeTraces.push(loopTrace);
 
     const syncResult = await syncApplicationToDriverProfile(sb, application, {
       enforceNumberCheck: false,
       profileMaps,
       precomputedMatch: match,
       standingsDriverIds,
+      profileMapStats: summarizeProfileMapStats(profileMaps),
+      standingsDriverCount: standingsDriverIds.size,
     });
     const logEntry = buildSyncLogEntry(application, match, syncResult, diagnostics);
     results.push(logEntry);
+    if (syncResult.runtimeTrace) {
+      instrumentation.runtimeTraces.push(syncResult.runtimeTrace);
+    }
 
     if (syncResult.ok && syncResult.driverProfile) {
       profileMaps = registerProfileInLookupMaps(profileMaps, syncResult.driverProfile);
@@ -548,9 +691,24 @@ export async function syncApprovedApplicationsToDriverProfiles() {
     }
   }
 
+  instrumentation.completedAt = new Date().toISOString();
+  instrumentation.operationSummary = {
+    updateChosen: instrumentation.runtimeTraces.filter((trace) => trace.operationChosen === 'UPDATE').length,
+    insertChosen: instrumentation.runtimeTraces.filter((trace) => trace.operationChosen === 'INSERT').length,
+    insertExecuted: instrumentation.runtimeTraces.filter((trace) => trace.insertExecuted === true).length,
+    duplicateKeyErrors: instrumentation.runtimeTraces.filter((trace) => trace.duplicateKeyError).length,
+  };
+  logSyncRuntimeTrace({
+    tag: 'driver-profile-sync-complete',
+    ...instrumentation.build,
+    ...instrumentation.operationSummary,
+    completedAt: instrumentation.completedAt,
+  });
+
   return {
     ok: summary.errors === 0 && summary.conflicts === 0,
     syncVersion: DRIVER_PROFILE_SYNC_VERSION,
+    instrumentation,
     summary,
     results,
     total: syncQueue.length,

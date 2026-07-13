@@ -392,8 +392,18 @@
 
     function formatSyncApprovedDriversSummary(data) {
       const summary = data.summary || {};
+      const instrumentation = data.instrumentation || {};
       const lines = [
         `Sync version: ${data.syncVersion || 'unknown'}`,
+        instrumentation?.build?.instrumentationVersion
+          ? `Instrumentation: ${instrumentation.build.instrumentationVersion}`
+          : null,
+        instrumentation?.operationSummary
+          ? `Runtime ops: UPDATE chosen ${instrumentation.operationSummary.updateChosen ?? 0}, INSERT chosen ${instrumentation.operationSummary.insertChosen ?? 0}, INSERT executed ${instrumentation.operationSummary.insertExecuted ?? 0}, duplicate-key errors ${instrumentation.operationSummary.duplicateKeyErrors ?? 0}`
+          : null,
+        instrumentation?.standingsFetchError
+          ? `Standings fetch error: ${instrumentation.standingsFetchError}`
+          : null,
         `Added: ${summary.added ?? summary.created ?? 0}`,
         `Updated existing current profiles: ${summary.updatedExistingCurrentProfiles ?? summary.updated ?? 0}`,
         `Already current: ${summary.alreadyCurrent ?? 0}`,
@@ -401,7 +411,7 @@
         `Conflicts: ${summary.conflicts ?? 0}`,
         `Skipped: ${summary.skipped ?? 0}`,
         `Errors: ${summary.errors ?? 0}`,
-      ];
+      ].filter(Boolean);
       const details = Array.isArray(data.results)
         ? data.results.map((row) =>
             [
@@ -413,13 +423,19 @@
               row.diagnostics
                 ? `Diagnostics: ${JSON.stringify(row.diagnostics)}`
                 : null,
+              row.runtimeTrace
+                ? `Runtime trace: ${JSON.stringify(row.runtimeTrace)}`
+                : null,
               row.recovery ? `Recovery: ${JSON.stringify(row.recovery)}` : null,
             ]
               .filter(Boolean)
               .join('\n')
           )
         : [];
-      return `${lines.join('\n')}${details.length ? `\n\n${details.join('\n\n')}` : ''}`;
+      const instrumentationDump = instrumentation?.build
+        ? `\n\nInstrumentation build:\n${JSON.stringify(instrumentation.build, null, 2)}`
+        : '';
+      return `${lines.join('\n')}${details.length ? `\n\n${details.join('\n\n')}` : ''}${instrumentationDump}`;
     }
 
     async function syncApprovedDrivers() {

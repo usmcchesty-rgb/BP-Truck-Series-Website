@@ -68,6 +68,7 @@ import {
   syncApprovedApplicationsToDriverProfiles,
   updateDriverApplication,
 } from './_driver-applications.js';
+import { buildSyncRuntimeBuildInfo } from './_driver-profile-sync-instrumentation.js';
 import { stripPrivateDriverProfileFields } from './_driver-profile-privacy.js';
 import { getLatestIracingSnapshotForApplication } from './_driver-application-iracing-snapshots.js';
 import { getLatestIracingStatsSnapshotForApplication } from './_driver-application-iracing-stats-snapshots.js';
@@ -165,7 +166,14 @@ async function handleDriverApplicationRoutes(req, res) {
       res.status(200).json(result);
       return true;
     } catch (error) {
-      res.status(500).json({ error: error.message || 'Failed to sync approved drivers.' });
+      res.status(500).json({
+        error: error.message || 'Failed to sync approved drivers.',
+        instrumentation: {
+          build: buildSyncRuntimeBuildInfo(),
+          thrownAt: new Date().toISOString(),
+          stackTrace: error.stack || null,
+        },
+      });
       return true;
     }
   }
