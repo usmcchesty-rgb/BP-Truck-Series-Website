@@ -178,7 +178,7 @@
     },
     {
       "name": "Bill Harkins",
-      "iracingName": "Bill Harkins",
+      "iracingName": "Kody Miller",
       "carNumber": "11",
       "iracingCustomerId": 315521,
       "slug": "bill-harkins",
@@ -359,6 +359,110 @@
       "iracingCustomerId": 244220,
       "slug": "justin-levine",
       "carImage": "/assets/images/cars/Justin Levine.png"
+    },
+    {
+      "name": "Miguel Gomez-Gaudet",
+      "iracingName": "Miguel Gomez-Gaudet",
+      "carNumber": "89",
+      "iracingCustomerId": 1478479,
+      "slug": "miguel-gomez-gaudet",
+      "carImage": "/assets/images/cars/Miguel Gomez-Gaudet.png"
+    },
+    {
+      "name": "Rick Thompson",
+      "iracingName": "Rick Thompson",
+      "carNumber": "25",
+      "iracingCustomerId": 15836,
+      "slug": "rick-thompson",
+      "carImage": "/assets/images/cars/Rick Thompson.png"
+    },
+    {
+      "name": "John Perkins",
+      "iracingName": "John Perkins",
+      "carNumber": "34",
+      "iracingCustomerId": 175138,
+      "slug": "john-perkins",
+      "carImage": "/assets/images/cars/John Perkins.png"
+    },
+    {
+      "name": "Michael Kelly",
+      "iracingName": "Michael Kelly",
+      "carNumber": "47",
+      "iracingCustomerId": 778311,
+      "slug": "michael-kelly",
+      "carImage": "/assets/images/cars/Michael Kelly.png"
+    },
+    {
+      "name": "Noah S. VanHoute",
+      "iracingName": "Noah S. VanHoute",
+      "carNumber": "00",
+      "iracingCustomerId": 202913,
+      "slug": "noah-s-vanhoute",
+      "carImage": "/assets/images/cars/Noah S. VanHoute.png"
+    },
+    {
+      "name": "Brad Collins",
+      "iracingName": "Brad Collins",
+      "carNumber": "67",
+      "iracingCustomerId": 17343,
+      "slug": "brad-collins",
+      "carImage": "/assets/images/cars/Brad Collins.png"
+    },
+    {
+      "name": "Fred Thompson",
+      "iracingName": "Fred Thompson",
+      "carNumber": "80",
+      "iracingCustomerId": 36516,
+      "slug": "fred-thompson",
+      "carImage": "/assets/images/cars/Fred Thompson.png"
+    },
+    {
+      "name": "Levi Allen",
+      "iracingName": "Levi Allen",
+      "carNumber": "79",
+      "iracingCustomerId": 108615,
+      "slug": "levi-allen",
+      "carImage": "/assets/images/cars/Levi Allen.png"
+    },
+    {
+      "name": "Alex Menet",
+      "iracingName": "Alex Menet",
+      "carNumber": "55",
+      "iracingCustomerId": 1455272,
+      "slug": "alex-menet",
+      "carImage": "/assets/images/cars/Alex Menet.png"
+    },
+    {
+      "name": "Kody Miller",
+      "iracingName": "Kody Miller",
+      "carNumber": "11",
+      "iracingCustomerId": 1207664,
+      "slug": "kody-miller",
+      "carImage": "/assets/images/cars/Kody Miller.png"
+    },
+    {
+      "name": "Ryan Wash",
+      "iracingName": "Ryan Wash",
+      "carNumber": "86",
+      "iracingCustomerId": 329874,
+      "slug": "ryan-wash",
+      "carImage": "/assets/images/cars/Ryan Wash.png"
+    },
+    {
+      "name": "Earl Hall",
+      "iracingName": "Earl Hall",
+      "carNumber": "49",
+      "iracingCustomerId": 44045,
+      "slug": "earl-hall",
+      "carImage": "/assets/images/cars/Earl Hall.png"
+    },
+    {
+      "name": "Gordon Miller",
+      "iracingName": "Gordon Miller",
+      "carNumber": "29",
+      "iracingCustomerId": 394772,
+      "slug": "gordon-miller",
+      "carImage": "/assets/images/cars/Gordon Miller.png"
     }
   ]
 }
