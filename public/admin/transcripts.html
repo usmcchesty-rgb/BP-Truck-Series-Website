@@ -26,6 +26,7 @@
     .saved-item span { color: #888; font-size: 11px; display: block; margin-top: 2px; }
     .saved-item button { padding: 4px 10px; font-size: 9px; }
     #lastUpdated { font-size: 12px; color: #aaa; margin-top: 8px; }
+    #transcriptDiagnostics { font-size: 11px; color: #666; margin-top: 10px; white-space: pre-wrap; }
   </style>
   <script src="/admin/admin-embed.js"></script>
 </head>
@@ -87,12 +88,24 @@
         <button class="btn btn-danger" type="button" onclick="deleteTranscript()">Delete Transcript</button>
       </div>
       <pre id="adminMsg"></pre>
+      <pre id="transcriptDiagnostics" hidden></pre>
     </div>
   </main>
 
-  <script>
+  <script type="module">
+    import {
+      buildTranscriptRaceOptionValue,
+      buildTranscriptSelectionDiagnostics,
+      enrichTranscriptScheduleRaces,
+      findTranscriptScheduleRace,
+      listTranscriptScheduleOptions,
+      resolveTranscriptRaceNumber,
+      resolveTranscriptTrackName,
+    } from './transcript-schedule.js';
+
     const $ = (s) => document.querySelector(s);
     const SESSION_KEY = 'bp_admin_pw';
+    const showDiagnostics = new URLSearchParams(location.search).has('debug');
     let scheduleRaces = [];
     let savedTranscripts = [];
 
@@ -174,37 +187,64 @@
       $('#lastUpdated').textContent = '';
     }
 
+    function clearTranscriptFieldsForSelection() {
+      clearEditor();
+      $('#raceName').value = '';
+    }
+
     function readRaceNumber() {
       const fromInput = Number($('#raceNumber').value);
       if (Number.isInteger(fromInput) && fromInput > 0) return fromInput;
-      const fromSelect = Number($('#raceSelect').value);
+      const fromSelect = resolveTranscriptRaceNumber(
+        findTranscriptScheduleRace(scheduleRaces, $('#raceSelect').value)
+      );
       if (Number.isInteger(fromSelect) && fromSelect > 0) return fromSelect;
       return null;
     }
 
-    function syncRaceFields(raceNumber) {
-      const num = Number(raceNumber);
-      if (!Number.isInteger(num) || num < 1) return;
-      $('#raceNumber').value = String(num);
-      $('#raceSelect').value = String(num);
-      const race = scheduleRaces.find((row) => Number(row.officialPointsRaceNumber) === num);
-      if (race?.track && !$('#raceName').value.trim()) {
-        $('#raceName').value = race.track;
+    function updateDiagnostics(selectedOptionValue, race, savedTranscriptFound) {
+      const diagnostics = buildTranscriptSelectionDiagnostics({
+        selectedOptionValue,
+        race,
+        savedTranscriptFound,
+      });
+      console.info('[transcript-editor]', diagnostics);
+      const panel = $('#transcriptDiagnostics');
+      if (!panel) return;
+      panel.textContent = JSON.stringify(diagnostics, null, 2);
+      panel.hidden = !showDiagnostics;
+    }
+
+    function applyScheduleRaceFields(race, selectedOptionValue) {
+      if (!race) return null;
+      const canonical = resolveTranscriptRaceNumber(race);
+      if (canonical != null) {
+        $('#raceNumber').value = String(canonical);
       }
+      $('#raceSelect').value = selectedOptionValue || buildTranscriptRaceOptionValue(race);
+      $('#raceName').value = resolveTranscriptTrackName(race);
+      return canonical;
+    }
+
+    function syncRaceFields(raceNumber) {
+      const race = findTranscriptScheduleRace(scheduleRaces, String(raceNumber));
+      if (!race) return;
+      applyScheduleRaceFields(race, buildTranscriptRaceOptionValue(race));
     }
 
     async function loadSchedule() {
       try {
         const res = await fetch('/api/schedule');
         const data = await res.json();
-        scheduleRaces = Array.isArray(data.races) ? data.races : [];
+        const rawRaces = Array.isArray(data.races) ? data.races : [];
+        scheduleRaces = enrichTranscriptScheduleRaces(rawRaces);
+        if (scheduleRaces.length) {
+          console.info('[transcript-editor] sample schedule row', scheduleRaces[0]);
+        }
+        const options = listTranscriptScheduleOptions(scheduleRaces);
         const select = $('#raceSelect');
-        select.innerHTML = scheduleRaces.length
-          ? scheduleRaces.map((race) => {
-              const num = race.officialPointsRaceNumber || race.scheduleRow;
-              const label = `Race ${num} — ${race.track || 'TBD'}`;
-              return `<option value="${num}">${label}</option>`;
-            }).join('')
+        select.innerHTML = options.length
+          ? options.map((option) => `<option value="${option.value}">${option.label}</option>`).join('')
           : '<option value="">No races found</option>';
       } catch {
         $('#raceSelect').innerHTML = '<option value="">Failed to load schedule</option>';
@@ -239,19 +279,29 @@
       `).join('');
       list.querySelectorAll('button[data-race]').forEach((btn) => {
         btn.addEventListener('click', () => {
-          syncRaceFields(btn.dataset.race);
-          loadTranscriptForRace(Number(btn.dataset.race));
+          const raceNumber = Number(btn.dataset.race);
+          clearTranscriptFieldsForSelection();
+          syncRaceFields(raceNumber);
+          loadTranscriptForRace(raceNumber, { fieldsPrePopulated: true });
         });
       });
     }
 
-    async function loadTranscriptForRace(raceNumber) {
+    async function loadTranscriptForRace(raceNumber, { fieldsPrePopulated = false } = {}) {
       const num = Number(raceNumber);
       if (!Number.isInteger(num) || num < 1) {
         setMsg('Enter a valid race number.', true);
         return;
       }
-      syncRaceFields(num);
+
+      const race = findTranscriptScheduleRace(scheduleRaces, String(num));
+      const optionValue = race ? buildTranscriptRaceOptionValue(race) : String(num);
+
+      if (!fieldsPrePopulated) {
+        clearTranscriptFieldsForSelection();
+        applyScheduleRaceFields(race, optionValue);
+      }
+
       setMsg('Loading transcript...');
       try {
         const res = await fetch(`/api/news?action=get-transcript&raceNumber=${num}`);
@@ -259,17 +309,16 @@
         if (!res.ok) throw new Error(data.error || 'Failed to load transcript.');
         const row = data.transcript;
         if (!row) {
-          clearEditor();
-          const race = scheduleRaces.find((item) => Number(item.officialPointsRaceNumber) === num);
-          if (race?.track) $('#raceName').value = race.track;
+          updateDiagnostics(optionValue, race, false);
           setMsg(`No saved transcript for Race ${num}.`);
           return;
         }
-        $('#raceName').value = row.raceName || '';
+        $('#raceName').value = row.raceName || resolveTranscriptTrackName(race);
         $('#sourceUrl').value = row.sourceUrl || '';
         $('#notes').value = row.notes || '';
         $('#transcript').value = row.transcript || '';
         $('#lastUpdated').textContent = `Last updated: ${formatTimestamp(row.updatedAt)}`;
+        updateDiagnostics(optionValue, race, true);
         setMsg(`Loaded saved transcript for Race ${num}.`);
       } catch (e) {
         setMsg(e.message, true);
@@ -345,12 +394,20 @@
     }
 
     $('#raceSelect')?.addEventListener('change', () => {
-      const raceNumber = Number($('#raceSelect').value);
-      if (!raceNumber) return;
-      syncRaceFields(raceNumber);
-      const race = scheduleRaces.find((row) => Number(row.officialPointsRaceNumber) === raceNumber);
-      if (race?.track) $('#raceName').value = race.track;
-      loadTranscriptForRace(raceNumber);
+      const optionValue = String($('#raceSelect').value || '').trim();
+      if (!optionValue) return;
+
+      clearTranscriptFieldsForSelection();
+
+      const race = findTranscriptScheduleRace(scheduleRaces, optionValue);
+      const canonical = applyScheduleRaceFields(race, optionValue);
+      if (canonical == null) {
+        updateDiagnostics(optionValue, race, false);
+        setMsg('Selected race has no official points number.', true);
+        return;
+      }
+
+      loadTranscriptForRace(canonical, { fieldsPrePopulated: true });
     });
 
     $('#raceNumber')?.addEventListener('change', () => {
@@ -361,6 +418,11 @@
     $('#loginPw')?.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') login();
     });
+
+    window.login = login;
+    window.logout = logout;
+    window.saveTranscript = saveTranscript;
+    window.deleteTranscript = deleteTranscript;
 
     initSession();
   </script>
