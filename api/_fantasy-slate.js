@@ -31,8 +31,15 @@ import {
   enrichFantasySlateDrivers,
   summarizeFantasySlateAnalytics,
 } from './_fantasy-admin-analytics.js';
+import {
+  enrichStandingsRowWithProfile,
+  refreshFantasyDriverPoolMetadata,
+  resolveFantasyDriverEligibility,
+  resolveProfileForStandingsRow,
+  SLATE_MAX_STANDINGS_POSITION,
+} from './_fantasy-driver-pool.js';
 
-const SLATE_MAX_STANDINGS_POSITION = 30;
+export { SLATE_MAX_STANDINGS_POSITION };
 
 export function extractScheduleIdFromRace(race) {
   if (race?.scheduleId) return String(race.scheduleId);
@@ -400,18 +407,22 @@ export async function generateFantasyDraftSlate(options = {}) {
     raceDebug.standingsScheduleId
   );
 
-  const standings = standingsResult.rows.filter(
-    (row) =>
-      Number(row.races) > 0 &&
-      Number(row.position) >= 1 &&
-      Number(row.position) <= SLATE_MAX_STANDINGS_POSITION
-  );
+  const profiles = await getDriverProfiles();
+  const standings = standingsResult.rows
+    .map((row) => {
+      const profileResolution = resolveProfileForStandingsRow(row, profiles);
+      const enriched = enrichStandingsRowWithProfile(row, profileResolution);
+      return {
+        ...enriched,
+        eligibility: resolveFantasyDriverEligibility(enriched, { inStandings: true }),
+      };
+    })
+    .filter((row) => row.eligibility.eligible);
 
   if (!standings.length) {
     throw new Error('No active standings drivers with race starts available for fantasy salary generation.');
   }
 
-  const profiles = await getDriverProfiles();
   const driverLookup = buildDriverLookup(standings, profiles);
   const alignedRaces = getAlignedRaceFinishes(
     scheduleRaces,
@@ -506,6 +517,10 @@ export async function generateFantasyDraftSlate(options = {}) {
   );
 
   const saved = await saveDraftSlate(slateRow, enrichedDrivers);
+
+  if (saved?.slate?.id) {
+    await refreshFantasyDriverPoolMetadata(seasonId, { raceNumber }).catch(() => {});
+  }
 
   return enrichFantasyDraftPayload({
     slate: saved.slate,

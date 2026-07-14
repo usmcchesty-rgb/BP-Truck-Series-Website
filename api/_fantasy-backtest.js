@@ -28,7 +28,7 @@ import {
   optimizeFantasyLineup,
 } from './_fantasy-lineup-optimizer.js';
 
-const SLATE_MAX_STANDINGS_POSITION = 30;
+import { filterEligibleStandingsRows } from './_fantasy-driver-pool.js';
 const LINEUP_SALARY_CAP = 50000;
 const APPROXIMATION_NOTICE =
   'Approximate backtest — not locked pre-race simulation yet.';
@@ -120,12 +120,7 @@ export async function buildFantasyDriversForRace({
 }) {
   const raceDebug = buildRaceNumberDebug(scheduleRaces, raceNumber, { now, settings });
   const standingsResult = await fetchStandingsRows(settings, raceDebug.standingsScheduleId);
-  const standings = standingsResult.rows.filter(
-    (row) =>
-      Number(row.races) > 0 &&
-      Number(row.position) >= 1 &&
-      Number(row.position) <= SLATE_MAX_STANDINGS_POSITION
-  );
+  const standings = filterEligibleStandingsRows(standingsResult.rows);
 
   if (!standings.length) return null;
 

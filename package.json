@@ -21,6 +21,7 @@
     "test:driver-profile-sync-identity": "node scripts/test-driver-profile-sync-identity.mjs",
     "test:drivers-write-identity": "node scripts/test-drivers-write-identity.mjs",
     "test:fantasy-post-race-automation": "node scripts/test-fantasy-post-race-automation.mjs",
+    "test:fantasy-driver-pool": "node scripts/test-fantasy-driver-pool.mjs",
     "test:api-imports": "node scripts/test-api-imports.mjs",
     "test:provisional-results": "node scripts/test-provisional-results.mjs",
     "test:driver-provisional-sync": "node scripts/test-driver-provisional-sync.mjs",

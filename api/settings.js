@@ -15,6 +15,11 @@ import {
   runFantasyLineupOptimizerForLatestSlate,
 } from './_fantasy-public-slate.js';
 import {
+  addMissingEligibleDriversToDraft,
+  auditFantasyDriverPoolHealth,
+  refreshFantasyDriverPoolMetadata,
+} from './_fantasy-driver-pool.js';
+import {
   buildPublicSocialShareConfig,
   buildSocialShareSettingsPatch,
 } from './_social-share-settings.js';
@@ -1032,6 +1037,15 @@ async function handleSettingsRequest(req, res) {
           settings,
         });
       }
+      let driverPoolHealth = null;
+      try {
+        driverPoolHealth = await auditFantasyDriverPoolHealth(seasonId, {
+          raceNumber: payload?.slate?.race_number ?? progression.nextRaceNumber ?? null,
+          settings,
+        });
+      } catch (poolError) {
+        driverPoolHealth = { error: poolError.message || 'driver_pool_health_failed' };
+      }
       return res.status(200).json({
         slate: payload?.slate || null,
         publishedSlate:
@@ -1052,9 +1066,64 @@ async function handleSettingsRequest(req, res) {
         lineupCount,
         submittedLineupsSelection: submittedLineupsSlate.selection,
         lockPreview,
+        driverPoolHealth,
       });
     } catch (error) {
       return res.status(500).json({ error: error.message || 'Failed to load slate stats.' });
+    }
+  }
+
+  if (action === 'getFantasyDriverPoolHealth') {
+    if (rejectAdminAuth(req, res, body)) return;
+    try {
+      const settings = await getSettings();
+      const seasonId = body.seasonId || settings.seasonId || '27987';
+      const audit = await auditFantasyDriverPoolHealth(seasonId, {
+        raceNumber: body.raceNumber != null ? Number(body.raceNumber) : null,
+        settings,
+      });
+      return res.status(200).json({ ok: true, ...audit });
+    } catch (error) {
+      return res.status(error.status || 500).json({
+        error: error.message || 'Failed to audit fantasy driver pool.',
+        code: error.code || null,
+        audit: error.audit || null,
+      });
+    }
+  }
+
+  if (action === 'refreshFantasyDriverPool') {
+    if (rejectAdminAuth(req, res, body)) return;
+    try {
+      const settings = await getSettings();
+      const seasonId = body.seasonId || settings.seasonId || '27987';
+      const audit = await refreshFantasyDriverPoolMetadata(seasonId, {
+        raceNumber: body.raceNumber != null ? Number(body.raceNumber) : null,
+        settings,
+      });
+      return res.status(200).json({ ok: true, ...audit });
+    } catch (error) {
+      return res.status(500).json({ error: error.message || 'Failed to refresh fantasy driver pool metadata.' });
+    }
+  }
+
+  if (action === 'addMissingFantasyDraftDrivers') {
+    if (rejectAdminAuth(req, res, body)) return;
+    try {
+      const settings = await getSettings();
+      const seasonId = body.seasonId || settings.seasonId || '27987';
+      const result = await addMissingEligibleDriversToDraft(seasonId, {
+        raceNumber: body.raceNumber != null ? Number(body.raceNumber) : null,
+        settings,
+        confirmManualEditMerge: body.confirmManualEditMerge === true,
+      });
+      return res.status(200).json(result);
+    } catch (error) {
+      return res.status(error.status || 500).json({
+        error: error.message || 'Failed to add missing fantasy draft drivers.',
+        code: error.code || null,
+        audit: error.audit || null,
+      });
     }
   }
 

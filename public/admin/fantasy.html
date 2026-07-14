@@ -810,6 +810,63 @@
             </div>
           </div>
 
+          <!-- Driver Pool Health -->
+          <div class="admin-card admin-card--full" id="fantasyDriverPoolHealthCard">
+            <div class="admin-card-title">Driver Pool Health</div>
+            <div class="admin-kv-grid">
+              <div class="admin-kv">
+                <div class="admin-k">Eligible roster drivers</div>
+                <div class="admin-v" id="driverPoolEligibleCount">—</div>
+              </div>
+              <div class="admin-kv">
+                <div class="admin-k">Drivers in draft</div>
+                <div class="admin-v" id="driverPoolDraftCount">—</div>
+              </div>
+              <div class="admin-kv">
+                <div class="admin-k">Missing eligible drivers</div>
+                <div class="admin-v" id="driverPoolMissingCount">—</div>
+              </div>
+              <div class="admin-kv">
+                <div class="admin-k">Ineligible drivers</div>
+                <div class="admin-v" id="driverPoolIneligibleCount">—</div>
+              </div>
+              <div class="admin-kv">
+                <div class="admin-k">Draft generated</div>
+                <div class="admin-v" id="driverPoolDraftGeneratedAt">—</div>
+              </div>
+              <div class="admin-kv">
+                <div class="admin-k">Roster last refreshed</div>
+                <div class="admin-v" id="driverPoolRosterRefreshedAt">—</div>
+              </div>
+              <div class="admin-kv">
+                <div class="admin-k">Driver pool status</div>
+                <div class="admin-v"><strong id="driverPoolStatusLabel">—</strong></div>
+              </div>
+            </div>
+            <p id="driverPoolRecommendation" class="admin-note"></p>
+            <div id="driverPoolMissingList" class="table-wrap" hidden>
+              <table class="fantasy-admin-table">
+                <thead>
+                  <tr>
+                    <th>Driver</th>
+                    <th>Starts</th>
+                    <th>Active</th>
+                    <th>Eligibility</th>
+                    <th>Why missing</th>
+                  </tr>
+                </thead>
+                <tbody id="driverPoolMissingTableBody"></tbody>
+              </table>
+            </div>
+            <div class="fantasy-generate-row">
+              <button id="refreshDriverPoolBtn" class="btn btn-secondary" type="button">Refresh Driver Pool</button>
+              <button id="compareDriverPoolBtn" class="btn btn-secondary" type="button">Compare Draft to Roster</button>
+              <button id="regenerateDriverPoolDraftBtn" class="btn btn-secondary" type="button">Regenerate Draft</button>
+              <button id="addMissingDriverPoolBtn" class="btn btn-secondary" type="button">Add Missing Eligible Drivers</button>
+              <span id="driverPoolActionStatus" class="fantasy-generate-status"></span>
+            </div>
+          </div>
+
           <!-- Draft Slate -->
           <div class="admin-card admin-card--full">
             <div class="admin-card-title">Draft Slate</div>
@@ -2258,12 +2315,219 @@
             currentFantasySlateId = slate.id ?? currentFantasySlateId;
             updateFantasyDraftHeader(slate, { raceNumber: slate.race_number, track: slate.track });
           }
+          renderDriverPoolHealth(data.driverPoolHealth || null);
         } catch (error) {
           if (countEl) countEl.textContent = '—';
           console.error('[Fantasy Admin] Stats load failed:', error);
+          renderDriverPoolHealth(null);
         }
         await loadFantasyRaceScoring();
         await loadPostRaceAutomation();
+      }
+
+      function formatDriverPoolStatusLabel(status = '') {
+        if (status === 'current') return 'Current';
+        if (status === 'needs_refresh') return 'Needs Refresh';
+        if (status === 'needs_regeneration') return 'Needs Regeneration';
+        if (status === 'published_stale') return 'Published — Stale Pool';
+        return status || '—';
+      }
+
+      function formatDriverPoolTimestamp(value) {
+        if (!value) return '—';
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return String(value);
+        return date.toLocaleString();
+      }
+
+      function renderDriverPoolHealth(health) {
+        const counts = health?.counts || {};
+        $('#driverPoolEligibleCount') &&
+          ($('#driverPoolEligibleCount').textContent = String(counts.eligibleRosterDrivers ?? '—'));
+        $('#driverPoolDraftCount') &&
+          ($('#driverPoolDraftCount').textContent = String(counts.driversInDraft ?? '—'));
+        $('#driverPoolMissingCount') &&
+          ($('#driverPoolMissingCount').textContent = String(counts.missingEligibleDrivers ?? '—'));
+        $('#driverPoolIneligibleCount') &&
+          ($('#driverPoolIneligibleCount').textContent = String(counts.ineligibleDrivers ?? '—'));
+        $('#driverPoolDraftGeneratedAt') &&
+          ($('#driverPoolDraftGeneratedAt').textContent = formatDriverPoolTimestamp(health?.draftGeneratedAt));
+        $('#driverPoolRosterRefreshedAt') &&
+          ($('#driverPoolRosterRefreshedAt').textContent = formatDriverPoolTimestamp(health?.rosterRefreshedAt));
+        const statusEl = $('#driverPoolStatusLabel');
+        if (statusEl) {
+          statusEl.textContent = formatDriverPoolStatusLabel(health?.driverPoolStatus);
+          statusEl.classList.toggle('error', health?.driverPoolStatus && health.driverPoolStatus !== 'current');
+        }
+        const recommendationEl = $('#driverPoolRecommendation');
+        if (recommendationEl) {
+          recommendationEl.textContent =
+            health?.recommendation || health?.error || 'Driver pool health unavailable.';
+          recommendationEl.classList.toggle('error', Boolean(health?.error));
+        }
+
+        const missing = health?.missingDrivers || [];
+        const listWrap = $('#driverPoolMissingList');
+        const tbody = $('#driverPoolMissingTableBody');
+        if (listWrap && tbody) {
+          listWrap.hidden = !missing.length;
+          tbody.innerHTML = missing
+            .map(
+              (driver) => `
+              <tr>
+                <td>${escapeAdminHtml(driver.driverName || driver.driverId || '—')}</td>
+                <td>${escapeAdminHtml(String(driver.seasonStarts ?? '—'))}</td>
+                <td>${driver.active === false ? 'No' : 'Yes'}</td>
+                <td>${escapeAdminHtml(driver.eligibilityReason || 'eligible')}</td>
+                <td>${escapeAdminHtml(driver.whyMissingFromDraft || '—')}</td>
+              </tr>`
+            )
+            .join('');
+        }
+
+        const addBtn = $('#addMissingDriverPoolBtn');
+        const regenBtn = $('#regenerateDriverPoolDraftBtn');
+        if (addBtn) addBtn.disabled = !missing.length || health?.publishedSlateLocked;
+        if (regenBtn) regenBtn.disabled = health?.publishedSlateLocked;
+      }
+
+      async function fetchDriverPoolHealth() {
+        const res = await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            password: getSessionPw(),
+            action: 'getFantasyDriverPoolHealth',
+            slateId: currentFantasySlateId,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Driver pool health unavailable');
+        renderDriverPoolHealth(data);
+        return data;
+      }
+
+      async function refreshDriverPoolHealth() {
+        const statusEl = $('#driverPoolActionStatus');
+        const btn = $('#refreshDriverPoolBtn');
+        if (btn) btn.disabled = true;
+        if (statusEl) {
+          statusEl.textContent = 'Refreshing driver pool...';
+          statusEl.classList.remove('error');
+        }
+        try {
+          const res = await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              password: getSessionPw(),
+              action: 'refreshFantasyDriverPool',
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Refresh failed');
+          renderDriverPoolHealth(data);
+          if (statusEl) statusEl.textContent = 'Driver pool refreshed.';
+        } catch (error) {
+          if (statusEl) {
+            statusEl.textContent = error.message || 'Refresh failed';
+            statusEl.classList.add('error');
+          }
+        } finally {
+          if (btn) btn.disabled = false;
+        }
+      }
+
+      async function compareDriverPoolToDraft() {
+        const statusEl = $('#driverPoolActionStatus');
+        if (statusEl) {
+          statusEl.textContent = 'Comparing draft to current roster...';
+          statusEl.classList.remove('error');
+        }
+        try {
+          await fetchDriverPoolHealth();
+          if (statusEl) statusEl.textContent = 'Comparison complete.';
+        } catch (error) {
+          if (statusEl) {
+            statusEl.textContent = error.message || 'Comparison failed';
+            statusEl.classList.add('error');
+          }
+        }
+      }
+
+      async function regenerateDriverPoolDraft() {
+        const confirmed = window.confirm(
+          'Regenerate the draft slate using the current eligible driver pool? Manual salary edits will be overwritten.'
+        );
+        if (!confirmed) return;
+        const statusEl = $('#driverPoolActionStatus');
+        if (statusEl) {
+          statusEl.textContent = 'Regenerating draft...';
+          statusEl.classList.remove('error');
+        }
+        await retryPostRaceSalaryDraft({ confirmOverwrite: true });
+        await Promise.all([loadFantasyDraftSlate(), loadFantasyAdminStats()]);
+        if (statusEl) statusEl.textContent = 'Draft regenerated.';
+      }
+
+      async function addMissingDriverPoolDrivers() {
+        const statusEl = $('#driverPoolActionStatus');
+        const btn = $('#addMissingDriverPoolBtn');
+        if (btn) btn.disabled = true;
+        if (statusEl) {
+          statusEl.textContent = 'Adding missing eligible drivers...';
+          statusEl.classList.remove('error');
+        }
+        try {
+          const res = await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              password: getSessionPw(),
+              action: 'addMissingFantasyDraftDrivers',
+              confirmManualEditMerge: false,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            if (data.code === 'MANUAL_EDITS_PROTECTED') {
+              const confirmed = window.confirm(
+                `${data.error}\n\nAdd missing drivers anyway? This preserves existing salary overrides but may affect tier balance.`
+              );
+              if (!confirmed) throw new Error(data.error);
+              const retry = await fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  password: getSessionPw(),
+                  action: 'addMissingFantasyDraftDrivers',
+                  confirmManualEditMerge: true,
+                }),
+              });
+              const retryData = await retry.json();
+              if (!retry.ok) throw new Error(retryData.error || 'Add missing drivers failed');
+              renderDriverPoolHealth(retryData.audit || null);
+              await loadFantasyDraftSlate();
+              if (statusEl) statusEl.textContent = `Added ${retryData.added || 0} driver(s).`;
+              return;
+            }
+            if (data.code === 'PUBLISHED_SLATE_LOCKED') {
+              renderDriverPoolHealth(data.audit || null);
+              throw new Error(data.error);
+            }
+            throw new Error(data.error || 'Add missing drivers failed');
+          }
+          renderDriverPoolHealth(data.audit || null);
+          await loadFantasyDraftSlate();
+          if (statusEl) statusEl.textContent = `Added ${data.added || 0} driver(s).`;
+        } catch (error) {
+          if (statusEl) {
+            statusEl.textContent = error.message || 'Add missing drivers failed';
+            statusEl.classList.add('error');
+          }
+        } finally {
+          if (btn) btn.disabled = false;
+        }
       }
 
       function formatPostRaceScoringLabel(scoring = {}) {
@@ -3501,6 +3765,10 @@
         if (!confirmed) return;
         await retryPostRaceSalaryDraft({ confirmOverwrite: true });
       });
+      $('#refreshDriverPoolBtn')?.addEventListener('click', refreshDriverPoolHealth);
+      $('#compareDriverPoolBtn')?.addEventListener('click', compareDriverPoolToDraft);
+      $('#regenerateDriverPoolDraftBtn')?.addEventListener('click', regenerateDriverPoolDraft);
+      $('#addMissingDriverPoolBtn')?.addEventListener('click', addMissingDriverPoolDrivers);
       $('#postRacePublishSlateBtn')?.addEventListener('click', () => publishFantasySlate());
       $('#backfillHistoricalSlatesBtn')?.addEventListener('click', backfillHistoricalSlates);
       bindSalaryReasonsPopoverEvents();
