@@ -19,7 +19,13 @@ import {
   resolveTrackType,
 } from './_fantasy-track-history.js';
 import { buildFantasyDriverSalaries } from './_fantasy-salary-scoring.js';
-import { deriveDriverActivityStatus } from './_driver-activity.js';
+import {
+  buildDriverActivityMap,
+  deriveDriverActivityStatus as deriveLast5WindowActivity,
+} from './_driver-activity.js';
+import { countConsecutiveDnps } from './_fantasy-salary-guardrails.js';
+import { getLockDisplayState } from './_fantasy-lock-time.js';
+import { countLineupsForSlate } from './_fantasy-lineups.js';
 import {
   buildIncomingDriverSlug,
   normalizeDriverWriteName,
@@ -36,6 +42,9 @@ export const FANTASY_DRIVER_POOL_EXCLUSIONS = {
   EXPLICIT_ADMIN: 'explicit_admin_exclusion',
   NOT_IN_STANDINGS: 'not_in_current_standings',
   SALARY_GENERATION_FAILED: 'salary_generation_failed',
+  INACTIVE_ATTENDANCE: 'inactive_after_5_consecutive_missed_races',
+  INACTIVE_RECENT_WINDOW: 'inactive_no_recent_starts',
+  SLATE_LOCKED: 'slate_locked',
 };
 
 function normalizeSlateDriverRow(row) {
@@ -178,6 +187,47 @@ export function filterEligibleStandingsRows(rows = []) {
   });
 }
 
+export function resolveFantasyDriverActivity(driver = {}, context = {}) {
+  const driverId = String(driver.driverId || driver.driver_id || '').trim();
+  const profileActive =
+    driver.profileActive == null ? driver.active !== false : driver.profileActive !== false;
+  const alignedRaces = context.alignedRaces || context.allAligned || [];
+  const consecutiveMissedRaces = countConsecutiveDnps(alignedRaces, driverId);
+
+  const last5FromMap = context.activityMap?.getForDriverId?.(driverId);
+  const last5Activity =
+    last5FromMap ||
+    deriveLast5WindowActivity({
+      last5Starts: driver.last5Starts,
+      last5WindowSize: driver.last5WindowSize,
+      lastStartRaceNumber: driver.lastStartRaceNumber,
+    });
+
+  const attendanceInactiveByStreak = consecutiveMissedRaces >= 5;
+  const attendanceInactiveByWindow = last5Activity.status === 'Inactive';
+  const attendanceActive = !attendanceInactiveByStreak && !attendanceInactiveByWindow;
+
+  let reason = null;
+  if (!profileActive) {
+    reason = FANTASY_DRIVER_POOL_EXCLUSIONS.INACTIVE_PROFILE;
+  } else if (attendanceInactiveByStreak) {
+    reason = FANTASY_DRIVER_POOL_EXCLUSIONS.INACTIVE_ATTENDANCE;
+  } else if (attendanceInactiveByWindow) {
+    reason = FANTASY_DRIVER_POOL_EXCLUSIONS.INACTIVE_RECENT_WINDOW;
+  }
+
+  return {
+    active: profileActive && attendanceActive,
+    reason,
+    consecutiveMissedRaces,
+    profileActive,
+    attendanceActive,
+    last5Starts: Number(last5Activity.last5Starts ?? driver.last5Starts ?? 0) || 0,
+    last5WindowSize: Number(last5Activity.last5WindowSize ?? driver.last5WindowSize ?? 0) || 0,
+    lastStartRaceNumber: last5Activity.lastStartRaceNumber ?? driver.lastStartRaceNumber ?? null,
+  };
+}
+
 export function resolveFantasyDriverEligibility(driver = {}, context = {}) {
   const explicitExclusions =
     context.explicitExclusions instanceof Set
@@ -188,8 +238,8 @@ export function resolveFantasyDriverEligibility(driver = {}, context = {}) {
   const position = Number(driver.position ?? driver.standingsPosition ?? 0) || 0;
   const inStandings = Boolean(context.inStandings ?? driver.inStandings ?? seasonStarts > 0);
   const profileResolved = driver.profileResolved !== false;
-  const active =
-    driver.profileActive == null ? driver.active !== false : driver.profileActive !== false;
+  const activity = driver.activity || context.activity || resolveFantasyDriverActivity(driver, context);
+  const active = activity.active;
 
   if (explicitExclusions.has(driverId)) {
     return {
@@ -246,13 +296,14 @@ export function resolveFantasyDriverEligibility(driver = {}, context = {}) {
   if (!active) {
     return {
       eligible: false,
-      reason: FANTASY_DRIVER_POOL_EXCLUSIONS.INACTIVE_PROFILE,
+      reason: activity.reason || FANTASY_DRIVER_POOL_EXCLUSIONS.INACTIVE_PROFILE,
       active,
       seasonStarts,
       inStandings,
       profileResolved,
       explicitExclusion: false,
       source: 'resolveFantasyDriverEligibility',
+      consecutiveMissedRaces: activity.consecutiveMissedRaces,
     };
   }
 
@@ -310,15 +361,43 @@ export async function loadEligibleFantasyStandingsPool(options = {}) {
     (options.explicitExclusions || []).map((value) => String(value))
   );
 
-  const enrichedRows = standingsResult.rows.map((row) => {
+  const candidateRows = filterEligibleStandingsRows(standingsResult.rows).map((row) => {
     const profileResolution = resolveProfileForStandingsRow(row, profiles);
-    const enriched = enrichStandingsRowWithProfile(row, profileResolution);
-    const eligibility = resolveFantasyDriverEligibility(enriched, {
-      inStandings: true,
-      explicitExclusions,
+    return enrichStandingsRowWithProfile(row, profileResolution);
+  });
+
+  const driverLookup = buildDriverLookup(candidateRows, profiles);
+  const allAligned = alignAllCompletedPointsRaces(
+    scheduleRaces,
+    standingsResult.schedules,
+    driverLookup,
+    { now, settings }
+  );
+  const activityMap = buildDriverActivityMap({
+    scheduleRaces,
+    srhSchedules: standingsResult.schedules,
+    settings,
+    now,
+  });
+
+  const enrichedRows = candidateRows.map((row) => {
+    const activity = resolveFantasyDriverActivity(row, {
+      alignedRaces: allAligned,
+      activityMap,
     });
+    const eligibility = resolveFantasyDriverEligibility(
+      { ...row, activity },
+      {
+        inStandings: true,
+        explicitExclusions,
+        alignedRaces: allAligned,
+        activityMap,
+        activity,
+      }
+    );
     return {
-      ...enriched,
+      ...row,
+      activity,
       eligibility,
       canonicalFantasyDriverId: String(row.driverId),
     };
@@ -339,6 +418,8 @@ export async function loadEligibleFantasyStandingsPool(options = {}) {
     enrichedRows,
     eligibleRows,
     ineligibleRows,
+    allAligned,
+    activityMap,
     rosterRefreshedAt: new Date().toISOString(),
   };
 }
@@ -359,7 +440,8 @@ export function compareDraftToEligiblePool(draftDrivers = [], eligibleRows = [])
         driverId: id,
         driverName: row.driverName,
         seasonStarts: Number(row.races) || 0,
-        active: row.profileActive !== false,
+        active: row.activity?.active !== false,
+        consecutiveMissedRaces: row.activity?.consecutiveMissedRaces ?? null,
         eligibilityReason: row.eligibility?.reason || null,
         identityMatchMethod: row.identityMatchMethod || null,
         profileDriverId: row.profileDriverId || null,
@@ -501,7 +583,13 @@ export async function auditFantasyDriverPoolHealth(seasonId, options = {}) {
 
   let draftPayload = null;
   let publishedPayload = null;
+  let resolvedPayload = null;
   if (sb) {
+    resolvedPayload = await (async () => {
+      const { loadFantasySlateForRace } = await import('./_fantasy-slate.js');
+      return loadFantasySlateForRace(String(seasonId), raceNumber);
+    })();
+
     const { data: slateRows } = await sb
       .from('fantasy_slates')
       .select('*')
@@ -510,7 +598,9 @@ export async function auditFantasyDriverPoolHealth(seasonId, options = {}) {
       .order('generated_at', { ascending: false });
 
     const draftRow = (slateRows || []).find((row) => row.status === 'draft') || null;
-    const publishedRow = (slateRows || []).find((row) => row.status === 'published') || null;
+    const publishedRow =
+      (slateRows || []).find((row) => row.status === 'published') ||
+      (resolvedPayload?.slate?.status === 'published' ? resolvedPayload.slate : null);
 
     if (draftRow?.id) {
       const { data: draftDrivers } = await sb
@@ -523,25 +613,37 @@ export async function auditFantasyDriverPoolHealth(seasonId, options = {}) {
       };
     }
     if (publishedRow?.id) {
-      const { data: publishedDrivers } = await sb
-        .from('fantasy_slate_drivers')
-        .select('*')
-        .eq('slate_id', publishedRow.id);
-      publishedPayload = {
-        slate: publishedRow,
-        drivers: (publishedDrivers || []).map(normalizeSlateDriverRow),
-      };
+      if (resolvedPayload?.slate?.id === publishedRow.id) {
+        publishedPayload = {
+          slate: resolvedPayload.slate,
+          drivers: resolvedPayload.drivers || [],
+        };
+      } else {
+        const { data: publishedDrivers } = await sb
+          .from('fantasy_slate_drivers')
+          .select('*')
+          .eq('slate_id', publishedRow.id);
+        publishedPayload = {
+          slate: publishedRow,
+          drivers: (publishedDrivers || []).map(normalizeSlateDriverRow),
+        };
+      }
     }
   }
 
-  const activePayload = publishedPayload || draftPayload;
-  const comparison = compareDraftToEligiblePool(
-    activePayload?.drivers || [],
-    poolContext.eligibleRows
-  );
+  const activePayload = publishedPayload || draftPayload || resolvedPayload;
+  const slateDrivers = activePayload?.drivers || [];
+  const comparison = compareDraftToEligiblePool(slateDrivers, poolContext.eligibleRows);
   const draftMeta = parseSlateMeta(draftPayload?.slate);
   const publishedMeta = parseSlateMeta(publishedPayload?.slate);
   const salaryDraftMeta = draftMeta.salaryDraft || publishedMeta.salaryDraft || {};
+
+  const inactiveByAttendanceCount = poolContext.ineligibleRows.filter((row) =>
+    [
+      FANTASY_DRIVER_POOL_EXCLUSIONS.INACTIVE_ATTENDANCE,
+      FANTASY_DRIVER_POOL_EXCLUSIONS.INACTIVE_RECENT_WINDOW,
+    ].includes(row.eligibility?.reason)
+  ).length;
 
   const driverReports = poolContext.enrichedRows.map((row) => ({
     driverId: String(row.driverId),
@@ -549,7 +651,8 @@ export async function auditFantasyDriverPoolHealth(seasonId, options = {}) {
     profileDriverId: row.profileDriverId || null,
     iracingCustomerId: row.iracingCustomerId || null,
     driverName: row.driverName,
-    active: row.profileActive !== false,
+    active: row.activity?.active !== false,
+    consecutiveMissedRaces: row.activity?.consecutiveMissedRaces ?? null,
     seasonStarts: Number(row.races) || 0,
     standingsPosition: Number(row.position) || null,
     inStandings: true,
@@ -558,13 +661,15 @@ export async function auditFantasyDriverPoolHealth(seasonId, options = {}) {
     identitySplit: Boolean(row.identitySplit),
     eligible: row.eligibility.eligible,
     eligibilityReason: row.eligibility.reason,
-    inDraft: Boolean(
-      (activePayload?.drivers || []).some(
-        (driver) => String(driver.driverId) === String(row.driverId)
-      )
+    inSlate: Boolean(
+      slateDrivers.some((driver) => String(driver.driverId) === String(row.driverId))
     ),
     exclusionSource: row.eligibility.eligible ? null : row.eligibility.source,
   }));
+
+  const slateDriverCount = slateDrivers.length;
+  const eligibleDriverCount = poolContext.eligibleRows.length;
+  const missingEligibleCount = comparison.missingEligible.length;
 
   const status =
     comparison.driverPoolChanged && activePayload?.slate?.status === 'published'
@@ -574,6 +679,10 @@ export async function auditFantasyDriverPoolHealth(seasonId, options = {}) {
           ? 'needs_regeneration'
           : 'needs_refresh'
         : 'current';
+
+  const lockState = activePayload?.slate?.lock_at
+    ? getLockDisplayState(activePayload.slate.lock_at, new Date())
+    : { isLocked: false };
 
   return {
     seasonId: String(seasonId),
@@ -585,15 +694,27 @@ export async function auditFantasyDriverPoolHealth(seasonId, options = {}) {
     },
     standingsScheduleId: poolContext.raceDebug.standingsScheduleId,
     rosterRefreshedAt: poolContext.rosterRefreshedAt,
-    draftGeneratedAt: draftPayload?.slate?.generated_at || null,
+    draftGeneratedAt: draftPayload?.slate?.generated_at || activePayload?.slate?.generated_at || null,
     publishedAt: publishedPayload?.slate?.published_at || null,
+    diagnostics: {
+      resolvedSlateId: activePayload?.slate?.id ?? null,
+      resolvedSlateStatus: activePayload?.slate?.status ?? null,
+      eligibleDriverCount,
+      slateDriverCount,
+      missingEligibleCount,
+      inactiveByAttendanceCount,
+      excludedCount: poolContext.ineligibleRows.length,
+      isLocked: Boolean(lockState.isLocked),
+    },
     counts: {
-      eligibleRosterDrivers: poolContext.eligibleRows.length,
-      driversInDraft: draftPayload?.drivers?.length || 0,
-      driversInPublishedSlate: publishedPayload?.drivers?.length || 0,
-      missingEligibleDrivers: comparison.missingEligible.length,
+      eligibleRosterDrivers: eligibleDriverCount,
+      driversInDraft: slateDriverCount,
+      driversInPublishedSlate:
+        activePayload?.slate?.status === 'published' ? slateDriverCount : publishedPayload?.drivers?.length || 0,
+      missingEligibleDrivers: missingEligibleCount,
       ineligibleDrivers: poolContext.ineligibleRows.length,
       extraDraftDrivers: comparison.extraDraftDrivers.length,
+      slateDriverCount,
     },
     driverPoolStatus: status,
     needsRegeneration: Boolean(
@@ -602,17 +723,22 @@ export async function auditFantasyDriverPoolHealth(seasonId, options = {}) {
     ),
     driverPoolChanged: comparison.driverPoolChanged,
     manualEditsPresent: Boolean(salaryDraftMeta.manualEditsPresent),
-    publishedSlateLocked: Boolean(publishedPayload?.slate?.status === 'published'),
+    publishedSlateLocked: false,
+    isPublishedSlate: activePayload?.slate?.status === 'published',
+    isLocked: Boolean(lockState.isLocked),
+    resolvedSlate: activePayload,
     comparison,
     drivers: driverReports,
     missingDrivers: comparison.missingEligible,
     recommendation:
-      publishedPayload?.slate?.status === 'published' && comparison.missingEligible.length
-        ? 'Newly eligible drivers are not included because this slate is already published. Leave the current week unchanged or use an explicit republish workflow next week.'
+      activePayload?.slate?.status === 'published' && comparison.missingEligible.length
+        ? lockState.isLocked
+          ? 'Published slate is locked. Use an admin lock override to add newly eligible drivers.'
+          : 'Published slate is missing eligible drivers. Use Add Missing Eligible Drivers to update the player pool without changing existing salaries.'
         : comparison.missingEligible.length && salaryDraftMeta.manualEditsPresent
           ? 'Draft has manual salary edits. Compare the driver pool and regenerate or add missing drivers explicitly.'
           : comparison.missingEligible.length
-            ? 'Draft driver pool is stale. Regenerate the draft or add missing eligible drivers.'
+            ? 'Slate driver pool is stale. Regenerate the slate or add missing eligible drivers.'
             : 'Driver pool is current.',
   };
 }
@@ -651,56 +777,77 @@ export async function patchFantasyDriverPoolMeta(slateId, patch = {}) {
   return nextMeta;
 }
 
-export async function addMissingEligibleDriversToDraft(seasonId, options = {}) {
+export async function addMissingEligibleDriversToSlate(seasonId, options = {}) {
   const sb = supabase();
   if (!sb) throw new Error('Supabase not configured.');
 
   const audit = await auditFantasyDriverPoolHealth(seasonId, options);
-  if (audit.publishedSlateLocked) {
+  const slatePayload = audit.resolvedSlate;
+  const slateRow = slatePayload?.slate;
+
+  if (!slateRow?.id) {
+    throw new Error(`No fantasy slate found for race ${audit.raceNumber}.`);
+  }
+
+  if (audit.isLocked && !options.adminLockOverride) {
     const error = new Error(
-      'Cannot add drivers to a published slate. Newly eligible drivers can be included on the next slate.'
+      'This slate is locked. Adding drivers requires an explicit admin lock override.'
     );
-    error.code = 'PUBLISHED_SLATE_LOCKED';
+    error.code = 'SLATE_LOCKED';
+    error.status = 409;
     error.audit = audit;
     throw error;
   }
 
-  const { data: draftRow } = await sb
-    .from('fantasy_slates')
-    .select('*')
-    .eq('season_id', String(seasonId))
-    .eq('race_number', Number(audit.raceNumber))
-    .eq('status', 'draft')
-    .maybeSingle();
-
-  if (!draftRow?.id) {
-    throw new Error('No draft fantasy slate found for the target race.');
+  const lineupCount = await countLineupsForSlate(slateRow.id);
+  if (lineupCount > 0 && !options.confirmLineupsExist) {
+    const error = new Error(
+      'This published slate has submitted lineups. Adding drivers will not change existing lineups.'
+    );
+    error.code = 'LINEUPS_EXIST_CONFIRM_REQUIRED';
+    error.status = 409;
+    error.audit = audit;
+    error.lineupCount = lineupCount;
+    throw error;
   }
 
   if (!audit.comparison.missingEligible.length) {
     return {
       ok: true,
+      addedCount: 0,
       added: 0,
+      addedDrivers: [],
+      existingCount: audit.counts.slateDriverCount,
+      finalCount: audit.counts.slateDriverCount,
+      slateId: slateRow.id,
+      status: slateRow.status,
       audit,
       message: 'No missing eligible drivers to add.',
     };
   }
 
-  const draftMeta = parseSlateMeta(draftRow);
-  if (draftMeta.salaryDraft?.manualEditsPresent && !options.confirmManualEditMerge) {
-    await patchFantasyDriverPoolMeta(draftRow.id, {
+  const draftMeta = parseSlateMeta(slateRow);
+  if (
+    slateRow.status === 'draft' &&
+    draftMeta.salaryDraft?.manualEditsPresent &&
+    !options.confirmManualEditMerge
+  ) {
+    await patchFantasyDriverPoolMeta(slateRow.id, {
       needsRegeneration: true,
       driverPoolChanged: true,
       missingDriverIds: audit.comparison.addedDriverIds,
     });
     const error = new Error(
-      'Draft has manual salary edits. Confirm merge or regenerate the full draft instead.'
+      'Draft has manual salary edits. Confirm merge or regenerate the full slate instead.'
     );
     error.code = 'MANUAL_EDITS_PROTECTED';
     error.audit = audit;
     throw error;
   }
 
+  const existingDriverIds = new Set(
+    (slatePayload.drivers || []).map((driver) => String(driver.driverId))
+  );
   const poolContext = await loadEligibleFantasyStandingsPool({
     ...options,
     raceNumber: audit.raceNumber,
@@ -711,15 +858,19 @@ export async function addMissingEligibleDriversToDraft(seasonId, options = {}) {
   );
 
   const inserts = [];
+  const addedDrivers = [];
   for (const missing of audit.comparison.missingEligible) {
-    const computed = salaryById.get(String(missing.driverId));
+    const id = String(missing.driverId);
+    if (existingDriverIds.has(id)) continue;
+
+    const computed = salaryById.get(id);
     if (!computed?.finalSalary && computed?.finalSalary !== 0) {
       throw new Error(
         `Salary generation failed for ${missing.driverName || missing.driverId}. Driver was not added.`
       );
     }
     inserts.push({
-      slate_id: draftRow.id,
+      slate_id: slateRow.id,
       driver_id: computed.driverId,
       driver_name: computed.driverName,
       car_number: computed.carNumber,
@@ -734,6 +885,26 @@ export async function addMissingEligibleDriversToDraft(seasonId, options = {}) {
       salary_reasons: computed.salaryReasons,
       prior_salary: computed.priorSalary,
     });
+    addedDrivers.push({
+      driverId: String(computed.driverId),
+      driverName: computed.driverName,
+      finalSalary: computed.finalSalary,
+    });
+  }
+
+  if (!inserts.length) {
+    return {
+      ok: true,
+      addedCount: 0,
+      added: 0,
+      addedDrivers: [],
+      existingCount: audit.counts.slateDriverCount,
+      finalCount: audit.counts.slateDriverCount,
+      slateId: slateRow.id,
+      status: slateRow.status,
+      audit,
+      message: 'No missing eligible drivers to add.',
+    };
   }
 
   const { error: insertError } = await sb.from('fantasy_slate_drivers').insert(inserts);
@@ -741,21 +912,93 @@ export async function addMissingEligibleDriversToDraft(seasonId, options = {}) {
     throw new Error(insertError.message || 'Failed to add missing fantasy slate drivers.');
   }
 
-  await patchFantasyDriverPoolMeta(draftRow.id, {
+  await patchFantasyDriverPoolMeta(slateRow.id, {
     driverPoolChanged: false,
     needsRegeneration: false,
     lastDriverPoolRefreshAt: new Date().toISOString(),
-    addedDriverIds: audit.comparison.addedDriverIds,
+    lastAddedDriverIds: addedDrivers.map((driver) => driver.driverId),
     driverPoolStatus: 'current',
+  });
+
+  const refreshedAudit = await auditFantasyDriverPoolHealth(seasonId, {
+    ...options,
+    raceNumber: audit.raceNumber,
   });
 
   return {
     ok: true,
+    addedCount: inserts.length,
     added: inserts.length,
-    addedDriverIds: audit.comparison.addedDriverIds,
-    audit,
-    drivers: inserts,
+    addedDrivers,
+    existingCount: audit.counts.slateDriverCount,
+    finalCount: audit.counts.slateDriverCount + inserts.length,
+    slateId: slateRow.id,
+    status: slateRow.status,
+    audit: refreshedAudit,
   };
+}
+
+export async function regenerateFantasySlatePool(seasonId, options = {}) {
+  const mode = options.mode === 'full_regenerate' ? 'full_regenerate' : 'add_missing_only';
+  if (mode === 'add_missing_only') {
+    return addMissingEligibleDriversToSlate(seasonId, options);
+  }
+
+  const audit = await auditFantasyDriverPoolHealth(seasonId, options);
+  const slateRow = audit.resolvedSlate?.slate;
+  if (!slateRow?.id) {
+    throw new Error(`No fantasy slate found for race ${audit.raceNumber}.`);
+  }
+
+  if (audit.isLocked && !options.adminLockOverride) {
+    const error = new Error(
+      'This slate is locked. Full regeneration requires an explicit admin lock override.'
+    );
+    error.code = 'SLATE_LOCKED';
+    error.status = 409;
+    error.audit = audit;
+    throw error;
+  }
+
+  const lineupCount = await countLineupsForSlate(slateRow.id);
+  if (lineupCount > 0 && !options.confirmLineupsExist) {
+    const error = new Error(
+      'This slate has submitted lineups. Full regeneration will rebuild salaries but will not alter existing lineups.'
+    );
+    error.code = 'LINEUPS_EXIST_CONFIRM_REQUIRED';
+    error.status = 409;
+    error.audit = audit;
+    error.lineupCount = lineupCount;
+    throw error;
+  }
+
+  const { generateFantasyDraftSlate } = await import('./_fantasy-slate.js');
+  const generated = await generateFantasyDraftSlate({
+    raceNumber: audit.raceNumber,
+    forceRegenerate: true,
+    allowPublishedUpdate: slateRow.status === 'published',
+  });
+
+  const refreshedAudit = await auditFantasyDriverPoolHealth(seasonId, {
+    ...options,
+    raceNumber: audit.raceNumber,
+  });
+
+  return {
+    ok: true,
+    mode,
+    slateId: generated.slate?.id ?? slateRow.id,
+    status: generated.slate?.status ?? slateRow.status,
+    driverCount: (generated.drivers || []).length,
+    actionTaken: generated.actionTaken || 'updated_existing',
+    audit: refreshedAudit,
+    slate: generated.slate || null,
+    drivers: generated.drivers || [],
+  };
+}
+
+export async function addMissingEligibleDriversToDraft(seasonId, options = {}) {
+  return addMissingEligibleDriversToSlate(seasonId, options);
 }
 
 export async function refreshFantasyDriverPoolMetadata(seasonId, options = {}) {
@@ -768,7 +1011,6 @@ export async function refreshFantasyDriverPoolMetadata(seasonId, options = {}) {
     .select('id, status')
     .eq('season_id', String(seasonId))
     .eq('race_number', Number(audit.raceNumber))
-    .eq('status', 'draft')
     .maybeSingle();
 
   if (draftRow?.id) {
@@ -790,12 +1032,14 @@ export async function refreshFantasyDriverPoolMetadata(seasonId, options = {}) {
 }
 
 export function draftDriverActivitySummary(slateDriver = {}) {
-  const activity = deriveDriverActivityStatus({
-    ...slateDriver,
-    attendanceContext:
-      slateDriver.attendanceContext ||
-      slateDriver.scoreBreakdown?.attendanceContext ||
-      null,
+  const attendance = slateDriver.attendanceContext || slateDriver.scoreBreakdown?.attendanceContext || {};
+  const reliability = slateDriver.scoreBreakdown?.reliability?.details || {};
+  const activity = resolveFantasyDriverActivity(slateDriver, {
+    last5Starts: reliability.last5Starts ?? attendance.validLast5Starts ?? attendance.last5Starts,
+    last5WindowSize:
+      reliability.last5WindowSize ?? attendance.validLast5WindowSize ?? attendance.last5WindowSize,
+    lastStartRaceNumber:
+      reliability.lastStartRaceNumber ?? attendance.lastStartRaceNumber ?? null,
   });
   return activity;
 }

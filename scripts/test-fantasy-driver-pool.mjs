@@ -4,9 +4,21 @@ import {
   enrichStandingsRowWithProfile,
   filterEligibleStandingsRows,
   FANTASY_DRIVER_POOL_EXCLUSIONS,
+  resolveFantasyDriverActivity,
   resolveFantasyDriverEligibility,
   resolveProfileForStandingsRow,
 } from '../api/_fantasy-driver-pool.js';
+
+function activeContext(extra = {}) {
+  return {
+    activity: {
+      active: true,
+      consecutiveMissedRaces: 0,
+      ...extra,
+    },
+    ...extra,
+  };
+}
 
 const bradProfile = {
   driver_id: '17343',
@@ -31,7 +43,10 @@ const bradStandings = {
   assert.equal(resolution.matchMethod, 'slug');
   assert.equal(resolution.identitySplit, true);
   const enriched = enrichStandingsRowWithProfile(bradStandings, resolution);
-  const eligibility = resolveFantasyDriverEligibility(enriched, { inStandings: true });
+  const eligibility = resolveFantasyDriverEligibility(enriched, {
+    inStandings: true,
+    activity: { active: true, consecutiveMissedRaces: 0 },
+  });
   assert.equal(eligibility.eligible, true);
   assert.equal(eligibility.seasonStarts, 1);
   assert.equal(enriched.profileDriverId, '17343');
@@ -47,7 +62,10 @@ const bradStandings = {
       profileActive: false,
       profileResolved: true,
     },
-    { inStandings: true }
+    {
+      inStandings: true,
+      activity: { active: false, reason: FANTASY_DRIVER_POOL_EXCLUSIONS.INACTIVE_PROFILE },
+    }
   );
   assert.equal(inactive.eligible, false);
   assert.equal(inactive.reason, FANTASY_DRIVER_POOL_EXCLUSIONS.INACTIVE_PROFILE);
@@ -55,8 +73,8 @@ const bradStandings = {
 
 {
   const zeroStarts = resolveFantasyDriverEligibility(
-    { driverId: '101', position: 12, races: 0, profileActive: true },
-    { inStandings: true }
+    { driverId: '101', position: 12, races: 0, profileActive: true, activity: { active: true } },
+    { inStandings: true, activity: { active: true } }
   );
   assert.equal(zeroStarts.eligible, false);
   assert.equal(zeroStarts.reason, FANTASY_DRIVER_POOL_EXCLUSIONS.ZERO_STARTS);
@@ -113,8 +131,9 @@ const bradStandings = {
       races: 1,
       profileActive: true,
       profileResolved: true,
+      activity: { active: true, consecutiveMissedRaces: 0 },
     },
-    { inStandings: true }
+    activeContext()
   );
   assert.equal(oneStartLowerPosition.eligible, true);
   assert.equal(oneStartLowerPosition.seasonStarts, 1);
@@ -130,6 +149,61 @@ const bradStandings = {
   );
   assert.equal(duplicateGuard.missingEligible.length, 0);
   assert.equal(duplicateGuard.driverPoolChanged, false);
+}
+
+{
+  const alignedRaces = [
+    { finishes: {} },
+    { finishes: {} },
+    { finishes: {} },
+    { finishes: {} },
+    { finishes: {} },
+  ];
+  const fiveMissed = resolveFantasyDriverActivity(
+    { driverId: '900', profileActive: true },
+    { alignedRaces }
+  );
+  assert.equal(fiveMissed.active, false);
+  assert.equal(fiveMissed.consecutiveMissedRaces, 5);
+  assert.equal(fiveMissed.reason, FANTASY_DRIVER_POOL_EXCLUSIONS.INACTIVE_ATTENDANCE);
+
+  const eligibility = resolveFantasyDriverEligibility(
+    {
+      driverId: '900',
+      position: 20,
+      races: 10,
+      activity: fiveMissed,
+    },
+    { inStandings: true, activity: fiveMissed }
+  );
+  assert.equal(eligibility.eligible, false);
+}
+
+{
+  const alignedRaces = [
+    { finishes: { 901: 5 } },
+    { finishes: {} },
+    { finishes: {} },
+    { finishes: {} },
+    { finishes: {} },
+  ];
+  const fourMissed = resolveFantasyDriverActivity(
+    { driverId: '901', profileActive: true },
+    { alignedRaces }
+  );
+  assert.equal(fourMissed.consecutiveMissedRaces, 4);
+  assert.equal(fourMissed.active, true);
+
+  const eligibility = resolveFantasyDriverEligibility(
+    {
+      driverId: '901',
+      position: 12,
+      races: 8,
+      activity: fourMissed,
+    },
+    { inStandings: true, activity: fourMissed }
+  );
+  assert.equal(eligibility.eligible, true);
 }
 
 console.log('test-fantasy-driver-pool: all tests passed');

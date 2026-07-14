@@ -15,9 +15,10 @@ import {
   runFantasyLineupOptimizerForLatestSlate,
 } from './_fantasy-public-slate.js';
 import {
-  addMissingEligibleDriversToDraft,
+  addMissingEligibleDriversToSlate,
   auditFantasyDriverPoolHealth,
   refreshFantasyDriverPoolMetadata,
+  regenerateFantasySlatePool,
 } from './_fantasy-driver-pool.js';
 import {
   buildPublicSocialShareConfig,
@@ -661,6 +662,16 @@ async function handleSettingsRequest(req, res) {
       });
       return res.status(200).json(result);
     } catch (error) {
+      if (error.code === 'PUBLISHED_SLATE_EXISTS') {
+        return res.status(409).json({
+          error: error.message,
+          code: error.code,
+          existingSlateFound: true,
+          slateId: error.existingSlateId,
+          raceNumber: error.raceNumber,
+          actionTaken: 'loaded_existing',
+        });
+      }
       return res.status(500).json({ error: error.message || 'Fantasy slate generation failed.' });
     }
   }
@@ -670,10 +681,13 @@ async function handleSettingsRequest(req, res) {
       const settings = await getSettings();
       const seasonId = body.seasonId || settings.seasonId || '27987';
       const raceNumber = body.raceNumber != null ? Number(body.raceNumber) : null;
-      const draft = await loadFantasyDraftSlate(seasonId, raceNumber);
+      const { loadFantasySlateForRace } = await import('./_fantasy-slate.js');
+      const draft =
+        (await loadFantasySlateForRace(seasonId, raceNumber)) ||
+        (await loadFantasyDraftSlate(seasonId, raceNumber));
 
       if (!draft) {
-        return res.status(404).json({ error: 'No draft fantasy slate found.' });
+        return res.status(404).json({ error: 'No fantasy slate found for this race.' });
       }
 
       return res.status(200).json(draft);
@@ -1040,7 +1054,11 @@ async function handleSettingsRequest(req, res) {
       let driverPoolHealth = null;
       try {
         driverPoolHealth = await auditFantasyDriverPoolHealth(seasonId, {
-          raceNumber: payload?.slate?.race_number ?? progression.nextRaceNumber ?? null,
+          raceNumber:
+            progression.activeSlateRow?.race_number ??
+            payload?.slate?.race_number ??
+            progression.nextRaceNumber ??
+            null,
           settings,
         });
       } catch (poolError) {
@@ -1112,17 +1130,44 @@ async function handleSettingsRequest(req, res) {
     try {
       const settings = await getSettings();
       const seasonId = body.seasonId || settings.seasonId || '27987';
-      const result = await addMissingEligibleDriversToDraft(seasonId, {
+      const result = await addMissingEligibleDriversToSlate(seasonId, {
         raceNumber: body.raceNumber != null ? Number(body.raceNumber) : null,
         settings,
         confirmManualEditMerge: body.confirmManualEditMerge === true,
+        confirmLineupsExist: body.confirmLineupsExist === true,
+        adminLockOverride: body.adminLockOverride === true,
       });
       return res.status(200).json(result);
     } catch (error) {
       return res.status(error.status || 500).json({
-        error: error.message || 'Failed to add missing fantasy draft drivers.',
+        error: error.message || 'Failed to add missing fantasy slate drivers.',
         code: error.code || null,
         audit: error.audit || null,
+        lineupCount: error.lineupCount ?? null,
+      });
+    }
+  }
+
+  if (action === 'regenerateFantasySlatePool') {
+    if (rejectAdminAuth(req, res, body)) return;
+    try {
+      const settings = await getSettings();
+      const seasonId = body.seasonId || settings.seasonId || '27987';
+      const result = await regenerateFantasySlatePool(seasonId, {
+        raceNumber: body.raceNumber != null ? Number(body.raceNumber) : null,
+        settings,
+        mode: body.mode === 'full_regenerate' ? 'full_regenerate' : 'add_missing_only',
+        confirmLineupsExist: body.confirmLineupsExist === true,
+        confirmManualEditMerge: body.confirmManualEditMerge === true,
+        adminLockOverride: body.adminLockOverride === true,
+      });
+      return res.status(200).json(result);
+    } catch (error) {
+      return res.status(error.status || 500).json({
+        error: error.message || 'Failed to regenerate fantasy slate pool.',
+        code: error.code || null,
+        audit: error.audit || null,
+        lineupCount: error.lineupCount ?? null,
       });
     }
   }

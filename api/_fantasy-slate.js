@@ -32,10 +32,8 @@ import {
   summarizeFantasySlateAnalytics,
 } from './_fantasy-admin-analytics.js';
 import {
-  enrichStandingsRowWithProfile,
+  loadEligibleFantasyStandingsPool,
   refreshFantasyDriverPoolMetadata,
-  resolveFantasyDriverEligibility,
-  resolveProfileForStandingsRow,
   SLATE_MAX_STANDINGS_POSITION,
 } from './_fantasy-driver-pool.js';
 
@@ -134,6 +132,35 @@ async function loadPriorPublishedSlateMaps(seasonId, beforeRaceNumber) {
   };
 }
 
+async function loadSlateRowForRace(seasonId, raceNumber) {
+  const sb = supabase();
+  if (!sb || raceNumber == null) return null;
+
+  const { data: row, error } = await sb
+    .from('fantasy_slates')
+    .select('*')
+    .eq('season_id', String(seasonId))
+    .eq('race_number', Number(raceNumber))
+    .maybeSingle();
+
+  if (error || !row || isBackfilledSlate(row)) return null;
+  return row;
+}
+
+export async function loadFantasySlateForRace(seasonId, raceNumber) {
+  const sb = supabase();
+  if (!sb || raceNumber == null) return null;
+
+  const row = await loadSlateRowForRace(seasonId, raceNumber);
+  if (!row?.id) return null;
+
+  const drivers = await loadFantasySlateDrivers(sb, row.id);
+  return enrichFantasyDraftPayload({
+    slate: row,
+    drivers,
+  });
+}
+
 async function deleteExistingDraft(seasonId, raceNumber) {
   const sb = supabase();
   if (!sb) return;
@@ -152,32 +179,25 @@ async function deleteExistingDraft(seasonId, raceNumber) {
   await sb.from('fantasy_slates').delete().eq('id', existing.id);
 }
 
-async function saveDraftSlate(slateRow, driverRows) {
+async function saveDraftSlate(slateRow, driverRows, options = {}) {
   const sb = supabase();
   if (!sb) {
     throw new Error('Supabase not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.');
   }
 
-  await deleteExistingDraft(slateRow.season_id, slateRow.race_number);
-
-  const now = new Date().toISOString();
-  const { data: inserted, error } = await sb
-    .from('fantasy_slates')
-    .insert({
-      ...slateRow,
-      status: 'draft',
-      generated_at: now,
-      updated_at: now,
-    })
-    .select('*')
-    .single();
-
-  if (error) {
-    throw new Error(error.message || 'Failed to save fantasy slate.');
+  const existing = await loadSlateRowForRace(slateRow.season_id, slateRow.race_number);
+  if (existing?.status === 'published' && !options.allowPublishedUpdate) {
+    const error = new Error(
+      `Race ${existing.race_number} already has a published fantasy slate. Use Add Missing or Regenerate Published Slate instead.`
+    );
+    error.code = 'PUBLISHED_SLATE_EXISTS';
+    error.existingSlateId = existing.id;
+    error.raceNumber = existing.race_number;
+    throw error;
   }
 
+  const now = new Date().toISOString();
   const payload = driverRows.map((row) => ({
-    slate_id: inserted.id,
     driver_id: row.driverId,
     driver_name: row.driverName,
     car_number: row.carNumber,
@@ -193,15 +213,74 @@ async function saveDraftSlate(slateRow, driverRows) {
     prior_salary: row.priorSalary,
   }));
 
-  const { error: driversError } = await sb.from('fantasy_slate_drivers').insert(payload);
+  let slateRecord = existing;
+
+  if (existing?.id) {
+    const updates = {
+      schedule_id: slateRow.schedule_id ?? existing.schedule_id,
+      track: slateRow.track ?? existing.track,
+      track_type: slateRow.track_type ?? existing.track_type,
+      lock_time: slateRow.lock_time ?? existing.lock_time,
+      model_version: slateRow.model_version ?? existing.model_version,
+      meta: slateRow.meta ?? existing.meta,
+      updated_at: now,
+    };
+    if (options.allowPublishedUpdate) {
+      updates.status = existing.status;
+    } else {
+      updates.status = 'draft';
+      updates.generated_at = now;
+    }
+
+    const { data: updated, error } = await sb
+      .from('fantasy_slates')
+      .update(updates)
+      .eq('id', existing.id)
+      .select('*')
+      .single();
+
+    if (error) {
+      throw new Error(error.message || 'Failed to update fantasy slate.');
+    }
+
+    await sb.from('fantasy_slate_drivers').delete().eq('slate_id', existing.id);
+    slateRecord = updated;
+  } else {
+    const { data: inserted, error } = await sb
+      .from('fantasy_slates')
+      .insert({
+        ...slateRow,
+        status: 'draft',
+        generated_at: now,
+        updated_at: now,
+      })
+      .select('*')
+      .single();
+
+    if (error) {
+      throw new Error(error.message || 'Failed to save fantasy slate.');
+    }
+    slateRecord = inserted;
+  }
+
+  const driverInsertPayload = payload.map((row) => ({
+    ...row,
+    slate_id: slateRecord.id,
+  }));
+
+  const { error: driversError } = await sb.from('fantasy_slate_drivers').insert(driverInsertPayload);
   if (driversError) {
-    await sb.from('fantasy_slates').delete().eq('id', inserted.id);
+    if (!existing?.id) {
+      await sb.from('fantasy_slates').delete().eq('id', slateRecord.id);
+    }
     throw new Error(driversError.message || 'Failed to save fantasy slate drivers.');
   }
 
   return {
-    slate: inserted,
-    drivers: payload,
+    slate: slateRecord,
+    drivers: driverInsertPayload,
+    existingSlateFound: Boolean(existing?.id),
+    actionTaken: existing?.id ? 'updated_existing' : 'created_draft',
   };
 }
 
@@ -401,23 +480,32 @@ export async function generateFantasyDraftSlate(options = {}) {
   }
 
   const raceNumber = targetRace.officialPointsRaceNumber;
-  const raceDebug = buildRaceNumberDebug(scheduleRaces, raceNumber, { now, settings });
-  const standingsResult = await fetchStandingsRows(
-    settings,
-    raceDebug.standingsScheduleId
-  );
 
-  const profiles = await getDriverProfiles();
-  const standings = standingsResult.rows
-    .map((row) => {
-      const profileResolution = resolveProfileForStandingsRow(row, profiles);
-      const enriched = enrichStandingsRowWithProfile(row, profileResolution);
-      return {
-        ...enriched,
-        eligibility: resolveFantasyDriverEligibility(enriched, { inStandings: true }),
-      };
-    })
-    .filter((row) => row.eligibility.eligible);
+  const existingSlate = await loadFantasySlateForRace(seasonId, raceNumber);
+  if (
+    existingSlate?.slate?.status === 'published' &&
+    !options.forceRegenerate &&
+    !options.allowPublishedUpdate
+  ) {
+    return enrichFantasyDraftPayload({
+      ...existingSlate,
+      existingSlateFound: true,
+      slateId: existingSlate.slate.id,
+      raceNumber,
+      actionTaken: 'loaded_existing',
+    });
+  }
+
+  const poolContext = await loadEligibleFantasyStandingsPool({
+    raceNumber,
+    settings,
+    now,
+    scheduleRaces,
+  });
+  const standings = poolContext.eligibleRows;
+  const standingsResult = poolContext.standingsResult;
+  const profiles = poolContext.profiles;
+  const raceDebug = poolContext.raceDebug;
 
   if (!standings.length) {
     throw new Error('No active standings drivers with race starts available for fantasy salary generation.');
@@ -516,7 +604,9 @@ export async function generateFantasyDraftSlate(options = {}) {
     priorDisplayMaps.priorSalariesByDriver
   );
 
-  const saved = await saveDraftSlate(slateRow, enrichedDrivers);
+  const saved = await saveDraftSlate(slateRow, enrichedDrivers, {
+    allowPublishedUpdate: options.allowPublishedUpdate === true || options.forceRegenerate === true,
+  });
 
   if (saved?.slate?.id) {
     await refreshFantasyDriverPoolMetadata(seasonId, { raceNumber }).catch(() => {});
@@ -532,6 +622,9 @@ export async function generateFantasyDraftSlate(options = {}) {
       date: targetRace.date || null,
       lockTime: lockTime || null,
     },
+    existingSlateFound: Boolean(saved.existingSlateFound),
+    slateId: saved.slate?.id ?? null,
+    actionTaken: saved.actionTaken || 'created_draft',
   });
 }
 

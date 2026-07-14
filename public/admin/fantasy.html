@@ -819,7 +819,7 @@
                 <div class="admin-v" id="driverPoolEligibleCount">—</div>
               </div>
               <div class="admin-kv">
-                <div class="admin-k">Drivers in draft</div>
+                <div class="admin-k">Drivers in slate</div>
                 <div class="admin-v" id="driverPoolDraftCount">—</div>
               </div>
               <div class="admin-kv">
@@ -831,7 +831,7 @@
                 <div class="admin-v" id="driverPoolIneligibleCount">—</div>
               </div>
               <div class="admin-kv">
-                <div class="admin-k">Draft generated</div>
+                <div class="admin-k">Slate generated</div>
                 <div class="admin-v" id="driverPoolDraftGeneratedAt">—</div>
               </div>
               <div class="admin-kv">
@@ -860,8 +860,9 @@
             </div>
             <div class="fantasy-generate-row">
               <button id="refreshDriverPoolBtn" class="btn btn-secondary" type="button">Refresh Driver Pool</button>
-              <button id="compareDriverPoolBtn" class="btn btn-secondary" type="button">Compare Draft to Roster</button>
+              <button id="compareDriverPoolBtn" class="btn btn-secondary" type="button">Compare Slate to Roster</button>
               <button id="regenerateDriverPoolDraftBtn" class="btn btn-secondary" type="button">Regenerate Draft</button>
+              <button id="fullRegenerateDriverPoolBtn" class="btn btn-secondary" type="button" hidden>Full Regenerate Published Slate</button>
               <button id="addMissingDriverPoolBtn" class="btn btn-secondary" type="button">Add Missing Eligible Drivers</button>
               <span id="driverPoolActionStatus" class="fantasy-generate-status"></span>
             </div>
@@ -2241,6 +2242,15 @@
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || 'Generation failed');
 
+          if (data.existingSlateFound || data.actionTaken === 'loaded_existing') {
+            applyFantasySlatePayload(data);
+            await loadFantasyAdminStats();
+            if (statusEl) {
+              statusEl.textContent = `Race ${data.raceNumber ?? data.slate?.race_number ?? ''} already has a published slate (ID ${data.slateId ?? data.slate?.id ?? ''}). Loaded existing slate.`;
+            }
+            return;
+          }
+
           applyFantasySlatePayload(data);
           await loadFantasyAdminStats();
           if (statusEl) {
@@ -2342,28 +2352,49 @@
 
       function renderDriverPoolHealth(health) {
         const counts = health?.counts || {};
+        const diagnostics = health?.diagnostics || {};
+        const slateDriverCount =
+          counts.slateDriverCount ?? counts.driversInDraft ?? diagnostics.slateDriverCount ?? '—';
         $('#driverPoolEligibleCount') &&
-          ($('#driverPoolEligibleCount').textContent = String(counts.eligibleRosterDrivers ?? '—'));
+          ($('#driverPoolEligibleCount').textContent = String(
+            counts.eligibleRosterDrivers ?? diagnostics.eligibleDriverCount ?? '—'
+          ));
         $('#driverPoolDraftCount') &&
-          ($('#driverPoolDraftCount').textContent = String(counts.driversInDraft ?? '—'));
+          ($('#driverPoolDraftCount').textContent = String(slateDriverCount));
         $('#driverPoolMissingCount') &&
-          ($('#driverPoolMissingCount').textContent = String(counts.missingEligibleDrivers ?? '—'));
+          ($('#driverPoolMissingCount').textContent = String(
+            counts.missingEligibleDrivers ?? diagnostics.missingEligibleCount ?? '—'
+          ));
         $('#driverPoolIneligibleCount') &&
           ($('#driverPoolIneligibleCount').textContent = String(counts.ineligibleDrivers ?? '—'));
         $('#driverPoolDraftGeneratedAt') &&
-          ($('#driverPoolDraftGeneratedAt').textContent = formatDriverPoolTimestamp(health?.draftGeneratedAt));
+          ($('#driverPoolDraftGeneratedAt').textContent = formatDriverPoolTimestamp(
+            health?.draftGeneratedAt || health?.publishedAt
+          ));
         $('#driverPoolRosterRefreshedAt') &&
           ($('#driverPoolRosterRefreshedAt').textContent = formatDriverPoolTimestamp(health?.rosterRefreshedAt));
         const statusEl = $('#driverPoolStatusLabel');
         if (statusEl) {
-          statusEl.textContent = formatDriverPoolStatusLabel(health?.driverPoolStatus);
+          const statusLabel = formatDriverPoolStatusLabel(health?.driverPoolStatus);
+          const slateStatus = diagnostics.resolvedSlateStatus
+            ? `${statusLabel} (${diagnostics.resolvedSlateStatus})`
+            : statusLabel;
+          statusEl.textContent = slateStatus;
           statusEl.classList.toggle('error', health?.driverPoolStatus && health.driverPoolStatus !== 'current');
         }
         const recommendationEl = $('#driverPoolRecommendation');
         if (recommendationEl) {
-          recommendationEl.textContent =
-            health?.recommendation || health?.error || 'Driver pool health unavailable.';
-          recommendationEl.classList.toggle('error', Boolean(health?.error));
+          const parts = [];
+          if (health?.recommendation) parts.push(health.recommendation);
+          if (health?.error) parts.push(health.error);
+          if (diagnostics.resolvedSlateId) {
+            parts.push(
+              `Resolved slate #${diagnostics.resolvedSlateId} (${diagnostics.resolvedSlateStatus || 'unknown'}).`
+            );
+          }
+          if (health?.isLocked) parts.push('Slate is locked — admin override required to modify the driver pool.');
+          recommendationEl.textContent = parts.join(' ') || 'Driver pool health unavailable.';
+          recommendationEl.classList.toggle('error', Boolean(health?.error || health?.isLocked));
         }
 
         const missing = health?.missingDrivers || [];
@@ -2387,8 +2418,17 @@
 
         const addBtn = $('#addMissingDriverPoolBtn');
         const regenBtn = $('#regenerateDriverPoolDraftBtn');
-        if (addBtn) addBtn.disabled = !missing.length || health?.publishedSlateLocked;
-        if (regenBtn) regenBtn.disabled = health?.publishedSlateLocked;
+        const fullRegenBtn = $('#fullRegenerateDriverPoolBtn');
+        const isPublished = Boolean(health?.isPublishedSlate);
+        if (addBtn) addBtn.disabled = !missing.length;
+        if (regenBtn) {
+          regenBtn.textContent = isPublished ? 'Add Missing Only' : 'Regenerate Draft';
+          regenBtn.disabled = isPublished ? !missing.length : false;
+        }
+        if (fullRegenBtn) {
+          fullRegenBtn.hidden = !isPublished;
+          fullRegenBtn.disabled = false;
+        }
       }
 
       async function fetchDriverPoolHealth() {
@@ -2456,18 +2496,116 @@
       }
 
       async function regenerateDriverPoolDraft() {
+        const health = await fetchDriverPoolHealth().catch(() => null);
+        const isPublished = Boolean(health?.isPublishedSlate);
+        const statusEl = $('#driverPoolActionStatus');
+
+        if (isPublished) {
+          return addMissingDriverPoolDrivers();
+        }
+
         const confirmed = window.confirm(
           'Regenerate the draft slate using the current eligible driver pool? Manual salary edits will be overwritten.'
         );
         if (!confirmed) return;
-        const statusEl = $('#driverPoolActionStatus');
         if (statusEl) {
           statusEl.textContent = 'Regenerating draft...';
           statusEl.classList.remove('error');
         }
-        await retryPostRaceSalaryDraft({ confirmOverwrite: true });
-        await Promise.all([loadFantasyDraftSlate(), loadFantasyAdminStats()]);
-        if (statusEl) statusEl.textContent = 'Draft regenerated.';
+        try {
+          const res = await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              password: getSessionPw(),
+              action: 'regenerateFantasySlatePool',
+              mode: 'full_regenerate',
+              raceNumber: health?.raceNumber ?? null,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Regeneration failed');
+          renderDriverPoolHealth(data.audit || null);
+          await Promise.all([loadFantasyDraftSlate(), loadFantasyAdminStats()]);
+          if (statusEl) statusEl.textContent = `Regenerated slate (${data.driverCount ?? 0} drivers).`;
+        } catch (error) {
+          if (statusEl) {
+            statusEl.textContent = error.message || 'Regeneration failed';
+            statusEl.classList.add('error');
+          }
+        }
+      }
+
+      async function fullRegeneratePublishedSlate() {
+        const health = await fetchDriverPoolHealth().catch(() => null);
+        const confirmed = window.confirm(
+          'Full Regenerate will rebuild all eligible driver salaries on this published slate.\n\nExisting submitted lineups remain unchanged, but every salary on the slate may change.\n\nContinue?'
+        );
+        if (!confirmed) return;
+
+        const statusEl = $('#driverPoolActionStatus');
+        if (statusEl) {
+          statusEl.textContent = 'Fully regenerating published slate...';
+          statusEl.classList.remove('error');
+        }
+
+        try {
+          const payload = {
+            password: getSessionPw(),
+            action: 'regenerateFantasySlatePool',
+            mode: 'full_regenerate',
+            raceNumber: health?.raceNumber ?? null,
+            confirmLineupsExist: false,
+            adminLockOverride: false,
+          };
+          let res = await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          let data = await res.json();
+
+          if (!res.ok && data.code === 'LINEUPS_EXIST_CONFIRM_REQUIRED') {
+            const lineupConfirmed = window.confirm(
+              `${data.error}\n\nThis published slate has submitted lineups. Adding drivers will not change existing lineups. Continue?`
+            );
+            if (!lineupConfirmed) throw new Error(data.error);
+            payload.confirmLineupsExist = true;
+            res = await fetch('/api/settings', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+            });
+            data = await res.json();
+          }
+
+          if (!res.ok && data.code === 'SLATE_LOCKED') {
+            const lockConfirmed = window.confirm(
+              `${data.error}\n\nThe lineup lock has passed. Override and continue anyway?`
+            );
+            if (!lockConfirmed) throw new Error(data.error);
+            payload.adminLockOverride = true;
+            payload.confirmLineupsExist = true;
+            res = await fetch('/api/settings', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+            });
+            data = await res.json();
+          }
+
+          if (!res.ok) throw new Error(data.error || 'Full regeneration failed');
+          renderDriverPoolHealth(data.audit || null);
+          await Promise.all([loadFantasyDraftSlate(), loadFantasyAdminStats()]);
+          if (statusEl) {
+            statusEl.textContent = `Published slate regenerated (${data.driverCount ?? 0} drivers).`;
+          }
+        } catch (error) {
+          if (statusEl) {
+            statusEl.textContent = error.message || 'Full regeneration failed';
+            statusEl.classList.add('error');
+          }
+        }
       }
 
       async function addMissingDriverPoolDrivers() {
@@ -2479,47 +2617,73 @@
           statusEl.classList.remove('error');
         }
         try {
-          const res = await fetch('/api/settings', {
+          const health = await fetchDriverPoolHealth().catch(() => null);
+          const payload = {
+            password: getSessionPw(),
+            action: 'addMissingFantasyDraftDrivers',
+            raceNumber: health?.raceNumber ?? null,
+            confirmManualEditMerge: false,
+            confirmLineupsExist: false,
+            adminLockOverride: false,
+          };
+
+          let res = await fetch('/api/settings', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              password: getSessionPw(),
-              action: 'addMissingFantasyDraftDrivers',
-              confirmManualEditMerge: false,
-            }),
+            body: JSON.stringify(payload),
           });
-          const data = await res.json();
-          if (!res.ok) {
-            if (data.code === 'MANUAL_EDITS_PROTECTED') {
-              const confirmed = window.confirm(
-                `${data.error}\n\nAdd missing drivers anyway? This preserves existing salary overrides but may affect tier balance.`
-              );
-              if (!confirmed) throw new Error(data.error);
-              const retry = await fetch('/api/settings', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  password: getSessionPw(),
-                  action: 'addMissingFantasyDraftDrivers',
-                  confirmManualEditMerge: true,
-                }),
-              });
-              const retryData = await retry.json();
-              if (!retry.ok) throw new Error(retryData.error || 'Add missing drivers failed');
-              renderDriverPoolHealth(retryData.audit || null);
-              await loadFantasyDraftSlate();
-              if (statusEl) statusEl.textContent = `Added ${retryData.added || 0} driver(s).`;
-              return;
-            }
-            if (data.code === 'PUBLISHED_SLATE_LOCKED') {
-              renderDriverPoolHealth(data.audit || null);
-              throw new Error(data.error);
-            }
-            throw new Error(data.error || 'Add missing drivers failed');
+          let data = await res.json();
+
+          if (!res.ok && data.code === 'LINEUPS_EXIST_CONFIRM_REQUIRED') {
+            const confirmed = window.confirm(
+              'This published slate has submitted lineups. Adding drivers will not change existing lineups. Continue?'
+            );
+            if (!confirmed) throw new Error(data.error);
+            payload.confirmLineupsExist = true;
+            res = await fetch('/api/settings', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+            });
+            data = await res.json();
           }
+
+          if (!res.ok && data.code === 'SLATE_LOCKED') {
+            const lockConfirmed = window.confirm(
+              `${data.error}\n\nThe lineup lock has passed. Override and continue anyway?`
+            );
+            if (!lockConfirmed) throw new Error(data.error);
+            payload.adminLockOverride = true;
+            payload.confirmLineupsExist = true;
+            res = await fetch('/api/settings', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+            });
+            data = await res.json();
+          }
+
+          if (!res.ok && data.code === 'MANUAL_EDITS_PROTECTED') {
+            const confirmed = window.confirm(
+              `${data.error}\n\nAdd missing drivers anyway? Existing salary overrides will be preserved.`
+            );
+            if (!confirmed) throw new Error(data.error);
+            payload.confirmManualEditMerge = true;
+            res = await fetch('/api/settings', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+            });
+            data = await res.json();
+          }
+
+          if (!res.ok) throw new Error(data.error || 'Add missing drivers failed');
+
           renderDriverPoolHealth(data.audit || null);
-          await loadFantasyDraftSlate();
-          if (statusEl) statusEl.textContent = `Added ${data.added || 0} driver(s).`;
+          await Promise.all([loadFantasyDraftSlate(), loadFantasyAdminStats()]);
+          if (statusEl) {
+            statusEl.textContent = `Added ${data.addedCount ?? data.added ?? 0} driver(s). Slate now has ${data.finalCount ?? '—'} drivers.`;
+          }
         } catch (error) {
           if (statusEl) {
             statusEl.textContent = error.message || 'Add missing drivers failed';
@@ -3768,6 +3932,7 @@
       $('#refreshDriverPoolBtn')?.addEventListener('click', refreshDriverPoolHealth);
       $('#compareDriverPoolBtn')?.addEventListener('click', compareDriverPoolToDraft);
       $('#regenerateDriverPoolDraftBtn')?.addEventListener('click', regenerateDriverPoolDraft);
+      $('#fullRegenerateDriverPoolBtn')?.addEventListener('click', fullRegeneratePublishedSlate);
       $('#addMissingDriverPoolBtn')?.addEventListener('click', addMissingDriverPoolDrivers);
       $('#postRacePublishSlateBtn')?.addEventListener('click', () => publishFantasySlate());
       $('#backfillHistoricalSlatesBtn')?.addEventListener('click', backfillHistoricalSlates);
