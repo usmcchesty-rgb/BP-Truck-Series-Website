@@ -82,8 +82,82 @@ export function isScoringReviewApproved(context = {}) {
 }
 
 export function isSlateReviewApproved(context = {}) {
+  if (isNextRaceSlatePublished(context)) return true;
   if (context.manualApprovals?.slateReview) return true;
   return (context.missionControlCompletedTaskIds || []).includes('wed-review-fantasy-salaries');
+}
+
+export function getNextRaceNumber(context = {}) {
+  const postRace = context.postRace || {};
+  const adminStats = context.adminStats || {};
+  return postRace.nextRace?.raceNumber ?? adminStats.nextRace?.raceNumber ?? null;
+}
+
+function slateRowMatchesNextRace(slate, nextRaceNumber) {
+  if (!slate || nextRaceNumber == null) return false;
+  const raceNumber = slate.race_number ?? slate.raceNumber;
+  return Number(raceNumber) === Number(nextRaceNumber);
+}
+
+function isPublishedSlateRow(slate) {
+  return String(slate?.status || '').toLowerCase() === 'published';
+}
+
+export function isNextRaceSlatePublished(context = {}) {
+  const postRace = context.postRace || {};
+  const adminStats = context.adminStats || {};
+  const nextRaceNumber = getNextRaceNumber(context);
+  if (nextRaceNumber == null) return false;
+  if (postRace.salaryDraft?.published === true) return true;
+  if (slateRowMatchesNextRace(adminStats.activePlayableSlate, nextRaceNumber)) return true;
+  if (
+    slateRowMatchesNextRace(adminStats.publishedSlate, nextRaceNumber) &&
+    isPublishedSlateRow(adminStats.publishedSlate)
+  ) {
+    return true;
+  }
+  if (slateRowMatchesNextRace(adminStats.slate, nextRaceNumber) && isPublishedSlateRow(adminStats.slate)) {
+    return true;
+  }
+  return false;
+}
+
+function getNextRaceDriverCount(context = {}) {
+  const adminStats = context.adminStats || {};
+  const postRace = context.postRace || {};
+  const poolHealth = adminStats.driverPoolHealth || {};
+  const nextRaceNumber = getNextRaceNumber(context);
+  const slateDrivers = adminStats.slate?.drivers;
+  if (
+    Array.isArray(slateDrivers) &&
+    slateDrivers.length &&
+    slateRowMatchesNextRace(adminStats.slate, nextRaceNumber)
+  ) {
+    return slateDrivers.length;
+  }
+  const draft = postRace.salaryDraft?.draft;
+  if (draft && slateRowMatchesNextRace(draft, nextRaceNumber)) {
+    const draftCount = draft.driver_count ?? draft.drivers?.length;
+    if (draftCount != null) return Number(draftCount);
+  }
+  return (
+    poolHealth.counts?.slateDriverCount ??
+    poolHealth.counts?.driversInDraft ??
+    poolHealth.counts?.eligibleRosterDrivers ??
+    poolHealth.diagnostics?.slateDriverCount ??
+    poolHealth.diagnostics?.eligibleDriverCount ??
+    null
+  );
+}
+
+export function hasActualPoolDataGap(context = {}) {
+  const adminStats = context.adminStats || {};
+  const poolHealth = adminStats.driverPoolHealth || {};
+  if (Number(poolHealth.counts?.unresolvedIdentity ?? 0) > 0) return true;
+  const driverCount = getNextRaceDriverCount(context);
+  if (driverCount != null && Number(driverCount) === 0) return true;
+  if (isNextRaceSlatePublished(context)) return false;
+  return !draftSlateReady(adminStats, context.postRace || {});
 }
 
 export function draftSlateReady(adminStats = {}, postRace = {}) {
@@ -92,8 +166,35 @@ export function draftSlateReady(adminStats = {}, postRace = {}) {
   return Boolean(draft?.id) && Number(drivers) > 0;
 }
 
-export function driverPoolBuilt(adminStats = {}, postRace = {}) {
+export function inferDriverPoolBuilt(context = {}) {
+  const adminStats = context.adminStats || {};
+  const postRace = context.postRace || {};
+  if (isNextRaceSlatePublished(context)) {
+    return !hasActualPoolDataGap(context);
+  }
   return draftSlateReady(adminStats, postRace) || salariesReady(adminStats, postRace);
+}
+
+export function inferSalariesReady(context = {}) {
+  const adminStats = context.adminStats || {};
+  const postRace = context.postRace || {};
+  if (isNextRaceSlatePublished(context)) {
+    if (hasActualPoolDataGap(context)) return false;
+    const nextRaceNumber = getNextRaceNumber(context);
+    const drivers = Array.isArray(adminStats.slate?.drivers)
+      ? adminStats.slate.drivers
+      : postRace.salaryDraft?.draft?.drivers || [];
+    if (Array.isArray(drivers) && drivers.length && slateRowMatchesNextRace(adminStats.slate, nextRaceNumber)) {
+      return drivers.every((row) => Number.isFinite(Number(row.salary ?? row.salary_amount)));
+    }
+    return true;
+  }
+  return salariesReady(adminStats, postRace);
+}
+
+/** @deprecated Use inferDriverPoolBuilt(context) */
+export function driverPoolBuilt(adminStats = {}, postRace = {}) {
+  return inferDriverPoolBuilt({ adminStats, postRace });
 }
 
 export function salariesReady(adminStats = {}, postRace = {}) {
@@ -238,7 +339,9 @@ export function buildFantasyRaceCycleSteps(context = {}) {
   const completedRace = postRace.completedRace || context.completedRace || null;
   const nextRace = postRace.nextRace || adminStats.nextRace || context.nextRace || null;
   const salaryDraft = postRace.salaryDraft || {};
-  const publishedNext = salaryDraft.published === true;
+  const nextSlatePublished = isNextRaceSlatePublished(context);
+  const poolBuilt = inferDriverPoolBuilt(context);
+  const salariesDone = inferSalariesReady(context);
   const poolHealth = adminStats.driverPoolHealth || {};
   const unresolved = unresolvedCount(scoring);
   const resultsReady = scoring.resultsReady === true;
@@ -410,9 +513,12 @@ export function buildFantasyRaceCycleSteps(context = {}) {
   } else if (poolBlocking) {
     step8.status = STEP_STATUS.BLOCKED;
     step8.blockedReason = 'Step 8 is blocked because one or more eligible drivers have unresolved identity matches.';
-  } else if (driverPoolBuilt(adminStats, postRace)) {
+  } else if (poolBuilt) {
     step8.status = STEP_STATUS.COMPLETE;
     step8.actionLabel = 'Review Exclusions';
+    if (nextSlatePublished) {
+      step8.details = { source: 'published_slate' };
+    }
   } else {
     step8.status = STEP_STATUS.READY;
     step8.actionLabel = 'Build Driver Pool';
@@ -429,7 +535,7 @@ export function buildFantasyRaceCycleSteps(context = {}) {
   if (step8.status !== STEP_STATUS.COMPLETE) {
     step9.status = STEP_STATUS.BLOCKED;
     step9.blockedReason = 'Build the eligible driver pool in Step 8 first.';
-  } else if (salariesReady(adminStats, postRace)) {
+  } else if (salariesDone) {
     step9.status = STEP_STATUS.COMPLETE;
     step9.actionLabel = 'Review Salary Details';
   } else {
@@ -448,9 +554,9 @@ export function buildFantasyRaceCycleSteps(context = {}) {
   if (step9.status !== STEP_STATUS.COMPLETE) {
     step10.status = STEP_STATUS.BLOCKED;
     step10.blockedReason = 'Step 10 is blocked because salaries have not been generated in Step 9.';
-  } else if (publishedNext || slateApproved) {
+  } else if (nextSlatePublished || slateApproved) {
     step10.status = STEP_STATUS.COMPLETE;
-  } else if (salariesReady(adminStats, postRace)) {
+  } else if (salariesDone) {
     step10.status = STEP_STATUS.NEEDS_REVIEW;
     step10.actionLabel = 'Approve Slate';
   } else {
@@ -469,9 +575,13 @@ export function buildFantasyRaceCycleSteps(context = {}) {
   if (step10.status !== STEP_STATUS.COMPLETE) {
     step11.status = STEP_STATUS.BLOCKED;
     step11.blockedReason = 'Approve the slate review in Step 10 before publishing.';
-  } else if (publishedNext) {
+  } else if (nextSlatePublished) {
     step11.status = STEP_STATUS.COMPLETE;
-    step11.completedAt = adminStats.publishedSlate?.published_at || null;
+    step11.completedAt =
+      adminStats.publishedSlate?.published_at ||
+      adminStats.activePlayableSlate?.published_at ||
+      adminStats.slate?.published_at ||
+      null;
   } else {
     step11.status = STEP_STATUS.READY;
     step11.actionLabel = 'Publish Fantasy Slate';
@@ -490,7 +600,7 @@ export function buildFantasyRaceCycleSteps(context = {}) {
   if (readiness.ready) {
     step12.status = STEP_STATUS.COMPLETE;
     step12.actionLabel = 'Run Full Validation';
-  } else if (publishedNext || finalized) {
+  } else if (nextSlatePublished || finalized) {
     step12.status = STEP_STATUS.NEEDS_REVIEW;
     step12.actionLabel = 'Run Full Validation';
     step12.blockedReason = readiness.message;
@@ -514,10 +624,10 @@ export function evaluateReadiness(context = {}, steps = []) {
   const progression = adminStats.progression || {};
   const lockPreview = adminStats.lockPreview || {};
   const checks = {
-    nextRaceSelected: Boolean(postRace.nextRace?.raceNumber),
-    slatePublished: postRace.salaryDraft?.published === true,
-    driverPoolPopulated: draftSlateReady(adminStats, postRace),
-    salariesPopulated: salariesReady(adminStats, postRace),
+    nextRaceSelected: Boolean(getNextRaceNumber(context)),
+    slatePublished: isNextRaceSlatePublished(context),
+    driverPoolPopulated: inferDriverPoolBuilt(context),
+    salariesPopulated: inferSalariesReady(context),
     lockTimeValid: Boolean(lockPreview.valid !== false || adminStats.publishedSlate?.lock_at),
     lineupSizeFive: true,
     salaryCap50000: true,
@@ -588,7 +698,7 @@ export function runFullValidation(context = {}, steps = []) {
   const adminStats = context.adminStats || {};
   const progression = adminStats.progression || {};
   const finalized = isContestFinalized(scoring);
-  const publishedNext = postRace.salaryDraft?.published === true;
+  const nextSlatePublished = isNextRaceSlatePublished(context);
 
   const postRaceChecks = [
     {
@@ -639,13 +749,13 @@ export function runFullValidation(context = {}, steps = []) {
   const nextRaceChecks = [
     {
       label: 'Next race selected',
-      state: !nextRaceApplicable ? 'Not Applicable' : postRace.nextRace?.raceNumber ? 'Passed' : 'Failed',
+      state: !nextRaceApplicable ? 'Not Applicable' : getNextRaceNumber(context) ? 'Passed' : 'Failed',
       stepId: 'select_next_race',
       stepNumber: 7,
     },
     {
       label: 'Driver pool exists',
-      state: !nextRaceApplicable ? 'Not Applicable' : draftSlateReady(adminStats, postRace) ? 'Passed' : 'Failed',
+      state: !nextRaceApplicable ? 'Not Applicable' : inferDriverPoolBuilt(context) ? 'Passed' : 'Failed',
       stepId: 'build_driver_pool',
       stepNumber: 8,
     },
@@ -673,7 +783,7 @@ export function runFullValidation(context = {}, steps = []) {
       label: 'Every eligible driver has a salary',
       state: !nextRaceApplicable
         ? 'Not Applicable'
-        : salariesReady(adminStats, postRace) && driversMissingSalary(adminStats) === 0
+        : inferSalariesReady(context) && driversMissingSalary(adminStats) === 0
           ? 'Passed'
           : 'Failed',
       stepId: 'generate_salaries',
@@ -703,19 +813,19 @@ export function runFullValidation(context = {}, steps = []) {
     },
     {
       label: 'Slate review approved',
-      state: !nextRaceApplicable ? 'Not Applicable' : isSlateReviewApproved(context) || publishedNext ? 'Passed' : 'Warning',
+      state: !nextRaceApplicable ? 'Not Applicable' : isSlateReviewApproved(context) ? 'Passed' : 'Warning',
       stepId: 'review_next_slate',
       stepNumber: 10,
     },
     {
       label: 'Slate published',
-      state: !nextRaceApplicable ? 'Not Applicable' : publishedNext ? 'Passed' : 'Failed',
+      state: !nextRaceApplicable ? 'Not Applicable' : nextSlatePublished ? 'Passed' : 'Failed',
       stepId: 'publish_next_slate',
       stepNumber: 11,
     },
     {
       label: 'Public contest data is available',
-      state: !nextRaceApplicable ? 'Not Applicable' : publishedNext ? 'Passed' : 'Failed',
+      state: !nextRaceApplicable ? 'Not Applicable' : nextSlatePublished ? 'Passed' : 'Failed',
       stepId: 'publish_next_slate',
       stepNumber: 11,
     },
@@ -725,7 +835,7 @@ export function runFullValidation(context = {}, steps = []) {
         ? 'Not Applicable'
         : progression.isPlayable === true
           ? 'Passed'
-          : publishedNext
+          : nextSlatePublished
             ? 'Warning'
             : 'Failed',
       stepId: 'readiness_check',
@@ -818,8 +928,11 @@ export function buildSummaryDashboard(context = {}, steps = []) {
   const progression = adminStats.progression || {};
   const poolHealth = adminStats.driverPoolHealth || {};
   const finalized = isContestFinalized(scoring);
-  const publishedNext = postRace.salaryDraft?.published === true;
-  const eligibleCount = poolHealth.counts?.eligibleRosterDrivers ?? poolHealth.diagnostics?.eligibleDriverCount;
+  const nextSlatePublished = isNextRaceSlatePublished(context);
+  const eligibleCount =
+    getNextRaceDriverCount(context) ??
+    poolHealth.counts?.eligibleRosterDrivers ??
+    poolHealth.diagnostics?.eligibleDriverCount;
 
   return {
     season: displayValue(context.seasonName),
@@ -828,12 +941,12 @@ export function buildSummaryDashboard(context = {}, steps = []) {
     scoring: scoring.status === 'scored' ? 'Complete' : hasPreviewScores(postRace, scoring) ? 'Calculated' : DISPLAY_NA,
     standings: finalized ? 'Updated' : 'Pending',
     nextRace: raceLabel(postRace.nextRace || adminStats.nextRace),
-    slate: publishedNext ? 'Published' : postRace.salaryDraft?.draft ? 'Draft' : 'Not generated',
+    slate: nextSlatePublished ? 'Published' : postRace.salaryDraft?.draft || adminStats.slate?.id ? 'Draft' : 'Not generated',
     drivers:
       eligibleCount == null ? DISPLAY_NA : `${eligibleCount} Eligible`,
-    salaries: salariesReady(adminStats, postRace) ? 'Generated' : 'Not generated',
-    published: publishedNext ? 'Yes' : 'No',
-    entries: progression.isPlayable ? 'Open' : publishedNext ? 'Closed' : 'Not Open',
+    salaries: inferSalariesReady(context) ? 'Generated' : 'Not generated',
+    published: nextSlatePublished ? 'Yes' : 'No',
+    entries: progression.isPlayable ? 'Open' : nextSlatePublished ? 'Closed' : 'Not Open',
     lock: displayValue(
       adminStats.publishedSlate?.lock_time ||
         adminStats.lockPreview?.lockTimeDisplay ||
@@ -862,8 +975,12 @@ export function buildReadinessCard(context = {}, steps = []) {
   const poolHealth = adminStats.driverPoolHealth || {};
   const readiness = evaluateReadiness(context, steps);
   const nextRace = postRace.nextRace || adminStats.nextRace || {};
-  const eligibleCount = poolHealth.counts?.eligibleRosterDrivers ?? poolHealth.diagnostics?.eligibleDriverCount;
+  const eligibleCount =
+    getNextRaceDriverCount(context) ??
+    poolHealth.counts?.eligibleRosterDrivers ??
+    poolHealth.diagnostics?.eligibleDriverCount;
   const scoring = context.scoring || postRace.scoring || {};
+  const nextSlatePublished = isNextRaceSlatePublished(context);
 
   return {
     ready: readiness.ready,
@@ -878,7 +995,7 @@ export function buildReadinessCard(context = {}, steps = []) {
       drivers: eligibleCount == null ? DISPLAY_NA : `${eligibleCount} Eligible`,
       salaryCap: '$50,000',
       lineupSize: '5 Drivers',
-      slate: postRace.salaryDraft?.published ? 'Published' : postRace.salaryDraft?.draft ? 'Draft' : DISPLAY_NA,
+      slate: nextSlatePublished ? 'Published' : postRace.salaryDraft?.draft || adminStats.slate?.id ? 'Draft' : DISPLAY_NA,
       entries: progression.isPlayable ? 'Open' : 'Not Open',
       previousRace: isContestFinalized(scoring) ? 'Finalized' : DISPLAY_NA,
       standings: isContestFinalized(scoring) ? 'Current' : 'Pending',
@@ -897,8 +1014,8 @@ export function summarizeWorkflowStatus(context = {}, steps = []) {
     headline = 'Ready for next race';
   } else if (!scoring.resultsReady) headline = 'Waiting for official results';
   else if (scoring.status === 'needs_review') headline = 'Scoring needs review';
-  else if (postRace.salaryDraft?.published) headline = 'Next slate published';
-  else if (postRace.salaryDraft?.draft) headline = 'Next slate draft ready';
+  else if (isNextRaceSlatePublished(context)) headline = 'Next slate published';
+  else if (postRace.salaryDraft?.draft || context.adminStats?.slate?.id) headline = 'Next slate draft ready';
   return { headline, nextAction };
 }
 

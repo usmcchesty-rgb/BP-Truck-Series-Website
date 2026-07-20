@@ -10,6 +10,7 @@ import {
   getActionDisabledReason,
   getAutoExpandedStepId,
   getNextRecommendedAction,
+  isNextRaceSlatePublished,
   runFullValidation,
   shouldStepExpand,
   STEP_STATUS,
@@ -528,6 +529,118 @@ function emptyContext() {
   const step9 = steps.find((step) => step.id === 'generate_salaries');
   assert.equal(step8.status, STEP_STATUS.READY);
   assert.equal(step9.status, STEP_STATUS.BLOCKED);
+}
+
+{
+  const context = baseContext({
+    postRace: {
+      ...baseContext().postRace,
+      nextRace: { raceNumber: 17, track: 'Texas', date: '2026-05-01' },
+      scoring: {
+        resultsReady: true,
+        status: 'scored',
+        scoringMeta: { status: 'scored' },
+        unresolvedDrivers: [],
+      },
+      salaryDraft: { published: true, draft: null },
+    },
+    scoring: { resultsReady: true, status: 'scored', scoringMeta: { status: 'scored' } },
+    adminStats: {
+      ...baseContext().adminStats,
+      nextRace: { raceNumber: 17, track: 'Texas', date: '2026-05-01' },
+      publishedSlate: {
+        id: 31,
+        race_number: 17,
+        status: 'published',
+        published_at: '2026-04-20T00:00:00.000Z',
+        lock_time: 'Sunday 7:45 PM',
+      },
+      activePlayableSlate: {
+        id: 31,
+        race_number: 17,
+        status: 'published',
+      },
+      slate: { id: 31, race_number: 17, status: 'published' },
+      driverPoolHealth: { counts: { eligibleRosterDrivers: 42, slateDriverCount: 42, unresolvedIdentity: 0 } },
+      progression: { isPlayable: true },
+    },
+  });
+  assert.equal(isNextRaceSlatePublished(context), true);
+  const steps = buildFantasyRaceCycleSteps(context);
+  assert.equal(steps.find((step) => step.id === 'build_driver_pool').status, STEP_STATUS.COMPLETE);
+  assert.equal(steps.find((step) => step.id === 'generate_salaries').status, STEP_STATUS.COMPLETE);
+  assert.equal(steps.find((step) => step.id === 'review_next_slate').status, STEP_STATUS.COMPLETE);
+  assert.equal(steps.find((step) => step.id === 'publish_next_slate').status, STEP_STATUS.COMPLETE);
+  const dashboard = buildSummaryDashboard(context, steps);
+  assert.equal(dashboard.slate, 'Published');
+  assert.equal(dashboard.salaries, 'Generated');
+}
+
+{
+  const context = baseContext({
+    postRace: {
+      ...baseContext().postRace,
+      nextRace: { raceNumber: 18, track: 'Nashville', date: '2026-06-01' },
+      scoring: {
+        resultsReady: true,
+        status: 'scored',
+        scoringMeta: { status: 'scored' },
+        unresolvedDrivers: [],
+      },
+      salaryDraft: { published: false, draft: null },
+    },
+    scoring: { resultsReady: true, status: 'scored', scoringMeta: { status: 'scored' } },
+    adminStats: {
+      ...baseContext().adminStats,
+      nextRace: { raceNumber: 18, track: 'Nashville', date: '2026-06-01' },
+      publishedSlate: {
+        id: 20,
+        race_number: 17,
+        status: 'published',
+      },
+      completedPublishedSlate: {
+        id: 20,
+        race_number: 17,
+        status: 'published',
+      },
+      slate: null,
+      driverPoolHealth: { counts: { eligibleRosterDrivers: 42, unresolvedIdentity: 0 } },
+    },
+  });
+  assert.equal(isNextRaceSlatePublished(context), false);
+  const steps = buildFantasyRaceCycleSteps(context);
+  assert.equal(steps.find((step) => step.id === 'build_driver_pool').status, STEP_STATUS.READY);
+  assert.equal(steps.find((step) => step.id === 'publish_next_slate').status, STEP_STATUS.BLOCKED);
+}
+
+{
+  const context = baseContext({
+    postRace: {
+      ...baseContext().postRace,
+      nextRace: { raceNumber: 5, track: 'Nashville', date: '2026-04-01' },
+      scoring: {
+        resultsReady: true,
+        status: 'scored',
+        scoringMeta: { status: 'scored' },
+        unresolvedDrivers: [],
+      },
+      salaryDraft: {
+        published: false,
+        draft: { id: 11, driver_count: 20, raceNumber: 5 },
+      },
+    },
+    scoring: { resultsReady: true, status: 'scored', scoringMeta: { status: 'scored' } },
+    adminStats: {
+      ...baseContext().adminStats,
+      nextRace: { raceNumber: 5, track: 'Nashville', date: '2026-04-01' },
+      slate: { id: 11, race_number: 5, drivers: [{ salary: 9000, driver_id: '1' }, { salary: 8000, driver_id: '2' }] },
+    },
+  });
+  const steps = buildFantasyRaceCycleSteps(context);
+  assert.equal(steps.find((step) => step.id === 'build_driver_pool').status, STEP_STATUS.COMPLETE);
+  assert.equal(steps.find((step) => step.id === 'generate_salaries').status, STEP_STATUS.COMPLETE);
+  assert.equal(steps.find((step) => step.id === 'review_next_slate').status, STEP_STATUS.NEEDS_REVIEW);
+  assert.equal(steps.find((step) => step.id === 'publish_next_slate').status, STEP_STATUS.BLOCKED);
 }
 
 console.log('test-fantasy-race-cycle: all tests passed');
