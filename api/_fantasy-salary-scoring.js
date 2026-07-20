@@ -40,6 +40,7 @@ export function buildFantasyDriverSalaries({
   allAlignedRaces = null,
   settings = null,
   now = new Date(),
+  tierScoreProfile = FANTASY_MODEL_VERSION,
 }) {
   const recentRaceContext =
     slateRaceNumber != null && scheduleRaces
@@ -98,6 +99,7 @@ export function buildFantasyDriverSalaries({
       priorTierScore: priorTierScoresByDriver.get(driverId) ?? null,
       priorSalary: priorSalariesByDriver.get(driverId) ?? null,
       attendanceContext,
+      tierScoreProfile,
     });
   });
 
@@ -123,6 +125,7 @@ export function buildFantasyDriverSalaries({
   normalizeFantasySlateComponents(rawDrivers, {
     effectiveWeights,
     recentDataSparse: sparseInfo.recentDataSparse,
+    tierScoreProfile,
   });
 
   for (const driver of rawDrivers) {

@@ -364,6 +364,7 @@ export function applyV26SalaryGuardrails(driver = {}, alignedRaces = []) {
   const movement = applyMovementGuardrails(salary, priorSalary, context);
   salary = movement.salary;
 
+  const salaryBeforeWeeklyCap = salary;
   const maxIncrease = applyMaxWeeklyIncrease(
     salary,
     priorSalary,
@@ -379,6 +380,14 @@ export function applyV26SalaryGuardrails(driver = {}, alignedRaces = []) {
 
   const rounded = roundSalaryInBand(roundSalary(salary), band);
   const salaryAfterGuardrails = rounded;
+  const modelSuggestedSalary =
+    Number.isFinite(priorSalary) && priorSalary > 0
+      ? roundSalaryInBand(roundSalary(salaryBeforeWeeklyCap), band)
+      : null;
+  const modelSuggestedChange =
+    modelSuggestedSalary != null ? modelSuggestedSalary - priorSalary : null;
+  const appliedSalaryChange =
+    Number.isFinite(priorSalary) && priorSalary > 0 ? salaryAfterGuardrails - priorSalary : null;
 
   const diagnostics = {
     salaryEngineVersion: SALARY_ENGINE_VERSION,
@@ -402,7 +411,13 @@ export function applyV26SalaryGuardrails(driver = {}, alignedRaces = []) {
     tierProgressCapMax: driver.tierProgressCapMax ?? null,
     uncappedBandSalary: driver.uncappedBandSalary ?? null,
     salaryBeforeGuardrails,
+    salaryBeforeWeeklyCap,
     salaryAfterGuardrails,
+    weeklyCapApplied: maxIncrease.limited,
+    weeklyCapMaxIncrease: maxIncrease.maxIncrease ?? null,
+    modelSuggestedSalary,
+    modelSuggestedChange,
+    appliedSalaryChange,
     guardrailNotes: [
       ...(movement.guardrailNotes || []),
       ...(maxIncrease.limited
@@ -419,6 +434,10 @@ export function applyV26SalaryGuardrails(driver = {}, alignedRaces = []) {
 
   Object.assign(driver, diagnostics);
   driver.salaryGuardrails = diagnostics;
+  driver.weeklyCapApplied = diagnostics.weeklyCapApplied;
+  driver.modelSuggestedSalary = diagnostics.modelSuggestedSalary;
+  driver.modelSuggestedChange = diagnostics.modelSuggestedChange;
+  driver.appliedSalaryChange = diagnostics.appliedSalaryChange;
 
   if (driver.scoreBreakdown) {
     driver.scoreBreakdown._v26Guardrails = diagnostics;
@@ -472,6 +491,19 @@ export function buildGuardrailExplanationLines(driver = {}) {
       g.salaryBeforeGuardrails !== g.salaryAfterGuardrails) {
     lines.push(
       `Final salary adjusted from $${Number(g.salaryBeforeGuardrails).toLocaleString('en-US')} to $${Number(g.salaryAfterGuardrails).toLocaleString('en-US')}.`,
+    );
+  }
+
+  if (
+    g.weeklyCapApplied &&
+    g.modelSuggestedChange != null &&
+    g.appliedSalaryChange != null &&
+    Number(g.modelSuggestedChange) !== Number(g.appliedSalaryChange)
+  ) {
+    const suggested = Number(g.modelSuggestedChange);
+    const applied = Number(g.appliedSalaryChange);
+    lines.push(
+      `Model suggested ${suggested >= 0 ? '+' : '-'}$${Math.abs(suggested).toLocaleString('en-US')}; applied ${applied >= 0 ? '+' : '-'}$${Math.abs(applied).toLocaleString('en-US')} after weekly cap.`,
     );
   }
 

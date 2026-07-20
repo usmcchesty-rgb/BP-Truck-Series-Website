@@ -182,6 +182,9 @@ export function enrichFantasySlateDrivers(drivers = [], priorSalariesByDriver = 
     return {
       ...driver,
       ...computeSalaryMovement(finalSalary, previousSalary),
+      modelSuggestedSalary: driver.modelSuggestedSalary ?? driver.salaryGuardrails?.modelSuggestedSalary ?? null,
+      modelSuggestedChange: driver.modelSuggestedChange ?? driver.salaryGuardrails?.modelSuggestedChange ?? null,
+      weeklyCapApplied: driver.weeklyCapApplied ?? driver.salaryGuardrails?.weeklyCapApplied ?? false,
     };
   });
 

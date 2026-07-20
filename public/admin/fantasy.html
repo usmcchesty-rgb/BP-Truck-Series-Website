@@ -260,6 +260,12 @@
       .fantasy-salary-change.is-same { color: #cfcfcf; }
       .fantasy-salary-change.is-new { color: #f0c040; }
 
+      .fantasy-salary-cap-note {
+        margin-top: 0.25rem;
+        font-size: 0.78rem;
+        line-height: 1.3;
+      }
+
       .fantasy-value-grade {
         display: inline-block;
         min-width: 28px;
@@ -1569,7 +1575,17 @@
         const formatted = `${change > 0 ? '+' : '-'}${formatFantasySalary(Math.abs(change)).replace('$', '$')}`;
         const arrow = change > 0 ? ' ▲' : ' ▼';
         const css = change > 0 ? 'is-up' : 'is-down';
-        return `<span class="fantasy-salary-change ${css}">${escapeAdminHtml(formatted)}${arrow}</span>`;
+        const weeklyCapApplied =
+          driver.weeklyCapApplied === true || driver.salaryGuardrails?.weeklyCapApplied === true;
+        const suggested = Number(
+          driver.modelSuggestedChange ?? driver.salaryGuardrails?.modelSuggestedChange
+        );
+        const main = `<span class="fantasy-salary-change ${css}">${escapeAdminHtml(formatted)}${arrow}</span>`;
+        if (weeklyCapApplied && Number.isFinite(suggested) && suggested !== change) {
+          const suggestedFormatted = `${suggested > 0 ? '+' : '-'}${formatFantasySalary(Math.abs(suggested))}`;
+          return `${main}<div class="fantasy-salary-cap-note muted">Model suggested ${escapeAdminHtml(suggestedFormatted)} · Weekly cap applied</div>`;
+        }
+        return main;
       }
 
       function renderFantasySalarySummary(analytics = null) {
@@ -2029,6 +2045,18 @@
               `Final salary reduced from ${formatFantasySalary(g.salaryBeforeGuardrails)} to ${formatFantasySalary(g.salaryAfterGuardrails)} before publish.`
             );
           }
+          if (
+            g.weeklyCapApplied &&
+            g.modelSuggestedChange != null &&
+            g.appliedSalaryChange != null &&
+            Number(g.modelSuggestedChange) !== Number(g.appliedSalaryChange)
+          ) {
+            const suggested = Number(g.modelSuggestedChange);
+            const applied = Number(g.appliedSalaryChange);
+            guardrailLines.push(
+              `Model suggested ${suggested >= 0 ? '+' : ''}${formatFantasySalary(Math.abs(suggested))}; applied ${applied >= 0 ? '+' : ''}${formatFantasySalary(Math.abs(applied))} after weekly cap.`
+            );
+          }
         }
 
         return `<ul class="fantasy-detail-list">${rows
@@ -2042,7 +2070,8 @@
               return `<li>${escapeAdminHtml(label)}: n/a</li>`;
             }
             if (!Number.isFinite(normalized) || raw === normalized) {
-              return `<li>${escapeAdminHtml(label)}: ${Number.isFinite(raw) ? raw.toFixed(1) : normalized.toFixed(1)}</li>`;
+              const absoluteLabel = component.absoluteScore ? ' (absolute)' : '';
+              return `<li>${escapeAdminHtml(label)}: ${Number.isFinite(raw) ? raw.toFixed(1) : normalized.toFixed(1)}${absoluteLabel}</li>`;
             }
             return `<li>${escapeAdminHtml(label)}: raw ${raw.toFixed(1)} → norm ${normalized.toFixed(1)}</li>`;
           })

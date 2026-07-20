@@ -11,7 +11,32 @@ import {
   mapScoreToSalaryInBandWithTierCap,
 } from './_fantasy-salary-guardrails.js';
 
-export const FANTASY_MODEL_VERSION = 'fantasy-salary-v2.6';
+export const FANTASY_MODEL_VERSION = 'fantasy-salary-v3.0';
+
+export const FANTASY_MOMENTUM_PRIOR_TRAJECTORY_WEIGHT = 0.35;
+export const FANTASY_MOMENTUM_RECENT_TREND_WEIGHT = 0.65;
+export const FANTASY_MOMENTUM_TREND_RACE_WEIGHTS = [0.5, 0.3, 0.2];
+
+/** Components that use absolute 0–100 scores instead of slate field normalization. */
+export const FANTASY_ABSOLUTE_COMPONENT_KEYS = ['raceImpact', 'momentum'];
+
+export const FANTASY_TIER_SCORE_PROFILES = {
+  'v2.6': {
+    absoluteComponentKeys: [],
+    momentumVersion: 'v2.6',
+  },
+  'v3.0': {
+    absoluteComponentKeys: FANTASY_ABSOLUTE_COMPONENT_KEYS,
+    momentumVersion: 'v3.0',
+  },
+};
+
+export function resolveFantasyTierScoreProfile(profile = FANTASY_MODEL_VERSION) {
+  if (profile === 'v2.6' || profile === 'fantasy-salary-v2.6') {
+    return FANTASY_TIER_SCORE_PROFILES['v2.6'];
+  }
+  return FANTASY_TIER_SCORE_PROFILES['v3.0'];
+}
 
 export const FANTASY_TIER_WEIGHTS = {
   seasonPerformance: 0.35,
@@ -1147,7 +1172,7 @@ export function applyAttendanceTierCaps(drivers = []) {
   return drivers;
 }
 
-export function buildFantasyMomentumRaw(priorTierScore) {
+export function buildFantasyMomentumRawV26(priorTierScore) {
   if (priorTierScore == null || priorTierScore === '') {
     return {
       score: FANTASY_NEUTRAL_COMPONENT_SCORE,
@@ -1156,6 +1181,7 @@ export function buildFantasyMomentumRaw(priorTierScore) {
         reason: 'First slate with no prior fantasy score; neutral 50 before field normalization.',
         priorTierScore: null,
         mappedMomentumRank: null,
+        momentumVersion: 'v2.6',
       },
     };
   }
@@ -1168,6 +1194,7 @@ export function buildFantasyMomentumRaw(priorTierScore) {
         neutralApplied: true,
         priorTierScore,
         mappedMomentumRank: null,
+        momentumVersion: 'v2.6',
       },
     };
   }
@@ -1179,7 +1206,75 @@ export function buildFantasyMomentumRaw(priorTierScore) {
       neutralApplied: false,
       priorTierScore,
       mappedMomentumRank: momentumRank,
+      momentumVersion: 'v2.6',
       ...momentum.details,
+    },
+  };
+}
+
+export function buildFantasyMomentumRaw({
+  priorTierScore = null,
+  alignedRaces = [],
+  schedules = [],
+  driverId = null,
+  momentumVersion = 'v3.0',
+} = {}) {
+  if (momentumVersion === 'v2.6') {
+    return buildFantasyMomentumRawV26(priorTierScore);
+  }
+
+  const priorTrajectory = Number.isFinite(Number(priorTierScore))
+    ? clampScore(Number(priorTierScore), 0, 100)
+    : FANTASY_NEUTRAL_COMPONENT_SCORE;
+
+  const last3Races = Array.isArray(alignedRaces) ? alignedRaces.slice(-3) : [];
+  const trendRaceDetails = [];
+  const impactScores = last3Races.map((race) => {
+    const impact = buildRaceImpactComponent(race, schedules, driverId);
+    trendRaceDetails.push({
+      raceNumber: race?.pointsRaceNumber ?? null,
+      track: race?.track ?? null,
+      finish: impact.details?.finish ?? null,
+      raceImpactScore: Number(impact.score.toFixed(2)),
+    });
+    return Number(impact.score);
+  });
+
+  let weightedTrend = FANTASY_NEUTRAL_COMPONENT_SCORE;
+  if (impactScores.length) {
+    const orderedScores = [...impactScores].reverse();
+    const weights = FANTASY_MOMENTUM_TREND_RACE_WEIGHTS.slice(0, orderedScores.length);
+    const weightSum = weights.reduce((sum, weight) => sum + weight, 0);
+    weightedTrend =
+      weightSum > 0
+        ? orderedScores.reduce(
+            (sum, score, index) => sum + score * (weights[index] / weightSum),
+            0
+          )
+        : FANTASY_NEUTRAL_COMPONENT_SCORE;
+  }
+
+  const score = clampScore(
+    FANTASY_MOMENTUM_PRIOR_TRAJECTORY_WEIGHT * priorTrajectory +
+      FANTASY_MOMENTUM_RECENT_TREND_WEIGHT * weightedTrend,
+    0,
+    100
+  );
+
+  return {
+    score: Number(score.toFixed(2)),
+    details: {
+      neutralApplied: false,
+      momentumVersion: 'v3.0',
+      scoringMode: 'absolute',
+      priorTierScore: Number.isFinite(Number(priorTierScore)) ? Number(priorTierScore) : null,
+      priorTrajectoryScore: Number(priorTrajectory.toFixed(2)),
+      priorTrajectoryWeight: FANTASY_MOMENTUM_PRIOR_TRAJECTORY_WEIGHT,
+      weightedTrendScore: Number(weightedTrend.toFixed(2)),
+      recentTrendWeight: FANTASY_MOMENTUM_RECENT_TREND_WEIGHT,
+      trendRaceWeights: FANTASY_MOMENTUM_TREND_RACE_WEIGHTS,
+      trendRaces: trendRaceDetails.reverse(),
+      mappedMomentumRank: null,
     },
   };
 }
@@ -1193,12 +1288,20 @@ export function buildFantasyRawComponents({
   careerTrackHistoryScore,
   priorTierScore = null,
   attendanceContext = null,
-}) {
+  tierScoreProfile = FANTASY_MODEL_VERSION,
+} = {}) {
+  const profile = resolveFantasyTierScoreProfile(tierScoreProfile);
   const latestRace = alignedRaces?.[alignedRaces.length - 1] || null;
   const season = explainSeasonPerformanceScore(standingsRow, schedules, driverId);
   const recentForm = buildFantasyRecentFormRaw(grounding, alignedRaces, driverId);
   const raceImpact = buildRaceImpactComponent(latestRace, schedules, driverId);
-  const momentum = buildFantasyMomentumRaw(priorTierScore);
+  const momentum = buildFantasyMomentumRaw({
+    priorTierScore,
+    alignedRaces,
+    schedules,
+    driverId,
+    momentumVersion: profile.momentumVersion,
+  });
   const reliabilityScore =
     attendanceContext?.reliabilityScore ?? FANTASY_NEUTRAL_COMPONENT_SCORE;
 
@@ -1233,13 +1336,18 @@ export function buildFantasyRawComponents({
       normalizedScore: null,
       score: Number(raceImpact.score.toFixed(2)),
       weight: FANTASY_TIER_WEIGHTS.raceImpact,
-      details: raceImpact.details,
+      absoluteScore: profile.absoluteComponentKeys.includes('raceImpact'),
+      details: {
+        ...raceImpact.details,
+        scoringMode: profile.absoluteComponentKeys.includes('raceImpact') ? 'absolute' : 'field_normalized',
+      },
     },
     momentum: {
       rawScore: momentum.score,
       normalizedScore: null,
       score: momentum.score,
       weight: FANTASY_TIER_WEIGHTS.momentum,
+      absoluteScore: profile.absoluteComponentKeys.includes('momentum'),
       details: momentum.details,
     },
     reliability: {
@@ -1314,11 +1422,32 @@ export function applyEffectiveComponentWeights(drivers = [], effectiveWeights = 
 
 export function normalizeFantasySlateComponents(
   drivers = [],
-  { effectiveWeights = FANTASY_TIER_WEIGHTS, recentDataSparse = false } = {}
+  {
+    effectiveWeights = FANTASY_TIER_WEIGHTS,
+    recentDataSparse = false,
+    tierScoreProfile = FANTASY_MODEL_VERSION,
+  } = {}
 ) {
+  const profile = resolveFantasyTierScoreProfile(tierScoreProfile);
+  const absoluteKeys = new Set(profile.absoluteComponentKeys || []);
+
   applyEffectiveComponentWeights(drivers, effectiveWeights);
 
   for (const key of FANTASY_COMPONENT_KEYS) {
+    if (absoluteKeys.has(key)) {
+      drivers.forEach((driver) => {
+        const component = driver.scoreBreakdown[key];
+        const raw = Number(component.rawScore);
+        const absoluteValue = Number.isFinite(raw)
+          ? Number(clampScore(raw, 0, 100).toFixed(2))
+          : FANTASY_NEUTRAL_COMPONENT_SCORE;
+        component.normalizedScore = absoluteValue;
+        component.score = absoluteValue;
+        component.absoluteScore = true;
+      });
+      continue;
+    }
+
     const rawScores = drivers.map((driver) => driver.scoreBreakdown?.[key]?.rawScore);
     const normalizedScores = normalizeFieldComponentScores(rawScores);
 
@@ -1326,12 +1455,14 @@ export function normalizeFantasySlateComponents(
       const component = driver.scoreBreakdown[key];
       component.normalizedScore = normalizedScores[index];
       component.score = normalizedScores[index];
+      component.absoluteScore = false;
     });
   }
 
   for (const driver of drivers) {
     driver.recentDataSparse = recentDataSparse;
     driver.effectiveWeights = { ...effectiveWeights };
+    driver.tierScoreProfile = tierScoreProfile;
     driver.fantasyTierScoreRaw = Number(
       computeWeightedFantasyTierScore(driver.scoreBreakdown, {
         useRawScores: true,
@@ -1345,6 +1476,7 @@ export function normalizeFantasySlateComponents(
     if (driver.scoreBreakdown) {
       driver.scoreBreakdown._recentDataSparse = recentDataSparse;
       driver.scoreBreakdown._effectiveWeights = { ...effectiveWeights };
+      driver.scoreBreakdown._tierScoreProfile = tierScoreProfile;
     }
   }
 
@@ -1433,6 +1565,7 @@ export function scoreFantasyDriverRaw({
   priorTierScore = null,
   priorSalary = null,
   attendanceContext = null,
+  tierScoreProfile = FANTASY_MODEL_VERSION,
 }) {
   const { fantasyTierScoreRaw, components } = buildFantasyRawComponents({
     driverId,
@@ -1446,6 +1579,7 @@ export function scoreFantasyDriverRaw({
       FANTASY_NEUTRAL_COMPONENT_SCORE,
     priorTierScore,
     attendanceContext,
+    tierScoreProfile,
   });
 
   components.careerTrackHistory.details = {
