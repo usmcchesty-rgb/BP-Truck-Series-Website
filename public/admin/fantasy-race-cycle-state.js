@@ -122,6 +122,96 @@ export function isNextRaceSlatePublished(context = {}) {
   return false;
 }
 
+/** Runtime diagnostics — does not change workflow outcomes. */
+export function diagnosePublishedSlateInference(context = {}) {
+  const postRace = context.postRace || {};
+  const adminStats = context.adminStats || {};
+  const nextRaceNumber = getNextRaceNumber(context);
+  const postRaceNextRace = postRace.nextRace?.raceNumber ?? null;
+  const adminStatsNextRace = adminStats.nextRace?.raceNumber ?? null;
+
+  const publishedFlag = postRace.salaryDraft?.published === true;
+  const activePlayable = adminStats.activePlayableSlate ?? null;
+  const publishedSlate = adminStats.publishedSlate ?? null;
+  const adminSlate = adminStats.slate ?? null;
+  const salaryDraft = postRace.salaryDraft ?? null;
+
+  const activePlayableMatch = slateRowMatchesNextRace(activePlayable, nextRaceNumber);
+  const publishedSlateRaceMatch = slateRowMatchesNextRace(publishedSlate, nextRaceNumber);
+  const publishedSlateStatus = isPublishedSlateRow(publishedSlate);
+  const adminSlateRaceMatch = slateRowMatchesNextRace(adminSlate, nextRaceNumber);
+  const adminSlateStatus = isPublishedSlateRow(adminSlate);
+
+  const driverRows = Array.isArray(adminSlate?.drivers) ? adminSlate.drivers.length : null;
+  const salaryRows = Array.isArray(adminSlate?.drivers)
+    ? adminSlate.drivers.filter((row) => Number.isFinite(Number(row.salary ?? row.salary_amount))).length
+    : null;
+
+  const conditions = {
+    nextRaceNumberPresent: nextRaceNumber != null,
+    publishedFlag,
+    activePlayableSlatePresent: activePlayable != null,
+    activePlayableSlateMatch: activePlayableMatch,
+    publishedSlatePresent: publishedSlate != null,
+    publishedSlateRaceMatch: publishedSlateRaceMatch,
+    publishedSlateStatusPublished: publishedSlateStatus,
+    adminSlatePresent: adminSlate != null,
+    adminSlateRaceMatch: adminSlateRaceMatch,
+    adminSlateStatusPublished: adminSlateStatus,
+  };
+
+  let matchedCondition = null;
+  if (!conditions.nextRaceNumberPresent) matchedCondition = 'none (nextRaceNumber null)';
+  else if (conditions.publishedFlag) matchedCondition = 'postRace.salaryDraft.published';
+  else if (conditions.activePlayableSlateMatch) matchedCondition = 'adminStats.activePlayableSlate race match';
+  else if (conditions.publishedSlateRaceMatch && conditions.publishedSlateStatusPublished) {
+    matchedCondition = 'adminStats.publishedSlate race + status match';
+  } else if (conditions.adminSlateRaceMatch && conditions.adminSlateStatusPublished) {
+    matchedCondition = 'adminStats.slate race + status match';
+  } else {
+    matchedCondition = 'none (inference did not trigger)';
+  }
+
+  const poolBuilt = inferDriverPoolBuilt(context);
+  const salariesDone = inferSalariesReady(context);
+  const steps = buildFantasyRaceCycleSteps(context);
+  const step8 = steps.find((step) => step.id === 'build_driver_pool') || null;
+  const step9 = steps.find((step) => step.id === 'generate_salaries') || null;
+
+  return {
+    isNextRaceSlatePublished: isNextRaceSlatePublished(context),
+    matchedCondition,
+    nextRaceNumber,
+    postRaceNextRace,
+    adminStatsNextRace,
+    nextRaceNumberSourcesMatch:
+      postRaceNextRace == null || adminStatsNextRace == null
+        ? null
+        : Number(postRaceNextRace) === Number(adminStatsNextRace),
+    conditions,
+    counts: {
+      driverRows,
+      salaryRows,
+      poolHealthSlateDriverCount: adminStats.driverPoolHealth?.counts?.slateDriverCount ?? null,
+      poolHealthEligibleCount: adminStats.driverPoolHealth?.counts?.eligibleRosterDrivers ?? null,
+    },
+    inferDriverPoolBuilt: poolBuilt,
+    inferSalariesReady: salariesDone,
+    draftSlateReady: draftSlateReady(adminStats, postRace),
+    step8Status: step8?.status ?? null,
+    step9Status: step9?.status ?? null,
+    step8BlockedReason: step8?.blockedReason ?? null,
+    step9BlockedReason: step9?.blockedReason ?? null,
+    snapshots: {
+      salaryDraft,
+      activePlayableSlate: activePlayable,
+      publishedSlate,
+      adminSlate,
+      completedPublishedSlate: adminStats.completedPublishedSlate ?? null,
+    },
+  };
+}
+
 function getNextRaceDriverCount(context = {}) {
   const adminStats = context.adminStats || {};
   const postRace = context.postRace || {};
