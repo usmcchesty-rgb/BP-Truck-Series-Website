@@ -1022,18 +1022,15 @@ function computeBestFinish(driverId, schedules) {
   return best;
 }
 
-function buildStats(profile, standingsRow, schedules, scheduleRaces) {
+function buildStats(profile, standingsRow, schedules, scheduleRaces, statsContext = {}) {
   const leader = standingsRow?.leader || null;
   const pointsBehind =
     leader && standingsRow?.points != null
       ? Math.max(0, Number(leader.points) - Number(standingsRow.points))
       : null;
-  const recentRaces = alignDriverRaceHistory(
-    profile.driver_id,
-    schedules,
-    scheduleRaces
-  );
-  const bestFinish = computeBestFinish(profile.driver_id, schedules);
+  const statsDriverId = statsContext.statsDriverId || profile.driver_id;
+  const recentRaces = alignDriverRaceHistory(statsDriverId, schedules, scheduleRaces);
+  const bestFinish = computeBestFinish(statsDriverId, schedules);
 
   return {
     position: standingsRow?.position ?? null,
@@ -1048,7 +1045,58 @@ function buildStats(profile, standingsRow, schedules, scheduleRaces) {
     incidents: standingsRow?.incidents ?? null,
     bestFinish,
     recentRaces: [...recentRaces].reverse(),
+    identity: statsContext.identity || null,
+    statsSource: statsContext.statsSource || null,
   };
+}
+
+function isStatsDebugEnabled() {
+  return new URLSearchParams(window.location.search).get("debug") === "stats";
+}
+
+function statsEmptyMessage(stats, section) {
+  const identity = stats?.identity;
+  const hasStarts =
+    Number(stats?.races) > 0 ||
+    Number(stats?.recentRaces?.length) > 0 ||
+    Number.isFinite(Number(stats?.bestFinish));
+
+  if (identity?.resolved === false) {
+    if (isStatsDebugEnabled()) {
+      return "Driver profile could not be linked to SimRacerHub identity.";
+    }
+    return section === "results"
+      ? "No completed race results yet."
+      : "Season stats are not available yet.";
+  }
+
+  if (!hasStarts) {
+    return "No official starts yet.";
+  }
+
+  return section === "results"
+    ? "No completed race results yet."
+    : "Season stats are not available yet.";
+}
+
+function renderStatsDiagnostics(diagnostics) {
+  if (!isStatsDebugEnabled() || !diagnostics) return "";
+  const rows = Object.entries(diagnostics)
+    .map(
+      ([key, value]) =>
+        `<tr><th>${escapeHtml(key)}</th><td>${escapeHtml(value == null ? "—" : String(value))}</td></tr>`
+    )
+    .join("");
+  return `<section class="driver-profile-stats-section driver-profile-stats-debug">
+    <div class="driver-profile-section-head">
+      <h2>Stats Identity Diagnostics</h2>
+    </div>
+    <div class="driver-profile-results-wrap">
+      <table class="driver-profile-results-table">
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  </section>`;
 }
 
 function renderStatsBar(stats, seasonLabel) {
@@ -1073,7 +1121,7 @@ function renderStatsBar(stats, seasonLabel) {
       <div class="driver-profile-section-head">
         <h2>${escapeHtml(title)}</h2>
       </div>
-      <p class="driver-profile-empty">Season stats are not available yet.</p>
+      <p class="driver-profile-empty">${escapeHtml(statsEmptyMessage(stats, "season"))}</p>
     </section>`;
   }
 
@@ -1085,13 +1133,13 @@ function renderStatsBar(stats, seasonLabel) {
   </section>`;
 }
 
-function renderRecentResults(recentRaces) {
+function renderRecentResults(recentRaces, stats = null) {
   if (!recentRaces?.length) {
     return `<section class="driver-profile-results-section">
       <div class="driver-profile-section-head">
         <h2>Recent Results</h2>
       </div>
-      <p class="driver-profile-empty">No completed race results yet.</p>
+      <p class="driver-profile-empty">${escapeHtml(statsEmptyMessage(stats, "results"))}</p>
     </section>`;
   }
 
@@ -1175,7 +1223,7 @@ function renderHeroPhoto(profile, name) {
   </div>`;
 }
 
-function renderProfile(profile, stats, seasonLabel, carImageUrl = "") {
+function renderProfile(profile, stats, seasonLabel, carImageUrl = "", diagnostics = null) {
   const panel = $("#driverProfilePanel");
   if (!panel || !profile) return;
 
@@ -1240,7 +1288,8 @@ function renderProfile(profile, stats, seasonLabel, carImageUrl = "") {
     ${renderCareerNotesSection(profile)}
     ${renderConnectSection(profile)}
     ${renderStatsBar(stats, seasonLabel)}
-    ${renderRecentResults(stats.recentRaces)}
+    ${renderRecentResults(stats.recentRaces, stats)}
+    ${renderStatsDiagnostics(diagnostics)}
   `;
 
   if (carImageUrl) {
@@ -1295,26 +1344,54 @@ async function loadDriverProfile() {
       return;
     }
 
-    const canonicalDriverId = String(profile.driver_id);
     const standingsData = standingsRes.ok ? await standingsRes.json() : { rows: [], schedules: {} };
     const scheduleData = scheduleRes.ok ? await scheduleRes.json() : { races: [] };
     const rows = Array.isArray(standingsData.rows) ? standingsData.rows : [];
-    const standingsRow =
-      rows.find((row) => String(row.driverId) === canonicalDriverId) || null;
+    const schedules = standingsData.schedules || {};
+    const scheduleRaces = scheduleData.races || [];
+    const identityApi = window.BPDriverStatsIdentity;
+    const standingsMaps = identityApi?.buildStandingsIdentityLookupMaps
+      ? identityApi.buildStandingsIdentityLookupMaps(rows)
+      : null;
+    const identity = identityApi?.resolveDriverStatsIdentity
+      ? identityApi.resolveDriverStatsIdentity(profile, {
+          standingsRows: rows,
+          standingsMaps,
+        })
+      : { resolved: false, srhDriverId: null, matchedBy: null };
+    const standingsRow = identityApi?.findStandingsRowForIdentity
+      ? identityApi.findStandingsRowForIdentity(identity, rows, standingsMaps)
+      : rows.find((row) => String(row.driverId) === String(profile.driver_id)) || null;
     const leader = rows.find((row) => Number(row.position) === 1) || null;
+    const statsDriverId =
+      identity.resolved && identity.srhDriverId ? identity.srhDriverId : profile.driver_id;
 
     const stats = buildStats(
       profile,
       standingsRow ? { ...standingsRow, leader } : null,
-      standingsData.schedules || {},
-      scheduleData.races || []
+      schedules,
+      scheduleRaces,
+      {
+        statsDriverId,
+        identity,
+        statsSource: identity.resolved ? "simracerhub_standings" : null,
+      }
     );
+
+    const diagnostics = identityApi?.buildDriverStatsIdentityDiagnostics
+      ? identityApi.buildDriverStatsIdentityDiagnostics(profile, {
+          standingsRows: rows,
+          standingsMaps,
+          schedules,
+          recentRaces: stats.recentRaces,
+        })
+      : null;
 
     const seasonLabel =
       standingsData.settings?.seasonName || scheduleData.settings?.seasonName || "Season 11";
 
     const carImage = await resolveCarImageUrl(profile);
-    renderProfile(profile, stats, seasonLabel, carImage.url);
+    renderProfile(profile, stats, seasonLabel, carImage.url, diagnostics);
   } catch (e) {
     console.error("Failed to load driver profile:", e);
     panel.innerHTML = `

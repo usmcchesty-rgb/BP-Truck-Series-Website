@@ -20,6 +20,7 @@
     "test:fantasy-dashboard-cards": "node scripts/test-fantasy-dashboard-cards.mjs",
     "test:driver-profile-sync-identity": "node scripts/test-driver-profile-sync-identity.mjs",
     "test:drivers-write-identity": "node scripts/test-drivers-write-identity.mjs",
+    "test:driver-stats-identity": "node scripts/test-driver-stats-identity.mjs",
     "test:fantasy-post-race-automation": "node scripts/test-fantasy-post-race-automation.mjs",
     "test:fantasy-driver-pool": "node scripts/test-fantasy-driver-pool.mjs",
     "test:api-imports": "node scripts/test-api-imports.mjs",
