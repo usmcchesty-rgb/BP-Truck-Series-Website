@@ -633,7 +633,312 @@
       }
       .submission-closes-card.is-warning .submission-closes-card__status { color: #ffd54a; }
       .submission-closes-card.is-locked .submission-closes-card__status { color: #ff7070; }
+
+      .frc-panel { margin-bottom: 18px; }
+      .frc-sticky {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        background: rgba(12, 12, 12, .98);
+        padding-bottom: 12px;
+        margin-bottom: 14px;
+        border-bottom: 1px solid #333;
+      }
+      .frc-dashboard {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+      .frc-dashboard-card {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        padding: 8px 10px;
+        border: 1px solid rgba(255,255,255,.08);
+        border-radius: 6px;
+        background: rgba(0,0,0,.2);
+        text-align: left;
+        cursor: pointer;
+        color: inherit;
+        font: inherit;
+      }
+      .frc-dashboard-card:hover { border-color: rgba(255, 48, 48, .35); }
+      .frc-k {
+        color: #999;
+        font-size: 10px;
+        font-weight: 900;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+      }
+      .frc-v { color: #fff; font-size: 13px; font-weight: 800; }
+      .frc-progress-header { margin-bottom: 14px; }
+      .frc-progress-top {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 8px;
+      }
+      .frc-progress-count { margin: 0; color: #fff; font-size: 18px; font-weight: 900; }
+      .frc-overall-state { margin: 4px 0 0; color: #bbb; font-size: 12px; font-weight: 700; }
+      .frc-progress-bar-wrap { margin: 8px 0 12px; }
+      .frc-progress-bar {
+        height: 10px;
+        border-radius: 999px;
+        background: rgba(255,255,255,.08);
+        overflow: hidden;
+        border: 1px solid rgba(255,255,255,.08);
+      }
+      .frc-progress-bar-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #b30000, #ff3030);
+        border-radius: 999px;
+      }
+      .frc-progress-meta {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+      .frc-next-action {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 12px;
+        padding: 12px;
+        border: 1px solid rgba(255, 48, 48, .35);
+        border-radius: 8px;
+        background: rgba(255, 48, 48, .06);
+      }
+      .frc-ready-banner,
+      .frc-action-required-banner {
+        margin-bottom: 12px;
+        padding: 12px;
+        border-radius: 8px;
+        border: 1px solid rgba(127, 217, 154, .45);
+        background: rgba(127, 217, 154, .08);
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+      }
+      .frc-action-required-banner {
+        border-color: rgba(255, 96, 96, .45);
+        background: rgba(255, 96, 96, .08);
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .frc-issue-list {
+        margin: 8px 0 0;
+        padding-left: 18px;
+        color: #eee;
+        font-size: 13px;
+      }
+      .frc-issue-link {
+        margin-left: 8px;
+        background: transparent;
+        border: 1px solid rgba(255,255,255,.25);
+        color: #fff;
+        border-radius: 4px;
+        padding: 2px 8px;
+        cursor: pointer;
+        font-size: 12px;
+      }
+      .frc-phase {
+        margin-top: 18px;
+        padding: 14px;
+        border: 1px solid rgba(255,255,255,.12);
+        border-radius: 10px;
+        background: rgba(0,0,0,.12);
+      }
+      .frc-phase--postRace { border-left: 4px solid #ff6060; }
+      .frc-phase--nextRace { border-left: 4px solid #6ea8ff; }
+      .frc-phase-header { margin-bottom: 12px; }
+      .frc-phase-title {
+        margin: 0;
+        font-size: 15px;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        color: #fff;
+      }
+      .frc-phase-status { margin: 4px 0 0; color: #ddd; font-size: 13px; font-weight: 800; }
+      .frc-phase-explainer { margin: 6px 0 0; color: #aaa; font-size: 12px; line-height: 1.45; }
+      .frc-steps { display: grid; gap: 10px; }
+      .frc-step {
+        border: 1px solid #333;
+        border-radius: 8px;
+        background: rgba(0,0,0,.18);
+        overflow: hidden;
+      }
+      .frc-step[data-status="Complete"] { border-color: rgba(127, 217, 154, .45); }
+      .frc-step[data-status="Blocked"] { border-color: rgba(255, 96, 96, .45); }
+      .frc-step[data-status="Needs Review"] { border-color: rgba(255, 196, 0, .45); }
+      .frc-step-toggle {
+        width: 100%;
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        padding: 12px 14px;
+        background: transparent;
+        border: 0;
+        color: inherit;
+        text-align: left;
+        cursor: pointer;
+        font: inherit;
+      }
+      .frc-step-toggle:focus-visible {
+        outline: 2px solid #ff5050;
+        outline-offset: -2px;
+      }
+      .frc-step-icon {
+        width: 28px;
+        height: 28px;
+        border-radius: 999px;
+        display: grid;
+        place-items: center;
+        font-weight: 900;
+        background: rgba(255,255,255,.08);
+        flex-shrink: 0;
+      }
+      .frc-step-toggle-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+      .frc-step-title { margin: 0; font-size: 16px; color: #fff; }
+      .frc-step-status { margin: 0; color: #bbb; font-size: 12px; font-weight: 700; }
+      .frc-step-collapsed-summary {
+        margin: 0;
+        color: #9fd9b0;
+        font-size: 12px;
+        line-height: 1.4;
+      }
+      .frc-step.is-expanded .frc-step-collapsed-summary { display: none; }
+      .frc-step-panel { padding: 0 14px 14px 52px; }
+      .frc-step-explainer { color: #ccc; font-size: 13px; line-height: 1.5; margin: 0 0 10px; }
+      .frc-warning-wrap { margin-bottom: 8px; }
+      .frc-warning { color: #ffb0b0; font-size: 12px; line-height: 1.5; margin: 8px 0 0; }
+      .frc-step-actions { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+      .frc-disabled-reason { margin: 0; color: #ffb0b0; font-size: 12px; line-height: 1.45; }
+      .frc-ready-card {
+        margin-top: 10px;
+        padding: 12px;
+        border: 1px solid rgba(127, 217, 154, .45);
+        border-radius: 8px;
+        background: rgba(127, 217, 154, .06);
+      }
+      .frc-ready-card--action {
+        border-color: rgba(255, 96, 96, .45);
+        background: rgba(255, 96, 96, .06);
+      }
+      .frc-ready-fields {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px 12px;
+        margin: 10px 0;
+      }
+      .frc-ready-fields dt {
+        margin: 0;
+        color: #999;
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: .1em;
+      }
+      .frc-ready-fields dd { margin: 2px 0 0; color: #fff; font-weight: 800; font-size: 13px; }
+      .frc-validation-results {
+        margin: 12px 0;
+        padding: 12px;
+        border: 1px solid rgba(255,255,255,.12);
+        border-radius: 8px;
+        background: rgba(0,0,0,.18);
+      }
+      .frc-validation-summary.ok { color: #9fd9b0; }
+      .frc-validation-summary.error { color: #ffb0b0; }
+      .frc-validation-group ul { margin: 8px 0 0; padding-left: 18px; }
+      .frc-validation-state { font-weight: 900; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
+      .frc-history { margin-top: 16px; }
+      .frc-history-title { font-size: 14px; color: #ff8080; margin: 0 0 8px; }
+      .frc-history-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+      .frc-history-table th, .frc-history-table td {
+        border-top: 1px solid rgba(255,255,255,.08);
+        padding: 8px 6px;
+        text-align: left;
+      }
+      .frc-advanced-wrap { margin-top: 18px; }
+      .frc-recovery-warning {
+        margin: 10px 0 14px;
+        padding: 10px 12px;
+        border: 1px solid rgba(255, 196, 0, .45);
+        border-radius: 8px;
+        background: rgba(255, 196, 0, .08);
+        color: #ffe082;
+        font-size: 13px;
+        line-height: 1.45;
+      }
+      .frc-recovery-group {
+        margin-bottom: 16px;
+        padding: 12px;
+        border: 1px solid rgba(255,255,255,.08);
+        border-radius: 8px;
+        background: rgba(0,0,0,.12);
+      }
+      .frc-recovery-group-title {
+        margin: 0 0 8px;
+        font-size: 12px;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+        color: #ff8080;
+      }
+      .frc-recovery-action {
+        margin-bottom: 12px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid rgba(255,255,255,.06);
+      }
+      .frc-recovery-action:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: 0; }
+      .frc-recovery-meta {
+        margin: 6px 0 8px;
+        color: #bbb;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+      .frc-recovery-dialog {
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+        display: grid;
+        place-items: center;
+        background: rgba(0,0,0,.72);
+        padding: 16px;
+      }
+      .frc-recovery-dialog[hidden] { display: none; }
+      .frc-recovery-dialog-panel {
+        width: min(520px, 100%);
+        max-height: 90vh;
+        overflow: auto;
+        padding: 16px;
+        border-radius: 10px;
+        border: 1px solid #444;
+        background: #121212;
+      }
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0,0,0,0);
+        border: 0;
+      }
+      @media (max-width: 760px) {
+        .frc-dashboard { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .frc-progress-meta { grid-template-columns: 1fr; }
+        .frc-next-action { flex-direction: column; align-items: stretch; }
+        .frc-step-actions .btn { width: 100%; }
+        .frc-ready-fields { grid-template-columns: 1fr; }
+        .frc-step-panel { padding-left: 14px; }
+      }
     </style>
+    <script type="module" src="/admin/fantasy-race-cycle-ui.js"></script>
     <script src="/admin/admin-embed.js"></script>
 
   </head>
@@ -660,10 +965,16 @@
 
     <main id="adminView" class="wrap" hidden>
       <h1>Fantasy Admin</h1>
-      <p class="sub">Manage BP Fantasy branding and salary draft generation for the upcoming race slate.</p>
+      <p class="sub">Follow the guided Fantasy Race Cycle below after each official race. Branding and advanced tools remain available further down the page.</p>
+
+      <div id="fantasyRaceCycleRoot" aria-live="polite">
+        <div class="admin-card admin-card--full">
+          <p class="muted">Loading Fantasy Race Cycle...</p>
+        </div>
+      </div>
 
       <div class="panel admin-section active">
-        <h2>BP Fantasy</h2>
+        <h2>BP Fantasy Tools</h2>
 
         <section class="admin-grid">
           <!-- Fantasy Branding -->
@@ -958,6 +1269,74 @@
           </div>
 
           <!-- Historical Slate Backfill -->
+          <details class="frc-advanced-wrap admin-card admin-card--full">
+            <summary class="admin-card-title" style="cursor:pointer;">Advanced / Recovery Tools</summary>
+            <p class="frc-recovery-warning">These tools can modify finalized contests, scoring, standings, or published slates. Use them only to correct an error.</p>
+
+            <div class="frc-recovery-group">
+              <h4 class="frc-recovery-group-title">Finalized Contest Corrections</h4>
+              <div class="frc-recovery-action">
+                <strong>Reopen finalized contest</strong>
+                <p class="frc-recovery-meta">Changes contest scoring review state. Does not delete lineups. Participant-visible leaderboard may change. Reversible with re-finalization.</p>
+                <button type="button" class="btn btn-secondary" data-recovery-action="reopen_finalized_contest">Reopen Finalized Contest</button>
+              </div>
+              <div class="frc-recovery-action">
+                <strong>Recalculate finalized scoring</strong>
+                <p class="frc-recovery-meta">Recomputes lineup points from official results. Does not change submissions or salaries. Participant-visible scores may change. Reversible by recalculating again.</p>
+                <button type="button" class="btn btn-secondary" data-recovery-action="recalculate_finalized_scoring">Recalculate Finalized Scoring</button>
+              </div>
+              <div class="frc-recovery-action">
+                <strong>Apply manual score adjustment</strong>
+                <p class="frc-recovery-meta">Opens race scoring tools below. Does not publish slates. Participant-visible scores may change. Not automatically reversible.</p>
+                <button type="button" class="btn btn-secondary" data-recovery-action="manual_score_adjustment">Open Race Scoring Tools</button>
+              </div>
+              <div class="frc-recovery-action">
+                <strong>Force standings rebuild</strong>
+                <p class="frc-recovery-meta">Rebuilds season standings from finalized race outputs. Does not modify salaries or slate publication. Participant-visible standings may change. Not reversible.</p>
+                <button type="button" class="btn btn-secondary" data-recovery-action="force_standings_rebuild">Force Standings Rebuild</button>
+              </div>
+            </div>
+
+            <div class="frc-recovery-group">
+              <h4 class="frc-recovery-group-title">Published Slate Corrections</h4>
+              <div class="frc-recovery-action">
+                <strong>Add missing eligible drivers</strong>
+                <p class="frc-recovery-meta">Adds eligible roster drivers missing from the published slate. Does not remove drivers or change existing lineups. Participant-visible driver pool may change. Reversible by removing drivers manually.</p>
+                <button type="button" class="btn btn-secondary" data-recovery-action="add_missing_eligible_drivers">Add Missing Eligible Drivers</button>
+              </div>
+              <div class="frc-recovery-action">
+                <strong>Full regenerate published slate</strong>
+                <p class="frc-recovery-meta">Rebuilds every eligible driver salary on the published slate. Does not delete lineup submissions. Participant-visible salaries may change. Not reversible.</p>
+                <button type="button" class="btn btn-secondary" data-recovery-action="full_regenerate_published_slate">Full Regenerate Published Slate</button>
+              </div>
+              <div class="frc-recovery-action">
+                <strong>Remove driver from published slate</strong>
+                <p class="frc-recovery-meta">Opens driver pool tools to review exclusions. Does not alter finalized scoring. Participant-visible slate may change. Not reversible without regeneration.</p>
+                <button type="button" class="btn btn-secondary" data-recovery-action="remove_driver_from_published_slate">Review Slate Exclusions</button>
+              </div>
+              <div class="frc-recovery-action">
+                <strong>Change next race</strong>
+                <p class="frc-recovery-meta">Opens draft slate generation for a different upcoming race. Does not finalize the previous contest. Participant-visible contest may change. Not reversible.</p>
+                <button type="button" class="btn btn-secondary" data-recovery-action="change_next_race">Open Next Race Slate Tools</button>
+              </div>
+            </div>
+
+            <div class="frc-recovery-group">
+              <h4 class="frc-recovery-group-title">Race Selection Corrections</h4>
+              <div class="frc-recovery-action">
+                <strong>Change completed race</strong>
+                <p class="frc-recovery-meta">Re-targets post-race scoring to a different completed official race. Does not publish the next slate. Participant-visible results may change. Not reversible.</p>
+                <button type="button" class="btn btn-secondary" data-recovery-action="change_completed_race">Change Completed Race Target</button>
+              </div>
+              <div class="frc-recovery-action">
+                <strong>Re-import official results</strong>
+                <p class="frc-recovery-meta">Reloads official finish order and identity matches. Does not publish slates or open entries. Not participant-visible until scoring is recalculated. Reversible by re-importing again.</p>
+                <button type="button" class="btn btn-secondary" data-recovery-action="reimport_official_results">Re-import Official Results</button>
+              </div>
+            </div>
+
+            <p class="admin-note">Unusual or destructive actions also remain available in the sections below. Routine post-race work should use the Fantasy Race Cycle above.</p>
+
           <div class="admin-card admin-card--full">
             <div class="admin-card-title">Historical Slate Backfill</div>
             <span class="field-help">Generate saved draft slates for completed races earlier in the season so public salary history and driver trend pages populate. Uses the current fantasy salary model and is approximate.</span>
@@ -972,8 +1351,8 @@
             <div id="backfillHistoricalOutput" class="fantasy-backtest-output" hidden></div>
           </div>
 
-          <!-- Post-Race Automation -->
-          <div class="admin-card admin-card--full" id="post-race-automation">
+          <!-- Post-Race Automation (legacy summary — use Race Cycle above) -->
+          <div class="admin-card admin-card--full" id="post-race-automation" hidden aria-hidden="true">
             <div class="admin-card-title">Post-Race Automation</div>
             <span class="field-help">Automatic fantasy scoring and next-race salary draft generation after official results. Salaries remain draft until admin publishes.</span>
             <div class="fantasy-slate-meta-grid" style="margin-top:12px;">
@@ -1034,6 +1413,7 @@
             </div>
             <div id="fantasyBacktestOutput" class="fantasy-backtest-output" hidden></div>
           </div>
+          </details>
         </section>
 
         <div class="btn-row">
@@ -1048,6 +1428,19 @@
         <pre id="adminMsg" style="margin-top:14px;"></pre>
       </div>
     </main>
+
+    <div id="frcRecoveryDialog" class="frc-recovery-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="frcRecoveryDialogTitle">
+      <div class="frc-recovery-dialog-panel">
+        <h3 id="frcRecoveryDialogTitle" style="margin-top:0;">Confirm Recovery Action</h3>
+        <p id="frcRecoveryDialogBody" class="frc-recovery-meta"></p>
+        <label class="field-label" for="frcRecoveryDialogInput" id="frcRecoveryDialogInputLabel" hidden>Type the confirmation phrase to continue</label>
+        <input id="frcRecoveryDialogInput" class="input" type="text" autocomplete="off" hidden />
+        <div class="btn-row" style="margin-top:12px;">
+          <button type="button" class="btn btn-secondary" id="frcRecoveryDialogCancel">Cancel</button>
+          <button type="button" class="btn" id="frcRecoveryDialogConfirm" disabled>Confirm</button>
+        </div>
+      </div>
+    </div>
 
 
     <script>
@@ -2266,22 +2659,227 @@
         }
       }
 
-      async function loadFantasyAdminStats() {
-        const countEl = $('#fantasySubmittedLineupCount');
-        const lockInput = $('#lineupLockTime');
+      async function fetchFantasyRaceCycleState(cached = {}) {
+        const password = getSessionPw();
+        let settings = cached.settings;
+        let adminStats = cached.adminStats;
+        let postRace = cached.postRace;
 
-        try {
-          const res = await fetch('/api/settings', {
+        const requests = [];
+        if (!settings) {
+          requests.push(
+            fetch('/api/settings').then(async (res) => {
+              settings = res.ok ? await res.json() : {};
+            })
+          );
+        }
+        if (!adminStats) {
+          requests.push(
+            fetch('/api/settings', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                password,
+                action: 'getFantasySlateAdminStats',
+                slateId: currentFantasySlateId,
+              }),
+            }).then(async (res) => {
+              adminStats = res.ok ? await res.json() : {};
+            })
+          );
+        }
+        if (!postRace) {
+          requests.push(
+            fetch('/api/settings', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ password, action: 'getFantasyPostRaceAutomationStatus' }),
+            }).then(async (res) => {
+              postRace = res.ok ? await res.json() : {};
+            })
+          );
+        }
+        if (requests.length) await Promise.all(requests);
+
+        let scoring = cached.scoring || postRace.scoring || null;
+        const completedRaceNumber = postRace.completedRace?.raceNumber ?? null;
+        if (!cached.scoring && completedRaceNumber != null) {
+          const scoringRes = await fetch('/api/settings', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              password: getSessionPw(),
-              action: 'getFantasySlateAdminStats',
-              slateId: currentFantasySlateId,
+              password,
+              action: 'getFantasyRaceScoringStatus',
+              raceNumber: completedRaceNumber,
             }),
           });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error || 'Stats unavailable');
+          if (scoringRes.ok) scoring = await scoringRes.json();
+        }
+
+        const seasonId = settings.seasonId || '27987';
+        const reviewKey = `bp_fantasy_scoring_review_${seasonId}_${completedRaceNumber || 'none'}`;
+        const slateReviewKey = `bp_fantasy_slate_review_${seasonId}_${postRace.nextRace?.raceNumber || 'none'}`;
+        let manualApprovals = { scoringReview: false, slateReview: false };
+        try {
+          manualApprovals.scoringReview = sessionStorage.getItem(reviewKey) === '1';
+          manualApprovals.slateReview = sessionStorage.getItem(slateReviewKey) === '1';
+        } catch {
+          manualApprovals = { scoringReview: false, slateReview: false };
+        }
+
+        return {
+          seasonName: settings.seasonName || 'Season 11',
+          adminStats,
+          postRace,
+          scoring,
+          manualApprovals,
+          missionControlCompletedTaskIds: [],
+        };
+      }
+
+      async function refreshFantasyRaceCyclePanel(cached) {
+        if (!window.FantasyRaceCycle?.refresh) return null;
+        try {
+          return await window.FantasyRaceCycle.refresh(cached);
+        } catch (error) {
+          console.error('[Fantasy Race Cycle] refresh failed:', error);
+          return null;
+        }
+      }
+
+      async function markMissionTaskComplete(taskId, workflow, raceNumber) {
+        const res = await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            password: getSessionPw(),
+            action: 'updateAdminMissionControlTask',
+            taskId,
+            workflow,
+            raceNumber,
+            completed: true,
+            manualOverride: true,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Could not save approval.');
+        return data;
+      }
+
+      window.FantasyAdminBridge = {
+        fetchState: fetchFantasyRaceCycleState,
+        refresh: async () => {
+          await Promise.all([
+            loadFantasyAdminStats({ skipRaceCycle: true }),
+            loadFantasyDraftSlate(),
+            loadSubmittedLineups(),
+          ]);
+          return refreshFantasyRaceCyclePanel();
+        },
+        actions: {
+          loadOfficialResults: async () => {
+            await loadFantasyRaceScoring();
+            await loadPostRaceAutomation();
+          },
+          calculateScoring: async () => {
+            await runFantasyRaceScoring({ recalculate: false });
+          },
+          recalculateScoring: async () => {
+            await runFantasyRaceScoring({ recalculate: true });
+          },
+          approveScoringReview: async () => {
+            const context = await fetchFantasyRaceCycleState();
+            const raceNumber = context.postRace?.completedRace?.raceNumber;
+            const seasonId = context.adminStats?.slate?.season_id || '27987';
+            if (!raceNumber) throw new Error('No completed race found for scoring review.');
+            try {
+              sessionStorage.setItem(`bp_fantasy_scoring_review_${seasonId}_${raceNumber}`, '1');
+            } catch {
+              /* ignore */
+            }
+            await markMissionTaskComplete('sun-score-fantasy-lineups', 'postRace', raceNumber);
+            document.getElementById('race-scoring')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            await loadFantasyRaceScoring();
+            await refreshFantasyRaceCyclePanel();
+          },
+          finalizeContest: async () => {
+            const context = await fetchFantasyRaceCycleState();
+            const race = context.postRace?.completedRace;
+            const label = race?.raceNumber
+              ? `Race ${race.raceNumber}${race.track ? ` — ${race.track}` : ''}`
+              : 'this race';
+            const confirmed = window.confirm(
+              `You are about to finalize Fantasy scoring for ${label}. This will publish the official results and update season standings.`
+            );
+            if (!confirmed) return;
+            await runFantasyRaceScoring({ recalculate: true });
+          },
+          updateStandings: async () => refreshFantasyRaceCyclePanel(),
+          selectNextRace: async () => refreshFantasyRaceCyclePanel(),
+          buildDriverPool: async () => {
+            await refreshDriverPoolHealth();
+            await generateFantasySalaries();
+          },
+          generateSalaries: async () => generateFantasySalaries(),
+          approveSlate: async () => {
+            const context = await fetchFantasyRaceCycleState();
+            const raceNumber = context.postRace?.nextRace?.raceNumber || context.adminStats?.nextRace?.raceNumber;
+            const seasonId = context.adminStats?.slate?.season_id || '27987';
+            if (!raceNumber) throw new Error('No next race found for slate review.');
+            try {
+              sessionStorage.setItem(`bp_fantasy_slate_review_${seasonId}_${raceNumber}`, '1');
+            } catch {
+              /* ignore */
+            }
+            await markMissionTaskComplete('wed-review-fantasy-salaries', 'nextRace', raceNumber);
+            document.getElementById('fantasySalaryTableWrap')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            await refreshFantasyRaceCyclePanel();
+          },
+          publishSlate: async () => {
+            const context = await fetchFantasyRaceCycleState();
+            const race = context.postRace?.nextRace || context.adminStats?.nextRace;
+            const label = race?.raceNumber
+              ? `Race ${race.raceNumber}${race.track ? ` — ${race.track}` : ''}`
+              : 'the next race';
+            const confirmed = window.confirm(
+              `Publish the Fantasy slate for ${label}? Participants will be able to create or update lineups until the contest locks.`
+            );
+            if (!confirmed) return;
+            await publishFantasySlate();
+          },
+          runReadinessCheck: async () => refreshFantasyRaceCyclePanel(),
+        },
+      };
+
+      async function loadFantasyAdminStats(options = {}) {
+        const countEl = $('#fantasySubmittedLineupCount');
+        const lockInput = $('#lineupLockTime');
+        let adminStats = null;
+        let postRacePayload = null;
+        let scoringPayload = null;
+
+        try {
+          const password = getSessionPw();
+          const [statsRes, postRaceRes] = await Promise.all([
+            fetch('/api/settings', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                password,
+                action: 'getFantasySlateAdminStats',
+                slateId: currentFantasySlateId,
+              }),
+            }),
+            fetch('/api/settings', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ password, action: 'getFantasyPostRaceAutomationStatus' }),
+            }),
+          ]);
+          const data = await statsRes.json();
+          if (!statsRes.ok) throw new Error(data.error || 'Stats unavailable');
+          adminStats = data;
+          postRacePayload = postRaceRes.ok ? await postRaceRes.json() : {};
 
           if (countEl) countEl.textContent = String(data.lineupCount ?? 0);
 
@@ -2331,8 +2929,16 @@
           console.error('[Fantasy Admin] Stats load failed:', error);
           renderDriverPoolHealth(null);
         }
-        await loadFantasyRaceScoring();
-        await loadPostRaceAutomation();
+
+        scoringPayload = await loadFantasyRaceScoring(postRacePayload);
+        await loadPostRaceAutomation(postRacePayload);
+        if (!options.skipRaceCycle) {
+          await refreshFantasyRaceCyclePanel({
+            adminStats,
+            postRace: postRacePayload,
+            scoring: scoringPayload,
+          });
+        }
       }
 
       function formatDriverPoolStatusLabel(status = '') {
@@ -2712,7 +3318,7 @@
         return 'Waiting';
       }
 
-      async function loadPostRaceAutomation() {
+      async function loadPostRaceAutomation(cachedData = null) {
         const completedEl = $('#postRaceCompletedLabel');
         const resultsEl = $('#postRaceResultsLabel');
         const scoringEl = $('#postRaceScoringLabel');
@@ -2725,16 +3331,19 @@
         const messageEl = $('#postRaceAutomationMessage');
 
         try {
-          const res = await fetch('/api/settings', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              password: getSessionPw(),
-              action: 'getFantasyPostRaceAutomationStatus',
-            }),
-          });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error || 'Post-race automation unavailable');
+          let data = cachedData;
+          if (!data) {
+            const res = await fetch('/api/settings', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                password: getSessionPw(),
+                action: 'getFantasyPostRaceAutomationStatus',
+              }),
+            });
+            data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Post-race automation unavailable');
+          }
 
           const completed = data.completedRace;
           const nextRace = data.nextRace;
@@ -2784,8 +3393,10 @@
             }
             messageEl.textContent = parts.join(' ');
           }
+          return data;
         } catch (error) {
           if (messageEl) messageEl.textContent = error.message || 'Could not load post-race automation.';
+          return cachedData || null;
         }
       }
 
@@ -2997,7 +3608,7 @@
         );
       }
 
-      async function loadFantasyRaceScoring() {
+      async function loadFantasyRaceScoring(postRaceCached = null) {
         const statusEl = $('#fantasyScoringStatusLabel');
         const resultsEl = $('#fantasyScoringResultsLabel');
         const countEl = $('#fantasyScoringLineupCount');
@@ -3008,12 +3619,14 @@
         const rulesEl = $('#fantasyScoringRulesCopy');
 
         try {
+          const raceNumber = postRaceCached?.completedRace?.raceNumber ?? null;
           const res = await fetch('/api/settings', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               password: getSessionPw(),
               action: 'getFantasyRaceScoringStatus',
+              raceNumber,
             }),
           });
           const data = await res.json();
@@ -3095,9 +3708,11 @@
               data.provisionalDrivers || data.scoringMeta?.provisionalDrivers || []
             );
           }
+          return data;
         } catch (error) {
           if (statusEl) statusEl.textContent = '—';
           if (messageEl) messageEl.textContent = error.message || 'Could not load scoring status.';
+          return postRaceCached?.scoring || null;
         }
       }
 
@@ -3937,6 +4552,192 @@
       $('#postRacePublishSlateBtn')?.addEventListener('click', () => publishFantasySlate());
       $('#backfillHistoricalSlatesBtn')?.addEventListener('click', backfillHistoricalSlates);
       bindSalaryReasonsPopoverEvents();
+
+      const RECOVERY_TYPED_PHRASES = {
+        reopen_finalized_contest: 'REOPEN CONTEST',
+        full_regenerate_published_slate: (raceNumber) =>
+          raceNumber != null ? `REGENERATE RACE ${raceNumber}` : 'REGENERATE SLATE',
+        force_standings_rebuild: 'REBUILD STANDINGS',
+        change_completed_race: 'CHANGE COMPLETED RACE',
+      };
+
+      function recordRecoveryAudit(actionId) {
+        const stamp = new Date().toISOString();
+        try {
+          sessionStorage.setItem(`frc_recovery_audit_${actionId}`, stamp);
+          const logRaw = sessionStorage.getItem('frc_recovery_audit_log');
+          const log = logRaw ? JSON.parse(logRaw) : [];
+          log.unshift({ actionId, at: stamp });
+          sessionStorage.setItem('frc_recovery_audit_log', JSON.stringify(log.slice(0, 50)));
+        } catch {
+          /* ignore */
+        }
+        return stamp;
+      }
+
+      let recoveryDialogState = { actionId: null, onConfirm: null, lastFocus: null };
+
+      function closeRecoveryDialog() {
+        const dialog = document.getElementById('frcRecoveryDialog');
+        const input = document.getElementById('frcRecoveryDialogInput');
+        if (dialog) dialog.hidden = true;
+        if (input) {
+          input.value = '';
+          input.hidden = true;
+        }
+        document.getElementById('frcRecoveryDialogInputLabel')?.setAttribute('hidden', '');
+        recoveryDialogState.lastFocus?.focus?.();
+        recoveryDialogState = { actionId: null, onConfirm: null, lastFocus: null };
+      }
+
+      function openRecoveryDialog({ actionId, title, body, typedPhrase, onConfirm, triggerEl }) {
+        const dialog = document.getElementById('frcRecoveryDialog');
+        const titleEl = document.getElementById('frcRecoveryDialogTitle');
+        const bodyEl = document.getElementById('frcRecoveryDialogBody');
+        const input = document.getElementById('frcRecoveryDialogInput');
+        const inputLabel = document.getElementById('frcRecoveryDialogInputLabel');
+        const confirmBtn = document.getElementById('frcRecoveryDialogConfirm');
+        if (!dialog || !titleEl || !bodyEl || !input || !confirmBtn) return;
+
+        recoveryDialogState = {
+          actionId,
+          onConfirm,
+          lastFocus: triggerEl || document.activeElement,
+          typedPhrase: typedPhrase || null,
+        };
+        titleEl.textContent = title;
+        bodyEl.textContent = body;
+        dialog.hidden = false;
+
+        const needsTyped = Boolean(typedPhrase);
+        input.hidden = !needsTyped;
+        inputLabel?.toggleAttribute('hidden', !needsTyped);
+        if (needsTyped) {
+          inputLabel.textContent = `Type ${typedPhrase} to continue.`;
+          input.value = '';
+          confirmBtn.disabled = true;
+          input.oninput = () => {
+            confirmBtn.disabled =
+              input.value.trim().toUpperCase() !== String(typedPhrase).trim().toUpperCase();
+          };
+          input.focus();
+        } else {
+          confirmBtn.disabled = false;
+          confirmBtn.focus();
+        }
+      }
+
+      document.getElementById('frcRecoveryDialogCancel')?.addEventListener('click', closeRecoveryDialog);
+      document.getElementById('frcRecoveryDialogConfirm')?.addEventListener('click', async () => {
+        const { actionId, onConfirm } = recoveryDialogState;
+        if (!actionId || !onConfirm) return;
+        recordRecoveryAudit(actionId);
+        closeRecoveryDialog();
+        await onConfirm();
+      });
+
+      async function runRecoveryAction(actionId, triggerEl) {
+        const raceNumber =
+          window.FantasyRaceCycle?._lastContext?.postRace?.nextRace?.raceNumber ??
+          window.FantasyRaceCycle?._lastContext?.adminStats?.nextRace?.raceNumber ??
+          null;
+
+        const handlers = {
+          reopen_finalized_contest: async () => {
+            try {
+              sessionStorage.removeItem(
+                `bp_fantasy_scoring_review_${window.FantasyRaceCycle?._lastContext?.adminStats?.slate?.season_id || '27987'}_${window.FantasyRaceCycle?._lastContext?.postRace?.completedRace?.raceNumber || 'none'}`
+              );
+            } catch {
+              /* ignore */
+            }
+            document.getElementById('race-scoring')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            await loadFantasyRaceScoring();
+            await refreshFantasyRaceCyclePanel();
+          },
+          recalculate_finalized_scoring: async () => {
+            await runFantasyRaceScoring({ recalculate: true });
+          },
+          manual_score_adjustment: async () => {
+            document.getElementById('race-scoring')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            await loadFantasyRaceScoring();
+          },
+          force_standings_rebuild: async () => {
+            await runFantasyRaceScoring({ recalculate: true });
+            await refreshFantasyRaceCyclePanel();
+          },
+          add_missing_eligible_drivers: addMissingDriverPoolDrivers,
+          full_regenerate_published_slate: fullRegeneratePublishedSlate,
+          remove_driver_from_published_slate: async () => {
+            document.getElementById('fantasyDriverPoolHealthCard')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            await fetchDriverPoolHealth();
+          },
+          change_next_race: async () => {
+            document.getElementById('generateNextRaceSlateBtn')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          },
+          change_completed_race: async () => {
+            window.FantasyRaceCycle?.refresh?.();
+            document.getElementById('fantasyRaceCycleRoot')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          },
+          reimport_official_results: async () => {
+            await window.FantasyAdminBridge?.actions?.loadOfficialResults?.();
+            await refreshFantasyRaceCyclePanel();
+          },
+        };
+
+        const typedTemplate = RECOVERY_TYPED_PHRASES[actionId];
+        const typedPhrase =
+          typeof typedTemplate === 'function' ? typedTemplate(raceNumber) : typedTemplate || null;
+
+        const descriptions = {
+          reopen_finalized_contest:
+            'This reopens scoring review for the finalized contest. Participant-visible leaderboard status may change until you finalize again.',
+          full_regenerate_published_slate:
+            'This rebuilds every salary on the published slate. Participant-visible salaries may change. Existing lineup submissions remain saved.',
+          force_standings_rebuild:
+            'This rebuilds season standings from finalized scoring outputs. Participant-visible standings may change.',
+          change_completed_race:
+            'This lets you re-target post-race work to a different completed race. Participant-visible results may change if scoring is rerun.',
+          recalculate_finalized_scoring:
+            'This recalculates lineup points from official results. Participant-visible scores may change.',
+          manual_score_adjustment: 'Open race scoring tools to apply a manual correction.',
+          add_missing_eligible_drivers:
+            'Adds eligible roster drivers missing from the published slate without removing existing drivers.',
+          remove_driver_from_published_slate:
+            'Opens driver pool health tools to review exclusions and missing drivers.',
+          change_next_race: 'Opens next-race slate tools so you can target a different upcoming race.',
+          reimport_official_results:
+            'Reloads official results and identity matches without publishing or finalizing anything.',
+        };
+
+        const needsConfirm = Boolean(typedPhrase) || [
+          'recalculate_finalized_scoring',
+          'manual_score_adjustment',
+          'add_missing_eligible_drivers',
+          'remove_driver_from_published_slate',
+          'change_next_race',
+          'reimport_official_results',
+        ].includes(actionId);
+
+        if (!needsConfirm) {
+          recordRecoveryAudit(actionId);
+          await handlers[actionId]?.();
+          return;
+        }
+
+        openRecoveryDialog({
+          actionId,
+          title: actionId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+          body: descriptions[actionId] || 'Confirm this recovery action.',
+          typedPhrase,
+          triggerEl,
+          onConfirm: handlers[actionId],
+        });
+      }
+
+      document.querySelectorAll('[data-recovery-action]').forEach((button) => {
+        button.addEventListener('click', () => runRecoveryAction(button.getAttribute('data-recovery-action'), button));
+      });
 
       initSession();
     </script>

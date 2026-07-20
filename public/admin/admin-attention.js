@@ -2,7 +2,6 @@
   const SESSION_KEY = 'bp_admin_pw';
   const SEEN_PREFIX = 'bp_admin_seen_attention:';
   const STYLE_ID = 'admin-attention-styles';
-  const POLL_MS = 60000;
 
   const APPLICATION_ATTENTION = [
     {
@@ -59,7 +58,6 @@
     applications: [],
     missionControl: null,
     observers: [],
-    pollTimer: null,
     getCurrentPageId: null,
     visibilityTargets: [],
   };
@@ -516,16 +514,18 @@
     state.observers.push(observer);
   }
 
-  function startPolling() {
-    if (state.pollTimer) return;
-    state.pollTimer = window.setInterval(() => refresh(), POLL_MS);
+  function bindFocusRefresh() {
+    window.addEventListener('focus', () => refresh());
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') refresh();
+    });
   }
 
   function init(options = {}) {
     if (options.getCurrentPageId) state.getCurrentPageId = options.getCurrentPageId;
     injectStyles();
     bindVisibilityChecks();
-    startPolling();
+    bindFocusRefresh();
     refresh();
   }
 
