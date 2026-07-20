@@ -390,63 +390,133 @@ function bindPanelEvents(root, context) {
   });
 }
 
-function logFantasyRaceCycleDiagnostics(context, source = 'refresh') {
-  if (!context) return null;
-  const model = buildFantasyRaceCycleModel(context);
-  const diagnosis = diagnosePublishedSlateInference(context);
-  const { conditions, counts, snapshots } = diagnosis;
-
-  const lines = [
-    `[Fantasy Race Cycle] diagnostics (${source})`,
-    '--- context (workflow input) ---',
-    context,
-    '--- context.postRace ---',
-    context.postRace ?? null,
-    '--- context.adminStats ---',
-    context.adminStats ?? null,
-    '--- model.summary (derived, not on context) ---',
-    model.summary ?? null,
-    '--- context.adminStats.slate (workflow reads here, not context.slate) ---',
-    context.adminStats?.slate ?? null,
-    '--- context.adminStats.activePlayableSlate ---',
-    context.adminStats?.activePlayableSlate ?? null,
-    '--- context.adminStats.publishedSlate ---',
-    context.adminStats?.publishedSlate ?? null,
-    '--- context.postRace.salaryDraft ---',
-    context.postRace?.salaryDraft ?? null,
-    '--- isNextRaceSlatePublished ---',
-    diagnosis.isNextRaceSlatePublished,
-    '--- inference condition breakdown ---',
-    `nextRaceNumber ........ ${diagnosis.nextRaceNumber ?? 'null'} (postRace=${diagnosis.postRaceNextRace ?? 'null'}, adminStats=${diagnosis.adminStatsNextRace ?? 'null'}, sourcesMatch=${diagnosis.nextRaceNumberSourcesMatch})`,
-    `published flag ........ ${conditions.publishedFlag}`,
-    `activePlayableSlate ... ${snapshots.activePlayableSlate ? 'present' : 'null'} (race=${snapshots.activePlayableSlate?.race_number ?? snapshots.activePlayableSlate?.raceNumber ?? 'n/a'}, match=${conditions.activePlayableSlateMatch})`,
-    `publishedSlate ........ ${snapshots.publishedSlate ? 'present' : 'null'} (race=${snapshots.publishedSlate?.race_number ?? snapshots.publishedSlate?.raceNumber ?? 'n/a'}, match=${conditions.publishedSlateRaceMatch}, statusPublished=${conditions.publishedSlateStatusPublished})`,
-    `adminStats.slate ...... ${snapshots.adminSlate ? 'present' : 'null'} (race=${snapshots.adminSlate?.race_number ?? snapshots.adminSlate?.raceNumber ?? 'n/a'}, match=${conditions.adminSlateRaceMatch}, status=${snapshots.adminSlate?.status ?? 'n/a'}, statusPublished=${conditions.adminSlateStatusPublished})`,
-    `matched condition ..... ${diagnosis.matchedCondition}`,
-    `driverRows ............ ${counts.driverRows ?? 'n/a'}`,
-    `salaryRows ............ ${counts.salaryRows ?? 'n/a'}`,
-    `inferDriverPoolBuilt .. ${diagnosis.inferDriverPoolBuilt}`,
-    `inferSalariesReady .... ${diagnosis.inferSalariesReady}`,
-    `draftSlateReady ....... ${diagnosis.draftSlateReady}`,
-    `step8 status .......... ${diagnosis.step8Status}${diagnosis.step8BlockedReason ? ` (${diagnosis.step8BlockedReason})` : ''}`,
-    `step9 status .......... ${diagnosis.step9Status}${diagnosis.step9BlockedReason ? ` (${diagnosis.step9BlockedReason})` : ''}`,
-  ];
-
-  console.groupCollapsed(lines[0]);
-  for (let i = 1; i < lines.length; i += 1) {
-    const line = lines[i];
-    if (line.startsWith('---')) {
-      console.log(line);
-    } else if (line.includes('........')) {
-      console.log(line);
-    } else {
-      console.dir(line);
-    }
+function safeDiagnosticString(value) {
+  if (value == null) return 'null';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+    return String(value);
   }
-  console.groupEnd();
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return Object.prototype.toString.call(value);
+  }
+}
 
-  window.FantasyRaceCycle._lastDiagnostics = diagnosis;
-  return diagnosis;
+function logDiagnosticEntry(label, value) {
+  try {
+    if (typeof label === 'string' && label.startsWith('---')) {
+      console.log(label);
+      return;
+    }
+    const name = typeof label === 'string' ? label : safeDiagnosticString(label);
+    if (value == null) {
+      console.log(`${name}: null`);
+      return;
+    }
+    const valueType = typeof value;
+    if (valueType === 'string' || valueType === 'number' || valueType === 'boolean' || valueType === 'bigint') {
+      console.log(`${name}:`, value);
+      return;
+    }
+    if (Array.isArray(value)) {
+      console.log(`${name} (array, length=${value.length}):`);
+      if (value.length && value.every((row) => row && typeof row === 'object' && !Array.isArray(row))) {
+        console.table(value);
+      } else {
+        console.dir(value);
+      }
+      return;
+    }
+    if (valueType === 'object') {
+      console.log(`${name}:`);
+      console.dir(value);
+      return;
+    }
+    console.log(`${name}:`, value);
+  } catch (error) {
+    console.warn('[Fantasy Race Cycle] diagnostics field failed:', label, error);
+  }
+}
+
+function logFantasyRaceCycleDiagnostics(context, source = 'refresh') {
+  try {
+    if (!context) {
+      console.warn('[Fantasy Race Cycle] diagnostics skipped: no context');
+      return null;
+    }
+
+    let model = null;
+    let diagnosis = null;
+    try {
+      model = buildFantasyRaceCycleModel(context);
+      diagnosis = diagnosePublishedSlateInference(context);
+    } catch (error) {
+      console.error('[Fantasy Race Cycle] diagnostics model build failed:', error);
+      diagnosis = {
+        nextRaceNumber: null,
+        matchedCondition: 'diagnosis build failed',
+        step8Status: null,
+        step9Status: null,
+      };
+    }
+
+    const { conditions = {}, counts = {}, snapshots = {} } = diagnosis || {};
+
+    console.groupCollapsed(`[Fantasy Race Cycle] diagnostics (${source})`);
+
+    logDiagnosticEntry('postRace.nextRace', context.postRace?.nextRace ?? null);
+    logDiagnosticEntry('adminStats.nextRace', context.adminStats?.nextRace ?? null);
+    logDiagnosticEntry('resolvedNextRace', diagnosis?.nextRaceNumber ?? null);
+    logDiagnosticEntry('salaryDraft', context.postRace?.salaryDraft ?? snapshots.salaryDraft ?? null);
+    logDiagnosticEntry('activePlayableSlate', context.adminStats?.activePlayableSlate ?? snapshots.activePlayableSlate ?? null);
+    logDiagnosticEntry('publishedSlate', context.adminStats?.publishedSlate ?? snapshots.publishedSlate ?? null);
+    logDiagnosticEntry('adminStats.slate', context.adminStats?.slate ?? snapshots.adminSlate ?? null);
+    logDiagnosticEntry('matched published condition', diagnosis?.matchedCondition ?? null);
+    logDiagnosticEntry('Step 8 status', diagnosis?.step8Status ?? null);
+    logDiagnosticEntry('Step 9 status', diagnosis?.step9Status ?? null);
+
+    logDiagnosticEntry('--- inference condition breakdown ---', null);
+    logDiagnosticEntry(
+      'nextRaceNumber',
+      `${diagnosis?.nextRaceNumber ?? 'null'} (postRace=${diagnosis?.postRaceNextRace ?? 'null'}, adminStats=${diagnosis?.adminStatsNextRace ?? 'null'}, sourcesMatch=${diagnosis?.nextRaceNumberSourcesMatch})`
+    );
+    logDiagnosticEntry('published flag', conditions.publishedFlag);
+    logDiagnosticEntry(
+      'activePlayableSlate check',
+      `${snapshots.activePlayableSlate ? 'present' : 'null'} (race=${snapshots.activePlayableSlate?.race_number ?? snapshots.activePlayableSlate?.raceNumber ?? 'n/a'}, match=${conditions.activePlayableSlateMatch})`
+    );
+    logDiagnosticEntry(
+      'publishedSlate check',
+      `${snapshots.publishedSlate ? 'present' : 'null'} (race=${snapshots.publishedSlate?.race_number ?? snapshots.publishedSlate?.raceNumber ?? 'n/a'}, match=${conditions.publishedSlateRaceMatch}, statusPublished=${conditions.publishedSlateStatusPublished})`
+    );
+    logDiagnosticEntry(
+      'adminStats.slate check',
+      `${snapshots.adminSlate ? 'present' : 'null'} (race=${snapshots.adminSlate?.race_number ?? snapshots.adminSlate?.raceNumber ?? 'n/a'}, match=${conditions.adminSlateRaceMatch}, status=${snapshots.adminSlate?.status ?? 'n/a'}, statusPublished=${conditions.adminSlateStatusPublished})`
+    );
+    logDiagnosticEntry('isNextRaceSlatePublished', diagnosis?.isNextRaceSlatePublished);
+    logDiagnosticEntry('driverRows', counts.driverRows ?? 'n/a');
+    logDiagnosticEntry('salaryRows', counts.salaryRows ?? 'n/a');
+    logDiagnosticEntry('inferDriverPoolBuilt', diagnosis?.inferDriverPoolBuilt);
+    logDiagnosticEntry('inferSalariesReady', diagnosis?.inferSalariesReady);
+    logDiagnosticEntry('draftSlateReady', diagnosis?.draftSlateReady);
+
+    logDiagnosticEntry('--- full context (workflow input) ---', null);
+    logDiagnosticEntry('context', context);
+    logDiagnosticEntry('context.postRace', context.postRace ?? null);
+    logDiagnosticEntry('context.adminStats', context.adminStats ?? null);
+    logDiagnosticEntry('model.summary (derived)', model?.summary ?? null);
+
+    console.groupEnd();
+
+    if (window.FantasyRaceCycle) {
+      window.FantasyRaceCycle._lastDiagnostics = diagnosis;
+    }
+    return diagnosis;
+  } catch (error) {
+    console.error('[Fantasy Race Cycle] diagnostics failed:', error);
+    return null;
+  }
 }
 
 function render(context) {
