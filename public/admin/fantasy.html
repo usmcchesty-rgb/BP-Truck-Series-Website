@@ -2619,7 +2619,7 @@
       }
 
       async function generateFantasySalaries(options = {}) {
-        const { rethrow = false, quiet = false } = options;
+        const { rethrow = false, quiet = false, raceNumber = null, preferExistingDraft = false } = options;
         const statusEl = quiet ? null : $('#fantasyGenerateStatus');
         const btn = quiet ? null : $('#generateFantasySalariesBtn');
         if (statusEl) {
@@ -2628,6 +2628,13 @@
         }
         if (btn) btn.disabled = true;
 
+        const cycleContext = window.FantasyRaceCycle?._lastContext;
+        const resolvedRaceNumber =
+          raceNumber ??
+          cycleContext?.postRace?.nextRace?.raceNumber ??
+          cycleContext?.adminStats?.nextRace?.raceNumber ??
+          null;
+
         try {
           const res = await fetch('/api/settings', {
             method: 'POST',
@@ -2635,31 +2642,35 @@
             body: JSON.stringify({
               password: getSessionPw(),
               action: 'generateFantasySlate',
+              raceNumber: resolvedRaceNumber,
+              preferExistingDraft,
             }),
           });
           const data = await res.json();
+          const slateActionMessage =
+            data.message ||
+            (data.loadedSlateRaceNumber != null
+              ? `Race ${data.loadedSlateRaceNumber} slate ${data.loadedSlateStatus || 'saved'} (ID ${data.loadedSlateId ?? data.slateId ?? ''}).`
+              : null);
+
           if (!res.ok) {
-            if (data.existingSlateFound || data.actionTaken === 'loaded_existing') {
+            if (data.existingSlateFound && data.actionTaken === 'loaded_existing_published') {
               applyFantasySlatePayload(data);
-              await loadFantasyAdminStats({ skipRaceCycle: true });
-              const message = `Race ${data.raceNumber ?? data.slate?.race_number ?? ''} already has a published slate (ID ${data.slateId ?? data.slate?.id ?? ''}). Loaded existing slate.`;
+              await loadFantasyAdminStats({ skipRaceCycle: true, forceFresh: true });
+              const message =
+                slateActionMessage ||
+                `Race ${data.loadedSlateRaceNumber ?? data.raceNumber ?? ''} already has a published slate (ID ${data.loadedSlateId ?? data.slateId ?? ''}). Loaded existing published slate.`;
               if (statusEl) statusEl.textContent = message;
               return message;
             }
-            throw new Error(data.error || 'Generation failed');
-          }
-
-          if (data.existingSlateFound || data.actionTaken === 'loaded_existing') {
-            applyFantasySlatePayload(data);
-            await loadFantasyAdminStats({ skipRaceCycle: true });
-            const message = `Race ${data.raceNumber ?? data.slate?.race_number ?? ''} already has a published slate (ID ${data.slateId ?? data.slate?.id ?? ''}). Loaded existing slate.`;
-            if (statusEl) statusEl.textContent = message;
-            return message;
+            throw new Error(data.error || data.message || 'Generation failed');
           }
 
           applyFantasySlatePayload(data);
-          await loadFantasyAdminStats({ skipRaceCycle: true });
-          const message = `Draft saved for race ${data.targetRace?.raceNumber ?? data.slate?.race_number ?? ''} (${(data.drivers || []).length} drivers).`;
+          await loadFantasyAdminStats({ skipRaceCycle: true, forceFresh: true });
+          const message =
+            slateActionMessage ||
+            `Draft saved for race ${data.targetRace?.raceNumber ?? data.loadedSlateRaceNumber ?? data.slate?.race_number ?? ''} (${data.driverCount ?? (data.drivers || []).length} drivers).`;
           if (statusEl) statusEl.textContent = message;
           return message;
         } catch (error) {
@@ -2675,11 +2686,11 @@
       }
 
       async function buildFantasyDriverPoolForCycle() {
-        const statusEl = $('#driverPoolActionStatus');
-        if (statusEl) {
-          statusEl.textContent = 'Refreshing eligible driver pool...';
-          statusEl.classList.remove('error');
-        }
+        const cycleContext = window.FantasyRaceCycle?._lastContext;
+        const raceNumber =
+          cycleContext?.postRace?.nextRace?.raceNumber ??
+          cycleContext?.adminStats?.nextRace?.raceNumber ??
+          null;
 
         const refreshRes = await fetch('/api/settings', {
           method: 'POST',
@@ -2687,6 +2698,7 @@
           body: JSON.stringify({
             password: getSessionPw(),
             action: 'refreshFantasyDriverPool',
+            raceNumber,
           }),
         });
         const refreshData = await refreshRes.json();
@@ -2695,24 +2707,37 @@
         }
         renderDriverPoolHealth(refreshData);
 
-        const slateMessage = await generateFantasySalaries({ rethrow: true, quiet: true });
-        await Promise.all([loadFantasyDraftSlate(), loadFantasyAdminStats({ skipRaceCycle: true })]);
+        const slateMessage = await generateFantasySalaries({
+          rethrow: true,
+          quiet: true,
+          raceNumber,
+          preferExistingDraft: true,
+        });
+        await Promise.all([
+          loadFantasyDraftSlate(),
+          loadFantasyAdminStats({ skipRaceCycle: true, forceFresh: true }),
+        ]);
+        await refreshFantasyRaceCyclePanel();
 
-        const eligibleCount =
-          refreshData?.counts?.eligibleRosterDrivers ??
-          refreshData?.counts?.driversInDraft ??
-          refreshData?.diagnostics?.eligibleDriverCount ??
-          null;
-        const driverLabel = eligibleCount != null ? `${eligibleCount} eligible drivers` : 'eligible drivers';
-        if (statusEl) statusEl.textContent = `Driver pool refreshed (${driverLabel}).`;
-        return slateMessage || `Driver pool built successfully (${driverLabel}).`;
+        return (
+          slateMessage ||
+          `Race ${raceNumber ?? ''} driver pool refreshed (${refreshData?.counts?.eligibleRosterDrivers ?? 'eligible'} drivers).`
+        );
       }
 
       async function fetchFantasyRaceCycleState(cached = {}) {
         const password = getSessionPw();
-        let settings = cached.settings;
-        let adminStats = cached.adminStats;
-        let postRace = cached.postRace;
+        const forceFresh = cached.forceFresh === true;
+        let settings = forceFresh ? null : cached.settings;
+        let adminStats = forceFresh ? null : cached.adminStats;
+        let postRace = forceFresh ? null : cached.postRace;
+
+        const cycleContext = window.FantasyRaceCycle?._lastContext;
+        const nextRaceNumber =
+          cached.nextRaceNumber ??
+          cycleContext?.postRace?.nextRace?.raceNumber ??
+          cycleContext?.adminStats?.nextRace?.raceNumber ??
+          null;
 
         const requests = [];
         if (!settings) {
@@ -2730,7 +2755,8 @@
               body: JSON.stringify({
                 password,
                 action: 'getFantasySlateAdminStats',
-                slateId: currentFantasySlateId,
+                raceNumber: nextRaceNumber,
+                ...(forceFresh ? {} : { slateId: currentFantasySlateId }),
               }),
             }).then(async (res) => {
               adminStats = res.ok ? await res.json() : {};
@@ -2819,7 +2845,7 @@
         fetchState: fetchFantasyRaceCycleState,
         refresh: async () => {
           await Promise.all([
-            loadFantasyAdminStats({ skipRaceCycle: true }),
+            loadFantasyAdminStats({ skipRaceCycle: true, forceFresh: true }),
             loadFantasyDraftSlate(),
             loadSubmittedLineups(),
           ]);
@@ -2906,6 +2932,11 @@
 
         try {
           const password = getSessionPw();
+          const cycleContext = window.FantasyRaceCycle?._lastContext;
+          const nextRaceNumber =
+            cycleContext?.postRace?.nextRace?.raceNumber ??
+            cycleContext?.adminStats?.nextRace?.raceNumber ??
+            null;
           const [statsRes, postRaceRes] = await Promise.all([
             fetch('/api/settings', {
               method: 'POST',
@@ -2913,7 +2944,8 @@
               body: JSON.stringify({
                 password,
                 action: 'getFantasySlateAdminStats',
-                slateId: currentFantasySlateId,
+                raceNumber: nextRaceNumber,
+                ...(options.forceFresh ? {} : { slateId: currentFantasySlateId }),
               }),
             }),
             fetch('/api/settings', {
@@ -2979,11 +3011,15 @@
         scoringPayload = await loadFantasyRaceScoring(postRacePayload);
         await loadPostRaceAutomation(postRacePayload);
         if (!options.skipRaceCycle) {
-          await refreshFantasyRaceCyclePanel({
-            adminStats,
-            postRace: postRacePayload,
-            scoring: scoringPayload,
-          });
+          await refreshFantasyRaceCyclePanel(
+            options.forceFresh
+              ? null
+              : {
+                  adminStats,
+                  postRace: postRacePayload,
+                  scoring: scoringPayload,
+                }
+          );
         }
       }
 

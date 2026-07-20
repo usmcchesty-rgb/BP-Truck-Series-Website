@@ -35,6 +35,7 @@ const SAFE_REFRESH = [
   'Recalculate Preview',
   'Review Exclusions',
   'Review Salary Details',
+  'Refresh Slate Details',
 ];
 
 const uiState = {
@@ -322,6 +323,17 @@ async function runStepAction(stepId) {
   uiState.stepFeedback = { stepId, status: 'loading', message: 'Working…' };
   render(context);
   try {
+    if (step?.actionLabel === 'Refresh Slate Details') {
+      await bridge.refresh?.();
+      uiState.busy = false;
+      uiState.stepFeedback = {
+        stepId,
+        status: 'success',
+        message: 'Slate details refreshed.',
+      };
+      render(window.FantasyRaceCycle._lastContext || context);
+      return;
+    }
     const actions = {
       import_official_results: bridge.actions.loadOfficialResults,
       calculate_fantasy_scoring: () =>

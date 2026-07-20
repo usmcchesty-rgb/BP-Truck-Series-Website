@@ -3,6 +3,7 @@ import {
   generateFantasyDraftSlate,
   loadFantasyDraftSlate,
   loadFantasySlateById,
+  loadFantasySlateForRace,
   publishFantasySlate,
   updateFantasySlateLock,
 } from './_fantasy-slate.js';
@@ -659,6 +660,8 @@ async function handleSettingsRequest(req, res) {
     try {
       const result = await generateFantasyDraftSlate({
         raceNumber: body.raceNumber ?? body.race_number ?? null,
+        preferExistingDraft: body.preferExistingDraft === true,
+        forceRegenerate: body.forceRegenerate === true,
       });
       return res.status(200).json(result);
     } catch (error) {
@@ -666,10 +669,15 @@ async function handleSettingsRequest(req, res) {
         return res.status(409).json({
           error: error.message,
           code: error.code,
+          requestedRaceNumber: error.raceNumber ?? null,
+          loadedSlateId: error.existingSlateId ?? null,
+          loadedSlateRaceNumber: error.raceNumber ?? null,
+          loadedSlateStatus: 'published',
+          actionTaken: 'blocked_published_exists',
           existingSlateFound: true,
           slateId: error.existingSlateId,
           raceNumber: error.raceNumber,
-          actionTaken: 'loaded_existing',
+          message: `Race ${error.raceNumber ?? '?'} already has a published slate (ID ${error.existingSlateId ?? '?'}). Regeneration blocked.`,
         });
       }
       return res.status(500).json({ error: error.message || 'Fantasy slate generation failed.' });
@@ -1034,11 +1042,24 @@ async function handleSettingsRequest(req, res) {
         body.slateId != null && Number.isFinite(Number(body.slateId))
           ? Number(body.slateId)
           : null;
-      const payload = requestedSlateId
-        ? await loadFantasySlateById(requestedSlateId)
-        : await loadFantasyDraftSlate(seasonId);
-      const publishedPayload = await loadLatestFantasySlate(seasonId);
       const progression = await resolveFantasySlateProgression(seasonId);
+      const nextRaceNumber =
+        body.raceNumber != null && Number.isFinite(Number(body.raceNumber))
+          ? Number(body.raceNumber)
+          : progression.nextRaceNumber ?? null;
+
+      let payload = null;
+      if (requestedSlateId) {
+        payload = await loadFantasySlateById(requestedSlateId);
+      } else if (nextRaceNumber != null) {
+        payload =
+          (await loadFantasySlateForRace(seasonId, nextRaceNumber)) ||
+          (await loadFantasyDraftSlate(seasonId, nextRaceNumber));
+      } else {
+        payload = await loadFantasyDraftSlate(seasonId);
+      }
+
+      const publishedPayload = await loadLatestFantasySlate(seasonId);
       const submittedLineupsSlate = await resolveAdminSubmittedLineupsSlate(seasonId);
       const countSlateId = submittedLineupsSlate.slateRow?.id ?? null;
       const lineupCount = countSlateId ? await countLineupsForSlate(countSlateId) : 0;
@@ -1055,9 +1076,9 @@ async function handleSettingsRequest(req, res) {
       try {
         driverPoolHealth = await auditFantasyDriverPoolHealth(seasonId, {
           raceNumber:
+            nextRaceNumber ??
             progression.activeSlateRow?.race_number ??
             payload?.slate?.race_number ??
-            progression.nextRaceNumber ??
             null,
           settings,
         });
@@ -1066,6 +1087,7 @@ async function handleSettingsRequest(req, res) {
       }
       return res.status(200).json({
         slate: payload?.slate || null,
+        slateSummary: payload?.slateSummary || null,
         publishedSlate:
           progression.activeSlateRow ||
           progression.archivedSlateRow ||

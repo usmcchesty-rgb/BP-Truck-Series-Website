@@ -279,8 +279,8 @@ async function saveDraftSlate(slateRow, driverRows, options = {}) {
   return {
     slate: slateRecord,
     drivers: driverInsertPayload,
-    existingSlateFound: Boolean(existing?.id),
-    actionTaken: existing?.id ? 'updated_existing' : 'created_draft',
+    existingSlateFound: false,
+    actionTaken: existing?.id ? 'updated_existing_draft' : 'created_draft',
   };
 }
 
@@ -451,6 +451,95 @@ export async function enrichFantasyDraftPayload(payload = {}) {
     ...payload,
     drivers,
     analytics,
+    slateSummary: buildFantasySlateSummary(slate, drivers),
+  };
+}
+
+export function buildFantasySlateSummary(slate, drivers = []) {
+  if (!slate?.id) return null;
+  const normalized = (drivers || []).map((row) => ({
+    driverId: row.driverId ?? row.driver_id,
+    salary:
+      row.finalSalary ??
+      row.final_salary ??
+      row.generatedSalary ??
+      row.generated_salary ??
+      row.salary ??
+      row.salary_amount,
+  }));
+  const ids = normalized.map((row) => String(row.driverId || '')).filter(Boolean);
+  const numericSalaries = normalized
+    .map((row) => Number(row.salary))
+    .filter((value) => Number.isFinite(value));
+  const validSalaryCount = normalized.filter((row) => Number.isFinite(Number(row.salary))).length;
+  return {
+    slateId: slate.id,
+    raceNumber: slate.race_number,
+    status: slate.status,
+    slateDriverCount: normalized.length,
+    validSalaryCount,
+    missingSalaryCount: Math.max(0, normalized.length - validSalaryCount),
+    duplicateDriverCount: ids.length ? ids.length - new Set(ids).size : 0,
+    salaryMinimum: numericSalaries.length ? Math.min(...numericSalaries) : null,
+    salaryMaximum: numericSalaries.length ? Math.max(...numericSalaries) : null,
+    salaryDetailsVerified: normalized.length > 0,
+  };
+}
+
+export function buildFantasySlateActionMessage(meta = {}) {
+  const race = meta.loadedSlateRaceNumber ?? meta.requestedRaceNumber ?? '?';
+  const id = meta.loadedSlateId ?? '?';
+  const drivers = meta.driverCount ?? 0;
+  switch (meta.actionTaken) {
+    case 'loaded_existing_published':
+      return `Race ${race} already has a published slate (ID ${id}). Loaded existing published slate.`;
+    case 'loaded_existing_draft':
+      return `Race ${race} already has a draft slate${drivers ? ` with ${drivers} drivers` : ''} (ID ${id}). Loaded existing draft.`;
+    case 'updated_existing_draft':
+      return `Race ${race} draft updated (${drivers} drivers).`;
+    case 'created_draft':
+      return `Race ${race} driver pool built with ${drivers} eligible drivers.`;
+    case 'blocked_published_exists':
+      return `Race ${race} already has a published slate (ID ${id}). Regeneration blocked.`;
+    default:
+      return meta.message || null;
+  }
+}
+
+export function attachFantasySlateActionMeta(payload = {}, options = {}) {
+  const slate = payload.slate || null;
+  const requestedRaceNumber =
+    options.requestedRaceNumber ?? payload.requestedRaceNumber ?? slate?.race_number ?? null;
+  const loadedSlateRaceNumber = slate?.race_number ?? payload.loadedSlateRaceNumber ?? null;
+  const loadedSlateStatus = slate?.status ?? payload.loadedSlateStatus ?? null;
+  const actionTaken = options.actionTaken ?? payload.actionTaken ?? null;
+  const driverCount = Array.isArray(payload.drivers) ? payload.drivers.length : payload.driverCount ?? 0;
+  const loadedSlateId = slate?.id ?? payload.loadedSlateId ?? payload.slateId ?? null;
+  const message =
+    options.message ??
+    payload.message ??
+    buildFantasySlateActionMessage({
+      requestedRaceNumber,
+      loadedSlateId,
+      loadedSlateRaceNumber,
+      loadedSlateStatus,
+      actionTaken,
+      driverCount,
+    });
+
+  return {
+    ...payload,
+    requestedRaceNumber,
+    loadedSlateId,
+    loadedSlateRaceNumber,
+    loadedSlateStatus,
+    actionTaken,
+    driverCount,
+    message,
+    slateId: loadedSlateId,
+    raceNumber: loadedSlateRaceNumber ?? requestedRaceNumber,
+    existingSlateFound:
+      actionTaken === 'loaded_existing_published' || actionTaken === 'loaded_existing_draft',
   };
 }
 
@@ -480,6 +569,7 @@ export async function generateFantasyDraftSlate(options = {}) {
   }
 
   const raceNumber = targetRace.officialPointsRaceNumber;
+  const requestedRaceNumber = options.raceNumber != null ? Number(options.raceNumber) : raceNumber;
 
   const existingSlate = await loadFantasySlateForRace(seasonId, raceNumber);
   if (
@@ -487,13 +577,35 @@ export async function generateFantasyDraftSlate(options = {}) {
     !options.forceRegenerate &&
     !options.allowPublishedUpdate
   ) {
-    return enrichFantasyDraftPayload({
-      ...existingSlate,
-      existingSlateFound: true,
-      slateId: existingSlate.slate.id,
-      raceNumber,
-      actionTaken: 'loaded_existing',
-    });
+    return attachFantasySlateActionMeta(
+      await enrichFantasyDraftPayload({
+        ...existingSlate,
+        slateId: existingSlate.slate.id,
+        raceNumber,
+      }),
+      {
+        requestedRaceNumber,
+        actionTaken: 'loaded_existing_published',
+      }
+    );
+  }
+
+  if (
+    existingSlate?.slate?.status === 'draft' &&
+    options.preferExistingDraft === true &&
+    !options.forceRegenerate
+  ) {
+    return attachFantasySlateActionMeta(
+      await enrichFantasyDraftPayload({
+        ...existingSlate,
+        slateId: existingSlate.slate.id,
+        raceNumber,
+      }),
+      {
+        requestedRaceNumber,
+        actionTaken: 'loaded_existing_draft',
+      }
+    );
   }
 
   const poolContext = await loadEligibleFantasyStandingsPool({
@@ -612,20 +724,23 @@ export async function generateFantasyDraftSlate(options = {}) {
     await refreshFantasyDriverPoolMetadata(seasonId, { raceNumber }).catch(() => {});
   }
 
-  return enrichFantasyDraftPayload({
-    slate: saved.slate,
-    drivers: enrichedDrivers,
-    meta,
-    targetRace: {
-      raceNumber,
-      track: upcomingTrack,
-      date: targetRace.date || null,
-      lockTime: lockTime || null,
-    },
-    existingSlateFound: Boolean(saved.existingSlateFound),
-    slateId: saved.slate?.id ?? null,
-    actionTaken: saved.actionTaken || 'created_draft',
-  });
+  return attachFantasySlateActionMeta(
+    await enrichFantasyDraftPayload({
+      slate: saved.slate,
+      drivers: enrichedDrivers,
+      meta,
+      targetRace: {
+        raceNumber,
+        track: upcomingTrack,
+        date: targetRace.date || null,
+        lockTime: lockTime || null,
+      },
+    }),
+    {
+      requestedRaceNumber,
+      actionTaken: saved.actionTaken || 'created_draft',
+    }
+  );
 }
 
 export async function publishFantasySlate(options = {}) {

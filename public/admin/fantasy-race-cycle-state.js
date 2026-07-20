@@ -212,11 +212,114 @@ export function diagnosePublishedSlateInference(context = {}) {
   };
 }
 
+function getNextRaceSlateSummary(context = {}) {
+  const adminStats = context.adminStats || {};
+  const nextRaceNumber = getNextRaceNumber(context);
+  const summary = adminStats.slateSummary;
+  if (!summary) return null;
+  if (Number(summary.raceNumber) === Number(nextRaceNumber)) return summary;
+  if (slateRowMatchesNextRace(adminStats.slate, nextRaceNumber)) return summary;
+  return null;
+}
+
+function nextRaceDraftSlateRow(context = {}) {
+  const adminStats = context.adminStats || {};
+  const postRace = context.postRace || {};
+  const nextRaceNumber = getNextRaceNumber(context);
+  if (
+    slateRowMatchesNextRace(adminStats.slate, nextRaceNumber) &&
+    adminStats.slate?.status === 'draft'
+  ) {
+    return adminStats.slate;
+  }
+  const draft = postRace.salaryDraft?.draft;
+  if (slateRowMatchesNextRace(draft, nextRaceNumber) && draft?.status !== 'published') {
+    return draft;
+  }
+  return null;
+}
+
+export function inferDraftDriverPoolComplete(context = {}) {
+  if (isNextRaceSlatePublished(context)) {
+    return { complete: false, needsReview: false, unverified: false };
+  }
+  const adminStats = context.adminStats || {};
+  const poolHealth = adminStats.driverPoolHealth || {};
+  if (Number(poolHealth.counts?.unresolvedIdentity ?? 0) > 0) {
+    return { complete: false, needsReview: false, unverified: false, blocked: true };
+  }
+
+  const draftRow = nextRaceDraftSlateRow(context);
+  if (!draftRow?.id) {
+    return { complete: false, needsReview: false, unverified: false };
+  }
+
+  const summary = getNextRaceSlateSummary(context);
+  if (summary?.salaryDetailsVerified) {
+    if (Number(summary.duplicateDriverCount ?? 0) > 0) {
+      return { complete: false, needsReview: true, unverified: false, reason: 'duplicates' };
+    }
+    if (Number(summary.slateDriverCount ?? 0) === 0) {
+      return { complete: false, needsReview: true, unverified: false, reason: 'empty_pool' };
+    }
+    return { complete: true, count: summary.slateDriverCount, unverified: false };
+  }
+
+  const postDraft = context.postRace?.salaryDraft?.draft;
+  const fallbackCount =
+    postDraft?.driver_count ??
+    postDraft?.drivers?.length ??
+    poolHealth.counts?.slateDriverCount ??
+    poolHealth.counts?.driversInDraft ??
+    null;
+  if (fallbackCount != null && Number(fallbackCount) === 0) {
+    return { complete: false, needsReview: true, unverified: false, reason: 'empty_pool' };
+  }
+  if (fallbackCount != null && Number(fallbackCount) > 0) {
+    return { complete: true, count: Number(fallbackCount), unverified: true };
+  }
+  return { complete: false, needsReview: true, unverified: true, reason: 'details_unverified' };
+}
+
+export function inferDraftSalariesComplete(context = {}) {
+  if (isNextRaceSlatePublished(context)) {
+    return { complete: false, needsReview: false, unverified: false };
+  }
+  const pool = inferDraftDriverPoolComplete(context);
+  if (!pool.complete) {
+    return { complete: false, needsReview: pool.needsReview, unverified: pool.unverified };
+  }
+
+  const summary = getNextRaceSlateSummary(context);
+  if (!summary?.salaryDetailsVerified) {
+    return {
+      complete: false,
+      needsReview: true,
+      unverified: true,
+      reason: 'salary_details_unverified',
+    };
+  }
+  if (Number(summary.missingSalaryCount ?? 0) > 0) {
+    return { complete: false, needsReview: false, unverified: false };
+  }
+  if (
+    Number(summary.validSalaryCount ?? 0) > 0 &&
+    Number(summary.validSalaryCount) === Number(summary.slateDriverCount)
+  ) {
+    return { complete: true, count: summary.validSalaryCount, unverified: false };
+  }
+  return { complete: false, needsReview: false, unverified: false };
+}
+
 function getNextRaceDriverCount(context = {}) {
   const adminStats = context.adminStats || {};
   const postRace = context.postRace || {};
   const poolHealth = adminStats.driverPoolHealth || {};
   const nextRaceNumber = getNextRaceNumber(context);
+  const summary = getNextRaceSlateSummary(context);
+  if (summary?.slateDriverCount != null && Number(summary.slateDriverCount) > 0) {
+    return summary.slateDriverCount;
+  }
   const slateDrivers = adminStats.slate?.drivers;
   if (
     Array.isArray(slateDrivers) &&
@@ -251,6 +354,9 @@ export function hasActualPoolDataGap(context = {}) {
 }
 
 export function draftSlateReady(adminStats = {}, postRace = {}) {
+  const context = { adminStats, postRace };
+  const draftPool = inferDraftDriverPoolComplete(context);
+  if (draftPool.complete) return true;
   const draft = postRace.salaryDraft?.draft || adminStats.slate;
   const drivers = draft?.driver_count ?? draft?.drivers?.length;
   return Boolean(draft?.id) && Number(drivers) > 0;
@@ -262,7 +368,8 @@ export function inferDriverPoolBuilt(context = {}) {
   if (isNextRaceSlatePublished(context)) {
     return !hasActualPoolDataGap(context);
   }
-  return draftSlateReady(adminStats, postRace) || salariesReady(adminStats, postRace);
+  if (inferDraftDriverPoolComplete(context).complete) return true;
+  return draftSlateReady(adminStats, postRace);
 }
 
 export function inferSalariesReady(context = {}) {
@@ -279,6 +386,7 @@ export function inferSalariesReady(context = {}) {
     }
     return true;
   }
+  if (inferDraftSalariesComplete(context).complete) return true;
   return salariesReady(adminStats, postRace);
 }
 
@@ -298,6 +406,8 @@ export function salariesReady(adminStats = {}, postRace = {}) {
 }
 
 function duplicateDriverCount(adminStats = {}) {
+  const summary = adminStats.slateSummary;
+  if (summary?.duplicateDriverCount != null) return Number(summary.duplicateDriverCount);
   const drivers = adminStats.slate?.drivers || [];
   if (!Array.isArray(drivers) || !drivers.length) return 0;
   const ids = drivers.map((row) => String(row.driver_id || row.driverId || '')).filter(Boolean);
@@ -305,6 +415,8 @@ function duplicateDriverCount(adminStats = {}) {
 }
 
 function driversMissingSalary(adminStats = {}) {
+  const summary = adminStats.slateSummary;
+  if (summary?.missingSalaryCount != null) return Number(summary.missingSalaryCount);
   const drivers = adminStats.slate?.drivers || [];
   if (!Array.isArray(drivers)) return 0;
   return drivers.filter((row) => !Number.isFinite(Number(row.salary ?? row.salary_amount))).length;
@@ -364,6 +476,7 @@ const SAFE_REFRESH_LABELS = new Set([
   'Recalculate Preview',
   'Review Exclusions',
   'Review Salary Details',
+  'Refresh Slate Details',
   'Run Full Validation',
 ]);
 
@@ -407,10 +520,18 @@ function completionSummaryForStep(step) {
       return 'Complete — Fantasy standings updated';
     case 'select_next_race':
       return `Complete — ${raceLabel(step.details)} selected`;
-    case 'build_driver_pool':
-      return 'Complete — Driver pool built';
-    case 'generate_salaries':
-      return 'Complete — Salaries generated';
+    case 'build_driver_pool': {
+      const count = step.details?.driverCount;
+      return count != null
+        ? `Complete — Draft driver pool contains ${count} eligible drivers`
+        : step.details?.source === 'published_slate'
+          ? 'Complete — Driver pool built'
+          : 'Complete — Driver pool built';
+    }
+    case 'generate_salaries': {
+      const count = step.details?.salaryCount;
+      return count != null ? `Complete — Salaries generated for ${count} drivers` : 'Complete — Salaries generated';
+    }
     case 'review_next_slate':
       return 'Complete — Slate review approved';
     case 'publish_next_slate':
@@ -432,6 +553,8 @@ export function buildFantasyRaceCycleSteps(context = {}) {
   const nextSlatePublished = isNextRaceSlatePublished(context);
   const poolBuilt = inferDriverPoolBuilt(context);
   const salariesDone = inferSalariesReady(context);
+  const draftPoolState = inferDraftDriverPoolComplete(context);
+  const draftSalaryState = inferDraftSalariesComplete(context);
   const poolHealth = adminStats.driverPoolHealth || {};
   const unresolved = unresolvedCount(scoring);
   const resultsReady = scoring.resultsReady === true;
@@ -606,9 +729,20 @@ export function buildFantasyRaceCycleSteps(context = {}) {
   } else if (poolBuilt) {
     step8.status = STEP_STATUS.COMPLETE;
     step8.actionLabel = 'Review Exclusions';
+    const driverCount = getNextRaceDriverCount(context) ?? draftPoolState.count ?? null;
     if (nextSlatePublished) {
-      step8.details = { source: 'published_slate' };
+      step8.details = { source: 'published_slate', driverCount };
+    } else {
+      step8.details = { driverCount, source: 'draft_slate' };
     }
+  } else if (draftPoolState.needsReview && draftPoolState.reason === 'empty_pool') {
+    step8.status = STEP_STATUS.NEEDS_REVIEW;
+    step8.blockedReason = 'Draft exists but has no eligible drivers.';
+    step8.actionLabel = 'Build Driver Pool';
+  } else if (draftPoolState.needsReview && draftPoolState.unverified) {
+    step8.status = STEP_STATUS.NEEDS_REVIEW;
+    step8.blockedReason = 'Draft slate details could not be verified. Refresh slate details.';
+    step8.actionLabel = 'Refresh Slate Details';
   } else {
     step8.status = STEP_STATUS.READY;
     step8.actionLabel = 'Build Driver Pool';
@@ -628,6 +762,21 @@ export function buildFantasyRaceCycleSteps(context = {}) {
   } else if (salariesDone) {
     step9.status = STEP_STATUS.COMPLETE;
     step9.actionLabel = 'Review Salary Details';
+    step9.details = {
+      salaryCount:
+        getNextRaceSlateSummary(context)?.validSalaryCount ??
+        draftSalaryState.count ??
+        getNextRaceDriverCount(context) ??
+        null,
+    };
+  } else if (
+    step8.status === STEP_STATUS.COMPLETE &&
+    draftSalaryState.needsReview &&
+    draftSalaryState.unverified
+  ) {
+    step9.status = STEP_STATUS.NEEDS_REVIEW;
+    step9.blockedReason = 'Salary details could not be verified.';
+    step9.actionLabel = 'Refresh Slate Details';
   } else {
     step9.status = STEP_STATUS.READY;
     step9.actionLabel = 'Generate Salaries';

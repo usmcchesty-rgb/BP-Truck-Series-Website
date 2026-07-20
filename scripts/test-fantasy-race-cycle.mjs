@@ -10,11 +10,19 @@ import {
   getActionDisabledReason,
   getAutoExpandedStepId,
   getNextRecommendedAction,
+  inferDraftDriverPoolComplete,
+  inferDraftSalariesComplete,
+  inferDriverPoolBuilt,
+  inferSalariesReady,
   isNextRaceSlatePublished,
   runFullValidation,
   shouldStepExpand,
   STEP_STATUS,
 } from '../scripts/helpers/fantasy-race-cycle-state.js';
+import {
+  attachFantasySlateActionMeta,
+  buildFantasySlateActionMessage,
+} from '../api/_fantasy-slate.js';
 import {
   confirmationMatches,
   expectedConfirmationPhrase,
@@ -641,6 +649,130 @@ function emptyContext() {
   assert.equal(steps.find((step) => step.id === 'generate_salaries').status, STEP_STATUS.COMPLETE);
   assert.equal(steps.find((step) => step.id === 'review_next_slate').status, STEP_STATUS.NEEDS_REVIEW);
   assert.equal(steps.find((step) => step.id === 'publish_next_slate').status, STEP_STATUS.BLOCKED);
+}
+
+function race17DraftContext(overrides = {}) {
+  const slateSummary = {
+    slateId: 31,
+    raceNumber: 17,
+    status: 'draft',
+    slateDriverCount: 45,
+    validSalaryCount: 45,
+    missingSalaryCount: 0,
+    duplicateDriverCount: 0,
+    salaryMinimum: 5000,
+    salaryMaximum: 12000,
+    salaryDetailsVerified: true,
+    ...overrides.slateSummary,
+  };
+  return baseContext({
+    postRace: {
+      ...baseContext().postRace,
+      nextRace: { raceNumber: 17, track: 'Homestead Miami Speedway Oval Night', date: '2026-06-01' },
+      scoring: {
+        resultsReady: true,
+        status: 'scored',
+        scoringMeta: { status: 'scored' },
+        unresolvedDrivers: [],
+      },
+      salaryDraft: { published: false, draft: { id: 31, race_number: 17, status: 'draft', driver_count: 45 } },
+    },
+    scoring: { resultsReady: true, status: 'scored', scoringMeta: { status: 'scored' } },
+    adminStats: {
+      ...baseContext().adminStats,
+      nextRace: { raceNumber: 17, track: 'Homestead Miami Speedway Oval Night', date: '2026-06-01' },
+      publishedSlate: { id: 30, race_number: 16, status: 'published' },
+      activePlayableSlate: null,
+      slate: { id: 31, race_number: 17, status: 'draft' },
+      slateSummary,
+      driverPoolHealth: {
+        counts: { eligibleRosterDrivers: 45, slateDriverCount: 45, unresolvedIdentity: 0 },
+      },
+      progression: { isPlayable: false },
+      ...overrides.adminStats,
+    },
+    ...overrides,
+  });
+}
+
+{
+  const context = race17DraftContext();
+  assert.equal(isNextRaceSlatePublished(context), false);
+  assert.equal(inferDriverPoolBuilt(context), true);
+  assert.equal(inferSalariesReady(context), true);
+  const steps = buildFantasyRaceCycleSteps(context);
+  assert.equal(steps.find((step) => step.id === 'build_driver_pool').status, STEP_STATUS.COMPLETE);
+  assert.equal(steps.find((step) => step.id === 'generate_salaries').status, STEP_STATUS.COMPLETE);
+  assert.equal(steps.find((step) => step.id === 'review_next_slate').status, STEP_STATUS.NEEDS_REVIEW);
+  assert.equal(steps.find((step) => step.id === 'publish_next_slate').status, STEP_STATUS.BLOCKED);
+}
+
+{
+  const context = race17DraftContext({
+    slateSummary: {
+      slateDriverCount: 45,
+      validSalaryCount: 0,
+      missingSalaryCount: 45,
+      salaryDetailsVerified: true,
+    },
+  });
+  assert.equal(inferSalariesReady(context), false);
+  const steps = buildFantasyRaceCycleSteps(context);
+  assert.equal(steps.find((step) => step.id === 'generate_salaries').status, STEP_STATUS.READY);
+}
+
+{
+  const context = race17DraftContext({
+    adminStats: {
+      slate: { id: 31, race_number: 17, status: 'draft' },
+      slateSummary: null,
+    },
+  });
+  assert.equal(inferDraftDriverPoolComplete(context).unverified, true);
+  assert.equal(inferDraftSalariesComplete(context).unverified, true);
+  const steps = buildFantasyRaceCycleSteps(context);
+  assert.equal(steps.find((step) => step.id === 'generate_salaries').status, STEP_STATUS.NEEDS_REVIEW);
+}
+
+{
+  const meta = attachFantasySlateActionMeta(
+    {
+      slate: { id: 31, race_number: 17, status: 'draft' },
+      drivers: Array.from({ length: 45 }, (_, index) => ({ driverId: String(index + 1), salary: 9000 })),
+    },
+    { requestedRaceNumber: 17, actionTaken: 'loaded_existing_draft' }
+  );
+  assert.equal(meta.requestedRaceNumber, 17);
+  assert.equal(meta.loadedSlateId, 31);
+  assert.equal(meta.loadedSlateRaceNumber, 17);
+  assert.equal(meta.loadedSlateStatus, 'draft');
+  assert.equal(meta.actionTaken, 'loaded_existing_draft');
+  assert.match(meta.message, /draft slate with 45 drivers/);
+  assert.equal(meta.existingSlateFound, true);
+}
+
+{
+  const message = buildFantasySlateActionMessage({
+    requestedRaceNumber: 17,
+    loadedSlateId: 30,
+    loadedSlateRaceNumber: 16,
+    loadedSlateStatus: 'published',
+    actionTaken: 'loaded_existing_published',
+  });
+  assert.match(message, /Race 16 already has a published slate/);
+  assert.doesNotMatch(message, /Race 17/);
+}
+
+{
+  const fantasyHtml = fs.readFileSync(path.join(repoRoot, 'public/admin/fantasy.html'), 'utf8');
+  assert.match(fantasyHtml, /preferExistingDraft/);
+  assert.match(fantasyHtml, /forceFresh/);
+  assert.doesNotMatch(fantasyHtml, /already has a published slate \(ID \$\{data\.slateId/);
+}
+
+{
+  const uiSource = fs.readFileSync(path.join(repoRoot, 'public/admin/fantasy-race-cycle-ui.js'), 'utf8');
+  assert.match(uiSource, /Refresh Slate Details/);
 }
 
 console.log('test-fantasy-race-cycle: all tests passed');
