@@ -470,4 +470,64 @@ function emptyContext() {
   assert.equal(steps.find((s) => s.id === 'finalize_contest').status, STEP_STATUS.READY);
 }
 
+{
+  const readyBase = baseContext({
+    postRace: {
+      ...baseContext().postRace,
+      scoring: {
+        resultsReady: true,
+        status: 'scored',
+        scoringMeta: { status: 'scored' },
+        unresolvedDrivers: [],
+      },
+      salaryDraft: { published: false, draft: null },
+    },
+    scoring: { resultsReady: true, status: 'scored', scoringMeta: { status: 'scored' } },
+  });
+  const context = {
+    ...readyBase,
+    adminStats: {
+      ...readyBase.adminStats,
+      slate: { id: 10, drivers: [{ salary: 9000, driver_id: '1' }, { salary: 8000, driver_id: '2' }] },
+    },
+  };
+  const steps = buildFantasyRaceCycleSteps(context);
+  const step8 = steps.find((step) => step.id === 'build_driver_pool');
+  const step9 = steps.find((step) => step.id === 'generate_salaries');
+  assert.equal(step8.status, STEP_STATUS.COMPLETE);
+  assert.equal(step9.status, STEP_STATUS.COMPLETE);
+}
+
+{
+  const readyBase = baseContext({
+    postRace: {
+      ...baseContext().postRace,
+      scoring: {
+        resultsReady: true,
+        status: 'scored',
+        scoringMeta: { status: 'scored' },
+        unresolvedDrivers: [],
+      },
+      salaryDraft: { published: false, draft: null },
+    },
+    scoring: { resultsReady: true, status: 'scored', scoringMeta: { status: 'scored' } },
+  });
+  const context = {
+    ...readyBase,
+    adminStats: {
+      ...readyBase.adminStats,
+      slate: { id: 10 },
+    },
+    postRace: {
+      ...readyBase.postRace,
+      salaryDraft: { published: false, draft: null },
+    },
+  };
+  const steps = buildFantasyRaceCycleSteps(context);
+  const step8 = steps.find((step) => step.id === 'build_driver_pool');
+  const step9 = steps.find((step) => step.id === 'generate_salaries');
+  assert.equal(step8.status, STEP_STATUS.READY);
+  assert.equal(step9.status, STEP_STATUS.BLOCKED);
+}
+
 console.log('test-fantasy-race-cycle: all tests passed');

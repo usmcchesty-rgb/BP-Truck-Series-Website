@@ -92,6 +92,10 @@ export function draftSlateReady(adminStats = {}, postRace = {}) {
   return Boolean(draft?.id) && Number(drivers) > 0;
 }
 
+export function driverPoolBuilt(adminStats = {}, postRace = {}) {
+  return draftSlateReady(adminStats, postRace) || salariesReady(adminStats, postRace);
+}
+
 export function salariesReady(adminStats = {}, postRace = {}) {
   const draft = postRace.salaryDraft?.draft || adminStats.slate;
   if (!draft?.id) return false;
@@ -99,7 +103,7 @@ export function salariesReady(adminStats = {}, postRace = {}) {
   if (Array.isArray(drivers) && drivers.length) {
     return drivers.every((row) => Number.isFinite(Number(row.salary ?? row.salary_amount)));
   }
-  return Boolean(draft.id);
+  return false;
 }
 
 function duplicateDriverCount(adminStats = {}) {
@@ -406,7 +410,7 @@ export function buildFantasyRaceCycleSteps(context = {}) {
   } else if (poolBlocking) {
     step8.status = STEP_STATUS.BLOCKED;
     step8.blockedReason = 'Step 8 is blocked because one or more eligible drivers have unresolved identity matches.';
-  } else if (draftSlateReady(adminStats, postRace)) {
+  } else if (driverPoolBuilt(adminStats, postRace)) {
     step8.status = STEP_STATUS.COMPLETE;
     step8.actionLabel = 'Review Exclusions';
   } else {
@@ -422,7 +426,7 @@ export function buildFantasyRaceCycleSteps(context = {}) {
     'Calculate salaries for the eligible driver pool using the existing salary formula.',
     'nextRace'
   );
-  if (step8.status !== STEP_STATUS.COMPLETE && step8.status !== STEP_STATUS.READY) {
+  if (step8.status !== STEP_STATUS.COMPLETE) {
     step9.status = STEP_STATUS.BLOCKED;
     step9.blockedReason = 'Build the eligible driver pool in Step 8 first.';
   } else if (salariesReady(adminStats, postRace)) {

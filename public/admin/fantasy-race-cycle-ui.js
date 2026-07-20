@@ -42,6 +42,7 @@ const uiState = {
   manualExpanded: {},
   lastFocused: null,
   validationVisible: false,
+  stepFeedback: null,
 };
 
 function sessionKey(prefix, context) {
@@ -165,12 +166,20 @@ function renderReadyBanner(model) {
 
 function renderActionButton(step, steps) {
   if (!step.actionLabel) return '';
-  const disabled = !step.actionEnabled;
-  const reason = disabled ? getActionDisabledReason(step, steps) : '';
-  const label = disabled ? `${step.actionLabel} — Disabled` : step.actionLabel;
+  const feedback = uiState.stepFeedback?.stepId === step.id ? uiState.stepFeedback : null;
+  const busyThisStep = feedback?.status === 'loading';
+  const disabled = !step.actionEnabled || uiState.busy;
+  const reason = disabled && !busyThisStep ? getActionDisabledReason(step, steps) : '';
+  let label = step.actionLabel;
+  if (busyThisStep) label = `${step.actionLabel}…`;
+  else if (disabled) label = `${step.actionLabel} — Disabled`;
+  const feedbackHtml = feedback
+    ? `<p class="frc-step-feedback frc-step-feedback--${escapeHtml(feedback.status)}" role="${feedback.status === 'error' ? 'alert' : 'status'}">${escapeHtml(feedback.message)}</p>`
+    : '';
   return `<div class="frc-step-actions">
-    <button type="button" class="btn frc-step-action" data-frc-step="${escapeHtml(step.id)}" ${disabled ? 'disabled aria-disabled="true"' : ''}>${escapeHtml(label)}</button>
+    <button type="button" class="btn frc-step-action" data-frc-step="${escapeHtml(step.id)}" ${disabled ? 'disabled aria-disabled="true"' : ''} aria-busy="${busyThisStep ? 'true' : 'false'}">${escapeHtml(label)}</button>
     ${disabled && reason ? `<p class="frc-disabled-reason" id="frc-disabled-${escapeHtml(step.id)}">${escapeHtml(reason)}</p>` : ''}
+    ${feedbackHtml}
   </div>`;
 }
 
@@ -307,7 +316,10 @@ async function runStepAction(stepId) {
       return;
     }
   }
+  const context = window.FantasyRaceCycle._lastContext;
   uiState.busy = true;
+  uiState.stepFeedback = { stepId, status: 'loading', message: 'Working…' };
+  render(context);
   try {
     const actions = {
       import_official_results: bridge.actions.loadOfficialResults,
@@ -324,10 +336,25 @@ async function runStepAction(stepId) {
       review_next_slate: bridge.actions.approveSlate,
       publish_next_slate: bridge.actions.publishSlate,
     };
-    await actions[stepId]?.();
+    const result = await actions[stepId]?.();
     await bridge.refresh?.();
-  } finally {
     uiState.busy = false;
+    const successMessage =
+      typeof result === 'string' && result
+        ? result
+        : stepId === 'build_driver_pool'
+          ? 'Driver pool built successfully.'
+          : 'Action completed successfully.';
+    uiState.stepFeedback = { stepId, status: 'success', message: successMessage };
+    render(window.FantasyRaceCycle._lastContext || context);
+  } catch (error) {
+    uiState.busy = false;
+    uiState.stepFeedback = {
+      stepId,
+      status: 'error',
+      message: error?.message || 'Action failed. Please try again.',
+    };
+    render(context);
   }
 }
 

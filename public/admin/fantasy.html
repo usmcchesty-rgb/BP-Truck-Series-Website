@@ -819,6 +819,10 @@
       .frc-warning { color: #ffb0b0; font-size: 12px; line-height: 1.5; margin: 8px 0 0; }
       .frc-step-actions { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
       .frc-disabled-reason { margin: 0; color: #ffb0b0; font-size: 12px; line-height: 1.45; }
+      .frc-step-feedback { margin: 0; font-size: 12px; line-height: 1.45; font-weight: 700; }
+      .frc-step-feedback--loading { color: #ffd54a; }
+      .frc-step-feedback--success { color: #9fd9b0; }
+      .frc-step-feedback--error { color: #ffb0b0; }
       .frc-ready-card {
         margin-top: 10px;
         padding: 12px;
@@ -2614,9 +2618,10 @@
         }
       }
 
-      async function generateFantasySalaries() {
-        const statusEl = $('#fantasyGenerateStatus');
-        const btn = $('#generateFantasySalariesBtn');
+      async function generateFantasySalaries(options = {}) {
+        const { rethrow = false, quiet = false } = options;
+        const statusEl = quiet ? null : $('#fantasyGenerateStatus');
+        const btn = quiet ? null : $('#generateFantasySalariesBtn');
         if (statusEl) {
           statusEl.textContent = 'Generating draft slate...';
           statusEl.classList.remove('error');
@@ -2633,30 +2638,74 @@
             }),
           });
           const data = await res.json();
-          if (!res.ok) throw new Error(data.error || 'Generation failed');
+          if (!res.ok) {
+            if (data.existingSlateFound || data.actionTaken === 'loaded_existing') {
+              applyFantasySlatePayload(data);
+              await loadFantasyAdminStats({ skipRaceCycle: true });
+              const message = `Race ${data.raceNumber ?? data.slate?.race_number ?? ''} already has a published slate (ID ${data.slateId ?? data.slate?.id ?? ''}). Loaded existing slate.`;
+              if (statusEl) statusEl.textContent = message;
+              return message;
+            }
+            throw new Error(data.error || 'Generation failed');
+          }
 
           if (data.existingSlateFound || data.actionTaken === 'loaded_existing') {
             applyFantasySlatePayload(data);
-            await loadFantasyAdminStats();
-            if (statusEl) {
-              statusEl.textContent = `Race ${data.raceNumber ?? data.slate?.race_number ?? ''} already has a published slate (ID ${data.slateId ?? data.slate?.id ?? ''}). Loaded existing slate.`;
-            }
-            return;
+            await loadFantasyAdminStats({ skipRaceCycle: true });
+            const message = `Race ${data.raceNumber ?? data.slate?.race_number ?? ''} already has a published slate (ID ${data.slateId ?? data.slate?.id ?? ''}). Loaded existing slate.`;
+            if (statusEl) statusEl.textContent = message;
+            return message;
           }
 
           applyFantasySlatePayload(data);
-          await loadFantasyAdminStats();
-          if (statusEl) {
-            statusEl.textContent = `Draft saved for race ${data.targetRace?.raceNumber ?? data.slate?.race_number ?? ''} (${(data.drivers || []).length} drivers).`;
-          }
+          await loadFantasyAdminStats({ skipRaceCycle: true });
+          const message = `Draft saved for race ${data.targetRace?.raceNumber ?? data.slate?.race_number ?? ''} (${(data.drivers || []).length} drivers).`;
+          if (statusEl) statusEl.textContent = message;
+          return message;
         } catch (error) {
           if (statusEl) {
             statusEl.textContent = error.message || 'Generation failed';
             statusEl.classList.add('error');
           }
+          if (rethrow) throw error;
         } finally {
           if (btn) btn.disabled = false;
         }
+        return null;
+      }
+
+      async function buildFantasyDriverPoolForCycle() {
+        const statusEl = $('#driverPoolActionStatus');
+        if (statusEl) {
+          statusEl.textContent = 'Refreshing eligible driver pool...';
+          statusEl.classList.remove('error');
+        }
+
+        const refreshRes = await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            password: getSessionPw(),
+            action: 'refreshFantasyDriverPool',
+          }),
+        });
+        const refreshData = await refreshRes.json();
+        if (!refreshRes.ok) {
+          throw new Error(refreshData.error || 'Failed to refresh driver pool.');
+        }
+        renderDriverPoolHealth(refreshData);
+
+        const slateMessage = await generateFantasySalaries({ rethrow: true, quiet: true });
+        await Promise.all([loadFantasyDraftSlate(), loadFantasyAdminStats({ skipRaceCycle: true })]);
+
+        const eligibleCount =
+          refreshData?.counts?.eligibleRosterDrivers ??
+          refreshData?.counts?.driversInDraft ??
+          refreshData?.diagnostics?.eligibleDriverCount ??
+          null;
+        const driverLabel = eligibleCount != null ? `${eligibleCount} eligible drivers` : 'eligible drivers';
+        if (statusEl) statusEl.textContent = `Driver pool refreshed (${driverLabel}).`;
+        return slateMessage || `Driver pool built successfully (${driverLabel}).`;
       }
 
       async function fetchFantasyRaceCycleState(cached = {}) {
@@ -2816,11 +2865,8 @@
           },
           updateStandings: async () => refreshFantasyRaceCyclePanel(),
           selectNextRace: async () => refreshFantasyRaceCyclePanel(),
-          buildDriverPool: async () => {
-            await refreshDriverPoolHealth();
-            await generateFantasySalaries();
-          },
-          generateSalaries: async () => generateFantasySalaries(),
+          buildDriverPool: async () => buildFantasyDriverPoolForCycle(),
+          generateSalaries: async () => generateFantasySalaries({ rethrow: true, quiet: true }),
           approveSlate: async () => {
             const context = await fetchFantasyRaceCycleState();
             const raceNumber = context.postRace?.nextRace?.raceNumber || context.adminStats?.nextRace?.raceNumber;
