@@ -27,6 +27,24 @@
     return html;
   }
 
+  function normalizeArticleMarkdown(text) {
+    let s = String(text ?? '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    s = s.replace(/([^\n])\n(#{1,3}\s)/g, '$1\n\n$2');
+    s = s.replace(/^(#{1,3}\s[^\n]+)\n(?!\n)([^\n#])/gm, '$1\n\n$2');
+    return s;
+  }
+
+  function renderHeadingLine(line) {
+    const match = String(line || '').trim().match(/^(#{1,3})\s+(.+)$/);
+    if (!match) return '';
+    const level = match[1].length;
+    const title = match[2];
+    if (level >= 3) {
+      return `<h3 class="news-article-h3 news-article-subheading">${renderInline(title)}</h3>`;
+    }
+    return `<h2 class="news-article-h2 news-article-heading">${renderInline(title)}</h2>`;
+  }
+
   function renderBlock(block) {
     const trimmed = String(block || '').trim();
     if (!trimmed) return '';
@@ -35,13 +53,14 @@
     if (!lines.length) return '';
 
     const first = lines[0];
+    const headingOnFirst = /^(#{1,3})\s+/.test(first);
 
-    if (/^##\s+/.test(first) && lines.length === 1) {
-      return `<h3 class="news-article-heading">${renderInline(first.replace(/^##\s+/, ''))}</h3>`;
-    }
-
-    if (/^###\s+/.test(first) && lines.length === 1) {
-      return `<h4 class="news-article-subheading">${renderInline(first.replace(/^###\s+/, ''))}</h4>`;
+    if (headingOnFirst) {
+      let html = renderHeadingLine(first);
+      if (lines.length > 1) {
+        html += renderBlocks(lines.slice(1).join('\n\n'));
+      }
+      return html;
     }
 
     if (lines.every((line) => /^>\s?/.test(line))) {
@@ -70,7 +89,8 @@
   }
 
   function renderBlocks(text) {
-    return String(text || '')
+    const normalized = normalizeArticleMarkdown(text);
+    return normalized
       .split(/\n\s*\n/)
       .map((block) => renderBlock(block))
       .filter(Boolean)
@@ -129,5 +149,10 @@
       .join('');
   }
 
-  window.NewsArticleBody = { render, renderInline, renderBlocks };
+  window.NewsArticleBody = {
+    render,
+    renderInline,
+    renderBlocks,
+    normalizeArticleMarkdown,
+  };
 })();

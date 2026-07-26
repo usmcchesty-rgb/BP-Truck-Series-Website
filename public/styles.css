@@ -3445,8 +3445,10 @@ a.home-news-item:hover h4{color:#fff}
 .news-article-subheadline{margin:0 0 6px;font-size:19px;color:#d6d6d6;line-height:1.35;font-weight:700}
 .news-article-body{display:grid;gap:16px;line-height:1.7;font-size:16px;color:#ececec;margin-top:8px}
 .news-article-body p{margin:0}
-.news-article-heading{margin:0;font-size:clamp(22px,3vw,28px);line-height:1.15;font-weight:900;color:#fff;text-transform:uppercase;letter-spacing:.02em}
-.news-article-subheading{margin:0;font-size:20px;line-height:1.25;font-weight:800;color:#f0f0f0}
+.news-article-body h2,.news-article-h2,.news-article-heading{margin:0;font-size:clamp(22px,3vw,28px);line-height:1.15;font-weight:900;color:#fff;text-transform:uppercase;letter-spacing:.02em}
+.news-article-body h3,.news-article-h3,.news-article-subheading{margin:0;font-size:20px;line-height:1.25;font-weight:800;color:#f0f0f0}
+.news-article-body strong{font-weight:800;color:#fff}
+.news-article-body ul,.news-article-body ol{margin:0}
 .news-article-quote{margin:0;padding:12px 14px;border-left:3px solid #666;background:rgba(255,255,255,.03);color:#ddd}
 .news-article-quote p{margin:0}
 .news-article-quote p + p{margin-top:8px}
