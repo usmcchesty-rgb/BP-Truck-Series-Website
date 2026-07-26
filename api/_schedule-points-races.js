@@ -128,6 +128,36 @@ export function getLatestCompletedPointsRace(scheduleRaces, { now = new Date(), 
   return latest;
 }
 
+export function resolveSeasonScheduleProgress(
+  scheduleRaces = [],
+  { now = new Date(), settings = null } = {}
+) {
+  const pointsRaces = (scheduleRaces || []).filter((race) => !race.nonPoints);
+  const totalPointsRaces = pointsRaces.length;
+  let completedPointsRaces = 0;
+
+  for (const race of pointsRaces) {
+    const status = getEffectiveRaceDateStatus({
+      raceDate: race.date,
+      hasResults: hasRaceResults(race),
+      now,
+      settings,
+    });
+    if (status.isCompleted) completedPointsRaces += 1;
+  }
+
+  const remainingPointsRaces = Math.max(0, totalPointsRaces - completedPointsRaces);
+  const currentSeasonComplete =
+    totalPointsRaces > 0 && completedPointsRaces >= totalPointsRaces;
+
+  return {
+    totalPointsRaces,
+    completedPointsRaces,
+    remainingPointsRaces,
+    currentSeasonComplete,
+  };
+}
+
 export function getCompletedPointsRaces(
   scheduleRaces,
   { now = new Date(), settings = null } = {}

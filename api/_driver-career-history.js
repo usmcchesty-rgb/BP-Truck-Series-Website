@@ -1,4 +1,5 @@
 import { fetchHtml } from './_lib.js';
+import { resolveSeasonScheduleProgress } from './_schedule-points-races.js';
 
 export const CAREER_TENURE_FORBIDDEN_WITHOUT_VERIFICATION = [
   'new to the league',
@@ -365,16 +366,162 @@ function formatSeasonLabel(season) {
   return season.seasonName || `Season ${season.seasonId}`;
 }
 
-export function buildLeagueCareerSummary(driverId, seasonCatalog = null) {
+function resolveCurrentBpSeasonNumber(seasonCatalog = null) {
+  const currentSeasonId = seasonCatalog?.currentSeasonId;
+  if (currentSeasonId && seasonCatalog?.seasons) {
+    const season = seasonCatalog.seasons.find(
+      (entry) => String(entry.seasonId) === String(currentSeasonId)
+    );
+    if (Number.isFinite(season?.bpSeasonNumber)) return season.bpSeasonNumber;
+  }
+  const match = String(seasonCatalog?.currentSeasonName || '').match(/season\s*#?\s*(\d+)/i);
+  return match ? Number(match[1]) : null;
+}
+
+function resolveSeasonStateForEntry(season, { currentSeasonId, currentSeasonComplete, currentBpNumber }) {
+  if (currentSeasonId && String(season.seasonId) === String(currentSeasonId)) {
+    return currentSeasonComplete ? 'completed' : 'current';
+  }
+  if (
+    Number.isFinite(season.bpSeasonNumber) &&
+    Number.isFinite(currentBpNumber) &&
+    season.bpSeasonNumber > currentBpNumber
+  ) {
+    return 'future';
+  }
+  return 'completed';
+}
+
+function pickBestChampionshipPosition(appearances = []) {
+  return appearances.reduce(
+    (best, season) => (!best || season.position < best.position ? season : best),
+    null
+  );
+}
+
+export function buildChampionshipSeasonWordingGuide({
+  currentSeasonInProgress,
+  currentSeasonComplete,
+  currentSeasonStanding,
+  bestCompletedSeason,
+  bestOverallSeason,
+  remainingPointsRaces,
+  currentSeasonPointsPosition,
+  priorChampionships,
+}) {
+  const currentPos =
+    currentSeasonStanding?.position ??
+    (Number.isFinite(currentSeasonPointsPosition) ? currentSeasonPointsPosition : null);
+  const bestCompletedPos = bestCompletedSeason?.position ?? null;
+  const isLeader = currentPos === 1;
+  const beatsCompletedBest =
+    currentSeasonInProgress &&
+    (bestCompletedPos == null || (Number.isFinite(currentPos) && currentPos < bestCompletedPos));
+  const tiesCompletedBest =
+    currentSeasonInProgress &&
+    bestCompletedPos != null &&
+    Number.isFinite(currentPos) &&
+    currentPos === bestCompletedPos;
+  const canStillBeatCompletedBest =
+    currentSeasonInProgress &&
+    bestCompletedPos != null &&
+    Number.isFinite(currentPos) &&
+    currentPos > bestCompletedPos;
+
+  const suggestedPhrasing = [];
+  if (currentSeasonInProgress) {
+    if (isLeader && (beatsCompletedBest || tiesCompletedBest || priorChampionships > 0)) {
+      suggestedPhrasing.push(
+        "He's having the best championship campaign of his career and currently leads the standings."
+      );
+    } else if (beatsCompletedBest) {
+      suggestedPhrasing.push(
+        "He's currently enjoying the best season of his career.",
+        'This is shaping up to be the strongest season of his Blazing Pedals career.',
+        "He's currently running a career-best season."
+      );
+      if (Number.isFinite(remainingPointsRaces) && remainingPointsRaces > 0 && remainingPointsRaces <= 4) {
+        suggestedPhrasing.push(
+          'With only a handful of races remaining, he is on track to achieve his highest championship finish.'
+        );
+      } else {
+        suggestedPhrasing.push(
+          'He is on pace for the best championship finish of his career.',
+          'The current campaign represents the strongest championship run of his career to date.'
+        );
+      }
+    } else if (tiesCompletedBest) {
+      suggestedPhrasing.push("He's matching the best championship run of his career.");
+    } else if (canStillBeatCompletedBest) {
+      suggestedPhrasing.push(
+        'He is on pace for the best championship finish of his career.',
+        'The current campaign could still become his strongest championship run to date.'
+      );
+    }
+  }
+
+  return {
+    currentSeasonInProgress,
+    currentSeasonComplete: currentSeasonComplete === true,
+    forbidCompletedSeasonWordingForCurrentSeason: currentSeasonInProgress,
+    currentSeasonStandingPosition: currentPos,
+    bestCompletedSeasonFinish: bestCompletedPos,
+    bestCompletedSeasonName: bestCompletedSeason?.label ?? null,
+    bestOverallSeasonFinish: bestOverallSeason?.position ?? null,
+    bestOverallSeasonName: bestOverallSeason?.label ?? null,
+    bestOverallIsCurrentSeasonInProgress:
+      currentSeasonInProgress && bestOverallSeason?.seasonState === 'current',
+    currentSeasonIsCareerBestPositionSoFar: beatsCompletedBest,
+    currentSeasonTiesCareerBest: tiesCompletedBest,
+    canStillBeatCompletedBest,
+    isChampionshipLeader: isLeader,
+    defendingPriorChampionship: priorChampionships > 0 && currentSeasonInProgress,
+    remainingPointsRaces: Number.isFinite(remainingPointsRaces) ? remainingPointsRaces : null,
+    suggestedPhrasing,
+    rules: currentSeasonInProgress
+      ? [
+          'Never describe the current in-progress season as a completed season.',
+          'Do not use past-tense championship finish wording (finished, placed, came in, ended the season) for the current season.',
+          'If the current season is his best position so far, use present-tense career-best campaign wording — not "His best season finish came in Season N" for the current season.',
+          bestCompletedSeason
+            ? `For completed seasons only, historical best remains ${bestCompletedSeason.label} at P${bestCompletedSeason.position}.`
+            : 'No completed championship seasons yet — describe the current campaign in present tense only.',
+        ]
+      : [
+          'The current season is complete — past-tense championship finish wording is allowed for this season.',
+        ],
+  };
+}
+
+export function buildLeagueCareerSummary(
+  driverId,
+  seasonCatalog = null,
+  progressionContext = null
+) {
   const standingsBySeason = seasonCatalog?.standingsBySeason || {};
   const leagueSeasons = (seasonCatalog?.seasons || []).filter((season) => !season.excludeFromCareer);
   const classificationReliable = seasonCatalog?.classificationReliable === true;
+  const currentSeasonId = seasonCatalog?.currentSeasonId
+    ? String(seasonCatalog.currentSeasonId)
+    : null;
+  const currentBpNumber = resolveCurrentBpSeasonNumber(seasonCatalog);
+  const scheduleProgress = resolveSeasonScheduleProgress(
+    progressionContext?.scheduleRaces || [],
+    { settings: progressionContext?.settings || null }
+  );
+  const currentSeasonComplete = scheduleProgress.currentSeasonComplete;
   const appearances = [];
 
   for (const season of sortSeasonEntries(leagueSeasons)) {
     const row = standingsBySeason[season.seasonId]?.byDriverId?.[String(driverId)];
     if (!row || row.starts <= 0) continue;
     if (!Number.isFinite(row.position) || row.position < 1) continue;
+
+    const seasonState = resolveSeasonStateForEntry(season, {
+      currentSeasonId,
+      currentSeasonComplete,
+      currentBpNumber,
+    });
 
     appearances.push({
       seasonId: season.seasonId,
@@ -386,6 +533,7 @@ export function buildLeagueCareerSummary(driverId, seasonCatalog = null) {
       points: row.points,
       starts: row.starts,
       label: formatSeasonLabel(season),
+      seasonState,
     });
   }
 
@@ -404,14 +552,31 @@ export function buildLeagueCareerSummary(driverId, seasonCatalog = null) {
     };
   }
 
-  const championshipSeasons = appearances.filter((season) => season.position === 1);
-  const runnerUpSeasons = appearances.filter((season) => season.position === 2);
-  const top3SeasonFinishes = appearances.filter(
+  const completedAppearances = appearances.filter((season) => season.seasonState === 'completed');
+  const currentSeasonStanding =
+    appearances.find((season) => season.seasonState === 'current') || null;
+
+  const championshipSeasons = completedAppearances.filter((season) => season.position === 1);
+  const runnerUpSeasons = completedAppearances.filter((season) => season.position === 2);
+  const top3SeasonFinishes = completedAppearances.filter(
     (season) => season.position >= 1 && season.position <= 3
   );
-  const bestSeason = appearances.reduce((best, season) =>
-    !best || season.position < best.position ? season : best
+  const bestCompletedSeason = pickBestChampionshipPosition(completedAppearances);
+  const bestOverallSeason = pickBestChampionshipPosition(
+    appearances.filter((season) => season.seasonState !== 'future')
   );
+  const currentSeasonInProgress = Boolean(currentSeasonStanding);
+
+  const seasonWording = buildChampionshipSeasonWordingGuide({
+    currentSeasonInProgress,
+    currentSeasonComplete,
+    currentSeasonStanding,
+    bestCompletedSeason,
+    bestOverallSeason,
+    remainingPointsRaces: scheduleProgress.remainingPointsRaces,
+    currentSeasonPointsPosition: progressionContext?.currentSeasonPointsPosition,
+    priorChampionships: championshipSeasons.length,
+  });
 
   return {
     careerSummaryVerified: classificationReliable,
@@ -427,6 +592,7 @@ export function buildLeagueCareerSummary(driverId, seasonCatalog = null) {
       label: season.label,
       position: season.position,
       points: season.points,
+      seasonState: season.seasonState,
     })),
     runnerUpSeasons: runnerUpSeasons.map((season) => ({
       seasonId: season.seasonId,
@@ -435,6 +601,7 @@ export function buildLeagueCareerSummary(driverId, seasonCatalog = null) {
       label: season.label,
       position: season.position,
       points: season.points,
+      seasonState: season.seasonState,
     })),
     top3SeasonFinishes: top3SeasonFinishes.map((season) => ({
       seasonId: season.seasonId,
@@ -443,10 +610,28 @@ export function buildLeagueCareerSummary(driverId, seasonCatalog = null) {
       label: season.label,
       position: season.position,
       points: season.points,
+      seasonState: season.seasonState,
     })),
-    bestSeasonFinish: bestSeason.position,
-    bestSeasonName: bestSeason.label,
-    bestSeasonId: bestSeason.seasonId,
+    bestSeasonFinish: bestOverallSeason?.position ?? null,
+    bestSeasonName: bestOverallSeason?.label ?? null,
+    bestSeasonId: bestOverallSeason?.seasonId ?? null,
+    bestSeasonIsInProgressCurrent: seasonWording.bestOverallIsCurrentSeasonInProgress,
+    bestCompletedSeasonFinish: bestCompletedSeason?.position ?? null,
+    bestCompletedSeasonName: bestCompletedSeason?.label ?? null,
+    bestCompletedSeasonId: bestCompletedSeason?.seasonId ?? null,
+    currentSeasonStanding: currentSeasonStanding
+      ? {
+          seasonId: currentSeasonStanding.seasonId,
+          label: currentSeasonStanding.label,
+          bpSeasonNumber: currentSeasonStanding.bpSeasonNumber,
+          position: currentSeasonStanding.position,
+          seasonState: 'current',
+        }
+      : null,
+    currentSeasonBpNumber: currentBpNumber,
+    currentSeasonComplete,
+    seasonScheduleProgress: scheduleProgress,
+    seasonWording,
     participatedSeasons: appearances,
   };
 }
@@ -980,6 +1165,7 @@ export function buildDriverCareerHistory({
   transcriptSummary = '',
   verifiedCareerStats = null,
   leagueCareerStats = null,
+  progressionContext = null,
 }) {
   const resolvedLeagueCareerStats = leagueCareerStats || verifiedCareerStats;
   const manualTenure = parseTenureClaimsFromNotes(manualRaceNotes, transcriptSummary);
@@ -1037,7 +1223,13 @@ export function buildDriverCareerHistory({
       }
     : null;
 
-  const leagueCareerSummary = buildLeagueCareerSummary(driverId, seasonCatalog);
+  const leagueCareerSummary = buildLeagueCareerSummary(driverId, seasonCatalog, {
+    scheduleRaces: progressionContext?.scheduleRaces || [],
+    settings: progressionContext?.settings || null,
+    currentSeasonPointsPosition: Number.isFinite(Number(standingsRow?.position))
+      ? Number(standingsRow.position)
+      : null,
+  });
 
   const careerHistory = {
     ...truckSeriesCareerHistory,
@@ -1110,7 +1302,16 @@ export async function enrichSpotlightDriverCareerStats(generationContext, spotli
   const catalog = generationContext.factualGrounding.careerHistoryAudit;
   const leagueCareerStats = await fetchSimRacerHubLeagueCareerStats(driverKey, catalog);
   const existing = generationContext.factualGrounding.drivers[driverKey];
-  const leagueCareerSummary = buildLeagueCareerSummary(driverKey, catalog);
+  const standingsRow = generationContext.standings?.find(
+    (row) => String(row.driverId) === driverKey
+  );
+  const leagueCareerSummary = buildLeagueCareerSummary(driverKey, catalog, {
+    scheduleRaces: generationContext.scheduleRaces || [],
+    settings: generationContext.settings || null,
+    currentSeasonPointsPosition: Number.isFinite(Number(standingsRow?.position))
+      ? Number(standingsRow.position)
+      : null,
+  });
   const careerStatsDiagnostics = buildCareerStatsDiagnostics(
     leagueCareerStats,
     spotlightDriverId,
@@ -1127,9 +1328,6 @@ export async function enrichSpotlightDriverCareerStats(generationContext, spotli
     };
   }
 
-  const standingsRow = generationContext.standings?.find(
-    (row) => String(row.driverId) === driverKey
-  );
   const careerHistory = buildDriverCareerHistory({
     driverId: driverKey,
     standingsRow,
@@ -1137,6 +1335,10 @@ export async function enrichSpotlightDriverCareerStats(generationContext, spotli
     manualRaceNotes: generationContext.manualRaceNotes || '',
     transcriptSummary: generationContext.contextMeta?.broadcastContext?.summary || '',
     leagueCareerStats,
+    progressionContext: {
+      scheduleRaces: generationContext.scheduleRaces || [],
+      settings: generationContext.settings || null,
+    },
   });
 
   generationContext.factualGrounding.drivers[driverKey] = {
@@ -1311,9 +1513,39 @@ export function buildSpotlightVerifiedStatsRepairBlock(context = {}) {
       );
     }
 
+    if (summary.bestCompletedSeasonFinish != null) {
+      lines.push(
+        `- bestCompletedSeasonFinish: P${summary.bestCompletedSeasonFinish} (${summary.bestCompletedSeasonName})`
+      );
+    }
+    if (summary.currentSeasonStanding) {
+      lines.push(
+        `- currentSeasonStanding (in progress): ${summary.currentSeasonStanding.label} P${summary.currentSeasonStanding.position}`
+      );
+    }
+    if (summary.seasonWording) {
+      lines.push(
+        '',
+        'Season wording (mandatory for championship history):',
+        `- currentSeasonInProgress: ${summary.seasonWording.currentSeasonInProgress}`,
+        `- bestOverallIsCurrentSeasonInProgress: ${summary.seasonWording.bestOverallIsCurrentSeasonInProgress}`,
+        `- currentSeasonIsCareerBestPositionSoFar: ${summary.seasonWording.currentSeasonIsCareerBestPositionSoFar}`,
+        ...(summary.seasonWording.rules || []).map((rule) => `- ${rule}`),
+        ...(summary.seasonWording.suggestedPhrasing?.length
+          ? [
+              '- suggestedPhrasing examples:',
+              ...summary.seasonWording.suggestedPhrasing.map((phrase) => `  • ${phrase}`),
+            ]
+          : [])
+      );
+    }
+
     lines.push(
       '',
-      `CRITICAL: Current-season points (${season.pointsTotal}) apply ONLY to the current season${currentSeasonBpNumber ? ` (Season ${currentSeasonBpNumber})` : ''}. Never attach them to Season 8 or other historical seasons.`
+      `CRITICAL: Current-season points (${season.pointsTotal}) apply ONLY to the current season${currentSeasonBpNumber ? ` (Season ${currentSeasonBpNumber})` : ''}. Never attach them to Season 8 or other historical seasons.`,
+      summary.seasonWording?.forbidCompletedSeasonWordingForCurrentSeason
+        ? `CRITICAL: Season ${currentSeasonBpNumber ?? 'current'} is IN PROGRESS — never say his best season finish "came in" or he "finished/placed" in the current season. Use present-tense campaign wording from seasonWording.`
+        : ''
     );
   }
 
@@ -1988,6 +2220,91 @@ function seasonSummaryIncludes(summary, predicate) {
   return lists.some((list) => Array.isArray(list) && list.some(predicate));
 }
 
+export function validateInProgressSeasonCompletedWording(text, context = {}) {
+  const unsupported = [];
+  const summary =
+    context.leagueCareerSummary ||
+    context.careerHistory?.leagueCareerSummary ||
+    null;
+  const wording = summary?.seasonWording;
+  if (!wording?.forbidCompletedSeasonWordingForCurrentSeason) {
+    return unsupported;
+  }
+
+  const manualRaceNotes = context.manualRaceNotes || '';
+  const transcriptSummary = context.transcriptSummary || '';
+  const currentBp =
+    summary.currentSeasonBpNumber ??
+    (Number.isFinite(context.currentSeasonBpNumber) ? context.currentSeasonBpNumber : null);
+  const currentLabel = summary.currentSeasonStanding?.label || null;
+  const pastTenseFinish =
+    /\b(?:finished|placed|ended the season|where he (?:finished|placed)|finished overall|placed overall)\b/i;
+
+  const pushError = (claim, message) => {
+    unsupported.push({
+      type: 'inprogress-season-completed-wording',
+      message,
+      claim: String(claim || '').trim(),
+      field: 'seasonWording',
+    });
+  };
+
+  for (const match of String(text || '').matchAll(
+    /\b(?:best|career-best|career best|highest championship).{0,100}\bcame in\b/gi
+  )) {
+    const window = String(text || '').slice(match.index, (match.index ?? 0) + 140);
+    if (claimSupportedInNotes(window, manualRaceNotes, transcriptSummary)) continue;
+    const seasonNum = seasonNumberFromClaim(window);
+    const referencesCurrent =
+      (Number.isFinite(currentBp) && seasonNum === currentBp) ||
+      (currentLabel && window.toLowerCase().includes(currentLabel.toLowerCase())) ||
+      wording.bestOverallIsCurrentSeasonInProgress;
+    if (referencesCurrent) {
+      pushError(
+        window,
+        'Do not describe the in-progress current season as a completed best season. Use present-tense career-campaign wording from seasonWording.suggestedPhrasing.'
+      );
+    }
+  }
+
+  for (const match of String(text || '').matchAll(/\bseason\s*#?\s*(\d+)\b/gi)) {
+    const seasonNum = Number(match[1]);
+    if (!Number.isFinite(currentBp) || seasonNum !== currentBp) continue;
+    const window = String(text || '').slice(
+      Math.max(0, (match.index ?? 0) - 100),
+      (match.index ?? 0) + 100
+    );
+    if (claimSupportedInNotes(window, manualRaceNotes, transcriptSummary)) continue;
+    if (pastTenseFinish.test(window)) {
+      pushError(
+        window,
+        `Season ${seasonNum} is in progress — do not use past-tense championship finish wording (finished, placed, ended the season).`
+      );
+    }
+    if (/\bbest season finish came\b/i.test(window)) {
+      pushError(
+        window,
+        `Season ${seasonNum} is in progress — do not claim a completed "best season finish" for the current season.`
+      );
+    }
+  }
+
+  if (
+    wording.bestOverallIsCurrentSeasonInProgress &&
+    /\bbest season finish came\b/i.test(String(text || ''))
+  ) {
+    const claim = String(text || '').match(/\bbest season finish came[\s\S]{0,120}/i)?.[0];
+    if (claim && !claimSupportedInNotes(claim, manualRaceNotes, transcriptSummary)) {
+      pushError(
+        claim,
+        'When the current in-progress season is his best position so far, use present-tense campaign wording — not "best season finish came in".'
+      );
+    }
+  }
+
+  return unsupported;
+}
+
 export function validateDriverSpotlightCareerSummary(text, context = {}) {
   const unsupported = [];
   const summary =
@@ -2200,6 +2517,7 @@ export function validateCareerTenureClaims(text, context = {}) {
 export const DRIVER_SPOTLIGHT_FIELD_VALIDATORS = [
   validateCareerTenureClaims,
   validateDriverSpotlightCareerStats,
+  validateInProgressSeasonCompletedWording,
   validateDriverSpotlightCareerSummary,
   validateDriverSpotlightMixedScopeStats,
   validateDriverSpotlightHistoricalSeasonStats,

@@ -318,8 +318,22 @@ function slimLeagueCareerSummary(summary) {
     })),
     bestSeasonFinish: summary.bestSeasonFinish,
     bestSeasonName: summary.bestSeasonName,
+    bestCompletedSeasonFinish: summary.bestCompletedSeasonFinish,
+    bestCompletedSeasonName: summary.bestCompletedSeasonName,
+    currentSeasonStanding: summary.currentSeasonStanding,
+    seasonWording: summary.seasonWording
+      ? {
+          currentSeasonInProgress: summary.seasonWording.currentSeasonInProgress,
+          bestOverallIsCurrentSeasonInProgress:
+            summary.seasonWording.bestOverallIsCurrentSeasonInProgress,
+          currentSeasonIsCareerBestPositionSoFar:
+            summary.seasonWording.currentSeasonIsCareerBestPositionSoFar,
+          rules: summary.seasonWording.rules,
+          suggestedPhrasing: summary.seasonWording.suggestedPhrasing,
+        }
+      : null,
     label: 'Blazing Pedals league championship history',
-    note: 'Use finishing position and season name for historical seasons. Do not cite points totals for past seasons or compare points across seasons.',
+    note: 'Use finishing position and season name for completed seasons only. For the in-progress current season, use seasonWording — never past-tense "best season finish came in" or "finished/placed in Season N". Do not cite points totals for past seasons or compare points across seasons.',
   };
 }
 
@@ -394,7 +408,7 @@ export function buildPromptFactualGrounding(generationContext, articleType, opti
 
   const spotlightRules =
     articleType === 'driver-spotlight'
-      ? 'Driver Spotlight structure: (1) Opening current-season overview using allowedSeasonStats and standings position/points. (2) Blazing Pedals career snapshot from leagueCareerStats when careerStatsVerified. (3) Championship history from leagueCareerSummary when careerSummaryVerified — bestSeasonFinish, bestSeasonName, championships, championshipSeasons, runnerUpSeasons, top3SeasonFinishes, seasonsAppeared. Omit section 3 entirely if not verified. (4) Recent form from verifiedRaceFinishes / last3RaceAverageFinish. (5) Outlook based only on verified current-season stats and recent results — no personality claims.'
+      ? 'Driver Spotlight structure: (1) Opening current-season overview using allowedSeasonStats and standings position/points. (2) Blazing Pedals career snapshot from leagueCareerStats when careerStatsVerified. (3) Championship history from leagueCareerSummary when careerSummaryVerified — use bestCompletedSeasonFinish/Name for completed seasons; follow seasonWording for the in-progress current season (present-tense campaign phrasing when it is his best so far — never "best season finish came in" for the current season). Omit section 3 entirely if not verified. (4) Recent form from verifiedRaceFinishes / last3RaceAverageFinish. (5) Outlook based only on verified current-season stats and recent results — no personality claims.'
       : null;
 
   const payload = {

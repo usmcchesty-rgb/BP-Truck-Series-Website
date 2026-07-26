@@ -114,13 +114,16 @@ Return corrected JSON only with headline, subheadline, summary, and body.
 Rewrite ALL affected fields. Separate season stats from career stats in every field.
 
 Historical seasons: use finishing position and season name only — never current-season points on Season 8 or other past seasons.
+Never describe the in-progress current season as completed (no "best season finish came in Season N", "finished fifth in Season N", or "placed overall" for the current season). Use seasonWording.suggestedPhrasing with present-tense campaign language.
 
-Examples when career wins=5, season wins=1, Season 8 runner-up (P2), current Season 11 points=595:
+Examples when career wins=5, season wins=1, Season 8 runner-up (P2), current Season 11 in progress at P5 (career-best position so far):
 - ALLOWED season: "one win this season"
 - ALLOWED career: "five career wins across his Blazing Pedals career"
-- ALLOWED history: "His best season came in Season 8, when he finished second in the championship standings"
+- ALLOWED history: "His best championship finish came in Season 8, when he finished second in the championship standings"
+- ALLOWED current campaign: "He's currently enjoying the best season of his career while sitting fifth in the standings"
 - REJECTED: "five wins this season"
-- REJECTED: "Season 8 runner-up with 595 points"`,
+- REJECTED: "Season 8 runner-up with 595 points"
+- REJECTED: "His best season finish came in Season 11, where he placed fifth overall"`,
     });
   } else {
     messages.push({ role: 'user', content: userPrompt });

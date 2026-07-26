@@ -134,6 +134,10 @@ function buildDriverGrounding(
     seasonCatalog: options.seasonCatalog || null,
     manualRaceNotes: options.manualRaceNotes || '',
     transcriptSummary: options.transcriptSummary || '',
+    progressionContext: {
+      scheduleRaces: options.scheduleRaces || [],
+      settings: options.settings || null,
+    },
   });
 
   return {
@@ -167,6 +171,7 @@ export function buildFactualGroundingContext({
   manualRaceNotes,
   transcriptSummary,
   seasonCatalog = null,
+  settings = null,
 }) {
   const alignedRaces = getAlignedRaceFinishes(
     scheduleRaces,
@@ -198,6 +203,8 @@ export function buildFactualGroundingContext({
           seasonCatalog,
           manualRaceNotes,
           transcriptSummary,
+          scheduleRaces,
+          settings,
         }
       ),
     };

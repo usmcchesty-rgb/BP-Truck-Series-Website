@@ -15,6 +15,7 @@
     "test:mission-control-windows": "node scripts/test-mission-control-windows.mjs",
     "test:news-article-slug": "node scripts/test-news-article-slug.mjs",
     "test:news-article-body": "node scripts/test-news-article-body.mjs",
+    "test:news-season-wording": "node scripts/test-news-season-wording.mjs",
     "test:mission-control-race-match": "node scripts/test-mission-control-race-match.mjs",
     "test:mission-control-manual-override": "node scripts/test-mission-control-manual-override.mjs",
     "test:mission-control-fantasy-lock": "node scripts/test-mission-control-fantasy-lock.mjs",

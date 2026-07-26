@@ -376,6 +376,7 @@ export const REPAIRABLE_NEWS_ERROR_TYPES = new Set([
   'cross-season-points-comparison',
   'unsupported-driver-style',
   'forbidden-meta',
+  'inprogress-season-completed-wording',
 ]);
 
 export function formatNewsValidationForRepair(validation, repairContext = {}) {

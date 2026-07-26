@@ -1918,6 +1918,7 @@ export async function loadPowerRankingsGenerationContext(
     manualRaceNotes,
     transcriptSummary: contextMeta.broadcastContext?.summary || '',
     seasonCatalog,
+    settings,
   });
 
   const alignedRaces = getAlignedRaceFinishes(
