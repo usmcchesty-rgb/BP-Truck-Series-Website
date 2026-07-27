@@ -1195,12 +1195,16 @@ footer{
   position:relative;
   width:100%;
   aspect-ratio:16 / 9;
-  min-height:220px;
+  min-height:0;
   background:#000;
   border:1px solid #333;
   border-radius:4px;
   overflow:hidden;
   box-shadow:0 0 14px rgba(0,0,0,.45);
+}
+.home-green-flag .home-youtube-wrap{
+  width:min(100%, 75%);
+  margin-inline:auto;
 }
 .home-youtube-wrap::before{
   content:"";
@@ -1227,13 +1231,25 @@ footer{
   letter-spacing:.35px;
   line-height:1.45;
 }
-.home-broadcast-title{
-  margin:0 0 12px;
-  color:var(--bp-text-primary);
-  font-size:14px;
-  font-style:italic;
+.home-broadcast-heading{
+  margin:0 0 6px;
+  color:#fff;
+  font-size:13px;
   font-weight:900;
+  letter-spacing:.45px;
   line-height:1.35;
+  text-transform:uppercase;
+}
+.home-broadcast-title{
+  margin:0 0 10px;
+  color:#c8c8c8;
+  font-size:13px;
+  font-style:italic;
+  font-weight:700;
+  line-height:1.35;
+}
+.home-broadcast-title[hidden]{
+  display:none;
 }
 .home-social-placeholder{
   display:flex;
@@ -3182,6 +3198,7 @@ a.home-news-item:hover h4{color:#fff}
   .content-grid{grid-template-columns:1fr}
   .home-magazine-grid{grid-template-columns:1fr}
   .home-card-wide,.home-card-full{grid-column:span 1}
+  .home-green-flag .home-youtube-wrap{width:100%}
   .home-magazine-grid .last-winner--home{grid-template-columns:1fr}
   .home-magazine-grid .last-winner-driver{
     flex-direction:row;

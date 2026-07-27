@@ -160,6 +160,41 @@ function selectFeaturedVideo(videos, nextRace) {
   return { featured: videos[0], selectionReason: "newest-fallback" };
 }
 
+export function formatScheduleRaceBroadcastLabel(nextRace) {
+  if (!nextRace) return null;
+  const raceNumber = nextRace.officialPointsRaceNumber ?? nextRace.raceNumber;
+  const track = String(nextRace.track || "").trim();
+  if (Number.isFinite(Number(raceNumber)) && Number(raceNumber) > 0 && track) {
+    return `Race ${Number(raceNumber)} — ${track}`;
+  }
+  return track || null;
+}
+
+export function buildBroadcastPresentation(featured, nextRace, selectionReason) {
+  if (!featured) {
+    return {
+      heading: "Green Flag TV Broadcasts",
+      videoTitle: null,
+      represents: "playlist",
+    };
+  }
+
+  if (selectionReason === "race-day-current") {
+    const scheduleLabel = formatScheduleRaceBroadcastLabel(nextRace);
+    return {
+      heading: scheduleLabel ? `Race Day Broadcast · ${scheduleLabel}` : "Race Day Broadcast",
+      videoTitle: featured.title,
+      represents: "race-day-current",
+    };
+  }
+
+  return {
+    heading: "Latest Broadcast",
+    videoTitle: featured.title,
+    represents: "latest-upload",
+  };
+}
+
 function buildScheduleContext(scheduleData, now = new Date()) {
   const settings = scheduleData?.settings || {};
   const progressionOptions = { now, settings };
@@ -262,6 +297,11 @@ export default async function handler(req, res) {
     }
 
     const { featured, selectionReason } = selectFeaturedVideo(videos, nextRace);
+    const broadcastPresentation = buildBroadcastPresentation(
+      featured,
+      nextRace,
+      selectionReason
+    );
 
     res.setHeader("Cache-Control", "s-maxage=300, stale-while-revalidate=600");
     return res.status(200).json({
@@ -270,6 +310,7 @@ export default async function handler(req, res) {
       playlistUrl: PLAYLIST_URL,
       embedUrl: featured?.embedUrl || PLAYLIST_EMBED,
       featured,
+      broadcastPresentation,
       videos,
       nextRace: nextRace
         ? {

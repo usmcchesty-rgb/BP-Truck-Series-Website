@@ -424,23 +424,42 @@ const PLAYLIST_EMBED =
   "https://www.youtube.com/embed/videoseries?list=PL4aFms0YBw6_uE-yoYgOFDtaNcN9ozPIO";
 
 function renderGreenFlagBroadcast(data) {
+  const headingEl = $("#homeBroadcastHeading");
   const titleEl = $("#homeBroadcastTitle");
   const iframe = $("#homeBroadcastEmbed");
-  if (!titleEl || !iframe) return;
+  if (!headingEl || !iframe) return;
 
   const featured = data?.featured;
+  const presentation = data?.broadcastPresentation;
   const usePlaylistFallback = data?.fallback || !featured?.videoId;
 
   if (usePlaylistFallback) {
-    titleEl.textContent = "Green Flag TV Broadcasts";
+    headingEl.textContent = presentation?.heading || "Green Flag TV Broadcasts";
+    if (titleEl) {
+      titleEl.hidden = true;
+      titleEl.textContent = "";
+    }
     iframe.src = data?.embedUrl || PLAYLIST_EMBED;
     iframe.title = "Green Flag TV race broadcasts";
     return;
   }
 
-  titleEl.textContent = featured.title || "Green Flag TV Broadcast";
+  const heading = presentation?.heading || "Latest Broadcast";
+  const videoTitle = presentation?.videoTitle || featured.title || "";
+
+  headingEl.textContent = heading;
+  if (titleEl) {
+    if (videoTitle && videoTitle !== heading) {
+      titleEl.hidden = false;
+      titleEl.textContent = videoTitle;
+    } else {
+      titleEl.hidden = true;
+      titleEl.textContent = "";
+    }
+  }
+
   iframe.src = featured.embedUrl || `https://www.youtube.com/embed/${featured.videoId}`;
-  iframe.title = featured.title || "Green Flag TV race broadcast";
+  iframe.title = videoTitle || heading || "Green Flag TV race broadcast";
 }
 
 async function loadGreenFlagBroadcast() {
