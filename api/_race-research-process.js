@@ -50,9 +50,17 @@ function mapFailureStatus(source, hadPreviousFacts) {
 }
 
 export async function processResearchSource(source, context = {}) {
+  const timing = context.rebuildTiming;
   const warnings = [];
   const attemptAt = new Date().toISOString();
   const rawBefore = source.rawText;
+
+  timing?.emit('source.process.start', {
+    sourceType: source.sourceType,
+    sourceId: source.id,
+    raceNumber: source.raceNumber,
+    seasonId: source.seasonId,
+  });
 
   const priorFactIds = await getFactIdsLinkedToSource(source.id);
   const hadPreviousFacts = priorFactIds.length > 0;
@@ -86,18 +94,30 @@ export async function processResearchSource(source, context = {}) {
       return { processingStatus: fail.processingStatus, factsCreated: 0, warnings, previousFactsPreserved: hadPreviousFacts };
     }
 
+    const isTranscriptSource = ['youtube_transcript', 'saved_transcript'].includes(fresh.sourceType);
+    const genericExtractStage =
+      timing && !isTranscriptSource ? timing.startStage('factExtraction') : null;
     const result = await processor(fresh, context);
+    genericExtractStage?.finish({
+      sourceType: fresh.sourceType,
+      proposedFactCount: result.proposedFacts?.length ?? 0,
+    });
+
     warnings.push(...(result.warnings || []));
 
     let factsCreated = 0;
     let conflictsDetected = 0;
 
     if (result.activateReplacement === true && Array.isArray(result.proposedFacts)) {
+      const swapStage = timing?.startStage('factExtraction.swapFacts');
       const swapped = await swapFactsForSource(fresh.id, result.proposedFacts);
+      swapStage?.finish({ factsCreated: swapped.factsCreated, atomic: swapped.atomic });
       factsCreated = swapped.factsCreated;
       conflictsDetected = swapped.conflictsDetected;
     } else if (result.activateReplacement === true && result.proposedFacts?.length === 0 && result.allowEmptyReplacement) {
+      const swapStage = timing?.startStage('factExtraction.swapFacts');
       const swapped = await swapFactsForSource(fresh.id, []);
+      swapStage?.finish({ factsCreated: swapped.factsCreated, atomic: swapped.atomic, emptyReplacement: true });
       factsCreated = swapped.factsCreated;
     }
 
@@ -128,18 +148,35 @@ export async function processResearchSource(source, context = {}) {
     if (context.seasonId && context.raceNumber) {
       if (result.activateReplacement) {
         try {
+          const derivedStage = timing?.startStage('derivedFactsRefresh');
           await refreshDerivedFactsForRace(context.seasonId, context.raceNumber, context);
+          derivedStage?.finish({});
+          if (timing) timing.totals.derivedRefreshRuns += 1;
         } catch (derivedErr) {
           warnings.push(`derived_refresh_failed: ${derivedErr.message}`);
         }
       }
       try {
-        await persistCanonicalConsolidation(context.seasonId, context.raceNumber);
+        const canonicalStage = timing?.startStage('canonicalPersistence');
+        await persistCanonicalConsolidation(context.seasonId, context.raceNumber, { rebuildTiming: timing });
+        canonicalStage?.finish({ trigger: 'postSourceProcess' });
+        if (timing) timing.totals.canonicalPersistenceRuns += 1;
       } catch (canonicalErr) {
         warnings.push(`canonical_consolidation_failed: ${canonicalErr.message}`);
       }
-      await refreshRacePackageDiagnostics(context.seasonId, context.raceNumber);
+      const pkgStage = timing?.startStage('packageSave');
+      await refreshRacePackageDiagnostics(context.seasonId, context.raceNumber, { rebuildTiming: timing });
+      pkgStage?.finish({ trigger: 'postSourceProcess' });
     }
+
+    timing?.emit('source.process.finish', {
+      sourceType: fresh.sourceType,
+      sourceId: fresh.id,
+      factsCreated,
+      processingStatus: status,
+      activateReplacement: result.activateReplacement,
+      proposedFactCount: result.proposedFacts?.length ?? 0,
+    });
 
     return {
       processingStatus: status,
@@ -318,6 +355,7 @@ async function processHistoricalResultsSource(source) {
 }
 
 async function processTranscriptSource(source, context) {
+  const timing = context.rebuildTiming;
   const text = String(source.rawText || '');
   if (!text.trim()) {
     return {
@@ -343,10 +381,19 @@ async function processTranscriptSource(source, context) {
         warnings: [`Estimated chunks: ${plannedLen}`],
       };
     }
+    const chunkGenStage = timing?.startStage('chunkGeneration');
     const ensured = await ensureTranscriptChunksForSource(source, context);
     chunks = ensured.chunks;
     chunksMatchSource = !ensured.regenerated;
     staleReason = ensured.reason;
+    chunkGenStage?.finish({
+      sourceId: source.id,
+      sourceType: source.sourceType,
+      chunkCount: chunks.length,
+      regenerated: ensured.regenerated,
+      reason: ensured.reason,
+    });
+    if (timing) timing.totals.chunksProcessed += chunks.length;
   } else {
     chunks = [{ id: null, chunkIndex: 0, chunkText: text }];
   }
@@ -357,8 +404,19 @@ async function processTranscriptSource(source, context) {
   let sequenceStart = 0;
   const totalChunks = chunks.length;
 
-  for (const chunk of chunks) {
-    const chunkIndex = chunk.chunkIndex ?? 0;
+  const extractStage = timing?.startStage('factExtraction');
+
+  for (let chunkLoopIndex = 0; chunkLoopIndex < chunks.length; chunkLoopIndex += 1) {
+    const chunk = chunks[chunkLoopIndex];
+    const chunkIndex = chunk.chunkIndex ?? chunkLoopIndex;
+    const chunkIterStage = timing?.startStage('factExtraction.chunk');
+    timing?.emit('factExtraction.chunk.start', {
+      sourceId: source.id,
+      sourceType: source.sourceType,
+      chunkIndex,
+      iteration: chunkLoopIndex + 1,
+      iterationCount: totalChunks,
+    });
     const cached =
       chunk.extractionCache &&
       chunk.extractionVersion === RACE_RESEARCH_EXTRACTION_VERSION &&
@@ -378,6 +436,12 @@ async function processTranscriptSource(source, context) {
       sequenceStart = nextSequence;
       allFacts.push(...facts);
       succeeded += 1;
+      if (timing) timing.totals.transcriptChunkIterations += 1;
+      chunkIterStage?.finish({
+        chunkIndex,
+        fromCache: true,
+        factCount: facts.length,
+      });
       continue;
     }
 
@@ -405,6 +469,7 @@ async function processTranscriptSource(source, context) {
       sequenceStart = nextSequence;
       allFacts.push(...facts);
       succeeded += 1;
+      if (timing) timing.totals.transcriptChunkIterations += 1;
 
       if (chunk.id) {
         await saveChunkExtractionCache(chunk.id, {
@@ -414,8 +479,19 @@ async function processTranscriptSource(source, context) {
         });
         await updateResearchChunk(chunk.id, { processingStatus: 'complete', processingError: null });
       }
+      chunkIterStage?.finish({
+        chunkIndex,
+        fromCache: false,
+        factCount: facts.length,
+        extractionMethod: extraction._meta?.extractionMethod || 'deterministic',
+      });
     } catch (error) {
       failed += 1;
+      chunkIterStage?.finish({
+        chunkIndex,
+        error: String(error.message || error).slice(0, 120),
+        failed: true,
+      });
       if (chunk.id) {
         await updateResearchChunk(chunk.id, {
           processingStatus: 'failed',
@@ -424,6 +500,15 @@ async function processTranscriptSource(source, context) {
       }
     }
   }
+
+  extractStage?.finish({
+    sourceId: source.id,
+    sourceType: source.sourceType,
+    factCount: allFacts.length,
+    chunkCount: totalChunks,
+    succeeded,
+    failed,
+  });
 
   if (failed > 0 || succeeded < totalChunks) {
     return {

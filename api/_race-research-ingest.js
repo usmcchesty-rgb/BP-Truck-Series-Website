@@ -25,7 +25,10 @@ function validateRaceIdentity(seasonId, raceNumber) {
  * Central ingestion entry point.
  */
 export async function ingestRaceResearchSource(input, context = {}) {
+  const timing = context.rebuildTiming;
   const { seasonId, raceNumber } = validateRaceIdentity(input.seasonId, input.raceNumber);
+  if (timing) timing.totals.sourcesIngestStarted += 1;
+
   const sourceType = String(input.sourceType || 'other');
   const sourceKey = String(input.sourceKey || '');
   const rawText = input.rawText != null ? String(input.rawText) : null;
@@ -44,7 +47,16 @@ export async function ingestRaceResearchSource(input, context = {}) {
 
   if (duplicateByHash && duplicateByHash.sourceType === sourceType && duplicateByHash.sourceKey === sourceKey) {
     if (!context.reprocess && duplicateByHash.processingStatus === 'complete') {
-      await refreshRacePackageDiagnostics(seasonId, raceNumber);
+      const pkgStage = timing?.startStage('packageSave');
+      await refreshRacePackageDiagnostics(seasonId, raceNumber, { rebuildTiming: timing });
+      pkgStage?.finish({ trigger: 'duplicate_skip' });
+      timing?.emit('source.ingest.finish', {
+        sourceType,
+        sourceId: duplicateByHash.id,
+        duplicate: true,
+        skippedReprocess: true,
+        factsCreated: 0,
+      });
       return {
         sourceId: duplicateByHash.id,
         duplicate: true,

@@ -144,7 +144,7 @@ export async function handleRebuildPackage(body) {
     const parsed = parseRaceBody(body);
     if (parsed.error) return parsed;
     const seasonId = await resolveSeasonId(parsed.seasonId);
-    const data = await handleResearchRebuildPackage(seasonId, parsed.raceNumber, body);
+    const data = await handleResearchRebuildPackage(seasonId, parsed.raceNumber, body, opId);
     return { status: 200, data: { ...data, operationId: opId } };
   } catch (error) {
     logResearchOperation({

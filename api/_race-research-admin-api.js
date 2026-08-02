@@ -33,6 +33,7 @@ import { processResearchSource } from './_race-research-process.js';
 import { extractTranscriptChunkDeterministic } from './_race-research-transcript-extract.js';
 import { refreshRacePackageDiagnostics } from './_race-research-package.js';
 import { createResearchOperationId, logResearchOperation } from './_race-research-log.js';
+import { createRebuildTiming } from './_race-research-rebuild-timing.js';
 
 export const RESEARCH_MIGRATION_HINT =
   'Race Intelligence database tables are not installed.\n\nApply:\nsupabase/race_research_intelligence_migration.sql';
@@ -566,28 +567,81 @@ function aggregateIngestResults(ingested = []) {
   return summary;
 }
 
-export async function handleResearchRebuildPackage(seasonId, raceNumber, body) {
+export async function handleResearchRebuildPackage(seasonId, raceNumber, body, operationId) {
   await assertResearchDatabaseReady();
-  const opId = createResearchOperationId();
+  const opId = operationId || createResearchOperationId();
   const started = Date.now();
+  const timing = createRebuildTiming({ opId, seasonId, raceNumber });
+  timing.logStart({
+    allowAi: resolveResearchAllowAi(body),
+    forceLargeSource: body.forceLargeSource !== false,
+    includeYoutube: body.includeYoutube !== false,
+    transcriptMode: getRaceResearchTranscriptMode(),
+  });
+
+  try {
   const allowAi = resolveResearchAllowAi(body);
+  const syncStage = timing.startStage('syncAutomaticRaceResearchSources');
   const sync = await syncAutomaticRaceResearchSources(seasonId, raceNumber, {
     manualNotes: body.manualNotes ?? body.manual_notes,
     includeYoutube: body.includeYoutube !== false,
     forceLargeSource: body.forceLargeSource !== false,
     transcriptExtractor: extractTranscriptChunkDeterministic,
     allowAi,
+    rebuildTiming: timing,
   });
-  const status = await refreshRacePackageDiagnostics(seasonId, raceNumber);
+  syncStage.finish({
+    sourcesIngested: sync.ingested?.length ?? 0,
+    syncWarnings: sync.warnings?.length ?? 0,
+    requestedRaceNumber: Number(raceNumber),
+    contextRaceNumber: sync.context?.raceNumber,
+  });
+
+  const packageSaveStage = timing.startStage('packageSave');
+  const status = await refreshRacePackageDiagnostics(seasonId, raceNumber, { rebuildTiming: timing });
+  packageSaveStage.finish({ packageStatus: status?.packageStatus });
+
+  const canonicalStage = timing.startStage('canonicalPersistence');
   let canonical = { skipped: true };
   try {
     const { persistCanonicalConsolidation } = await import('./_race-research-canonical-persist.js');
-    canonical = await persistCanonicalConsolidation(seasonId, raceNumber);
+    canonical = await persistCanonicalConsolidation(seasonId, raceNumber, { rebuildTiming: timing });
+    timing.totals.canonicalPersistenceRuns += 1;
   } catch (err) {
     canonical = { skipped: true, error: err.message };
   }
-  const quality = await runDiagnoseQuality(seasonId, raceNumber);
+  canonicalStage.finish({
+    skipped: Boolean(canonical.skipped),
+    canonicalCount: canonical.canonicalCount,
+  });
+
+  const qualityStage = timing.startStage('runDiagnoseQuality');
+  const quality = await runDiagnoseQuality(seasonId, raceNumber, { rebuildTiming: timing });
+  qualityStage.finish({ reportLength: quality.report?.length ?? 0 });
+
   const summary = aggregateIngestResults(sync.ingested);
+
+  timing.logEnd({
+    status: 'ok',
+    totalDurationMs: Date.now() - started,
+    sourcesProcessed: summary.chunksProcessed + summary.sourcesUnchanged,
+    sourcesAdded: summary.sourcesAdded,
+    sourcesUpdated: summary.sourcesUpdated,
+    sourcesUnchanged: summary.sourcesUnchanged,
+    chunksCreated: summary.chunksCreated,
+    factsCreated: summary.factsCreated,
+    chunksProcessedAggregate: summary.chunksProcessed,
+    timingTotals: {
+      sourcesIngestStarted: timing.totals.sourcesIngestStarted,
+      sourcesIngestFinished: timing.totals.sourcesIngestFinished,
+      chunksProcessed: timing.totals.chunksProcessed,
+      factsGenerated: timing.totals.factsGenerated,
+      transcriptChunkIterations: timing.totals.transcriptChunkIterations,
+      canonicalPersistenceRuns: timing.totals.canonicalPersistenceRuns,
+      packageSaveRuns: timing.totals.packageSaveRuns,
+      derivedRefreshRuns: timing.totals.derivedRefreshRuns,
+    },
+  });
 
   logResearchOperation({
     opId,
@@ -614,6 +668,15 @@ export async function handleResearchRebuildPackage(seasonId, raceNumber, body) {
     readiness: quality.readiness,
     report: quality.report,
   };
+  } catch (error) {
+    timing.logEnd({
+      status: 'error',
+      totalDurationMs: Date.now() - started,
+      error: String(error.message || error).slice(0, 200),
+      timingTotals: timing.totals,
+    });
+    throw error;
+  }
 }
 
 export async function handleResearchContinueProcessing(seasonId, raceNumber, body) {

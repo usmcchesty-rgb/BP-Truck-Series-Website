@@ -65,7 +65,22 @@ export async function loadRaceResearchBootstrapContext(seasonId, raceNumber, opt
  * Pull existing project sources into race_research_sources (idempotent via content hash).
  */
 export async function syncAutomaticRaceResearchSources(seasonId, raceNumber, options = {}) {
+  const timing = options.rebuildTiming;
+  const bootstrapStage = timing?.startStage('syncAutomaticRaceResearchSources.bootstrapContext');
   const ctx = await loadRaceResearchBootstrapContext(seasonId, raceNumber, options);
+  bootstrapStage?.finish({
+    raceNumber: ctx.raceNumber,
+    seasonId: ctx.seasonId,
+    standingsRows: ctx.standings?.length ?? 0,
+  });
+
+  if (timing && Number(ctx.raceNumber) !== Number(raceNumber)) {
+    timing.emit('syncAutomaticRaceResearchSources.raceMismatch', {
+      requestedRaceNumber: Number(raceNumber),
+      contextRaceNumber: Number(ctx.raceNumber),
+    });
+  }
+
   const warnings = [];
   const ingested = [];
   const processContext = {
@@ -74,11 +89,38 @@ export async function syncAutomaticRaceResearchSources(seasonId, raceNumber, opt
     transcriptExtractor: options.transcriptExtractor,
     autoProcess: options.autoProcess !== false,
     allowAi: options.allowAi === true,
+    rebuildTiming: timing,
   };
+
+  let ingestIteration = 0;
+  async function ingestOne(input) {
+    ingestIteration += 1;
+    timing?.emit('source.ingest.start', {
+      iteration: ingestIteration,
+      sourceType: input.sourceType,
+      sourceKey: input.sourceKey,
+      raceNumber: input.raceNumber,
+    });
+    const ingestStage = timing?.startStage('source.ingest');
+    const result = await ingestRaceResearchSource(input, processContext);
+    ingestStage?.finish({
+      iteration: ingestIteration,
+      sourceType: input.sourceType,
+      sourceId: result.sourceId,
+      duplicate: result.duplicate,
+      factsCreated: result.factsCreated ?? 0,
+      processingStatus: result.processingStatus,
+    });
+    if (timing) {
+      timing.totals.sourcesIngestFinished += 1;
+      timing.totals.factsGenerated += Number(result.factsCreated || 0);
+    }
+    return result;
+  }
 
   if (ctx.scheduleRace) {
     ingested.push(
-      await ingestRaceResearchSource(
+      await ingestOne(
         {
           seasonId: ctx.seasonId,
           raceNumber: ctx.raceNumber,
@@ -87,15 +129,14 @@ export async function syncAutomaticRaceResearchSources(seasonId, raceNumber, opt
           title: `Race ${ctx.raceNumber} schedule`,
           rawText: JSON.stringify(ctx.scheduleRace),
           metadata: { scheduleId: ctx.scheduleId },
-        },
-        processContext
+        }
       )
     );
   }
 
   if (ctx.scheduleEntry?.driverResults) {
     ingested.push(
-      await ingestRaceResearchSource(
+      await ingestOne(
         {
           seasonId: ctx.seasonId,
           raceNumber: ctx.raceNumber,
@@ -104,15 +145,14 @@ export async function syncAutomaticRaceResearchSources(seasonId, raceNumber, opt
           title: 'SimRacerHub official results',
           rawText: JSON.stringify(ctx.scheduleEntry),
           metadata: { scheduleId: ctx.scheduleId },
-        },
-        processContext
+        }
       )
     );
   }
 
   if (ctx.standings?.length) {
     ingested.push(
-      await ingestRaceResearchSource(
+      await ingestOne(
         {
           seasonId: ctx.seasonId,
           raceNumber: ctx.raceNumber,
@@ -120,16 +160,18 @@ export async function syncAutomaticRaceResearchSources(seasonId, raceNumber, opt
           sourceKey: String(ctx.scheduleId || 'srh'),
           title: 'Standings snapshot',
           rawText: JSON.stringify({ rows: ctx.standings, scheduleId: ctx.scheduleId }),
-        },
-        processContext
+        }
       )
     );
   }
 
+  const rcStage = timing?.startStage('syncAutomaticRaceResearchSources.raceControlFetch');
   const report = await getRaceControlReport(ctx.seasonId, ctx.raceNumber, { enrich: false });
+  rcStage?.finish({ hasReport: Boolean(report?.parsedJson) });
+
   if (report?.parsedJson) {
     ingested.push(
-      await ingestRaceResearchSource(
+      await ingestOne(
         {
           seasonId: ctx.seasonId,
           raceNumber: ctx.raceNumber,
@@ -138,8 +180,7 @@ export async function syncAutomaticRaceResearchSources(seasonId, raceNumber, opt
           title: report.originalFilename || 'Race Control report',
           rawText: JSON.stringify({ parsedJson: report.parsedJson }),
           metadata: { parseStatus: report.parseStatus },
-        },
-        processContext
+        }
       )
     );
   } else {
@@ -149,7 +190,7 @@ export async function syncAutomaticRaceResearchSources(seasonId, raceNumber, opt
   const savedTranscript = await loadRaceTranscript(ctx.raceNumber);
   if (savedTranscript?.transcript) {
     ingested.push(
-      await ingestRaceResearchSource(
+      await ingestOne(
         {
           seasonId: ctx.seasonId,
           raceNumber: ctx.raceNumber,
@@ -158,37 +199,41 @@ export async function syncAutomaticRaceResearchSources(seasonId, raceNumber, opt
           title: savedTranscript.raceName || 'Saved transcript',
           rawText: savedTranscript.transcript,
           sourceUrl: savedTranscript.sourceUrl,
-        },
-        processContext
+        }
       )
     );
   } else if (options.includeYoutube !== false) {
     try {
+      const ytStage = timing?.startStage('syncAutomaticRaceResearchSources.youtubeFetch');
       const videos = await fetchGreenFlagPlaylistVideos();
       const selection = selectBroadcastVideoForRankings(videos, ctx.raceNumber);
-      if (selection.video?.videoId) {
-        const fetchResult = await fetchYouTubeTranscript(selection.video.videoId);
-        if (fetchResult.transcript) {
-          ingested.push(
-            await ingestRaceResearchSource(
-              {
-                seasonId: ctx.seasonId,
-                raceNumber: ctx.raceNumber,
-                sourceType: 'youtube_transcript',
-                sourceKey: selection.video.videoId,
-                title: selection.selectedVideoTitle,
-                rawText: fetchResult.transcript,
-                sourceUrl: `https://www.youtube.com/watch?v=${selection.video.videoId}`,
-                metadata: {
-                  videoId: selection.video.videoId,
-                  transcriptLength: fetchResult.transcriptLength,
-                  autoGenerated: true,
-                },
+      const fetchResult = selection.video?.videoId
+        ? await fetchYouTubeTranscript(selection.video.videoId)
+        : { transcript: null };
+      ytStage?.finish({
+        videoId: selection.video?.videoId,
+        hasTranscript: Boolean(fetchResult.transcript),
+        transcriptLength: fetchResult.transcriptLength,
+      });
+      if (fetchResult.transcript) {
+        ingested.push(
+          await ingestOne(
+            {
+              seasonId: ctx.seasonId,
+              raceNumber: ctx.raceNumber,
+              sourceType: 'youtube_transcript',
+              sourceKey: selection.video.videoId,
+              title: selection.selectedVideoTitle,
+              rawText: fetchResult.transcript,
+              sourceUrl: `https://www.youtube.com/watch?v=${selection.video.videoId}`,
+              metadata: {
+                videoId: selection.video.videoId,
+                transcriptLength: fetchResult.transcriptLength,
+                autoGenerated: true,
               },
-              processContext
-            )
-          );
-        }
+            }
+          )
+        );
       }
     } catch (error) {
       warnings.push(`youtube_sync_failed: ${error.message}`);
@@ -196,9 +241,13 @@ export async function syncAutomaticRaceResearchSources(seasonId, raceNumber, opt
   }
 
   const articles = await loadPreviousArticles(ctx.raceNumber);
+  timing?.emit('syncAutomaticRaceResearchSources.previousArticles', {
+    iterationCount: articles.length,
+    raceNumber: ctx.raceNumber,
+  });
   for (const article of articles) {
     ingested.push(
-      await ingestRaceResearchSource(
+      await ingestOne(
         {
           seasonId: ctx.seasonId,
           raceNumber: ctx.raceNumber,
@@ -206,15 +255,14 @@ export async function syncAutomaticRaceResearchSources(seasonId, raceNumber, opt
           sourceKey: String(article.id),
           title: article.headline,
           rawText: JSON.stringify(article),
-        },
-        processContext
+        }
       )
     );
   }
 
   if (options.manualNotes) {
     ingested.push(
-      await ingestRaceResearchSource(
+      await ingestOne(
         {
           seasonId: ctx.seasonId,
           raceNumber: ctx.raceNumber,
@@ -222,11 +270,15 @@ export async function syncAutomaticRaceResearchSources(seasonId, raceNumber, opt
           sourceKey: hashContent(options.manualNotes).slice(0, 16),
           title: 'Manual notes',
           rawText: String(options.manualNotes),
-        },
-        processContext
+        }
       )
     );
   }
+
+  timing?.emit('syncAutomaticRaceResearchSources.ingestLoopComplete', {
+    ingestIterationCount: ingestIteration,
+    ingestedCount: ingested.length,
+  });
 
   return { ingested, warnings, context: ctx };
 }

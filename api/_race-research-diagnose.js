@@ -251,8 +251,17 @@ export async function runDiagnoseCompareExtractors(seasonId, raceNumber, allowAi
   return { mode: 'compare-extractors', allowAi, sampleCount: samples.length, samples, summary };
 }
 
-export async function runDiagnoseQuality(seasonId, raceNumber) {
-  const pkg = await buildRaceIntelligencePackage({ seasonId, raceNumber });
+export async function runDiagnoseQuality(seasonId, raceNumber, options = {}) {
+  const timing = options.rebuildTiming;
+  const buildStage = timing?.startStage('packageBuild');
+  const pkg = await buildRaceIntelligencePackage({ seasonId, raceNumber, rebuildTiming: timing });
+  buildStage?.finish({
+    factCount: pkg.facts?.length ?? 0,
+    sourceCount: pkg.sources?.length ?? 0,
+    timelineCount: pkg.timeline?.length ?? 0,
+  });
+
+  const chunkStage = timing?.startStage('runDiagnoseQuality.chunkStats');
   const sources = await listResearchSourcesForRace(seasonId, raceNumber);
   const transcript = sources.find((s) => ['youtube_transcript', 'saved_transcript'].includes(s.sourceType));
   let chunkStats = {};
@@ -266,8 +275,12 @@ export async function runDiagnoseQuality(seasonId, raceNumber) {
       deterministicOnly: chunks.filter((c) => c.extractionMethod === 'deterministic').length,
     };
   }
+  chunkStage?.finish(chunkStats);
 
+  const reportStage = timing?.startStage('runDiagnoseQuality.formatReport');
   const text = formatResearchQualityReport({ seasonId, raceNumber, racePackage: pkg, processingStats: chunkStats });
+  reportStage?.finish({ reportLength: text.length });
+
   return { mode: 'quality', report: text, readiness: {
     short: assessArticleReadiness(pkg, 'short'),
     medium: assessArticleReadiness(pkg, 'medium'),

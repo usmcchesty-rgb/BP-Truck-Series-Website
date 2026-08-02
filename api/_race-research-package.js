@@ -13,9 +13,13 @@ import {
 } from './_race-research-repository.js';
 import { buildRaceDriverStoryPackages } from './_race-research-driver-stories.js';
 
-export async function refreshRacePackageDiagnostics(seasonId, raceNumber) {
+export async function refreshRacePackageDiagnostics(seasonId, raceNumber, options = {}) {
+  const timing = options.rebuildTiming;
+  if (timing) timing.totals.packageSaveRuns += 1;
+  const loadStage = timing?.startStage('packageSave.loadData');
   const sources = await listResearchSourcesForRace(seasonId, raceNumber);
   const facts = await listRaceFactsForRace(seasonId, raceNumber);
+  loadStage?.finish({ sourceCount: sources.length, factCount: facts.length });
 
   const eventCount = facts.filter((f) =>
     ['race_event', 'lead_change', 'caution', 'incident', 'penalty', 'strategy'].includes(f.factType)
@@ -36,7 +40,9 @@ export async function refreshRacePackageDiagnostics(seasonId, raceNumber) {
   const staleCount = sources.filter((s) => s.sourceMetadata?.stale_reason || s.processingStatus === 'stale').length;
   const preservedCount = sources.filter((s) => s.sourceMetadata?.previous_facts_preserved === true).length;
 
+  const orphansStage = timing?.startStage('packageSave.orphanScan');
   const orphans = await findOrphanRaceFacts(seasonId, raceNumber);
+  orphansStage?.finish({ orphanCount: orphans.count });
 
   let packageStatus = 'collecting';
   if (!sources.length) packageStatus = 'empty';
@@ -54,7 +60,8 @@ export async function refreshRacePackageDiagnostics(seasonId, raceNumber) {
 
   const coverageScore = computeCoverageScore(sourceCoverage);
 
-  return upsertRacePackageStatus({
+  const upsertStage = timing?.startStage('packageSave.upsertStatus');
+  const saved = await upsertRacePackageStatus({
     seasonId,
     raceNumber,
     packageVersion: RACE_RESEARCH_PACKAGE_VERSION,
@@ -69,12 +76,25 @@ export async function refreshRacePackageDiagnostics(seasonId, raceNumber) {
     sourceCoverage,
     lastBuiltAt: new Date().toISOString(),
   });
+  upsertStage?.finish({ packageStatus });
+  return saved;
 }
 
-export async function buildRaceIntelligencePackage({ seasonId, raceNumber, includeRawExcerpts = false }) {
+export async function buildRaceIntelligencePackage({
+  seasonId,
+  raceNumber,
+  includeRawExcerpts = false,
+  rebuildTiming = null,
+}) {
+  const timing = rebuildTiming;
+  const loadStage = timing?.startStage('packageBuild.loadData');
   const sources = await listResearchSourcesForRace(seasonId, raceNumber);
   const facts = await listRaceFactsForRace(seasonId, raceNumber);
-  const status = (await getRacePackageStatus(seasonId, raceNumber)) || (await refreshRacePackageDiagnostics(seasonId, raceNumber));
+  loadStage?.finish({ sourceCount: sources.length, factCount: facts.length });
+
+  const statusStage = timing?.startStage('packageBuild.packageStatus');
+  const status = (await getRacePackageStatus(seasonId, raceNumber)) || (await refreshRacePackageDiagnostics(seasonId, raceNumber, { rebuildTiming: timing }));
+  statusStage?.finish({});
 
   const sourceCoverage = status.sourceCoverage || buildSourceCoverageDiagnostics(sources);
   const timeline = facts
@@ -96,7 +116,9 @@ export async function buildRaceIntelligencePackage({ seasonId, raceNumber, inclu
   const conflicts = facts.filter((f) => f.confidence === 'conflicting');
   const verifiedQuotes = facts.filter((f) => f.factType === 'quote');
   const raceControlEvents = facts.filter((f) => f.category?.includes('race_control') || f.structuredData?.raw);
+  const driverStage = timing?.startStage('driverStories');
   const driverSummaries = buildRaceDriverStoryPackages({ racePackage: { facts } });
+  driverStage?.finish({ driverStoryCount: driverSummaries.length });
 
   const scheduleSource = sources.find((s) => s.sourceType === 'schedule');
   let raceMetadata = null;

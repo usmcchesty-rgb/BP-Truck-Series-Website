@@ -54,10 +54,13 @@ function detectConflict(group) {
 /**
  * Persist cross-source canonical facts for a race (deterministic, post-processing).
  */
-export async function persistCanonicalConsolidation(seasonId, raceNumber) {
+export async function persistCanonicalConsolidation(seasonId, raceNumber, options = {}) {
+  const timing = options.rebuildTiming;
+  const stage = timing?.startStage('canonicalPersistence.run');
   const sb = assertResearchDb();
   const tables = await sb.from('race_canonical_facts').select('id', { head: true, count: 'exact' }).limit(1);
   if (tables.error && String(tables.error.message).includes('does not exist')) {
+    stage?.finish({ skipped: true, reason: 'canonical_tables_missing' });
     return { skipped: true, reason: 'canonical_tables_missing' };
   }
 
@@ -212,6 +215,13 @@ export async function persistCanonicalConsolidation(seasonId, raceNumber) {
     }
   }
 
+  stage?.finish({
+    skipped: false,
+    canonicalCount: clusters.length,
+    mergedEvidenceLinks: mergedEvidence,
+    clusterCount: clusters.length,
+    factInputCount: facts.length,
+  });
   return {
     skipped: false,
     canonicalCount: clusters.length,
