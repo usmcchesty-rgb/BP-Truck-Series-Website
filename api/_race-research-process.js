@@ -3,16 +3,16 @@ import {
   RACE_RESEARCH_MAX_CHUNKS_PER_SOURCE_DEFAULT,
 } from '../server/config/race-research-config.js';
 import { chunkTextForResearch, shouldChunkSource } from './_race-research-chunking.js';
+import { ensureTranscriptChunksForSource } from './_race-research-chunk-sync.js';
 import { hashContent } from './_race-research-hash.js';
 import {
-  deleteFactsForSource,
-  deleteChunksForSource,
-  insertRaceFact,
-  insertResearchChunks,
-  listResearchChunksForSource,
+  getFactIdsLinkedToSource,
+  getResearchSourceById,
   saveChunkExtractionCache,
   updateResearchChunk,
   updateResearchSource,
+  upsertResearchSource,
+  findResearchSourceByIdentity,
 } from './_race-research-repository.js';
 import {
   buildManualNotesFacts,
@@ -28,58 +28,138 @@ import {
 } from './_race-research-transcript-extract.js';
 import { buildDerivedRaceFacts } from './_race-research-derived.js';
 import { refreshRacePackageDiagnostics } from './_race-research-package.js';
+import { persistCanonicalConsolidation } from './_race-research-canonical-persist.js';
+import { swapFactsForSource } from './_race-research-fact-replace.js';
+
+function processingMetaPatch(source, patch) {
+  const prev = source.sourceMetadata || {};
+  return { ...prev, ...patch };
+}
+
+function mapFailureStatus(source, hadPreviousFacts) {
+  if (hadPreviousFacts) {
+    return {
+      processingStatus: 'failed_with_previous_data',
+      latestProcessingStatus: 'failed',
+    };
+  }
+  return {
+    processingStatus: 'failed_without_previous_data',
+    latestProcessingStatus: 'failed',
+  };
+}
 
 export async function processResearchSource(source, context = {}) {
   const warnings = [];
-  let factsCreated = 0;
-  let factsUpdated = 0;
-  let conflictsDetected = 0;
+  const attemptAt = new Date().toISOString();
+  const rawBefore = source.rawText;
+
+  const priorFactIds = await getFactIdsLinkedToSource(source.id);
+  const hadPreviousFacts = priorFactIds.length > 0;
 
   await updateResearchSource(source.id, {
     processingStatus: 'processing',
     processingError: null,
+    sourceMetadata: processingMetaPatch(source, {
+      last_processing_attempt_at: attemptAt,
+      latest_processing_status: 'processing',
+    }),
   });
 
   try {
-    await deleteFactsForSource(source.id);
-
-    const processor = pickProcessor(source.sourceType);
-    if (!processor) {
-      await updateResearchSource(source.id, {
-        processingStatus: 'failed',
-        processingError: `No processor for source type ${source.sourceType}`,
-      });
-      return { processingStatus: 'failed', factsCreated: 0, warnings };
+    const fresh = (await getResearchSourceById(source.id)) || source;
+    if (rawBefore != null && fresh.rawText !== rawBefore) {
+      throw new Error('Raw source mutated during processing.');
     }
 
-    const result = await processor(source, context);
-    factsCreated += result.factsCreated || 0;
-    conflictsDetected += result.conflictsDetected || 0;
+    const processor = pickProcessor(fresh.sourceType);
+    if (!processor) {
+      const fail = mapFailureStatus(fresh, hadPreviousFacts);
+      await updateResearchSource(fresh.id, {
+        processingStatus: fail.processingStatus,
+        processingError: `No processor for source type ${fresh.sourceType}`,
+        sourceMetadata: processingMetaPatch(fresh, {
+          latest_processing_status: fail.latestProcessingStatus,
+          previous_facts_preserved: hadPreviousFacts,
+        }),
+      });
+      return { processingStatus: fail.processingStatus, factsCreated: 0, warnings, previousFactsPreserved: hadPreviousFacts };
+    }
+
+    const result = await processor(fresh, context);
     warnings.push(...(result.warnings || []));
 
-    const status = result.processingStatus || 'complete';
-    await updateResearchSource(source.id, {
+    let factsCreated = 0;
+    let conflictsDetected = 0;
+
+    if (result.activateReplacement === true && Array.isArray(result.proposedFacts)) {
+      const swapped = await swapFactsForSource(fresh.id, result.proposedFacts);
+      factsCreated = swapped.factsCreated;
+      conflictsDetected = swapped.conflictsDetected;
+    } else if (result.activateReplacement === true && result.proposedFacts?.length === 0 && result.allowEmptyReplacement) {
+      const swapped = await swapFactsForSource(fresh.id, []);
+      factsCreated = swapped.factsCreated;
+    }
+
+    let status = result.processingStatus || 'complete';
+    if (!result.activateReplacement) {
+      if (status === 'failed') {
+        status = hadPreviousFacts ? 'failed_with_previous_data' : 'failed_without_previous_data';
+      } else if (status === 'partial' && hadPreviousFacts) {
+        status = 'partial';
+      }
+    }
+
+    const successAt = result.activateReplacement ? attemptAt : fresh.processedAt;
+
+    await updateResearchSource(fresh.id, {
       processingStatus: status,
       processingError: result.processingError || null,
-      processedAt: new Date().toISOString(),
+      processedAt: result.activateReplacement ? successAt : fresh.processedAt || null,
+      sourceMetadata: processingMetaPatch(fresh, {
+        latest_processing_status: status,
+        last_successful_processed_at: result.activateReplacement ? attemptAt : fresh.sourceMetadata?.last_successful_processed_at,
+        previous_facts_preserved: !result.activateReplacement && hadPreviousFacts,
+        chunks_match_source: result.chunksMatchSource ?? fresh.sourceMetadata?.chunks_match_source,
+        stale_reason: result.staleReason ?? null,
+      }),
     });
 
     if (context.seasonId && context.raceNumber) {
-      await refreshDerivedFactsForRace(context.seasonId, context.raceNumber, context);
+      if (result.activateReplacement) {
+        try {
+          await refreshDerivedFactsForRace(context.seasonId, context.raceNumber, context);
+        } catch (derivedErr) {
+          warnings.push(`derived_refresh_failed: ${derivedErr.message}`);
+        }
+      }
+      try {
+        await persistCanonicalConsolidation(context.seasonId, context.raceNumber);
+      } catch (canonicalErr) {
+        warnings.push(`canonical_consolidation_failed: ${canonicalErr.message}`);
+      }
       await refreshRacePackageDiagnostics(context.seasonId, context.raceNumber);
     }
 
     return {
       processingStatus: status,
       factsCreated,
-      factsUpdated,
+      factsUpdated: 0,
       conflictsDetected,
       warnings,
+      previousFactsPreserved: !result.activateReplacement && hadPreviousFacts,
+      activateReplacement: result.activateReplacement,
     };
   } catch (error) {
+    const fresh = (await getResearchSourceById(source.id)) || source;
+    const fail = mapFailureStatus(fresh, hadPreviousFacts);
     await updateResearchSource(source.id, {
-      processingStatus: 'failed',
+      processingStatus: fail.processingStatus,
       processingError: String(error.message || error).slice(0, 2000),
+      sourceMetadata: processingMetaPatch(fresh, {
+        latest_processing_status: fail.latestProcessingStatus,
+        previous_facts_preserved: hadPreviousFacts,
+      }),
     });
     throw error;
   }
@@ -101,17 +181,12 @@ function pickProcessor(sourceType) {
   return map[sourceType] || null;
 }
 
-async function persistFacts(facts, source) {
-  const { facts: merged, conflictsDetected } = consolidateRaceFactsInMemory(facts);
-  let created = 0;
-  for (const fact of merged) {
-    if (!fact.evidenceLinks?.length) {
-      throw new Error('Every fact must have at least one evidence link.');
-    }
-    await insertRaceFact(fact, fact.evidenceLinks);
-    created += 1;
-  }
-  return { factsCreated: created, conflictsDetected };
+function buildProposedFacts(facts, sourceId) {
+  const { facts: merged } = consolidateRaceFactsInMemory(facts);
+  return merged.map((f) => ({
+    ...f,
+    evidenceLinks: (f.evidenceLinks || []).map((l) => ({ ...l, sourceId })),
+  }));
 }
 
 async function processOfficialResultsSource(source, context) {
@@ -124,8 +199,11 @@ async function processOfficialResultsSource(source, context) {
     driverLookup: context.driverLookup,
     sourceId: source.id,
   });
-  const saved = await persistFacts(facts, source);
-  return { ...saved, processingStatus: 'complete' };
+  return {
+    proposedFacts: buildProposedFacts(facts, source.id),
+    activateReplacement: true,
+    processingStatus: 'complete',
+  };
 }
 
 async function processStandingsSource(source, context) {
@@ -136,8 +214,11 @@ async function processStandingsSource(source, context) {
     standingsRows: payload.rows || [],
     sourceId: source.id,
   });
-  const saved = await persistFacts(facts, source);
-  return { ...saved, processingStatus: 'complete' };
+  return {
+    proposedFacts: buildProposedFacts(facts, source.id),
+    activateReplacement: true,
+    processingStatus: 'complete',
+  };
 }
 
 async function processScheduleSource(source, context) {
@@ -148,8 +229,11 @@ async function processScheduleSource(source, context) {
     scheduleRace: payload,
     sourceId: source.id,
   });
-  const saved = await persistFacts(facts, source);
-  return { ...saved, processingStatus: 'complete' };
+  return {
+    proposedFacts: buildProposedFacts(facts, source.id),
+    activateReplacement: true,
+    processingStatus: 'complete',
+  };
 }
 
 async function processRaceControlSource(source, context) {
@@ -161,8 +245,11 @@ async function processRaceControlSource(source, context) {
     sourceId: source.id,
     driverLookup: context.driverLookup,
   });
-  const saved = await persistFacts(facts, source);
-  return { ...saved, processingStatus: 'complete' };
+  return {
+    proposedFacts: buildProposedFacts(facts, source.id),
+    activateReplacement: true,
+    processingStatus: 'complete',
+  };
 }
 
 async function processManualNotesSource(source) {
@@ -172,15 +259,22 @@ async function processManualNotesSource(source) {
     notes: source.rawText,
     sourceId: source.id,
   });
-  const saved = await persistFacts(facts, source);
-  return { ...saved, processingStatus: 'complete' };
+  return {
+    proposedFacts: buildProposedFacts(facts, source.id),
+    activateReplacement: true,
+    processingStatus: 'complete',
+  };
 }
 
 async function processPreviousArticleSource(source) {
   const payload = JSON.parse(source.rawText || '{}');
   const summary = String(payload.summary || payload.headline || '').trim();
   if (!summary) {
-    return { factsCreated: 0, processingStatus: 'partial', warnings: ['Previous article summary empty.'] };
+    return {
+      activateReplacement: false,
+      processingStatus: 'partial',
+      warnings: ['Previous article summary empty.'],
+    };
   }
   const facts = [
     {
@@ -195,8 +289,11 @@ async function processPreviousArticleSource(source) {
       evidenceLinks: [{ sourceId: source.id, supportType: 'primary' }],
     },
   ];
-  const saved = await persistFacts(facts, source);
-  return { ...saved, processingStatus: 'complete' };
+  return {
+    proposedFacts: buildProposedFacts(facts, source.id),
+    activateReplacement: true,
+    processingStatus: 'complete',
+  };
 }
 
 async function processHistoricalResultsSource(source) {
@@ -213,42 +310,45 @@ async function processHistoricalResultsSource(source) {
     structuredData: entry,
     evidenceLinks: [{ sourceId: source.id, supportType: 'primary' }],
   }));
-  const saved = await persistFacts(facts, source);
-  return { ...saved, processingStatus: 'complete' };
+  return {
+    proposedFacts: buildProposedFacts(facts, source.id),
+    activateReplacement: true,
+    processingStatus: 'complete',
+  };
 }
 
 async function processTranscriptSource(source, context) {
   const text = String(source.rawText || '');
   if (!text.trim()) {
-    return { factsCreated: 0, processingStatus: 'failed', processingError: 'Empty transcript' };
+    return {
+      activateReplacement: false,
+      processingStatus: 'failed',
+      processingError: 'Empty transcript',
+    };
   }
 
   const needsChunks = shouldChunkSource(source.sourceType, text.length);
-  let chunks = await listResearchChunksForSource(source.id);
+  let chunks = [];
+  let chunksMatchSource = true;
+  let staleReason = null;
 
-  if (needsChunks && !chunks.length) {
-    await deleteChunksForSource(source.id);
-    const planned = chunkTextForResearch(text);
+  if (needsChunks) {
     const maxChunks = context.maxChunksPerSource ?? RACE_RESEARCH_MAX_CHUNKS_PER_SOURCE_DEFAULT;
-    if (planned.length > maxChunks && !context.forceLargeSource) {
+    const plannedLen = chunkTextForResearch(text).length;
+    if (plannedLen > maxChunks && !context.forceLargeSource) {
       return {
-        factsCreated: 0,
+        activateReplacement: false,
         processingStatus: 'failed',
-        processingError: `Transcript requires ${planned.length} chunks (max ${maxChunks}). Set forceLargeSource to proceed.`,
-        warnings: [`Estimated chunks: ${planned.length}`],
+        processingError: `Transcript requires ${plannedLen} chunks (max ${maxChunks}). Set forceLargeSource to proceed.`,
+        warnings: [`Estimated chunks: ${plannedLen}`],
       };
     }
-    chunks = await insertResearchChunks(source.id, planned, RACE_RESEARCH_EXTRACTION_VERSION);
-  }
-
-  if (!needsChunks) {
-    chunks = [
-      {
-        id: null,
-        chunkIndex: 0,
-        chunkText: text,
-      },
-    ];
+    const ensured = await ensureTranscriptChunksForSource(source, context);
+    chunks = ensured.chunks;
+    chunksMatchSource = !ensured.regenerated;
+    staleReason = ensured.reason;
+  } else {
+    chunks = [{ id: null, chunkIndex: 0, chunkText: text }];
   }
 
   const allFacts = [];
@@ -325,27 +425,31 @@ async function processTranscriptSource(source, context) {
     }
   }
 
-  if (!allFacts.length && failed > 0) {
+  if (failed > 0 || succeeded < totalChunks) {
     return {
-      factsCreated: 0,
-      processingStatus: 'failed',
-      processingError: 'All transcript chunks failed extraction.',
-      warnings: [`failedChunks: ${failed}`],
+      activateReplacement: false,
+      processingStatus: failed === totalChunks ? 'failed' : 'partial',
+      processingError:
+        failed === totalChunks
+          ? 'All transcript chunks failed extraction.'
+          : `${failed} chunk(s) failed; prior facts preserved.`,
+      warnings: [`failedChunks: ${failed}`, `succeededChunks: ${succeeded}`],
+      chunksMatchSource,
+      staleReason,
     };
   }
 
-  const saved = await persistFacts(allFacts, source);
-  const status = failed > 0 ? 'partial' : 'complete';
   return {
-    ...saved,
-    processingStatus: status,
-    warnings: failed > 0 ? [`${failed} chunk(s) failed; ${succeeded} succeeded.`] : [],
+    proposedFacts: buildProposedFacts(allFacts, source.id),
+    activateReplacement: true,
+    processingStatus: 'complete',
+    chunksMatchSource,
+    staleReason,
   };
 }
 
 async function refreshDerivedFactsForRace(seasonId, raceNumber, context) {
-  const { listRaceFactsForRace, deleteFactsForSource, findResearchSourceByIdentity, upsertResearchSource } =
-    await import('./_race-research-repository.js');
+  const { listRaceFactsForRace, findResearchSourceByIdentity } = await import('./_race-research-repository.js');
 
   const facts = await listRaceFactsForRace(seasonId, raceNumber);
   const nonDerived = facts.filter((f) => !f.structuredData?.derivationType);
@@ -354,6 +458,8 @@ async function refreshDerivedFactsForRace(seasonId, raceNumber, context) {
   let source = await findResearchSourceByIdentity(seasonId, raceNumber, 'other', 'derived_facts');
   const rawText = JSON.stringify({ derivedFacts, builtAt: new Date().toISOString() });
   const contentHash = hashContent(rawText);
+
+  const hadPrevious = source ? (await getFactIdsLinkedToSource(source.id)).length > 0 : false;
 
   source = await upsertResearchSource({
     seasonId,
@@ -367,10 +473,33 @@ async function refreshDerivedFactsForRace(seasonId, raceNumber, context) {
     sourceMetadata: { synthetic: true },
   });
 
-  await deleteFactsForSource(source.id);
   const withLinks = derivedFacts.map((fact) => ({
     ...fact,
     evidenceLinks: [{ sourceId: source.id, supportType: 'primary' }],
   }));
-  await persistFacts(withLinks, source);
+
+  try {
+    await swapFactsForSource(source.id, withLinks);
+    await updateResearchSource(source.id, {
+      processingStatus: 'complete',
+      processingError: null,
+      processedAt: new Date().toISOString(),
+      sourceMetadata: processingMetaPatch(source, {
+        latest_processing_status: 'complete',
+        last_successful_processed_at: new Date().toISOString(),
+        derived_stale: false,
+      }),
+    });
+  } catch (error) {
+    await updateResearchSource(source.id, {
+      processingStatus: hadPrevious ? 'failed_with_previous_data' : 'failed_without_previous_data',
+      processingError: String(error.message || error).slice(0, 500),
+      sourceMetadata: processingMetaPatch(source, {
+        latest_processing_status: 'failed',
+        previous_facts_preserved: hadPrevious,
+        derived_stale: true,
+      }),
+    });
+    throw error;
+  }
 }

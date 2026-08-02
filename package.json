@@ -32,6 +32,8 @@
     "test:fantasy-driver-pool": "node scripts/test-fantasy-driver-pool.mjs",
     "test:api-imports": "node scripts/test-api-imports.mjs",
     "test:race-research-intelligence": "node scripts/test-race-research-intelligence.mjs",
+    "test:race-research-safety": "node scripts/test-race-research-safety.mjs",
+    "test:race-research-canonical": "node scripts/test-race-research-canonical.mjs",
     "diagnose:race15-research-package": "node scripts/diagnose-race15-research-package.mjs",
     "test:provisional-results": "node scripts/test-provisional-results.mjs",
     "test:driver-provisional-sync": "node scripts/test-driver-provisional-sync.mjs",

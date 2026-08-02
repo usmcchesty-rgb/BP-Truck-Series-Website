@@ -10,6 +10,9 @@ export const TRANSCRIPT_CHUNK_OVERLAP_CHARACTERS = 1000;
 
 export const RACE_RESEARCH_EXTRACTION_VERSION = '2.0';
 
+/** Bump when chunk target/overlap/split algorithm changes — triggers rechunk. */
+export const RACE_RESEARCH_CHUNKING_POLICY_VERSION = '1.0';
+
 /** deterministic | hybrid | ai — default deterministic until verification complete */
 export function getRaceResearchTranscriptMode() {
   const raw = String(process.env.RACE_RESEARCH_TRANSCRIPT_MODE || 'deterministic')

@@ -7,6 +7,7 @@ import {
   TRANSCRIPT_CHUNK_TARGET_CHARACTERS,
 } from '../server/config/race-research-config.js';
 import { chunkTextForResearch, shouldChunkSource } from './_race-research-chunking.js';
+import { chunksMatchSourceContent } from './_race-research-chunk-validate.js';
 import {
   runDiagnoseEvidence,
   runDiagnoseFacts,
@@ -20,6 +21,7 @@ import { syncAutomaticRaceResearchSources, loadRaceResearchBootstrapContext } fr
 import { loadRaceTranscript } from './_race-transcripts.js';
 import {
   checkResearchTablesExist,
+  findOrphanRaceFacts,
   getRacePackageStatus,
   listFactSourceJoinsForRace,
   listResearchChunksForSource,
@@ -277,7 +279,12 @@ export async function handleResearchDbCheck() {
       configured: tables.configured,
       tables: tables.tables,
       ready: Boolean(tables.allPresent),
-      message: tables.allPresent ? null : RESEARCH_MIGRATION_HINT,
+      architectureExtended: Boolean(tables.architectureExtended),
+      message: tables.allPresent
+        ? tables.architectureExtended
+          ? null
+          : 'Core tables ready. Apply race_research_canonical_and_atomic_migration.sql for canonical facts, atomic swap RPC, and source version history.'
+        : RESEARCH_MIGRATION_HINT,
       config: getResearchConfigStatus(),
     },
   };
@@ -294,7 +301,13 @@ export async function handleResearchOverview(seasonId, raceNumber) {
   ).length;
 
   const sources = await listResearchSourcesForRace(seasonId, raceNumber);
-  const failedOrPartial = sources.filter((s) => ['failed', 'partial'].includes(s.processingStatus)).length;
+  const failedOrPartial = sources.filter((s) =>
+    ['failed', 'partial', 'failed_with_previous_data', 'failed_without_previous_data', 'stale'].includes(
+      s.processingStatus
+    )
+  ).length;
+  const orphans = await findOrphanRaceFacts(seasonId, raceNumber);
+  const proc = statusRow?.sourceCoverage?._processing || {};
 
   return {
     seasonId,
@@ -316,6 +329,11 @@ export async function handleResearchOverview(seasonId, raceNumber) {
     lastBuiltAt: statusRow?.lastBuiltAt,
     config: getResearchConfigStatus(),
     missingSources: pkg.diagnostics?.missingSources || [],
+    orphanFactCount: orphans.count,
+    staleSourceCount: proc.staleCount ?? 0,
+    preservedFactsSourceCount: proc.preservedCount ?? 0,
+    failedLatestAttemptCount: proc.failedWithPreviousCount ?? 0,
+    chunkMismatchCount: null,
   };
 }
 
@@ -323,11 +341,19 @@ export async function handleResearchSourcesDetail(seasonId, raceNumber) {
   await assertResearchDatabaseReady();
   const sources = await listResearchSourcesForRace(seasonId, raceNumber);
   const rows = [];
+  const youtubeSources = sources.filter((s) => s.sourceType === 'youtube_transcript');
+  const youtubeWarning =
+    youtubeSources.length > 1
+      ? `${youtubeSources.length} YouTube transcript sources exist for this race — review Sources tab.`
+      : null;
+
   for (const s of sources) {
     const chunks = await listResearchChunksForSource(s.id);
+    const chunksMatch = chunks.length ? chunksMatchSourceContent(chunks, s) : null;
     const complete = chunks.filter((c) => c.processingStatus === 'complete');
     const failed = chunks.filter((c) => c.processingStatus === 'failed');
     const methods = [...new Set(chunks.map((c) => c.extractionMethod).filter(Boolean))];
+    const meta = s.sourceMetadata || {};
     rows.push({
       id: s.id,
       idShort: shortId(s.id),
@@ -337,6 +363,14 @@ export async function handleResearchSourcesDetail(seasonId, raceNumber) {
       characterCount: s.characterCount,
       contentHashShort: s.contentHash ? s.contentHash.slice(0, 12) : null,
       processingStatus: s.processingStatus,
+      latestProcessingStatus: meta.latest_processing_status || s.processingStatus,
+      lastSuccessfulProcessedAt: meta.last_successful_processed_at || s.processedAt,
+      lastProcessingAttemptAt: meta.last_processing_attempt_at || null,
+      previousFactsPreserved: meta.previous_facts_preserved === true,
+      isStale: Boolean(meta.stale_reason) || s.processingStatus === 'stale',
+      staleReason: meta.stale_reason || null,
+      chunksMatchSource: chunksMatch,
+      chunkParentHashSample: chunks[0]?.sourceContentHash?.slice(0, 12) || null,
       chunkCount: chunks.length,
       chunksComplete: complete.length,
       chunksFailed: failed.length,
@@ -345,7 +379,7 @@ export async function handleResearchSourcesDetail(seasonId, raceNumber) {
       factsProduced: null,
       processedAt: s.processedAt,
       error: s.processingError,
-      skippedUnchanged: Boolean(s.sourceMetadata?.skippedUnchanged),
+      skippedUnchanged: Boolean(meta.skippedUnchanged),
       preview: sanitizeSourcePreview(s.rawText),
     });
   }
@@ -359,7 +393,7 @@ export async function handleResearchSourcesDetail(seasonId, raceNumber) {
     row.factsProduced = factCountBySource[row.id] || 0;
   }
 
-  return { seasonId, raceNumber, sources: rows };
+  return { seasonId, raceNumber, sources: rows, youtubeWarning };
 }
 
 export async function handleResearchFactsFiltered(seasonId, raceNumber, body) {
@@ -545,6 +579,13 @@ export async function handleResearchRebuildPackage(seasonId, raceNumber, body) {
     allowAi,
   });
   const status = await refreshRacePackageDiagnostics(seasonId, raceNumber);
+  let canonical = { skipped: true };
+  try {
+    const { persistCanonicalConsolidation } = await import('./_race-research-canonical-persist.js');
+    canonical = await persistCanonicalConsolidation(seasonId, raceNumber);
+  } catch (err) {
+    canonical = { skipped: true, error: err.message };
+  }
   const quality = await runDiagnoseQuality(seasonId, raceNumber);
   const summary = aggregateIngestResults(sync.ingested);
 
@@ -568,6 +609,7 @@ export async function handleResearchRebuildPackage(seasonId, raceNumber, body) {
     syncWarnings: sync.warnings,
     ...summary,
     packageStatus: status,
+    canonicalConsolidation: canonical,
     coverageScore: status?.coverageScore,
     readiness: quality.readiness,
     report: quality.report,
@@ -619,6 +661,51 @@ export async function handleResearchContinueProcessing(seasonId, raceNumber, bod
   });
 
   return { operationId: opId, continued: results.length, results };
+}
+
+export async function handleResearchCanonicalAdmin(seasonId, raceNumber) {
+  await assertResearchDatabaseReady();
+  const { getCanonicalDiagnostics } = await import('./_race-research-canonical-persist.js');
+  return getCanonicalDiagnostics(seasonId, raceNumber);
+}
+
+export async function handleResearchSourceHistoryAdmin(seasonId, raceNumber, body) {
+  await assertResearchDatabaseReady();
+  const { listSourceVersions } = await import('./_race-research-source-versions.js');
+  const sourceId = body.sourceId ?? body.source_id;
+  if (!sourceId) {
+    const sources = await listResearchSourcesForRace(seasonId, raceNumber);
+    const bySource = [];
+    for (const s of sources) {
+      bySource.push({
+        sourceId: s.id,
+        sourceType: s.sourceType,
+        sourceKey: s.sourceKey,
+        versions: await listSourceVersions(s.id),
+      });
+    }
+    return { seasonId, raceNumber, sources: bySource };
+  }
+  return { seasonId, raceNumber, sourceId, versions: await listSourceVersions(sourceId) };
+}
+
+export async function handleResearchRollbackSourceAdmin(seasonId, raceNumber, body) {
+  await assertResearchDatabaseReady();
+  const sourceId = body.sourceId ?? body.source_id;
+  const versionId = body.versionId ?? body.version_id;
+  if (!sourceId || !versionId) {
+    throw Object.assign(new Error('sourceId and versionId are required.'), { status: 400 });
+  }
+  const ctx = await loadRaceResearchBootstrapContext(seasonId, raceNumber);
+  const { rollbackSourceToVersion } = await import('./_race-research-source-versions.js');
+  return rollbackSourceToVersion(sourceId, versionId, {
+    seasonId,
+    raceNumber,
+    driverLookup: ctx.driverLookup,
+    forceRechunk: true,
+    forceLargeSource: true,
+    allowAi: false,
+  });
 }
 
 export async function handleResearchStatusReadOnly(seasonId, raceNumber) {

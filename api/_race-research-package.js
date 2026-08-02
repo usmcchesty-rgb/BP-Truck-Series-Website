@@ -5,6 +5,7 @@ import {
   listMissingCoverageKeys,
 } from './_race-research-coverage.js';
 import {
+  findOrphanRaceFacts,
   getRacePackageStatus,
   listRaceFactsForRace,
   listResearchSourcesForRace,
@@ -16,9 +17,6 @@ export async function refreshRacePackageDiagnostics(seasonId, raceNumber) {
   const sources = await listResearchSourcesForRace(seasonId, raceNumber);
   const facts = await listRaceFactsForRace(seasonId, raceNumber);
 
-  const sourceCoverage = buildSourceCoverageDiagnostics(sources);
-  const coverageScore = computeCoverageScore(sourceCoverage);
-
   const eventCount = facts.filter((f) =>
     ['race_event', 'lead_change', 'caution', 'incident', 'penalty', 'strategy'].includes(f.factType)
   ).length;
@@ -27,13 +25,34 @@ export async function refreshRacePackageDiagnostics(seasonId, raceNumber) {
 
   const processedSourceCount = sources.filter((s) => s.processingStatus === 'complete').length;
   const partialCount = sources.filter((s) => s.processingStatus === 'partial').length;
-  const failedCount = sources.filter((s) => s.processingStatus === 'failed').length;
+  const failedCount = sources.filter(
+    (s) =>
+      s.processingStatus === 'failed' ||
+      s.processingStatus === 'failed_without_previous_data'
+  ).length;
+  const failedWithPreviousCount = sources.filter(
+    (s) => s.processingStatus === 'failed_with_previous_data'
+  ).length;
+  const staleCount = sources.filter((s) => s.sourceMetadata?.stale_reason || s.processingStatus === 'stale').length;
+  const preservedCount = sources.filter((s) => s.sourceMetadata?.previous_facts_preserved === true).length;
+
+  const orphans = await findOrphanRaceFacts(seasonId, raceNumber);
 
   let packageStatus = 'collecting';
   if (!sources.length) packageStatus = 'empty';
-  else if (failedCount && !processedSourceCount) packageStatus = 'failed';
-  else if (partialCount || failedCount) packageStatus = 'partial';
+  else if (failedCount && !processedSourceCount && !failedWithPreviousCount) packageStatus = 'failed';
+  else if (partialCount || failedCount || failedWithPreviousCount || staleCount) packageStatus = 'partial';
   else if (processedSourceCount === sources.length) packageStatus = 'ready';
+
+  const sourceCoverage = buildSourceCoverageDiagnostics(sources);
+  sourceCoverage._processing = {
+    failedWithPreviousCount,
+    preservedCount,
+    staleCount,
+    orphanFactCount: orphans.count,
+  };
+
+  const coverageScore = computeCoverageScore(sourceCoverage);
 
   return upsertRacePackageStatus({
     seasonId,

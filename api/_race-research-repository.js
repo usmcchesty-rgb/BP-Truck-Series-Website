@@ -42,6 +42,8 @@ function mapChunkRow(row) {
     endTimestamp: row.end_timestamp,
     chunkText: row.chunk_text,
     contentHash: row.content_hash,
+    sourceContentHash: row.source_content_hash,
+    chunkingPolicyVersion: row.chunking_policy_version,
     processingStatus: row.processing_status,
     extractionVersion: row.extraction_version,
     extractionMethod: row.extraction_method,
@@ -70,6 +72,7 @@ function mapFactRow(row) {
     importanceScore: Number(row.importance_score) || 0,
     confidence: row.confidence,
     structuredData: row.structured_data || {},
+    canonicalFactId: row.canonical_fact_id || null,
     firstSeenAt: row.first_seen_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -175,10 +178,8 @@ export async function updateResearchSource(id, patch) {
   if (patch.processingStatus != null) row.processing_status = patch.processingStatus;
   if (patch.processingError !== undefined) row.processing_error = patch.processingError;
   if (patch.processedAt !== undefined) row.processed_at = patch.processedAt;
-  if (patch.rawText !== undefined) row.raw_text = patch.rawText;
   if (patch.sourceMetadata != null) row.source_metadata = patch.sourceMetadata;
-  if (patch.characterCount != null) row.character_count = patch.characterCount;
-  if (patch.contentHash != null) row.content_hash = patch.contentHash;
+  // raw_text, content_hash, source_key intentionally not patchable here — ingest only.
 
   const { data, error } = await sb
     .from('race_research_sources')
@@ -208,9 +209,11 @@ export async function deleteChunksForSource(sourceId) {
   if (error) throw new Error(error.message);
 }
 
-export async function insertResearchChunks(sourceId, chunks, extractionVersion) {
+export async function insertResearchChunks(sourceId, chunks, extractionVersion, options = {}) {
   const sb = assertResearchDb();
   const now = nowIso();
+  const parentHash = options.sourceContentHash ?? null;
+  const policyVersion = options.chunkingPolicyVersion ?? null;
   const rows = chunks.map((chunk) => ({
     source_id: sourceId,
     chunk_index: chunk.chunkIndex,
@@ -220,6 +223,8 @@ export async function insertResearchChunks(sourceId, chunks, extractionVersion) 
     end_timestamp: chunk.endTimestamp ?? null,
     chunk_text: chunk.chunkText,
     content_hash: hashContent(chunk.chunkText),
+    source_content_hash: chunk.sourceContentHash ?? parentHash,
+    chunking_policy_version: chunk.chunkingPolicyVersion ?? policyVersion,
     processing_status: 'pending',
     extraction_version: extractionVersion,
     updated_at: now,
@@ -331,6 +336,30 @@ export async function listFactSourcesForFacts(factIds) {
   return data || [];
 }
 
+export async function getFactIdsLinkedToSource(sourceId) {
+  const sb = assertResearchDb();
+  const { data, error } = await sb.from('race_fact_sources').select('fact_id').eq('source_id', sourceId);
+  if (error) throw new Error(error.message);
+  return [...new Set((data || []).map((row) => row.fact_id))];
+}
+
+export async function findOrphanRaceFacts(seasonId, raceNumber) {
+  const facts = await listRaceFactsForRace(seasonId, raceNumber);
+  if (!facts.length) return { count: 0, factIds: [] };
+  const factIds = facts.map((f) => f.id);
+  const links = await listFactSourcesForFacts(factIds);
+  const linked = new Set(links.map((l) => l.fact_id));
+  const orphans = facts.filter((f) => !linked.has(f.id)).map((f) => f.id);
+  return { count: orphans.length, factIds: orphans };
+}
+
+export async function getResearchSourceById(sourceId) {
+  const sb = assertResearchDb();
+  const { data, error } = await sb.from('race_research_sources').select('*').eq('id', sourceId).maybeSingle();
+  if (error) throw new Error(error.message);
+  return mapSourceRow(data);
+}
+
 export async function deleteFactsForSource(sourceId) {
   const sb = assertResearchDb();
   const { data: links, error: linkErr } = await sb
@@ -369,15 +398,16 @@ export async function checkResearchTablesExist() {
   const sb = supabase();
   if (!sb) return { configured: false, tables: {} };
 
-  const tables = [
+  const requiredTables = [
     'race_research_sources',
     'race_research_chunks',
     'race_facts',
     'race_fact_sources',
     'race_package_status',
   ];
+  const optionalTables = ['race_canonical_facts', 'race_research_source_versions'];
   const result = {};
-  for (const table of tables) {
+  for (const table of [...requiredTables, ...optionalTables]) {
     const { error } = await sb.from(table).select('id').limit(1);
     if (!error) {
       result[table] = true;
@@ -391,7 +421,12 @@ export async function checkResearchTablesExist() {
       error.code === 'PGRST205';
     result[table] = !missing;
   }
-  return { configured: true, tables: result, allPresent: Object.values(result).every(Boolean) };
+  return {
+    configured: true,
+    tables: result,
+    allPresent: requiredTables.every((t) => result[t]),
+    architectureExtended: optionalTables.every((t) => result[t]),
+  };
 }
 
 export async function saveChunkExtractionCache(chunkId, { extraction, extractionMethod, extractionVersion }) {

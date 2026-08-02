@@ -27,6 +27,9 @@ import {
   handleResearchStatus,
   handleResearchSync,
   handleResearchTimeline,
+  handleResearchCanonical,
+  handleResearchSourceHistory,
+  handleResearchRollbackSourceVersion,
   handleRetrySource,
 } from './_race-research-handlers.js';
 import { enrichSpotlightArticles } from './_spotlight-image.js';
@@ -639,6 +642,24 @@ async function handlePost(req, res) {
   if (action === 'research-quality') {
     const result = await handleResearchQuality(body);
     if (result.error) return res.status(result.status).json({ error: result.error });
+    return res.status(result.status).json(result.data);
+  }
+
+  if (action === 'research-canonical') {
+    const result = await handleResearchCanonical(body);
+    if (result.error) return res.status(result.status).json({ error: result.error, operationId: result.operationId, migrationHint: result.migrationHint });
+    return res.status(result.status).json(result.data);
+  }
+
+  if (action === 'research-source-history') {
+    const result = await handleResearchSourceHistory(body);
+    if (result.error) return res.status(result.status).json({ error: result.error, operationId: result.operationId, migrationHint: result.migrationHint });
+    return res.status(result.status).json(result.data);
+  }
+
+  if (action === 'research-rollback-source') {
+    const result = await handleResearchRollbackSourceVersion(body);
+    if (result.error) return res.status(result.status).json({ error: result.error, operationId: result.operationId, migrationHint: result.migrationHint });
     return res.status(result.status).json(result.data);
   }
 

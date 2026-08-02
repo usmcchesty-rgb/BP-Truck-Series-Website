@@ -10,6 +10,7 @@ import {
 import { processResearchSource } from './_race-research-process.js';
 import { refreshRacePackageDiagnostics } from './_race-research-package.js';
 import { RACE_RESEARCH_EXTRACTION_VERSION } from '../server/config/race-research-config.js';
+import { archiveSourceVersionBeforeUpdate, markActiveSourceVersion } from './_race-research-source-versions.js';
 
 function validateRaceIdentity(seasonId, raceNumber) {
   if (!seasonId) throw Object.assign(new Error('seasonId is required.'), { status: 400 });
@@ -36,6 +37,10 @@ export async function ingestRaceResearchSource(input, context = {}) {
   const contentHash = hashContent(rawText || input.storagePath || '');
   const duplicateByHash = await findResearchSourceByHash(seasonId, raceNumber, contentHash);
   const existing = await findResearchSourceByIdentity(seasonId, raceNumber, sourceType, sourceKey);
+
+  if (existing && existing.contentHash !== contentHash && existing.rawText) {
+    await archiveSourceVersionBeforeUpdate(existing.id, existing);
+  }
 
   if (duplicateByHash && duplicateByHash.sourceType === sourceType && duplicateByHash.sourceKey === sourceKey) {
     if (!context.reprocess && duplicateByHash.processingStatus === 'complete') {
@@ -79,7 +84,9 @@ export async function ingestRaceResearchSource(input, context = {}) {
       await import('./_race-research-repository.js').then(({ deleteChunksForSource }) =>
         deleteChunksForSource(source.id)
       );
-      await insertResearchChunks(source.id, planned, RACE_RESEARCH_EXTRACTION_VERSION);
+      await insertResearchChunks(source.id, planned, RACE_RESEARCH_EXTRACTION_VERSION, {
+        sourceContentHash: contentHash,
+      });
       chunksCreated = planned.length;
     }
   }
@@ -98,6 +105,12 @@ export async function ingestRaceResearchSource(input, context = {}) {
       seasonId,
       raceNumber,
     });
+  }
+
+  try {
+    await markActiveSourceVersion(source.id, contentHash);
+  } catch {
+    // version table optional until migration applied
   }
 
   return {

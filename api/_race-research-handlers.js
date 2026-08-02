@@ -37,6 +37,9 @@ import {
   handleResearchStatusReadOnly,
   handleResearchSyncAdmin,
   handleResearchTimelineAdmin,
+  handleResearchCanonicalAdmin,
+  handleResearchSourceHistoryAdmin,
+  handleResearchRollbackSourceAdmin,
   RESEARCH_MIGRATION_HINT,
   resolveResearchAllowAi,
 } from './_race-research-admin-api.js';
@@ -163,6 +166,18 @@ export async function handleRebuildPackage(body) {
 
 export async function handleResearchContinue(body) {
   return wrapResearchHandler(handleResearchContinueProcessing)(body);
+}
+
+export async function handleResearchCanonical(body) {
+  return wrapResearchHandler(handleResearchCanonicalAdmin)(body);
+}
+
+export async function handleResearchSourceHistory(body) {
+  return wrapResearchHandler(handleResearchSourceHistoryAdmin)(body);
+}
+
+export async function handleResearchRollbackSourceVersion(body) {
+  return wrapResearchHandler(handleResearchRollbackSourceAdmin)(body);
 }
 
 export async function handleIngestSource(body) {
