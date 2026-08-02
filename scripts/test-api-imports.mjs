@@ -13,6 +13,11 @@ const REQUIRED_EXPORTS = {
     'matchFantasyDriverToResult',
     'loadOfficialRaceResultsContext',
   ],
+  '../api/_race-research-chunking.js': ['chunkTextForResearch', 'shouldChunkSource'],
+  '../api/_race-research-ingest.js': ['ingestRaceResearchSource'],
+  '../api/_race-research-package.js': ['buildRaceIntelligencePackage', 'refreshRacePackageDiagnostics'],
+  '../api/_race-research-handlers.js': ['handleResearchStatus', 'handleResearchDbCheckAction', 'handleRebuildPackage'],
+  '../api/_race-research-admin-api.js': ['getResearchConfigStatus', 'assertResearchDatabaseReady'],
 };
 
 async function assertModuleExports(modulePath, exportNames) {

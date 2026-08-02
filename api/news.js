@@ -8,6 +8,27 @@ import {
   loadRaceTranscript,
   saveRaceTranscript,
 } from './_race-transcripts.js';
+import {
+  handleIngestSource,
+  handleListConflicts,
+  handleListFacts,
+  handleProcessSource,
+  handleRebuildPackage,
+  handleResearchConflicts,
+  handleResearchContinue,
+  handleResearchDbCheckAction,
+  handleResearchDriverStories,
+  handleResearchFacts,
+  handleResearchPreview,
+  handleResearchQuality,
+  handleResearchQuotes,
+  handleResearchRebuildEstimateAction,
+  handleResearchSources,
+  handleResearchStatus,
+  handleResearchSync,
+  handleResearchTimeline,
+  handleRetrySource,
+} from './_race-research-handlers.js';
 import { enrichSpotlightArticles } from './_spotlight-image.js';
 import {
   buildSharePreviewHtml,
@@ -419,6 +440,7 @@ async function handleGenerate(body) {
       transcript: body.transcript,
       headlineOverride: body.headlineOverride ?? body.headline_override,
       spotlightDriverId,
+      articleDepth: body.articleDepth ?? body.article_depth,
     });
     return { data: result, status: 200 };
   } catch (error) {
@@ -470,6 +492,154 @@ async function handlePost(req, res) {
     const result = await deleteRaceTranscript(body.raceNumber ?? body.race_number);
     if (result.error) return res.status(result.status).json({ error: result.error });
     return res.status(result.status).json({ ok: true });
+  }
+
+  if (action === 'research-status') {
+    const result = await handleResearchStatus(body);
+    if (result.error) {
+      return res.status(result.status).json({
+        error: result.error,
+        operationId: result.operationId,
+        migrationHint: result.migrationHint,
+      });
+    }
+    return res.status(result.status).json(result.data);
+  }
+
+  if (action === 'research-db-check') {
+    const result = await handleResearchDbCheckAction(body);
+    if (result.error) return res.status(result.status).json({ error: result.error, operationId: result.operationId });
+    return res.status(result.status).json(result.data);
+  }
+
+  if (action === 'research-sync') {
+    const result = await handleResearchSync(body);
+    if (result.error) {
+      return res.status(result.status).json({
+        error: result.error,
+        operationId: result.operationId,
+        migrationHint: result.migrationHint,
+      });
+    }
+    return res.status(result.status).json(result.data);
+  }
+
+  if (action === 'research-sources') {
+    const result = await handleResearchSources(body);
+    if (result.error) {
+      return res.status(result.status).json({ error: result.error, operationId: result.operationId, migrationHint: result.migrationHint });
+    }
+    return res.status(result.status).json(result.data);
+  }
+
+  if (action === 'research-facts') {
+    const result = await handleResearchFacts(body);
+    if (result.error) {
+      return res.status(result.status).json({ error: result.error, operationId: result.operationId, migrationHint: result.migrationHint });
+    }
+    return res.status(result.status).json(result.data);
+  }
+
+  if (action === 'research-timeline') {
+    const result = await handleResearchTimeline(body);
+    if (result.error) {
+      return res.status(result.status).json({ error: result.error, operationId: result.operationId, migrationHint: result.migrationHint });
+    }
+    return res.status(result.status).json(result.data);
+  }
+
+  if (action === 'research-quotes') {
+    const result = await handleResearchQuotes(body);
+    if (result.error) {
+      return res.status(result.status).json({ error: result.error, operationId: result.operationId, migrationHint: result.migrationHint });
+    }
+    return res.status(result.status).json(result.data);
+  }
+
+  if (action === 'research-driver-stories') {
+    const result = await handleResearchDriverStories(body);
+    if (result.error) {
+      return res.status(result.status).json({ error: result.error, operationId: result.operationId, migrationHint: result.migrationHint });
+    }
+    return res.status(result.status).json(result.data);
+  }
+
+  if (action === 'research-conflicts') {
+    const result = await handleResearchConflicts(body);
+    if (result.error) {
+      return res.status(result.status).json({ error: result.error, operationId: result.operationId, migrationHint: result.migrationHint });
+    }
+    return res.status(result.status).json(result.data);
+  }
+
+  if (action === 'research-rebuild-estimate') {
+    const result = await handleResearchRebuildEstimateAction(body);
+    if (result.error) {
+      return res.status(result.status).json({ error: result.error, operationId: result.operationId, migrationHint: result.migrationHint });
+    }
+    return res.status(result.status).json(result.data);
+  }
+
+  if (action === 'research-continue-processing') {
+    const result = await handleResearchContinue(body);
+    if (result.error) {
+      return res.status(result.status).json({ error: result.error, operationId: result.operationId, migrationHint: result.migrationHint });
+    }
+    return res.status(result.status).json(result.data);
+  }
+
+  if (action === 'ingest-source') {
+    const result = await handleIngestSource(body);
+    if (result.error) return res.status(result.status).json({ error: result.error });
+    return res.status(result.status).json(result.data);
+  }
+
+  if (action === 'process-source') {
+    const result = await handleProcessSource(body);
+    if (result.error) return res.status(result.status).json({ error: result.error });
+    return res.status(result.status).json(result.data);
+  }
+
+  if (action === 'retry-source') {
+    const result = await handleRetrySource(body);
+    if (result.error) return res.status(result.status).json({ error: result.error });
+    return res.status(result.status).json(result.data);
+  }
+
+  if (action === 'rebuild-package') {
+    const result = await handleRebuildPackage(body);
+    if (result.error) {
+      return res.status(result.status).json({
+        error: result.error,
+        operationId: result.operationId,
+        migrationHint: result.migrationHint,
+      });
+    }
+    return res.status(result.status).json(result.data);
+  }
+
+  if (action === 'list-facts') {
+    const result = await handleListFacts(body);
+    if (result.error) return res.status(result.status).json({ error: result.error });
+    return res.status(result.status).json(result.data);
+  }
+
+  if (action === 'list-conflicts') {
+    const result = await handleListConflicts(body);
+    if (result.error) return res.status(result.status).json({ error: result.error });
+    return res.status(result.status).json(result.data);
+  }
+
+  if (action === 'research-preview') {
+    const result = await handleResearchPreview(body);
+    if (result.error) return res.status(result.status).json({ error: result.error });
+    return res.status(result.status).json(result.data);
+  }
+
+  if (action === 'research-quality') {
+    const result = await handleResearchQuality(body);
+    if (result.error) return res.status(result.status).json({ error: result.error });
+    return res.status(result.status).json(result.data);
   }
 
   if (action === 'save' || action === 'publish') {

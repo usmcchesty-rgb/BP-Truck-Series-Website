@@ -140,6 +140,31 @@
     .generation-sources { border: 1px solid #334; background: #121820; }
     .generation-sources h3 { margin: 0 0 8px; font-size: 13px; color: #6ec6ff; }
     .transcript-diagnostics pre, .generation-sources pre { margin: 0; font-size: 12px; color: #ccc; white-space: pre-wrap; }
+    .research-env-badges { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 12px; }
+    .research-badge { font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; padding: 4px 8px; border-radius: 4px; border: 1px solid #444; color: #ccc; background: #111; }
+    .research-badge.is-ok { border-color: #285; color: #8f8; }
+    .research-badge.is-warn { border-color: #863; color: #fc8; }
+    .research-tab-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 8px; }
+    .research-tab-btn { padding: 5px 10px; font-size: 10px; font-weight: 900; text-transform: uppercase; border: 1px solid #444; background: #141414; color: #bbb; cursor: pointer; }
+    .research-tab-btn.is-active { color: #fff; border-color: #ff3030; }
+    .research-tab-panel { display: none; margin-top: 8px; max-height: 520px; overflow: auto; border: 1px solid #333; padding: 10px; background: #0d0d0d; }
+    .research-tab-panel.is-active { display: block; }
+    .research-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    .research-table th, .research-table td { border-bottom: 1px solid #333; padding: 6px 8px; text-align: left; vertical-align: top; }
+    .research-table th { color: #999; font-size: 10px; text-transform: uppercase; }
+    .status-pill { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: 900; text-transform: uppercase; border: 1px solid #555; }
+    .status-pill.complete { border-color: #285; color: #9f9; }
+    .status-pill.partial { border-color: #863; color: #fc8; }
+    .status-pill.missing, .status-pill.failed { border-color: #733; color: #f88; }
+    .status-pill.stale { border-color: #556; color: #aaf; }
+    .research-meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; font-size: 11px; margin-bottom: 10px; }
+    .research-meta-grid dt { color: #888; font-size: 9px; text-transform: uppercase; margin: 0; }
+    .research-meta-grid dd { margin: 2px 0 0; color: #eee; }
+    .research-filter-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: flex-end; }
+    .research-filter-row label { font-size: 10px; color: #888; display: flex; flex-direction: column; gap: 2px; }
+    .research-filter-row .input, .research-filter-row .select { margin: 0; width: 120px; }
+    .research-detail-block { margin-top: 8px; padding: 8px; border: 1px dashed #444; font-size: 11px; color: #ccc; }
+    #researchDbMessage { font-size: 11px; color: #fc8; white-space: pre-wrap; margin: 8px 0; }
     .preview-link { font-size: 11px; color: #8fd3ff; }
     .reporter-preview-row { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start; margin: 12px 0; }
     .reporter-preview-frame { width: 120px; height: 120px; }
@@ -285,9 +310,54 @@
           <label class="field-label" for="spotlightDriverId" id="spotlightDriverLabel">Driver (optional)</label>
           <select id="spotlightDriverId" class="select"><option value="">—</option></select>
         </div>
+        <div>
+          <label class="field-label" for="articleDepth">Article Depth</label>
+          <select id="articleDepth" class="select">
+            <option value="short">Short</option>
+            <option value="medium" selected>Medium</option>
+            <option value="in-depth">In-Depth</option>
+          </select>
+          <p class="field-hint">Depth controls evidence selection and length when Race Intelligence Package is enabled.</p>
+        </div>
       </div>
 
-      <div class="article-image-panel" id="articleImagePanel">
+      <div id="researchPackagePanel" class="transcript-diagnostics">
+        <h3>Race Research Package</h3>
+        <p class="sub">Inspect and rebuild stored race evidence on the deployed site. Does not generate articles unless you use Generate separately.</p>
+        <div id="researchEnvBadges" class="research-env-badges">
+          <span class="research-badge">Package prompt: —</span>
+          <span class="research-badge">Transcript mode: —</span>
+          <span class="research-badge">AI extraction: —</span>
+        </div>
+        <div class="btn-row">
+          <button id="researchDbCheckBtn" class="btn btn-secondary" type="button">Check Research Database</button>
+          <button id="refreshResearchBtn" class="btn btn-secondary" type="button">Refresh Status</button>
+          <button id="rebuildResearchBtn" class="btn btn-secondary" type="button">Rebuild Race Package</button>
+          <button id="researchContinueBtn" class="btn btn-secondary" type="button" hidden>Continue Processing</button>
+        </div>
+        <pre id="researchDbMessage"></pre>
+        <div class="research-tab-row" id="researchTabRow">
+          <button type="button" class="research-tab-btn is-active" data-research-tab="overview">Overview</button>
+          <button type="button" class="research-tab-btn" data-research-tab="sources">Sources</button>
+          <button type="button" class="research-tab-btn" data-research-tab="facts">Facts</button>
+          <button type="button" class="research-tab-btn" data-research-tab="timeline">Timeline</button>
+          <button type="button" class="research-tab-btn" data-research-tab="quotes">Quotes</button>
+          <button type="button" class="research-tab-btn" data-research-tab="driver-stories">Driver Stories</button>
+          <button type="button" class="research-tab-btn" data-research-tab="conflicts">Conflicts</button>
+          <button type="button" class="research-tab-btn" data-research-tab="evidence">Evidence Preview</button>
+          <button type="button" class="research-tab-btn" data-research-tab="quality">Research Quality</button>
+        </div>
+        <div id="researchTabOverview" class="research-tab-panel is-active"></div>
+        <div id="researchTabSources" class="research-tab-panel"></div>
+        <div id="researchTabFacts" class="research-tab-panel"></div>
+        <div id="researchTabTimeline" class="research-tab-panel"></div>
+        <div id="researchTabQuotes" class="research-tab-panel"></div>
+        <div id="researchTabDriverStories" class="research-tab-panel"></div>
+        <div id="researchTabConflicts" class="research-tab-panel"></div>
+        <div id="researchTabEvidence" class="research-tab-panel"></div>
+        <div id="researchTabQuality" class="research-tab-panel"></div>
+        <pre id="researchPackageStatus" hidden>Select a race number, check the database, then Refresh Status.</pre>
+      </div>
         <h3>Article Image</h3>
         <p class="sub">Featured image for this article on the News page and article detail.</p>
         <input type="hidden" id="articleDraftKey">
@@ -1562,6 +1632,7 @@
           action: 'generate',
           password: getSessionPw(),
           articleType: $('#articleType').value,
+          articleDepth: $('#articleDepth').value,
           spotlightDriverId: $('#spotlightDriverId').value || null,
           manualNotes: $('#manualNotes').value,
           newsTopic: $('#newsTopic').value.trim(),
@@ -1586,6 +1657,17 @@
         $('#body').value = article.body || '';
         if (window.NewsBodyEditor) NewsBodyEditor.updatePreview();
         renderDiagnostics(data);
+
+        if (data.intelligenceDiagnostics && !data.intelligenceDiagnostics.fallback) {
+          const id = $('#researchPackageStatus');
+          if (id) {
+            id.textContent = [
+              'Intelligence supplement applied during generation.',
+              `Coverage: ${data.intelligenceDiagnostics.packageDiagnostics?.coverageScore ?? '—'}%`,
+              `Selected facts: ${data.intelligenceDiagnostics.evidence?.selectedFacts?.length ?? 0}`,
+            ].join('\n');
+          }
+        }
 
         const warnings = (data.validation?.errors || []).length;
         setMsg(
@@ -1660,6 +1742,355 @@
     function escapeHtml(s) {
       return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
+
+    function researchRacePayload(extra = {}) {
+      const raceVal = $('#raceNumber').value;
+      const payload = {
+        password: getSessionPw(),
+        raceNumber: raceVal !== '' ? Number(raceVal) : null,
+        articleType: $('#articleType').value,
+        articleDepth: $('#articleDepth').value,
+        manualNotes: $('#manualNotes').value,
+        ...extra,
+      };
+      return payload;
+    }
+
+    const researchState = { dbReady: false, overview: null, config: null };
+
+    function statusPill(label, kind) {
+      return `<span class="status-pill ${escapeHtml(kind || 'partial')}">${escapeHtml(label)}</span>`;
+    }
+
+    function renderResearchEnvBadges(config) {
+      const c = config || researchState.config || {};
+      const el = $('#researchEnvBadges');
+      if (!el) return;
+      const prompt = c.packageBasedArticlePrompt ? 'Enabled' : 'Disabled';
+      const ai = c.aiTranscriptExtraction ? 'Enabled' : 'Disabled';
+      const mode = c.transcriptProcessingMode || 'deterministic';
+      el.innerHTML = [
+        `<span class="research-badge ${c.packageBasedArticlePrompt ? 'is-warn' : 'is-ok'}">Package-Based Article Prompt: ${prompt}</span>`,
+        `<span class="research-badge is-ok">Transcript Processing Mode: ${escapeHtml(mode)}</span>`,
+        `<span class="research-badge ${c.aiTranscriptExtraction ? 'is-warn' : 'is-ok'}">AI Transcript Extraction: ${ai}</span>`,
+      ].join('');
+    }
+
+    async function researchPost(action, extra = {}) {
+      const res = await fetch('/api/news', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...researchRacePayload(), action, ...extra }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        const err = new Error(data.error || 'Request failed');
+        err.operationId = data.operationId;
+        err.migrationHint = data.migrationHint;
+        throw err;
+      }
+      return data;
+    }
+
+    function setResearchTab(name) {
+      document.querySelectorAll('.research-tab-btn').forEach((btn) => {
+        btn.classList.toggle('is-active', btn.dataset.researchTab === name);
+      });
+      const map = {
+        overview: 'researchTabOverview',
+        sources: 'researchTabSources',
+        facts: 'researchTabFacts',
+        timeline: 'researchTabTimeline',
+        quotes: 'researchTabQuotes',
+        'driver-stories': 'researchTabDriverStories',
+        conflicts: 'researchTabConflicts',
+        evidence: 'researchTabEvidence',
+        quality: 'researchTabQuality',
+      };
+      Object.entries(map).forEach(([key, id]) => {
+        const panel = document.getElementById(id);
+        if (panel) panel.classList.toggle('is-active', key === name);
+      });
+    }
+
+    function renderOverviewPanel(data) {
+      const pkgStatus = data.packageStatus || 'unknown';
+      const pillKind = pkgStatus === 'ready' ? 'complete' : pkgStatus === 'partial' ? 'partial' : pkgStatus === 'failed' ? 'failed' : 'missing';
+      const cfg = data.config || {};
+      return `
+        <dl class="research-meta-grid">
+          <div><dt>Season</dt><dd>${escapeHtml(data.seasonId)}</dd></div>
+          <div><dt>Race</dt><dd>${escapeHtml(data.raceNumber)}</dd></div>
+          <div><dt>Track</dt><dd>${escapeHtml(data.track || '—')}</dd></div>
+          <div><dt>Race date</dt><dd>${escapeHtml(data.raceDate || '—')}</dd></div>
+          <div><dt>Package</dt><dd>${statusPill(pkgStatus, pillKind)}</dd></div>
+          <div><dt>Version</dt><dd>${escapeHtml(data.packageVersion || '—')}</dd></div>
+          <div><dt>Coverage</dt><dd>${escapeHtml(data.coverageScore ?? 0)}%</dd></div>
+          <div><dt>Sources</dt><dd>${escapeHtml(data.sourceCount ?? 0)} (${escapeHtml(data.processedSourceCount ?? 0)} processed, ${escapeHtml(data.failedOrPartialSourceCount ?? 0)} failed/partial)</dd></div>
+          <div><dt>Facts</dt><dd>${escapeHtml(data.factCount ?? 0)}</dd></div>
+          <div><dt>Timeline events</dt><dd>${escapeHtml(data.timelineEventCount ?? 0)}</dd></div>
+          <div><dt>Quotes</dt><dd>${escapeHtml(data.quoteCount ?? 0)}</dd></div>
+          <div><dt>Driver stories</dt><dd>${escapeHtml(data.driverStoryCount ?? 0)}</dd></div>
+          <div><dt>Conflicts</dt><dd>${escapeHtml(data.conflictCount ?? 0)}</dd></div>
+          <div><dt>Unresolved drivers</dt><dd>${escapeHtml(data.unresolvedDriverCount ?? 0)}</dd></div>
+          <div><dt>Last built</dt><dd>${escapeHtml(data.lastBuiltAt || '—')}</dd></div>
+        </dl>
+        <p class="sub">Transcript mode: <strong>${escapeHtml(cfg.transcriptProcessingMode || 'deterministic')}</strong> · AI extraction: <strong>${cfg.aiTranscriptExtraction ? 'Enabled' : 'Disabled'}</strong> · Package prompts: <strong>${cfg.packageBasedArticlePrompt ? 'Enabled' : 'Disabled'}</strong></p>
+        ${(data.missingSourceTypes || data.missingSources || []).length ? `<p class="sub">Missing source types: ${escapeHtml((data.missingSourceTypes || data.missingSources).join(', '))}</p>` : ''}
+      `;
+    }
+
+    async function checkResearchDatabase() {
+      $('#researchDbMessage').textContent = 'Checking database…';
+      try {
+        const data = await researchPost('research-db-check', { raceNumber: 1 });
+        researchState.dbReady = Boolean(data.ready);
+        researchState.config = data.config;
+        renderResearchEnvBadges(data.config);
+        if (data.ready) {
+          $('#researchDbMessage').textContent = 'Race Intelligence tables are installed.';
+          $('#rebuildResearchBtn').disabled = false;
+        } else {
+          $('#researchDbMessage').textContent = data.message || 'Migration required.';
+          $('#rebuildResearchBtn').disabled = true;
+        }
+        setMsg(researchState.dbReady ? 'Research database ready.' : 'Apply migration before rebuild.');
+      } catch (e) {
+        researchState.dbReady = false;
+        $('#researchDbMessage').textContent = e.migrationHint || e.message;
+        $('#rebuildResearchBtn').disabled = true;
+        setMsg(e.message, true);
+      }
+    }
+
+    async function refreshResearchPackageStatus() {
+      const raceVal = $('#raceNumber').value;
+      if (raceVal === '') return setMsg('Enter a race number for research package status.', true);
+      $('#researchTabOverview').innerHTML = '<p class="sub">Loading…</p>';
+      try {
+        const data = await researchPost('research-status');
+        researchState.overview = data;
+        researchState.config = data.config;
+        renderResearchEnvBadges(data.config);
+        $('#researchTabOverview').innerHTML = renderOverviewPanel(data);
+        const partial = Number(data.failedOrPartialSourceCount || 0) > 0;
+        $('#researchContinueBtn').hidden = !partial;
+        setMsg('Research status refreshed (read-only).');
+      } catch (e) {
+        $('#researchTabOverview').innerHTML = `<p class="sub">${escapeHtml(e.migrationHint || e.message)}</p>`;
+        setMsg(e.message, true);
+      }
+    }
+
+    async function rebuildResearchPackage() {
+      const raceVal = $('#raceNumber').value;
+      if (raceVal === '') return setMsg('Enter a race number to rebuild the research package.', true);
+      if (!researchState.dbReady) return setMsg('Check Research Database first — migration must be installed.', true);
+      let estimate;
+      try {
+        estimate = await researchPost('research-rebuild-estimate');
+      } catch (e) {
+        return setMsg(e.message, true);
+      }
+      const summary = [
+        `Season: ${estimate.seasonId}`,
+        `Race: ${estimate.raceNumber}`,
+        `Transcript mode: ${estimate.config?.transcriptProcessingMode}`,
+        `AI extraction enabled (server): ${estimate.config?.aiTranscriptExtraction ? 'yes' : 'no'}`,
+        `Rebuild allowAi: false (fixed for this phase)`,
+        `Estimated sources: ~${estimate.estimatedSourceCount}`,
+        `Estimated transcript chunks: ~${estimate.estimatedTranscriptChunks}`,
+        `Estimated paid AI requests: ${estimate.estimatedPaidAiRequests}`,
+        `Unchanged sources skipped: yes`,
+        estimate.forceLargeSourceRequired ? 'Note: large transcript — forceLargeSource will be used.' : '',
+      ].filter(Boolean).join('\n');
+      if (!confirm(`Rebuild Race Package?\n\n${summary}`)) return;
+      $('#researchTabOverview').innerHTML = '<p class="sub">Processing… (single request — keep this page open)</p>';
+      try {
+        const data = await researchPost('rebuild-package', { forceLargeSource: true, allowAi: false });
+        researchState.overview = data;
+        await refreshResearchPackageStatus();
+        setResearchTab('quality');
+        $('#researchTabQuality').innerHTML = `<pre>${escapeHtml(data.report || '')}</pre><p class="sub">Sources unchanged: ${data.sourcesUnchanged ?? 0} · Facts created: ${data.factsCreated ?? 0} · Coverage: ${data.coverageScore ?? '—'}%</p>`;
+        setMsg(`Rebuild complete (op ${data.operationId || '—'}).`);
+      } catch (e) {
+        setMsg(e.message, true);
+      }
+    }
+
+    async function continueResearchProcessing() {
+      try {
+        const data = await researchPost('research-continue-processing', { allowAi: false, forceLargeSource: true });
+        await refreshResearchPackageStatus();
+        setMsg(data.message || `Continued ${data.continued ?? 0} source(s).`);
+      } catch (e) {
+        setMsg(e.message, true);
+      }
+    }
+
+    async function loadResearchSourcesTab() {
+      $('#researchTabSources').innerHTML = '<p class="sub">Loading sources…</p>';
+      const data = await researchPost('research-sources');
+      const rows = (data.sources || []).map((s) => `
+        <details class="research-detail-block">
+          <summary>${escapeHtml(s.sourceType)} · ${statusPill(s.processingStatus, s.processingStatus)} · ${escapeHtml(s.characterCount || 0)} chars</summary>
+          <div>Key: ${escapeHtml(s.sourceKey)} · Hash: ${escapeHtml(s.contentHashShort)} · Chunks: ${s.chunkCount} (${s.chunksComplete} ok, ${s.chunksFailed} failed)</div>
+          <div>Extraction: ${escapeHtml((s.extractionMethods || []).join(', ') || '—')} v${escapeHtml(s.extractionVersion || '—')} · Facts linked: ${s.factsProduced ?? 0}</div>
+          <div>Processed: ${escapeHtml(s.processedAt || '—')}</div>
+          ${s.error ? `<div>Error: ${escapeHtml(s.error)}</div>` : ''}
+          ${s.preview ? `<div>Preview: ${escapeHtml(s.preview)}</div>` : ''}
+        </details>`).join('');
+      $('#researchTabSources').innerHTML = rows || '<p class="sub">No sources ingested yet.</p>';
+    }
+
+    async function loadResearchFactsTab() {
+      $('#researchTabFacts').innerHTML = `
+        <div class="research-filter-row">
+          <label>Fact type<input id="rfFactType" class="input" placeholder="caution"></label>
+          <label>Category<input id="rfCategory" class="input"></label>
+          <label>Driver<input id="rfDriver" class="input"></label>
+          <label>Confidence<select id="rfConfidence" class="select"><option value="">Any</option><option>official</option><option>broadcast_reported</option><option>unverified</option><option>conflicting</option></select></label>
+          <label>Min importance<input id="rfMinImp" class="input" type="number" min="0"></label>
+          <label><input id="rfConflictOnly" type="checkbox"> Conflict only</label>
+          <button type="button" class="btn btn-secondary" id="rfApplyFilters">Apply</button>
+        </div>
+        <div id="researchFactsTableWrap"><p class="sub">Loading…</p></div>`;
+      async function runFacts() {
+        const filters = {
+          factType: $('#rfFactType').value.trim() || undefined,
+          category: $('#rfCategory').value.trim() || undefined,
+          driver: $('#rfDriver').value.trim() || undefined,
+          confidence: $('#rfConfidence').value || undefined,
+          minImportance: $('#rfMinImp').value !== '' ? Number($('#rfMinImp').value) : undefined,
+          conflictOnly: $('#rfConflictOnly').checked,
+        };
+        const data = await researchPost('research-facts', { filters });
+        const rows = (data.facts || []).map((f) => `
+          <tr>
+            <td>${escapeHtml(f.idShort)}</td>
+            <td>${escapeHtml(f.factType)}</td>
+            <td>${escapeHtml(f.category)}</td>
+            <td>${escapeHtml(f.summary.slice(0, 100))}${f.summary.length > 100 ? '…' : ''}</td>
+            <td>${escapeHtml(f.drivers)}</td>
+            <td>${escapeHtml(f.lap ?? '—')}</td>
+            <td>${escapeHtml(f.importance)}</td>
+            <td>${escapeHtml(f.confidence)}</td>
+            <td>${f.sourceCount}</td>
+            <td>${escapeHtml((f.sourceTypes || []).join(', '))}</td>
+            <td>${f.conflictStatus === 'conflict' ? statusPill('Conflict', 'failed') : '—'}</td>
+          </tr>`).join('');
+        $('#researchFactsTableWrap').innerHTML = `<p class="sub">Showing ${data.returned} of ${data.total}</p>
+          <table class="research-table"><thead><tr><th>ID</th><th>Type</th><th>Cat</th><th>Summary</th><th>Drivers</th><th>Lap</th><th>Imp</th><th>Conf</th><th>Src#</th><th>Src types</th><th>Conflict</th></tr></thead><tbody>${rows}</tbody></table>`;
+      }
+      $('#rfApplyFilters').addEventListener('click', () => runFacts().catch((e) => setMsg(e.message, true)));
+      await runFacts();
+    }
+
+    async function loadResearchTimelineTab() {
+      $('#researchTabTimeline').innerHTML = '<p class="sub">Loading timeline…</p>';
+      const data = await researchPost('research-timeline');
+      const phases = Object.keys(data.grouped || {});
+      let html = `<p class="sub">Unplaced: ${data.highlights?.unplaced ?? 0} · Duplicates: ${data.highlights?.duplicates ?? 0} · Gaps: ${data.highlights?.gaps ?? 0} · Conflicts: ${data.highlights?.conflicts ?? 0}</p>`;
+      for (const phase of phases) {
+        const items = data.grouped[phase] || [];
+        if (!items.length) continue;
+        html += `<h4 style="color:#f0c040;margin:12px 0 6px">${escapeHtml(phase)}</h4>`;
+        html += items.map((i) => `
+          <div class="research-detail-block">
+            ${i.lap != null ? `Lap ${i.lap} · ` : ''}${escapeHtml(i.category)} · ${escapeHtml(i.summary.slice(0, 140))}
+            <div>${escapeHtml(i.drivers)} · ${escapeHtml(i.confidence)} ${i.official ? statusPill('Official', 'complete') : ''} ${i.broadcastOnly ? statusPill('Broadcast only', 'partial') : ''} ${i.speculation ? statusPill('Speculation', 'stale') : ''} ${i.conflict ? statusPill('Conflict', 'failed') : ''}</div>
+          </div>`).join('');
+      }
+      $('#researchTabTimeline').innerHTML = html;
+    }
+
+    async function loadResearchQuotesTab() {
+      const data = await researchPost('research-quotes');
+      const rows = (data.quotes || []).map((q) => `
+        <div class="research-detail-block">
+          <strong>${escapeHtml(q.speaker || 'Unknown')}</strong> · ${statusPill(q.publicationLabel || 'Unknown', q.publicationReadiness === 'ready' ? 'complete' : 'partial')}
+          <div>"${escapeHtml(String(q.quote || '').slice(0, 280))}"</div>
+          <div>Completeness: ${escapeHtml(q.completeness || '—')} · Confidence: ${escapeHtml(q.confidence || '—')}</div>
+        </div>`).join('');
+      $('#researchTabQuotes').innerHTML = rows || '<p class="sub">No quotes stored.</p>';
+    }
+
+    async function loadResearchDriverStoriesTab() {
+      const data = await researchPost('research-driver-stories');
+      const stories = [...(data.driverStories || [])].sort((a, b) => b.storyImportanceScore - a.storyImportanceScore);
+      $('#researchTabDriverStories').innerHTML = stories.map((s) => `
+        <details class="research-detail-block">
+          <summary>${escapeHtml(s.canonicalName)} #${escapeHtml(s.carNumber || '—')} · P${escapeHtml(s.finishingPosition ?? '—')} · Importance ${s.storyImportanceScore}</summary>
+          <div>Start ${s.startingPosition ?? '—'} → Finish ${s.finishingPosition ?? '—'} · Δ ${s.positionsChanged ?? '—'} · Laps led ${s.lapsLed ?? '—'} · Evidence ${s.availableEvidenceCount}</div>
+          <div>${escapeHtml((s.raceSummary || []).slice(0, 3).join(' · '))}</div>
+        </details>`).join('') || '<p class="sub">No driver stories.</p>';
+    }
+
+    async function loadResearchConflictsTab() {
+      const data = await researchPost('research-conflicts');
+      $('#researchTabConflicts').innerHTML = (data.conflicts || []).map((c) => `
+        <div class="research-detail-block">
+          <div>${escapeHtml(c.canonicalSummary)}</div>
+          ${(c.competingStatements || []).map((s) => `<div>↳ ${escapeHtml(s)}</div>`).join('')}
+          <div>${escapeHtml(c.articleBehavior)}</div>
+        </div>`).join('') || '<p class="sub">No conflicts flagged.</p>';
+    }
+
+    async function loadResearchEvidenceTab() {
+      const depth = $('#articleDepth')?.value || 'medium';
+      $('#researchTabEvidence').innerHTML = '<p class="sub">Loading evidence previews…</p>';
+      const depths = ['short', 'medium', 'in-depth'];
+      let html = '<p class="sub">All depths use the same underlying Race Intelligence Package.</p>';
+      for (const d of depths) {
+        const data = await researchPost('research-preview', { articleDepth: d });
+        const ev = data.evidence || {};
+        const cov = ev.categoryCoverage || {};
+        html += `<div class="research-detail-block"><strong>${escapeHtml(d)}</strong>
+          Facts: ${ev.selectedFacts?.length ?? 0} · Events: ${ev.selectedTimelineEvents?.length ?? 0} · Drivers: ${ev.featuredDriverCount ?? 0} · Quotes: ${ev.selectedQuotes?.length ?? 0}
+          · Tokens ~${ev.estimatedTokens ?? '—'}
+          <div>Categories selected: ${escapeHtml((cov.selectedCategories || []).join(', '))}</div>
+          <div>Missing: ${escapeHtml((cov.missingCategories || []).slice(0, 6).join(', '))}</div>
+        </div>`;
+      }
+      $('#researchTabEvidence').innerHTML = html;
+    }
+
+    async function loadResearchQualityTab() {
+      $('#researchTabQuality').innerHTML = '<p class="sub">Loading…</p>';
+      const data = await researchPost('research-quality');
+      const r = data.readiness || {};
+      $('#researchTabQuality').innerHTML = `<pre>${escapeHtml(data.report || '')}</pre>
+        <p class="sub">Short: ${escapeHtml(r.short?.status || '—')} · Medium: ${escapeHtml(r.medium?.status || '—')} · In-Depth: ${escapeHtml(r.inDepth?.status || '—')}</p>`;
+    }
+
+    async function onResearchTabClick(name) {
+      setResearchTab(name);
+      const raceVal = $('#raceNumber').value;
+      if (raceVal === '' && name !== 'overview') return setMsg('Enter a race number first.', true);
+      try {
+        if (name === 'overview') await refreshResearchPackageStatus();
+        else if (name === 'sources') await loadResearchSourcesTab();
+        else if (name === 'facts') await loadResearchFactsTab();
+        else if (name === 'timeline') await loadResearchTimelineTab();
+        else if (name === 'quotes') await loadResearchQuotesTab();
+        else if (name === 'driver-stories') await loadResearchDriverStoriesTab();
+        else if (name === 'conflicts') await loadResearchConflictsTab();
+        else if (name === 'evidence') await loadResearchEvidenceTab();
+        else if (name === 'quality') await loadResearchQualityTab();
+      } catch (e) {
+        setMsg(e.message, true);
+      }
+    }
+
+    document.querySelectorAll('.research-tab-btn').forEach((btn) => {
+      btn.addEventListener('click', () => onResearchTabClick(btn.dataset.researchTab));
+    });
+
+    $('#researchDbCheckBtn')?.addEventListener('click', checkResearchDatabase);
+    $('#refreshResearchBtn')?.addEventListener('click', refreshResearchPackageStatus);
+    $('#rebuildResearchBtn')?.addEventListener('click', rebuildResearchPackage);
+    $('#researchContinueBtn')?.addEventListener('click', continueResearchProcessing);
+    $('#rebuildResearchBtn').disabled = true;
 
     $('#loginPw')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') login(); });
     $('#articleType')?.addEventListener('change', onArticleTypeChange);

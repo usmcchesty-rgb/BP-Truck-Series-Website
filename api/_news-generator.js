@@ -22,6 +22,12 @@ import {
   buildSpotlightVerifiedStatsRepairBlock,
   SPOTLIGHT_SCOPE_ERROR_TYPES,
 } from './_driver-career-history.js';
+import { loadIntelligenceSupplementForNews } from './_race-research-handlers.js';
+import {
+  ARTICLE_DEPTH_OUTPUT_TOKEN_BUDGET,
+  isNewsIntelligencePackageEnabled,
+  normalizeArticleDepth,
+} from '../server/config/race-research-config.js';
 
 function parseBody(req) {
   if (!req.body) return {};
@@ -88,7 +94,7 @@ function buildNewsUserPrompt(generationContext, options = {}) {
 
 async function callOpenAiNews(
   userPrompt,
-  { repairReason = null, previousArticle = null, repairContext = null } = {}
+  { repairReason = null, previousArticle = null, repairContext = null, maxTokens = 2200 } = {}
 ) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -138,7 +144,7 @@ Examples when career wins=5, season wins=1, Season 8 runner-up (P2), current Sea
     body: JSON.stringify({
       model,
       temperature: 0.65,
-      max_tokens: 2200,
+      max_tokens: maxTokens,
       messages,
     }),
   });
@@ -190,6 +196,9 @@ export async function loadNewsGenerationContext(options = {}) {
 
   const generationContext = await loadPowerRankingsGenerationContext(raceNumber, '', {
     supplementalManualNotes: manualNotes,
+    inlineTranscriptFallback: String(
+      options.inlineTranscript ?? options.transcript ?? options.inline_transcript ?? ''
+    ).trim(),
   });
   generationContext.resolvedRaceNumber = raceNumber;
   generationContext.requestedRaceNumber = hasRequestedRace ? Number(rawRace) : null;
@@ -283,6 +292,8 @@ export async function generateNewsArticle(options = {}) {
     Number.isInteger(Number(rawRace)) &&
     Number(rawRace) >= 1;
 
+  const articleDepth = normalizeArticleDepth(options.articleDepth ?? options.article_depth);
+
   const generationContext = await loadNewsGenerationContext({
     articleType,
     raceNumber: isDriverSpotlight
@@ -295,6 +306,8 @@ export async function generateNewsArticle(options = {}) {
     manualNotes: options.manualNotes ?? options.manualRaceNotes,
     newsTopic: options.newsTopic ?? options.news_topic,
     spotlightDriverId: options.spotlightDriverId ?? options.spotlight_driver_id,
+    transcript: options.transcript,
+    articleDepth,
   });
 
   const resolvedRaceNumber = generationContext.resolvedRaceNumber ?? 1;
@@ -306,13 +319,37 @@ export async function generateNewsArticle(options = {}) {
     newsTopic: options.newsTopic ?? options.news_topic ?? generationContext.newsTopic,
     headlineOverride: options.headlineOverride ?? options.headline_override,
     spotlightDriverId: options.spotlightDriverId ?? options.spotlight_driver_id,
+    articleDepth,
   });
 
-  const promptSize = measureNewsPromptSize(NEWS_SYSTEM_PROMPT, userPrompt, promptContext);
+  let finalUserPrompt = userPrompt;
+  let intelligenceDiagnostics = null;
+
+  if (isNewsIntelligencePackageEnabled() && hasRequestedRace && !isDriverSpotlight) {
+    const supplement = await loadIntelligenceSupplementForNews({
+      seasonId: generationContext.settings?.seasonId,
+      raceNumber: Number(rawRace),
+      articleType,
+      articleDepth,
+      manualNotes: options.manualNotes ?? options.manualRaceNotes,
+      autoRebuild: false,
+    });
+    intelligenceDiagnostics = supplement;
+    if (supplement?.promptBlock && !supplement?.fallback && !supplement?.error) {
+      finalUserPrompt = `${userPrompt}\n\n${supplement.promptBlock}`;
+    }
+  }
+
+  const promptSize = measureNewsPromptSize(NEWS_SYSTEM_PROMPT, finalUserPrompt, promptContext);
   logNewsPromptSize(promptSize);
   assertNewsPromptWithinLimits(promptSize);
 
-  let draft = await callOpenAiNews(userPrompt);
+  const outputBudget = ARTICLE_DEPTH_OUTPUT_TOKEN_BUDGET[articleDepth] || ARTICLE_DEPTH_OUTPUT_TOKEN_BUDGET.medium;
+  const maxTokens = isNewsIntelligencePackageEnabled()
+    ? outputBudget.max
+    : 2200;
+
+  let draft = await callOpenAiNews(finalUserPrompt, { maxTokens });
   const repaired = await repairNewsArticle(draft, generationContext, articleType);
 
   const generationSources = buildGenerationSources(
@@ -336,6 +373,9 @@ export async function generateNewsArticle(options = {}) {
     generationSources,
     promptSize,
     transcriptDiagnostics: buildTranscriptDiagnostics(generationContext),
+    articleDepth,
+    intelligenceDiagnostics,
+    intelligencePackageEnabled: isNewsIntelligencePackageEnabled(),
   };
 }
 

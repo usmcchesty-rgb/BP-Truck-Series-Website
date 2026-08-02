@@ -31,6 +31,8 @@
     "test:fantasy-post-race-automation": "node scripts/test-fantasy-post-race-automation.mjs",
     "test:fantasy-driver-pool": "node scripts/test-fantasy-driver-pool.mjs",
     "test:api-imports": "node scripts/test-api-imports.mjs",
+    "test:race-research-intelligence": "node scripts/test-race-research-intelligence.mjs",
+    "diagnose:race15-research-package": "node scripts/diagnose-race15-research-package.mjs",
     "test:provisional-results": "node scripts/test-provisional-results.mjs",
     "test:driver-provisional-sync": "node scripts/test-driver-provisional-sync.mjs",
     "test:mission-control-runtime": "node scripts/test-mission-control-runtime.mjs",
