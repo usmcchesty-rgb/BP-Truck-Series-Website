@@ -10,6 +10,11 @@ import {
   confidenceFromSourceType,
 } from '../api/_race-research-confidence.js';
 import { validateProposedFacts } from '../api/_race-research-fact-replace.js';
+import { formatResearchQualityReport } from '../api/_race-research-readiness.js';
+import {
+  buildTranscriptCoverageSummary,
+  resolveTranscriptSources,
+} from '../api/_race-research-transcript-coverage.js';
 import { isNewsIntelligencePackageEnabled } from '../server/config/race-research-config.js';
 
 const cautionA = {
@@ -101,6 +106,41 @@ function shouldSkipVersionInsert(existingHashes, hash) {
 }
 assert.equal(shouldSkipVersionInsert(['abc', 'def'], 'abc'), true);
 assert.equal(shouldSkipVersionInsert(['abc'], 'xyz'), false);
+
+const savedOnly = resolveTranscriptSources([
+  { id: '1', sourceType: 'saved_transcript', processingStatus: 'complete', characterCount: 144887 },
+]);
+assert.equal(savedOnly.active?.sourceType, 'saved_transcript');
+
+const both = resolveTranscriptSources([
+  { id: 'y', sourceType: 'youtube_transcript', processingStatus: 'complete' },
+  { id: 's', sourceType: 'saved_transcript', processingStatus: 'complete', characterCount: 100 },
+]);
+assert.equal(both.active?.sourceType, 'saved_transcript');
+
+const summary = buildTranscriptCoverageSummary(
+  [{ id: 's', sourceType: 'saved_transcript', processingStatus: 'complete', characterCount: 144887 }],
+  { chunkTotal: 17, chunkComplete: 17, chunkFailed: 0 },
+  { transcriptProcessingMode: 'deterministic', aiTranscriptExtraction: false }
+);
+assert.equal(summary.coverageStatus, 'complete');
+assert.equal(summary.activeSourceType, 'saved_transcript');
+
+const report = formatResearchQualityReport({
+  seasonId: '27987',
+  raceNumber: 17,
+  racePackage: {
+    sources: [
+      { sourceType: 'saved_transcript', processingStatus: 'complete', characterCount: 144887 },
+      { sourceType: 'race_control', processingStatus: 'complete' },
+    ],
+    facts: [],
+  },
+  processingStats: { chunkTotal: 17, chunkComplete: 17, chunkFailed: 0 },
+});
+assert.ok(!report.includes('YouTube transcript: Missing'));
+assert.ok(report.includes('Transcript Coverage'));
+assert.ok(report.includes('Saved Transcript (active)'));
 
 assert.equal(isNewsIntelligencePackageEnabled(), false);
 

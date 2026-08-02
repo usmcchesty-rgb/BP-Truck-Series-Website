@@ -28,7 +28,13 @@ import {
   listResearchSourcesForRace,
 } from './_race-research-repository.js';
 import { buildRaceDriverStoryPackages } from './_race-research-driver-stories.js';
-import { assessQuotePublicationReadiness } from './_race-research-readiness.js';
+import {
+  buildTranscriptCoverageSummary,
+  filterDisplayMissingCoverageKeys,
+  formatCoverageKeyLabel,
+  resolveTranscriptSources,
+} from './_race-research-transcript-coverage.js';
+import { assessQuotePublicationReadiness, assessArticleReadiness } from './_race-research-readiness.js';
 import { processResearchSource } from './_race-research-process.js';
 import { extractTranscriptChunkDeterministic } from './_race-research-transcript-extract.js';
 import { refreshRacePackageDiagnostics } from './_race-research-package.js';
@@ -310,6 +316,30 @@ export async function handleResearchOverview(seasonId, raceNumber) {
   const orphans = await findOrphanRaceFacts(seasonId, raceNumber);
   const proc = statusRow?.sourceCoverage?._processing || {};
 
+  const activeTranscript = resolveTranscriptSources(sources).active;
+  let chunkStats = {};
+  if (activeTranscript?.id) {
+    const chunks = await listResearchChunksForSource(activeTranscript.id);
+    chunkStats = {
+      chunkTotal: chunks.length,
+      chunkComplete: chunks.filter((c) => c.processingStatus === 'complete').length,
+      chunkFailed: chunks.filter((c) => c.processingStatus === 'failed').length,
+    };
+  }
+  const cfg = getResearchConfigStatus();
+  const transcriptCoverage = buildTranscriptCoverageSummary(sources, chunkStats, {
+    transcriptProcessingMode: cfg.transcriptProcessingMode,
+    aiTranscriptExtraction: cfg.aiTranscriptExtraction,
+  });
+  const rawMissing = pkg.diagnostics?.missingSources || [];
+  const missingSourcesDisplay = filterDisplayMissingCoverageKeys(rawMissing, sources).map(formatCoverageKeyLabel);
+
+  const articleReadiness = {
+    short: assessArticleReadiness(pkg, 'short'),
+    medium: assessArticleReadiness(pkg, 'medium'),
+    inDepth: assessArticleReadiness(pkg, 'in-depth'),
+  };
+
   return {
     seasonId,
     raceNumber,
@@ -329,7 +359,10 @@ export async function handleResearchOverview(seasonId, raceNumber) {
     unresolvedDriverCount: unresolvedDrivers,
     lastBuiltAt: statusRow?.lastBuiltAt,
     config: getResearchConfigStatus(),
-    missingSources: pkg.diagnostics?.missingSources || [],
+    missingSources: rawMissing,
+    missingSourcesDisplay,
+    transcriptCoverage,
+    articleReadiness,
     orphanFactCount: orphans.count,
     staleSourceCount: proc.staleCount ?? 0,
     preservedFactsSourceCount: proc.preservedCount ?? 0,
@@ -781,6 +814,10 @@ export async function handleResearchStatusReadOnly(seasonId, raceNumber) {
     chunks: status.chunks,
     factCounts: status.factCounts,
     missingSourceTypes: status.missingSourceTypes,
+    missingSourceTypesDisplay: filterDisplayMissingCoverageKeys(status.missingSourceTypes, await listResearchSourcesForRace(seasonId, raceNumber)).map(
+      formatCoverageKeyLabel
+    ),
+    transcriptCoverage: overview.transcriptCoverage || status.transcriptCoverage,
     sourcesSummary: status.sources,
   };
 }

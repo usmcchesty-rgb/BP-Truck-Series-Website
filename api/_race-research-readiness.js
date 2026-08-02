@@ -1,5 +1,11 @@
-import { normalizeArticleDepth, ARTICLE_DEPTH_EVIDENCE_GUIDELINES } from '../server/config/race-research-config.js';
+import { normalizeArticleDepth, ARTICLE_DEPTH_EVIDENCE_GUIDELINES, getRaceResearchTranscriptMode, isRaceResearchAiExtractionEnabled } from '../server/config/race-research-config.js';
 import { buildRaceDriverStoryPackages } from './_race-research-driver-stories.js';
+import {
+  buildTranscriptCoverageSummary,
+  labelForTranscriptSourceType,
+  processingStatusLabel,
+  resolveTranscriptSources,
+} from './_race-research-transcript-coverage.js';
 
 const IN_DEPTH_CATEGORIES = [
   { key: 'winner_story', test: (f) => f.category === 'winner' || f.structuredData?.finishPosition === 1 },
@@ -25,12 +31,12 @@ export function assessArticleReadiness(racePackage, articleDepth = 'medium') {
   const diagnostics = racePackage?.diagnostics || {};
   const sources = racePackage?.sources || [];
 
-  const transcriptSource = sources.find((s) =>
-    ['youtube_transcript', 'saved_transcript'].includes(s.sourceType)
-  );
+  const transcriptSource = resolveTranscriptSources(sources).active;
   const transcriptComplete =
     transcriptSource?.processingStatus === 'complete' || transcriptSource?.processingStatus === 'partial';
-  const transcriptFailed = transcriptSource?.processingStatus === 'failed';
+  const transcriptFailed =
+    transcriptSource?.processingStatus === 'failed' ||
+    transcriptSource?.processingStatus === 'failed_without_previous_data';
   const hasResults = facts.some((f) => f.category === 'official_finish');
   const hasStandings = facts.some((f) => f.category === 'standings_snapshot');
   const hasRaceControl = sources.some((s) => s.sourceType === 'race_control' && s.processingStatus === 'complete');
@@ -83,33 +89,43 @@ export function formatResearchQualityReport({ seasonId, raceNumber, racePackage,
   const lines = [];
   lines.push(`Race ${raceNumber} Research Quality (Season ${seasonId})`, '');
 
-  lines.push('Raw Sources', '------------');
-  for (const type of ['youtube_transcript', 'saved_transcript', 'race_control', 'official_results', 'qualifying', 'standings', 'schedule']) {
-    const src = sources.find((s) => s.sourceType === type || (type === 'qualifying' && s.sourceType === 'official_results'));
-    if (type === 'qualifying') continue;
-    const label = src
-      ? src.processingStatus === 'complete'
-        ? 'Complete'
-        : src.processingStatus === 'partial'
-          ? 'Partial'
-          : src.processingStatus
-      : 'Missing';
-    const name =
-      type === 'youtube_transcript'
-        ? 'YouTube transcript'
-        : type === 'saved_transcript'
-          ? 'Saved transcript'
-          : type.replace(/_/g, ' ');
-    if (type !== 'saved_transcript' || !sources.find((s) => s.sourceType === 'youtube_transcript')) {
-      lines.push(`${name}: ${label}`);
+  const transcriptCoverage = buildTranscriptCoverageSummary(sources, processingStats, {
+    transcriptProcessingMode: getRaceResearchTranscriptMode(),
+    aiTranscriptExtraction: isRaceResearchAiExtractionEnabled(),
+  });
+
+  lines.push('Transcript Coverage', '-------------------');
+  lines.push(`Status: ${transcriptCoverage.coverageLabel}`);
+  if (transcriptCoverage.hasTranscript) {
+    lines.push(`Source: ${labelForTranscriptSourceType(transcriptCoverage.activeSourceType)} (active)`);
+    for (const alt of transcriptCoverage.alternates) {
+      lines.push(`${alt.label}: ${alt.processingLabel} (available, not active)`);
     }
+    lines.push(`Processing status: ${transcriptCoverage.processingLabel}`);
+    if (transcriptCoverage.characterCount != null) {
+      lines.push(`Characters: ${transcriptCoverage.characterCount.toLocaleString('en-US')}`);
+    }
+    lines.push(`Chunks: ${transcriptCoverage.chunkTotal || '—'}`);
+    lines.push(`Processing: ${transcriptCoverage.processingSummary}`);
+    lines.push(`Extraction: ${transcriptCoverage.extraction}`);
+    lines.push(`AI: ${transcriptCoverage.aiExtraction}`);
+  } else {
+    lines.push('No saved or YouTube transcript is ingested for this race.');
   }
 
-  lines.push('', 'Processing', '----------');
+  lines.push('', 'Other Sources', '---------------');
+  for (const type of ['race_control', 'official_results', 'standings', 'schedule']) {
+    const src = sources.find((s) => s.sourceType === type);
+    const label = processingStatusLabel(src ? src.processingStatus : 'missing');
+    const name = type.replace(/_/g, ' ');
+    lines.push(`${name}: ${label}`);
+  }
+
+  lines.push('', 'Processing (active transcript)', '------------------------------');
   lines.push(`Transcript chunks: ${processingStats.chunkTotal ?? '—'}`);
   lines.push(`Successful: ${processingStats.chunkComplete ?? '—'}`);
   lines.push(`Failed: ${processingStats.chunkFailed ?? '—'}`);
-  lines.push(`AI processed: ${processingStats.aiProcessed ?? '—'}`);
+  lines.push(`AI processed chunks: ${processingStats.aiProcessed ?? '—'}`);
   lines.push(`Deterministic only: ${processingStats.deterministicOnly ?? '—'}`);
 
   lines.push('', 'Evidence', '--------');

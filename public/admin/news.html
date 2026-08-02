@@ -1819,11 +1819,66 @@
       });
     }
 
+    function renderTranscriptCoverageBlock(tc) {
+      if (!tc) return '';
+      const ok = tc.coverageStatus === 'complete';
+      const partial = tc.coverageStatus === 'partial';
+      const pill = ok ? statusPill('Complete', 'complete') : partial ? statusPill('Partial', 'partial') : statusPill(tc.coverageLabel || 'Missing', 'missing');
+      const alts = (tc.alternates || []).map((a) =>
+        `<div class="sub">${escapeHtml(a.label)}: ${escapeHtml(a.processingLabel)} (available, not active)</div>`
+      ).join('');
+      const chars = tc.characterCount != null ? Number(tc.characterCount).toLocaleString('en-US') : '—';
+      return `
+        <div class="research-detail-block">
+          <strong>Transcript Coverage</strong> ${pill}
+          <dl class="research-meta-grid">
+            <div><dt>Source</dt><dd>${escapeHtml(tc.activeSourceLabel || tc.coverageLabel || '—')}</dd></div>
+            <div><dt>Status</dt><dd>${escapeHtml(tc.processingLabel || '—')}</dd></div>
+            <div><dt>Characters</dt><dd>${escapeHtml(chars)}</dd></div>
+            <div><dt>Chunks</dt><dd>${escapeHtml(tc.chunkTotal ?? '—')}</dd></div>
+            <div><dt>Processing</dt><dd>${escapeHtml(tc.processingSummary || '—')}</dd></div>
+            <div><dt>Extraction</dt><dd>${escapeHtml(tc.extraction || '—')}</dd></div>
+            <div><dt>AI</dt><dd>${escapeHtml(tc.aiExtraction || '—')}</dd></div>
+          </dl>
+          ${alts}
+        </div>`;
+    }
+
+    function readinessPill(status) {
+      const s = String(status || '—');
+      if (s === 'Ready') return statusPill('✓ Ready', 'complete');
+      if (s === 'Partial') return statusPill('Partial', 'partial');
+      if (s === 'Not Ready') return statusPill('Not Ready', 'failed');
+      return statusPill(s, 'missing');
+    }
+
+    function renderArticleReadinessBlock(readiness) {
+      const r = readiness || {};
+      return `
+        <div class="research-detail-block">
+          <strong>Article Readiness</strong>
+          <p class="sub" title="Whether enough evidence exists to generate each article depth.">Whether enough evidence exists to generate each article depth.</p>
+          <dl class="research-meta-grid">
+            <div><dt>Short</dt><dd>${readinessPill(r.short?.status)}</dd></div>
+            <div><dt>Medium</dt><dd>${readinessPill(r.medium?.status)}</dd></div>
+            <div><dt>In-Depth</dt><dd>${readinessPill(r.inDepth?.status)}</dd></div>
+          </dl>
+        </div>`;
+    }
+
     function renderOverviewPanel(data) {
       const pkgStatus = data.packageStatus || 'unknown';
       const pillKind = pkgStatus === 'ready' ? 'complete' : pkgStatus === 'partial' ? 'partial' : pkgStatus === 'failed' ? 'failed' : 'missing';
       const cfg = data.config || {};
+      const missingLine = (data.missingSourcesDisplay || data.missingSourceTypesDisplay || data.missingSources || data.missingSourceTypes || []);
       return `
+        ${renderTranscriptCoverageBlock(data.transcriptCoverage)}
+        ${renderArticleReadinessBlock(data.articleReadiness)}
+        <div class="research-detail-block" style="margin-bottom:10px">
+          <strong>Evidence Coverage</strong>
+          <p class="sub" title="How complete the research package is.">How complete the research package is.</p>
+          <p style="font-size:22px;font-weight:900;margin:6px 0 0">${escapeHtml(data.coverageScore ?? 0)}%</p>
+        </div>
         <dl class="research-meta-grid">
           <div><dt>Season</dt><dd>${escapeHtml(data.seasonId)}</dd></div>
           <div><dt>Race</dt><dd>${escapeHtml(data.raceNumber)}</dd></div>
@@ -1831,7 +1886,6 @@
           <div><dt>Race date</dt><dd>${escapeHtml(data.raceDate || '—')}</dd></div>
           <div><dt>Package</dt><dd>${statusPill(pkgStatus, pillKind)}</dd></div>
           <div><dt>Version</dt><dd>${escapeHtml(data.packageVersion || '—')}</dd></div>
-          <div><dt>Coverage</dt><dd>${escapeHtml(data.coverageScore ?? 0)}%</dd></div>
           <div><dt>Sources</dt><dd>${escapeHtml(data.sourceCount ?? 0)} (${escapeHtml(data.processedSourceCount ?? 0)} processed, ${escapeHtml(data.failedOrPartialSourceCount ?? 0)} failed/partial)</dd></div>
           <div><dt>Facts</dt><dd>${escapeHtml(data.factCount ?? 0)}</dd></div>
           <div><dt>Timeline events</dt><dd>${escapeHtml(data.timelineEventCount ?? 0)}</dd></div>
@@ -1842,7 +1896,7 @@
           <div><dt>Last built</dt><dd>${escapeHtml(data.lastBuiltAt || '—')}</dd></div>
         </dl>
         <p class="sub">Transcript mode: <strong>${escapeHtml(cfg.transcriptProcessingMode || 'deterministic')}</strong> · AI extraction: <strong>${cfg.aiTranscriptExtraction ? 'Enabled' : 'Disabled'}</strong> · Package prompts: <strong>${cfg.packageBasedArticlePrompt ? 'Enabled' : 'Disabled'}</strong></p>
-        ${(data.missingSourceTypes || data.missingSources || []).length ? `<p class="sub">Missing source types: ${escapeHtml((data.missingSourceTypes || data.missingSources).join(', '))}</p>` : ''}
+        ${missingLine.length ? `<p class="sub">Missing evidence: ${escapeHtml(missingLine.join(', '))}</p>` : ''}
         <p class="sub">Orphan facts: ${escapeHtml(data.orphanFactCount ?? 0)} · Stale sources: ${escapeHtml(data.staleSourceCount ?? 0)} · Preserved after failure: ${escapeHtml(data.preservedFactsSourceCount ?? 0)}</p>
       `;
     }
@@ -1919,7 +1973,7 @@
         researchState.overview = data;
         await refreshResearchPackageStatus();
         setResearchTab('quality');
-        $('#researchTabQuality').innerHTML = `<pre>${escapeHtml(data.report || '')}</pre><p class="sub">Sources unchanged: ${data.sourcesUnchanged ?? 0} · Facts created: ${data.factsCreated ?? 0} · Coverage: ${data.coverageScore ?? '—'}%</p>`;
+        $('#researchTabQuality').innerHTML = `<pre>${escapeHtml(data.report || '')}</pre><p class="sub">Sources unchanged: ${data.sourcesUnchanged ?? 0} · Facts created: ${data.factsCreated ?? 0} · Evidence coverage: ${data.coverageScore ?? '—'}%</p>`;
         setMsg(`Rebuild complete (op ${data.operationId || '—'}).`);
       } catch (e) {
         setMsg(e.message, true);
@@ -2136,9 +2190,11 @@
     async function loadResearchQualityTab() {
       $('#researchTabQuality').innerHTML = '<p class="sub">Loading…</p>';
       const data = await researchPost('research-quality');
-      const r = data.readiness || {};
-      $('#researchTabQuality').innerHTML = `<pre>${escapeHtml(data.report || '')}</pre>
-        <p class="sub">Short: ${escapeHtml(r.short?.status || '—')} · Medium: ${escapeHtml(r.medium?.status || '—')} · In-Depth: ${escapeHtml(r.inDepth?.status || '—')}</p>`;
+      const tc = data.transcriptCoverage;
+      $('#researchTabQuality').innerHTML = `${renderTranscriptCoverageBlock(tc)}
+        ${renderArticleReadinessBlock(data.readiness)}
+        <pre>${escapeHtml(data.report || '')}</pre>
+        <p class="sub">Evidence coverage measures collected source categories. Article readiness reflects depth-specific evidence rules.</p>`;
     }
 
     async function onResearchTabClick(name) {

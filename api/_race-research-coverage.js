@@ -34,8 +34,23 @@ export function buildSourceCoverageDiagnostics(sources = []) {
     }
 
     const prev = byKey[coverageKey];
-    if (!prev || rankStatus(status) > rankStatus(prev.status)) {
-      byKey[coverageKey] = { status, weight: RACE_RESEARCH_COVERAGE_WEIGHTS[coverageKey], sourceType: source.sourceType };
+    const shouldReplace =
+      !prev ||
+      rankStatus(status) > rankStatus(prev.status) ||
+      (coverageKey === 'transcript' &&
+        source.sourceType === 'saved_transcript' &&
+        rankStatus(status) >= rankStatus(prev.status));
+
+    if (shouldReplace) {
+      byKey[coverageKey] = {
+        status,
+        weight: RACE_RESEARCH_COVERAGE_WEIGHTS[coverageKey],
+        sourceType: source.sourceType,
+        activeSourceType:
+          coverageKey === 'transcript' ? source.sourceType : prev?.activeSourceType,
+      };
+    } else if (coverageKey === 'transcript' && !byKey[coverageKey].activeSourceType) {
+      byKey[coverageKey].activeSourceType = source.sourceType;
     }
   }
 

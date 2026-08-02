@@ -17,9 +17,10 @@ import {
   formatResearchQualityReport,
 } from './_race-research-readiness.js';
 import { listMissingCoverageKeys, buildSourceCoverageDiagnostics } from './_race-research-coverage.js';
+import { resolveTranscriptSources, buildTranscriptCoverageSummary, filterDisplayMissingCoverageKeys, formatCoverageKeyLabel } from './_race-research-transcript-coverage.js';
 import { extractTranscriptChunkDeterministic, extractTranscriptChunkWithAi, compareExtractions } from './_race-research-transcript-extract.js';
 import { preprocessTranscriptChunk, selectSampleChunkIndices } from './_race-research-transcript-preprocess.js';
-import { getRaceResearchTranscriptMode, isNewsIntelligencePackageEnabled } from '../server/config/race-research-config.js';
+import { getRaceResearchTranscriptMode, isNewsIntelligencePackageEnabled, isRaceResearchAiExtractionEnabled } from '../server/config/race-research-config.js';
 
 export function parseDiagnoseArgs(argv) {
   const args = argv.slice(2);
@@ -56,7 +57,7 @@ export async function runDiagnoseStatus(seasonId, raceNumber) {
   }
 
   let chunkStats = { total: 0, complete: 0, failed: 0, ai: 0, deterministic: 0 };
-  const transcript = sources.find((s) => ['youtube_transcript', 'saved_transcript'].includes(s.sourceType));
+  const transcript = resolveTranscriptSources(sources).active;
   if (transcript) {
     const chunks = await listResearchChunksForSource(transcript.id);
     chunkStats.total = chunks.length;
@@ -85,6 +86,11 @@ export async function runDiagnoseStatus(seasonId, raceNumber) {
     chunks: chunkStats,
     factCounts: { total: facts.length, byType: factByType, byConfidence: factByConfidence },
     missingSourceTypes: listMissingCoverageKeys(coverage),
+    transcriptCoverage: buildTranscriptCoverageSummary(sources, {
+      chunkTotal: chunkStats.total,
+      chunkComplete: chunkStats.complete,
+      chunkFailed: chunkStats.failed,
+    }),
     coverageScore: status?.coverageScore ?? 0,
     linkCount: links.length,
     sourceByIdCount: Object.keys(sourceById).length,
@@ -263,7 +269,7 @@ export async function runDiagnoseQuality(seasonId, raceNumber, options = {}) {
 
   const chunkStage = timing?.startStage('runDiagnoseQuality.chunkStats');
   const sources = await listResearchSourcesForRace(seasonId, raceNumber);
-  const transcript = sources.find((s) => ['youtube_transcript', 'saved_transcript'].includes(s.sourceType));
+  const transcript = resolveTranscriptSources(sources).active;
   let chunkStats = {};
   if (transcript?.id) {
     const chunks = await listResearchChunksForSource(transcript.id);
@@ -277,11 +283,20 @@ export async function runDiagnoseQuality(seasonId, raceNumber, options = {}) {
   }
   chunkStage?.finish(chunkStats);
 
+  const transcriptCoverage = buildTranscriptCoverageSummary(sources, chunkStats, {
+    transcriptProcessingMode: getRaceResearchTranscriptMode(),
+    aiTranscriptExtraction: isRaceResearchAiExtractionEnabled(),
+  });
+
   const reportStage = timing?.startStage('runDiagnoseQuality.formatReport');
   const text = formatResearchQualityReport({ seasonId, raceNumber, racePackage: pkg, processingStats: chunkStats });
   reportStage?.finish({ reportLength: text.length });
 
-  return { mode: 'quality', report: text, readiness: {
+  return {
+    mode: 'quality',
+    report: text,
+    transcriptCoverage,
+    readiness: {
     short: assessArticleReadiness(pkg, 'short'),
     medium: assessArticleReadiness(pkg, 'medium'),
     inDepth: assessArticleReadiness(pkg, 'in-depth'),
