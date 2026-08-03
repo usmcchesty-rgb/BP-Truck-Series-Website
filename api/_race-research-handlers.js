@@ -19,6 +19,7 @@ import { buildNewsArticlePlan } from './_race-research-plan.js';
 import { buildDeterministicArticlePlan } from './_news-writer-deterministic-plan.js';
 import { prepareFactsForPlanning } from './_news-writer-fact-quality.js';
 import { buildFactVerificationReport } from './_news-writer-fact-verification.js';
+import { buildNewsworthinessReport } from './_news-writer-newsworthiness.js';
 export {
   handleResearchWriterPreview,
   handleResearchWriterShadow,
@@ -309,6 +310,13 @@ export async function handleResearchPreview(body) {
       racePackage: pkg,
       preparedFacts,
     });
+    const newsworthinessReport = buildNewsworthinessReport({
+      racePackage: pkg,
+      preparedFacts,
+      storyPlan: deterministicPlan.storyPlan,
+      requiredRecap: deterministicPlan.requiredRecap,
+      factVerification,
+    });
     const allDepths = await runDiagnoseEvidence(seasonId, raceNumber);
     return {
       articleDepth,
@@ -317,6 +325,7 @@ export async function handleResearchPreview(body) {
       plan,
       deterministicPlan,
       factVerification,
+      newsworthinessReport,
       samePackage: {
         factCount: pkg.facts?.length ?? 0,
         message: 'Short, Medium, and In-Depth previews use the same stored Race Intelligence Package.',

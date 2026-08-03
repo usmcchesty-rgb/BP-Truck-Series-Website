@@ -1,11 +1,13 @@
 import { MULTIPASS_OPENAI_HEADLINE_MAX_TOKENS } from '../server/config/news-writer-multipass-config.js';
 import { callOpenAiWriterJson, milesApexHeadlineSystemPrompt } from './_news-writer-openai.js';
+import { compactNewsroomGuidanceForPrompt } from './_news-writer-newsworthiness.js';
 
 export async function buildHeadlinePack({
   editedArticle,
   storyPlan,
   callOpenAi = callOpenAiWriterJson,
   factVerification = null,
+  newsworthinessReport = null,
 }) {
   const payload = {
     bodyPreview: String(editedArticle.body || '').slice(0, 3500),
@@ -19,6 +21,7 @@ export async function buildHeadlinePack({
           verifiedCategories: factVerification.verifiedCategories || {},
         }
       : null,
+    newsroomGuidance: compactNewsroomGuidanceForPrompt(newsworthinessReport),
   };
 
   const { parsed, usage, model, elapsedMs } = await callOpenAi({

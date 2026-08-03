@@ -1,5 +1,6 @@
 import { MULTIPASS_OPENAI_EDITOR_MAX_TOKENS } from '../server/config/news-writer-multipass-config.js';
 import { callOpenAiWriterJson, milesApexEditorSystemPrompt } from './_news-writer-openai.js';
+import { compactNewsroomGuidanceForPrompt } from './_news-writer-newsworthiness.js';
 
 export async function editArticle({
   sectionDrafts,
@@ -9,6 +10,7 @@ export async function editArticle({
   callOpenAi = callOpenAiWriterJson,
   repairHints = null,
   factVerification = null,
+  newsworthinessReport = null,
 }) {
   const payload = {
     sections: sectionDrafts.map((s) => ({
@@ -35,6 +37,7 @@ export async function editArticle({
           writerRules: factVerification.writerRules,
         }
       : null,
+    newsroomGuidance: compactNewsroomGuidanceForPrompt(newsworthinessReport),
   };
 
   const { parsed, usage, model, elapsedMs } = await callOpenAi({

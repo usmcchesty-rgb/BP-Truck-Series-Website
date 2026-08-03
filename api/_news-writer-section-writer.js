@@ -7,6 +7,7 @@ import { buildSectionEvidenceBundle } from './_news-writer-section-evidence.js';
 import { compactMemoryForPrompt } from './_news-writer-section-memory.js';
 import { filterUsedFactIdsToEvidence } from './_news-writer-ledger-writer.js';
 import { applyVerificationToSectionEvidence, sanitizeWriterText } from './_news-writer-fact-verification.js';
+import { compactNewsroomGuidanceForPrompt } from './_news-writer-newsworthiness.js';
 
 function wordCount(text) {
   return String(text || '')
@@ -24,6 +25,7 @@ export async function writeArticleSection({
   sectionMemory,
   callOpenAi = callOpenAiWriterJson,
   factVerification = null,
+  newsworthinessReport = null,
 }) {
   let evidence = buildSectionEvidenceBundle({
     section,
@@ -54,6 +56,7 @@ export async function writeArticleSection({
       sectionFactIds: evidence.facts.map((f) => f.factId),
     },
     factVerificationGuidance: evidence.factVerificationGuidance || null,
+    newsroomGuidance: compactNewsroomGuidanceForPrompt(newsworthinessReport),
   };
 
   const { parsed, usage, model, elapsedMs } = await callOpenAi({

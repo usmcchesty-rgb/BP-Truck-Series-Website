@@ -2285,6 +2285,24 @@
       const fvRepairs = (fv.repairSuggestions || []).map((r) => `
         <tr><td>${escapeHtml(String(r.factId || '').slice(0, 10))}</td><td>${escapeHtml(r.currentValue)}</td><td>${escapeHtml(r.preferredValue)}</td><td>${escapeHtml(r.source || '')}</td><td class="sub">${escapeHtml(r.reason || '')}</td></tr>`).join('');
       const fvSuppressed = (fv.suppressedFactIds || []).map((id) => `<li class="sub">${escapeHtml(String(id).slice(0, 12))}</li>`).join('') || '<li class="sub">None</li>';
+      const ni = data.newsworthinessReport || {};
+      const niClassRows = (ni.classifications || []).slice(0, 12).map((c) => `
+        <tr><td>${escapeHtml(c.classificationId)}</td><td>${escapeHtml(c.confidence)}</td><td>${escapeHtml(c.score)}</td><td class="sub">${escapeHtml(c.reason || '')}</td><td>${(c.supportingFactIds || []).length}</td></tr>`).join('');
+      const niDriverRows = (ni.driverStoryImportance || []).slice(0, 10).map((d) => `
+        <tr><td>${escapeHtml(d.driverName)}</td><td>${escapeHtml(d.importance)}</td><td class="sub">${escapeHtml(d.reason || '')}</td></tr>`).join('');
+      const niStoryRank = (ni.storyImportanceRanking || []).slice(0, 8).map((r) => `
+        <li>#${escapeHtml(r.rank)} ${escapeHtml(r.narrative)} · score ${escapeHtml(r.score)} · conf ${escapeHtml(r.confidence)}</li>`).join('');
+      const niHist = (ni.historicalComparison || []).map((h) => `
+        <li>${escapeHtml(h.type)}: ${escapeHtml(h.label)} ${h.verified ? statusPill('Verified', 'complete') : statusPill('Unverified', 'missing')}</li>`).join('') || '<li class="sub">None from package</li>';
+      const eg = ni.editorialGuidance || {};
+      const niGuidance = `
+        <p class="sub"><strong>Lead:</strong> ${escapeHtml(eg.lead || '—')}</p>
+        <p class="sub"><strong>Primary remembered for:</strong> ${escapeHtml(eg.primaryRememberedFor || '—')}</p>
+        <p class="sub"><strong>Secondary:</strong> ${(eg.secondaryThemes || []).map((t) => escapeHtml(t)).join(' · ') || '—'}</p>
+        <p class="sub"><strong>Minor:</strong> ${(eg.minorThemes || []).map((t) => escapeHtml(t)).join(' · ') || '—'}</p>
+        <p class="sub"><strong>Quotes recommended:</strong> ${(eg.quoteRecommendations || []).map((q) => escapeHtml(q)).join(', ') || '—'}</p>
+        <p class="sub"><strong>Do not overemphasize:</strong></p><ul class="sub">${(eg.deEmphasize || []).map((d) => `<li>${escapeHtml(d)}</li>`).join('') || '<li>—</li>'}</ul>
+        ${(eg.orderingHints || []).length ? `<p class="sub"><strong>Ordering:</strong> ${eg.orderingHints.map((h) => escapeHtml(h)).join(' · ')}</p>` : ''}`;
 
       $('#researchTabStoryPlan').innerHTML = `
         <p class="sub">Phase 3a preview only · Operation ${escapeHtml(dp.operationId)} · Fingerprint ${escapeHtml(sp.packageFingerprint)} · Planner ${escapeHtml(sp.plannerVersion)}</p>
@@ -2336,6 +2354,20 @@
         <table class="research-table"><thead><tr><th>Fact</th><th>Current</th><th>Preferred</th><th>Source</th><th>Reason</th></tr></thead><tbody>${fvRepairs || '<tr><td colspan="5" class="sub">None</td></tr>'}</tbody></table>
         <h4 style="color:#f0c040;margin:12px 0 6px">Suppressed for writer</h4>
         <ul>${fvSuppressed}</ul>
+        <h4 style="color:#f0c040;margin:12px 0 6px">Newsroom Intelligence (Phase 3d — deterministic)</h4>
+        <p class="sub">Engine ${escapeHtml(ni.version || '—')} · Overall newsworthiness ${escapeHtml(ni.overallNewsworthiness ?? ni.overallImportance ?? '—')} · Primary ${escapeHtml(ni.primaryNarrative || '—')} · Season ${escapeHtml(ni.seasonImportance || '—')} · Race rating ${escapeHtml(ni.raceRating || '—')} · Confidence ${escapeHtml(ni.confidence ?? '—')}</p>
+        <p class="sub">Secondary narratives: ${(ni.secondaryNarratives || []).map((n) => escapeHtml(n)).join(', ') || '—'}</p>
+        <p class="sub">Dimensions — importance ${escapeHtml(ni.dimensions?.importance ?? '—')}, uniqueness ${escapeHtml(ni.dimensions?.uniqueness ?? '—')}, season impact ${escapeHtml(ni.dimensions?.seasonImpact ?? '—')}, fan interest ${escapeHtml(ni.dimensions?.fanInterest ?? '—')}, historical ${escapeHtml(ni.dimensions?.historicalSignificance ?? '—')}, championship ${escapeHtml(ni.dimensions?.championshipImpact ?? '—')}</p>
+        <h4 style="color:#f0c040;margin:12px 0 6px">Story importance ranking</h4>
+        <ul class="sub">${niStoryRank || '<li>—</li>'}</ul>
+        <h4 style="color:#f0c040;margin:12px 0 6px">Narrative classifications</h4>
+        <table class="research-table"><thead><tr><th>ID</th><th>Conf</th><th>Score</th><th>Reason</th><th>Facts</th></tr></thead><tbody>${niClassRows || '<tr><td colspan="5" class="sub">—</td></tr>'}</tbody></table>
+        <h4 style="color:#f0c040;margin:12px 0 6px">Driver story importance</h4>
+        <table class="research-table"><thead><tr><th>Driver</th><th>Importance</th><th>Reason</th></tr></thead><tbody>${niDriverRows || '<tr><td colspan="3" class="sub">—</td></tr>'}</tbody></table>
+        <h4 style="color:#f0c040;margin:12px 0 6px">Historical comparison (package only)</h4>
+        <ul class="sub">${niHist}</ul>
+        <h4 style="color:#f0c040;margin:12px 0 6px">Editorial guidance</h4>
+        ${niGuidance}
         <p class="sub">Deterministic planning only — no article prose generated.</p>`;
     }
 

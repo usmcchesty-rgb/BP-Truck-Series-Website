@@ -3,7 +3,8 @@ import {
   normalizeArticleDepth,
 } from '../server/config/race-research-config.js';
 import { CANONICAL_COVERAGE_TARGETS } from './_news-writer-config.js';
-import { buildFactCorrectnessValidation, factCorrectnessValidationScore } from './_news-writer-fact-verification.js';
+import { buildFactCorrectnessValidation } from './_news-writer-fact-verification.js';
+import { buildNewsworthinessValidation } from './_news-writer-newsworthiness.js';
 
 function normalizeText(text) {
   return String(text || '').toLowerCase();
@@ -24,6 +25,7 @@ export function validateMultipassDraft({
   coverageTargets,
   allowedDriverNames = [],
   factVerification = null,
+  newsworthinessReport = null,
 }) {
   const errors = [];
   const warnings = [];
@@ -109,6 +111,11 @@ export function validateMultipassDraft({
     body: editedArticle.body,
     headline: headlinePack?.headline || editedArticle.headline,
   });
+  const newsworthinessValidation = buildNewsworthinessValidation(newsworthinessReport, {
+    body: editedArticle.body,
+    headline: headlinePack?.headline || editedArticle.headline,
+    summary: editedArticle.summary,
+  });
   for (const check of factCorrectness.checks) {
     if (check.warn && check.ok) {
       warnings.push({ type: check.id, message: check.label });
@@ -119,9 +126,16 @@ export function validateMultipassDraft({
     }
   }
 
+  for (const check of newsworthinessValidation.checks) {
+    if (!check.ok) {
+      warnings.push({ type: check.id, message: check.label });
+    }
+  }
+
   const stylePenalty = errors.filter((e) => !String(e.type).includes('verified') && !String(e.type).includes('unsupported')).length * 8;
   const factPenalty = factCorrectness.scorePenalty;
-  const validationScore = Math.max(0, 100 - stylePenalty - factPenalty);
+  const newsPenalty = newsworthinessValidation.scorePenalty;
+  const validationScore = Math.max(0, 100 - stylePenalty - factPenalty - newsPenalty);
 
   return {
     ok: errors.length === 0,
@@ -130,6 +144,7 @@ export function validateMultipassDraft({
     wordCount: words,
     validationScore,
     factCorrectness,
+    newsworthinessValidation,
     checksRun: [
       'required_recap',
       'lead_story',
@@ -140,6 +155,7 @@ export function validateMultipassDraft({
       'headline_match',
       'duplicate_paragraphs',
       'fact_correctness',
+      'newsroom_intelligence',
     ],
   };
 }

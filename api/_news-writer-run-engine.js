@@ -39,6 +39,7 @@ import {
   sanitizeHeadlinePack,
   sanitizeWriterText,
 } from './_news-writer-fact-verification.js';
+import { buildNewsworthinessReport } from './_news-writer-newsworthiness.js';
 import {
   countOutlineSections,
   WRITER_RUN_MAX_OPENAI_CALLS_PER_REQUEST,
@@ -137,6 +138,16 @@ export function createInitialCheckpoint({
     racePackage && preparedFacts
       ? buildFactVerificationReport({ racePackage, preparedFacts })
       : null;
+  const newsworthinessReport =
+    racePackage && preparedFacts && planResult?.storyPlan
+      ? buildNewsworthinessReport({
+          racePackage,
+          preparedFacts,
+          storyPlan: planResult.storyPlan,
+          requiredRecap: planResult.requiredRecap,
+          factVerification,
+        })
+      : null;
   return {
     v: 1,
     runType,
@@ -166,6 +177,7 @@ export function createInitialCheckpoint({
     packageStale: false,
     startedAtMs: Date.now(),
     factVerification,
+    newsworthinessReport,
   };
 }
 
@@ -227,6 +239,7 @@ function buildMultipassPipelineResult(checkpoint, { seasonId, raceNumber, articl
   const planResult = rebuildPlanFromCheckpoint(checkpoint);
   const storyPlan = planResult.storyPlan;
   const factVerification = checkpoint.factVerification || null;
+  const newsworthinessReport = checkpoint.newsworthinessReport || null;
   const edited = checkpoint.edited || {};
   const headlinePack = checkpoint.headlinePack || {};
   const usage = totalUsageFromCheckpoint(checkpoint);
@@ -251,6 +264,7 @@ function buildMultipassPipelineResult(checkpoint, { seasonId, raceNumber, articl
     factUsageLedgerAfterWrite: checkpoint.ledger,
     ledgerCoverageAfterWrite: ledgerCoverageSnapshot(checkpoint.ledger),
     factVerification,
+    newsworthinessReport,
     openAiUsage: { ...usage, elapsedMs },
     article: draft,
     author: NEWS_AUTHOR,
@@ -357,7 +371,17 @@ export async function advanceWriterRun(run, {
       preparedFacts: ctx.preparedFacts,
     });
   }
+  if (!checkpoint.newsworthinessReport && ctx.racePackage && ctx.preparedFacts && planResult?.storyPlan) {
+    checkpoint.newsworthinessReport = buildNewsworthinessReport({
+      racePackage: ctx.racePackage,
+      preparedFacts: ctx.preparedFacts,
+      storyPlan: planResult.storyPlan,
+      requiredRecap: planResult.requiredRecap,
+      factVerification: checkpoint.factVerification,
+    });
+  }
   const activeVerification = checkpoint.factVerification || null;
+  const activeNewsworthiness = checkpoint.newsworthinessReport || null;
   const outlineById = outlineByIdFromCheckpoint(checkpoint);
   let openAiBudget = maxOpenAiCalls;
   let tickOpenAiCalls = 0;
@@ -388,6 +412,7 @@ export async function advanceWriterRun(run, {
         sectionMemory: checkpoint.sectionMemory,
         callOpenAi,
         factVerification: activeVerification,
+        newsworthinessReport: activeNewsworthiness,
       });
       checkpoint.sectionDrafts.push(draft);
       appendSectionMemory(checkpoint.sectionMemory, draft);
@@ -412,6 +437,7 @@ export async function advanceWriterRun(run, {
         requiredRecap: planResult.requiredRecap,
         callOpenAi,
         factVerification: activeVerification,
+        newsworthinessReport: activeNewsworthiness,
       });
       edited.body = sanitizeWriterText(edited.body, activeVerification);
       edited.summary = sanitizeWriterText(edited.summary, activeVerification);
@@ -434,6 +460,7 @@ export async function advanceWriterRun(run, {
         storyPlan,
         callOpenAi,
         factVerification: activeVerification,
+        newsworthinessReport: activeNewsworthiness,
       });
       headlinePack = sanitizeHeadlinePack(headlinePack, activeVerification);
       checkpoint.headlinePack = headlinePack;
@@ -464,6 +491,7 @@ export async function advanceWriterRun(run, {
         coverageTargets: planResult.coverageTargets,
         allowedDriverNames: allowedDriverNames(storyPlan, ctx.preparedFacts),
         factVerification: activeVerification,
+        newsworthinessReport: activeNewsworthiness,
       });
       checkpoint.validation = validation;
 
@@ -503,6 +531,7 @@ export async function advanceWriterRun(run, {
         coverageTargets: planResult.coverageTargets,
         allowedDriverNames: allowedDriverNames(storyPlan, ctx.preparedFacts),
         factVerification: activeVerification,
+        newsworthinessReport: activeNewsworthiness,
       });
       checkpoint.validation = validation;
       markStepComplete(checkpoint, step);
@@ -555,6 +584,8 @@ export async function advanceWriterRun(run, {
         requiredRecap: planResult.requiredRecap,
         repairHints: hints,
         callOpenAi,
+        factVerification: activeVerification,
+        newsworthinessReport: activeNewsworthiness,
       });
       checkpoint.edited = edited;
       pushUsage(checkpoint, edited.editorDiagnostics?.usage || {});
@@ -575,6 +606,7 @@ export async function advanceWriterRun(run, {
         storyPlan,
         callOpenAi,
         factVerification: activeVerification,
+        newsworthinessReport: activeNewsworthiness,
       });
       headlinePack = sanitizeHeadlinePack(headlinePack, activeVerification);
       checkpoint.headlinePack = headlinePack;
