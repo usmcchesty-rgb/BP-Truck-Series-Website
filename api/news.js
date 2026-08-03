@@ -3,6 +3,14 @@ import { resolveUniqueSlugForTable } from './_news-article-slug.js';
 import { ARTICLE_TYPES } from '../server/config/news-system-prompt.js';
 import { generateNewsArticle, normalizeArticleType } from './_news-generator.js';
 import {
+  generateNewsArticleMultipass,
+  isNewsWriterMultipassEnabled,
+} from './_news-writer-orchestrator.js';
+import {
+  isNewsWriterShadowModeEnabled,
+} from '../server/config/news-writer-multipass-config.js';
+import { runWriterShadowComparison } from './_news-writer-shadow.js';
+import {
   deleteRaceTranscript,
   listRaceTranscripts,
   loadRaceTranscript,
@@ -21,6 +29,13 @@ import {
   handleResearchFacts,
   handleResearchPreview,
   handleResearchQuality,
+  handleResearchWriterPreview,
+  handleResearchWriterShadow,
+  handleResearchWriterEstimate,
+  handleResearchWriterStart,
+  handleResearchWriterContinue,
+  handleResearchWriterStatus,
+  handleResearchWriterCancel,
   handleResearchQuotes,
   handleResearchRebuildEstimateAction,
   handleResearchSources,
@@ -435,16 +450,38 @@ async function handleGenerate(body) {
     rawRace != null && rawRace !== '' && Number.isInteger(Number(rawRace)) && Number(rawRace) >= 1;
 
   try {
-    const result = await generateNewsArticle({
-      articleType,
-      raceNumber: isDriverSpotlight || !hasRace ? null : Number(rawRace),
-      manualNotes: body.manualNotes ?? body.manualRaceNotes ?? body.manual_notes,
-      newsTopic: body.newsTopic ?? body.news_topic,
-      transcript: body.transcript,
-      headlineOverride: body.headlineOverride ?? body.headline_override,
-      spotlightDriverId,
-      articleDepth: body.articleDepth ?? body.article_depth,
-    });
+    const shadowMode =
+      isNewsWriterShadowModeEnabled() && articleType === 'race-recap' && hasRace;
+    if (shadowMode) {
+      const shadow = await runWriterShadowComparison({
+        seasonId: body.seasonId,
+        raceNumber: Number(rawRace),
+        articleType,
+        articleDepth: body.articleDepth ?? body.article_depth,
+        manualNotes: body.manualNotes ?? body.manualRaceNotes ?? body.manual_notes,
+      });
+      return { data: shadow, status: 200 };
+    }
+
+    const useMultipass =
+      isNewsWriterMultipassEnabled() && articleType === 'race-recap' && hasRace;
+    const result = useMultipass
+      ? await generateNewsArticleMultipass({
+          articleType,
+          raceNumber: Number(rawRace),
+          articleDepth: body.articleDepth ?? body.article_depth,
+          previewOnly: true,
+        })
+      : await generateNewsArticle({
+          articleType,
+          raceNumber: isDriverSpotlight || !hasRace ? null : Number(rawRace),
+          manualNotes: body.manualNotes ?? body.manualRaceNotes ?? body.manual_notes,
+          newsTopic: body.newsTopic ?? body.news_topic,
+          transcript: body.transcript,
+          headlineOverride: body.headlineOverride ?? body.headline_override,
+          spotlightDriverId,
+          articleDepth: body.articleDepth ?? body.article_depth,
+        });
     return { data: result, status: 200 };
   } catch (error) {
     return {
@@ -636,6 +673,62 @@ async function handlePost(req, res) {
   if (action === 'research-preview') {
     const result = await handleResearchPreview(body);
     if (result.error) return res.status(result.status).json({ error: result.error });
+    return res.status(result.status).json(result.data);
+  }
+
+  if (action === 'research-writer-preview') {
+    const result = await handleResearchWriterPreview(body);
+    if (result.error) {
+      return res.status(result.status || 400).json({ error: result.error, operationId: result.operationId, ...(result.data || {}) });
+    }
+    return res.status(result.status).json(result.data);
+  }
+
+  if (action === 'research-writer-estimate') {
+    const result = await handleResearchWriterEstimate(body);
+    if (result.error) {
+      return res.status(result.status || 400).json({ error: result.error, ...(result.data || {}) });
+    }
+    return res.status(result.status).json(result.data);
+  }
+
+  if (action === 'research-writer-start') {
+    const result = await handleResearchWriterStart(body);
+    if (result.error) {
+      return res.status(result.status || 400).json({ error: result.error, ...(result.data || {}) });
+    }
+    return res.status(result.status).json(result.data);
+  }
+
+  if (action === 'research-writer-continue') {
+    const result = await handleResearchWriterContinue(body);
+    if (result.error) {
+      return res.status(result.status || 400).json({ error: result.error, ...(result.data || {}) });
+    }
+    return res.status(result.status).json(result.data);
+  }
+
+  if (action === 'research-writer-status') {
+    const result = await handleResearchWriterStatus(body);
+    if (result.error) {
+      return res.status(result.status || 400).json({ error: result.error, ...(result.data || {}) });
+    }
+    return res.status(result.status).json(result.data);
+  }
+
+  if (action === 'research-writer-cancel') {
+    const result = await handleResearchWriterCancel(body);
+    if (result.error) {
+      return res.status(result.status || 400).json({ error: result.error, ...(result.data || {}) });
+    }
+    return res.status(result.status).json(result.data);
+  }
+
+  if (action === 'research-writer-shadow') {
+    const result = await handleResearchWriterShadow(body);
+    if (result.error) {
+      return res.status(result.status || 400).json({ error: result.error, operationId: result.operationId });
+    }
     return res.status(result.status).json(result.data);
   }
 

@@ -348,6 +348,8 @@
           <button type="button" class="research-tab-btn" data-research-tab="source-history">Source History</button>
           <button type="button" class="research-tab-btn" data-research-tab="evidence">Evidence Preview</button>
           <button type="button" class="research-tab-btn" data-research-tab="story-plan">Story Plan (3a)</button>
+          <button type="button" class="research-tab-btn" data-research-tab="writer-draft">Writer Draft (3b)</button>
+          <button type="button" class="research-tab-btn" data-research-tab="writer-shadow">Shadow Compare</button>
           <button type="button" class="research-tab-btn" data-research-tab="quality">Research Quality</button>
         </div>
         <div id="researchTabOverview" class="research-tab-panel is-active"></div>
@@ -361,6 +363,8 @@
         <div id="researchTabSourceHistory" class="research-tab-panel"></div>
         <div id="researchTabEvidence" class="research-tab-panel"></div>
         <div id="researchTabStoryPlan" class="research-tab-panel"></div>
+        <div id="researchTabWriterDraft" class="research-tab-panel"></div>
+        <div id="researchTabWriterShadow" class="research-tab-panel"></div>
         <div id="researchTabQuality" class="research-tab-panel"></div>
         <pre id="researchPackageStatus" hidden>Select a race number, check the database, then Refresh Status.</pre>
       </div>
@@ -1627,6 +1631,18 @@
       ].join('\n');
     }
 
+    let lastWriterShadowComparison = null;
+
+    function applyDraftToEditor(article, sourceLabel) {
+      const a = article || {};
+      $('#headline').value = a.headline || '';
+      $('#subheadline').value = a.subheadline || '';
+      $('#summary').value = a.summary || '';
+      $('#body').value = a.body || '';
+      if (window.NewsBodyEditor) NewsBodyEditor.updatePreview();
+      setMsg(`Loaded ${sourceLabel} draft into editor (not saved).`);
+    }
+
     async function generateDraft(isRegenerate) {
       if (isDriverSpotlightType() && !$('#spotlightDriverId').value) {
         return setMsg('Select a spotlight driver before generating a Driver Spotlight article.', true);
@@ -1653,6 +1669,16 @@
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Generation failed');
+
+        if (data.mode === 'shadow') {
+          lastWriterShadowComparison = data;
+          setMsg('Shadow mode: both drafts generated — open Research → Shadow Compare.');
+          if (typeof loadResearchWriterShadowTab === 'function') {
+            setResearchTab('writer-shadow');
+            await loadResearchWriterShadowTab(data);
+          }
+          return;
+        }
 
         const article = data.article || {};
         if (!$('#headlineOverride').value.trim() || isRegenerate) {
@@ -1814,6 +1840,8 @@
         'source-history': 'researchTabSourceHistory',
         evidence: 'researchTabEvidence',
         'story-plan': 'researchTabStoryPlan',
+        'writer-draft': 'researchTabWriterDraft',
+        'writer-shadow': 'researchTabWriterShadow',
         quality: 'researchTabQuality',
       };
       Object.entries(map).forEach(([key, id]) => {
@@ -2232,8 +2260,11 @@
           <td>${(c.supportingFactIds || []).length}</td>
           <td class="sub">${escapeHtml(c.suppressedReason || '')}</td>
         </tr>`).join('');
-      const canon = dp.ledgerCoverage?.canonical || {};
-      const covTargets = dp.coverageTargets || {};
+      const canon = dp.planningCoverage?.primary || dp.ledgerCoverage?.canonical || {};
+      const covTargets = dp.coverageTargets || dp.planningCoverage?.coverageTargets || {};
+      const rawCov = dp.secondaryDiagnostics?.rawFactCoverage || {};
+      const unresolvedRows = (sp.unresolvedDrivers || []).map((u) => `
+        <tr><td>${escapeHtml(u.rawName || '—')}</td><td>${escapeHtml(u.driverId || '—')}</td><td>${escapeHtml(u.matchMethod || '')}</td><td>${(u.factIds || []).length}</td></tr>`).join('');
       const unusedGroups = dp.unusedFactDiagnostics || {};
       const dupUnused = (unusedGroups.duplicate_of_canonical || []).slice(0, 8).map((u) => `<li class="sub">${escapeHtml(u.summaryShort)}</li>`).join('') || '<li class="sub">None</li>';
       const lowQual = (dp.excludedPlanningFacts || []).slice(0, 10).map((u) => `<li class="sub">${escapeHtml(u.summaryShort)} (${escapeHtml(u.reason)})</li>`).join('') || '<li class="sub">None</li>';
@@ -2263,16 +2294,20 @@
         <table class="research-table"><thead><tr><th>Story</th><th>Status</th><th>Score</th><th>Conf</th><th>Facts</th></tr></thead><tbody>${storyRows}</tbody></table>
         <h4 style="color:#f0c040;margin:12px 0 6px">Normalized drivers</h4>
         <table class="research-table"><thead><tr><th>Name</th><th>Roles</th></tr></thead><tbody>${driverRows || '<tr><td colspan="2" class="sub">—</td></tr>'}</tbody></table>
+        <h4 style="color:#f0c040;margin:12px 0 6px">Unresolved drivers (diagnostics only)</h4>
+        <table class="research-table"><thead><tr><th>Raw name</th><th>ID</th><th>Match</th><th>Facts</th></tr></thead><tbody>${unresolvedRows || '<tr><td colspan="4" class="sub">None</td></tr>'}</tbody></table>
         <h4 style="color:#f0c040;margin:12px 0 6px">Reader Takeaways</h4>
         <table class="research-table"><thead><tr><th>Pri</th><th>Label</th><th>Evidence</th></tr></thead><tbody>${takeawayRows}</tbody></table>
         <h4 style="color:#f0c040;margin:12px 0 6px">Article Outline</h4>
         <table class="research-table"><thead><tr><th>Section</th><th>Title</th><th>Facts</th><th>Target words</th></tr></thead><tbody>${outlineRows}</tbody></table>
         <p class="sub"><strong>Word allocation:</strong></p><ul class="sub">${wordAlloc || '<li>—</li>'}</ul>
-        <h4 style="color:#f0c040;margin:12px 0 6px">Coverage</h4>
-        <p class="sub">Raw facts: ${escapeHtml(dp.ledgerCoverage?.coveragePercent ?? 0)}% · High-priority raw: ${escapeHtml(dp.ledgerCoverage?.highPriorityCoveragePercent ?? 0)}%</p>
+        <h4 style="color:#f0c040;margin:12px 0 6px">Planning coverage (canonical — primary)</h4>
         <p class="sub">Canonical events: ${escapeHtml(canon.coveragePercent ?? 0)}% · Critical canonical: ${escapeHtml(canon.criticalCoveragePercent ?? 0)}% · High-priority canonical: ${escapeHtml(canon.highPriorityCoveragePercent ?? 0)}%</p>
-        <p class="sub">Targets (medium): critical ≥ ${escapeHtml(covTargets.targets?.critical ?? '—')}%, high ≥ ${escapeHtml(covTargets.targets?.high ?? '—')}% · Met: ${covTargets.met ? statusPill('Yes', 'complete') : statusPill('No', 'missing')}</p>
+        <p class="sub">Targets: critical ≥ ${escapeHtml(covTargets.targets?.critical ?? '—')}%, high ≥ ${escapeHtml(covTargets.targets?.high ?? '—')}% · Met: ${covTargets.met ? statusPill('Yes', 'complete') : statusPill('No', 'missing')}</p>
         ${(covTargets.reasons || []).length ? `<ul class="sub">${covTargets.reasons.map((r) => `<li>${escapeHtml(r)}</li>`).join('')}</ul>` : ''}
+        <details class="sub" style="margin-top:8px"><summary>Secondary: raw fact coverage</summary>
+          <p>Raw facts planned: ${escapeHtml(rawCov.coveragePercent ?? dp.ledgerCoverage?.coveragePercent ?? 0)}% · High-priority raw: ${escapeHtml(rawCov.highPriorityCoveragePercent ?? dp.ledgerCoverage?.highPriorityCoveragePercent ?? 0)}% (${escapeHtml(rawCov.plannedOrUsed ?? '—')} / ${escapeHtml(rawCov.totalFacts ?? '—')} facts)</p>
+        </details>
         <h4 style="color:#f0c040;margin:12px 0 6px">Fact Usage Ledger (sample)</h4>
         <table class="research-table"><thead><tr><th>Fact</th><th>Tier</th><th>Status</th><th>Sections</th></tr></thead><tbody>${ledgerRows}</tbody></table>
         <h4 style="color:#f0c040;margin:12px 0 6px">Genuine unused critical facts</h4>
@@ -2282,6 +2317,283 @@
         <h4 style="color:#f0c040;margin:12px 0 6px">Low-quality transcript excluded from planning</h4>
         <ul>${lowQual}</ul>
         <p class="sub">Deterministic planning only — no article prose generated.</p>`;
+    }
+
+    function writerRunStorageKey(runType) {
+      const race = $('#raceNumber')?.value || '';
+      return `bp-writer-run:${runType}:${race}`;
+    }
+
+    function renderWriterCostEstimate(estimate) {
+      if (!estimate) return '<p class="sub">No estimate available.</p>';
+      return `
+        <table class="research-table">
+          <tbody>
+            <tr><td>Article depth</td><td>${escapeHtml(estimate.articleDepth)}</td></tr>
+            <tr><td>Section count</td><td>${escapeHtml(estimate.sectionCount)}</td></tr>
+            <tr><td>Expected OpenAI calls</td><td>${escapeHtml(estimate.expectedOpenAiCalls)} (incl. repair reserve)</td></tr>
+            <tr><td>Est. prompt tokens</td><td>${escapeHtml(estimate.estimatedPromptTokens)}</td></tr>
+            <tr><td>Est. completion tokens</td><td>${escapeHtml(estimate.estimatedCompletionTokens)}</td></tr>
+            <tr><td>Est. total tokens</td><td>${escapeHtml(estimate.estimatedTotalTokens)}</td></tr>
+            <tr><td>Est. USD cost</td><td>$${escapeHtml(Number(estimate.estimatedCostUsd || 0).toFixed(4))}</td></tr>
+            <tr><td>Est. continuation requests</td><td>${escapeHtml(estimate.estimatedContinuationRequests)} (max ${escapeHtml(estimate.maxOpenAiCallsPerRequest || 2)} calls each)</td></tr>
+            <tr><td>Est. runtime</td><td>~${escapeHtml(estimate.estimatedRuntimeSeconds)} s</td></tr>
+            <tr><td>Package fingerprint</td><td><code>${escapeHtml(estimate.packageFingerprint || '—')}</code></td></tr>
+            <tr><td>Planner version</td><td>${escapeHtml(estimate.plannerVersion || '—')}</td></tr>
+          </tbody>
+        </table>`;
+    }
+
+    function renderWriterRunProgress(progress) {
+      if (!progress) return '';
+      const stale = progress.packageStale ? statusPill('Package stale — start new run', 'missing') : '';
+      return `
+        <div class="research-detail-block">
+          <strong>Run progress</strong> ${stale}
+          <p class="sub">Run ${escapeHtml(progress.runId || '—')} · Status ${escapeHtml(progress.status)} · Step ${escapeHtml(progress.currentStep || '—')}</p>
+          <p class="sub">Sections ${escapeHtml(progress.sectionsCompleted ?? 0)} / ${escapeHtml(progress.sectionsTotal ?? '—')} · Steps ${escapeHtml(progress.stepsCompleted ?? 0)} / ${escapeHtml(progress.stepsTotal ?? '—')}</p>
+          <p class="sub">OpenAI calls so far: ${escapeHtml(progress.openAiUsage?.calls ?? 0)} · Tokens: ${escapeHtml(progress.openAiUsage?.totalTokens ?? 0)} · Est. cost: $${escapeHtml(Number(progress.estimatedCostUsd || 0).toFixed(4))} · Elapsed: ${escapeHtml(progress.elapsedMs ?? 0)} ms</p>
+          <p class="sub">Fingerprint <code>${escapeHtml(progress.packageFingerprint || '—')}</code> · Planner ${escapeHtml(progress.plannerVersion || '—')}</p>
+        </div>`;
+    }
+
+    function renderWriterDraftResult(data) {
+      const sections = (data.generatedSections || []).map((s) => `
+        <tr>
+          <td>${escapeHtml(s.sectionId)}</td>
+          <td>${escapeHtml(s.wordCount)}</td>
+          <td>${(s.usedFactIds || []).length}</td>
+          <td>${escapeHtml(s.writerDiagnostics?.elapsedMs ?? '—')} ms</td>
+        </tr>`).join('');
+      const val = data.validation || {};
+      const valRows = (val.errors || []).map((e) => `<li>${escapeHtml(e.message || e.type)}</li>`).join('') || '<li class="sub">No errors</li>';
+      const cov = data.ledgerCoverageAfterWrite || {};
+      return `
+        <p class="sub">Phase 3b draft · Multipass ${escapeHtml(data.multipassVersion || '—')} · Planner ${escapeHtml(data.plannerVersion || '—')} · ${escapeHtml(data.openAiUsage?.elapsedMs ?? 0)} ms · ${escapeHtml(data.openAiUsage?.calls ?? 0)} OpenAI calls · ${escapeHtml(data.openAiUsage?.totalTokens ?? 0)} tokens</p>
+        <div class="research-detail-block"><strong>Flow</strong> Story Plan → Sections (${(data.generatedSections || []).length}) → Editorial → Validation → Headline</div>
+        <h4 style="color:#f0c040;margin:12px 0 6px">Generated sections</h4>
+        <table class="research-table"><thead><tr><th>Section</th><th>Words</th><th>Facts used</th><th>Latency</th></tr></thead><tbody>${sections || '<tr><td colspan="4" class="sub">—</td></tr>'}</tbody></table>
+        <h4 style="color:#f0c040;margin:12px 0 6px">Fact coverage after write</h4>
+        <p class="sub">Facts used: ${escapeHtml(cov.factsUsed ?? '—')} / ${escapeHtml(cov.totalFacts ?? '—')} · Critical used: ${escapeHtml(cov.criticalCoveragePercent ?? '—')}%</p>
+        <h4 style="color:#f0c040;margin:12px 0 6px">Validation</h4>
+        <p>${val.ok ? statusPill('Passed', 'complete') : statusPill('Issues', 'missing')} · Words: ${escapeHtml(val.wordCount ?? '—')}${data.repairAttempted ? ' · Repair attempted' : ''}</p>
+        <ul>${valRows}</ul>
+        <h4 style="color:#f0c040;margin:12px 0 6px">Headline pack</h4>
+        <p><strong>${escapeHtml(data.headlinePack?.headline || '—')}</strong></p>
+        <p class="sub">${escapeHtml(data.headlinePack?.subheadline || '')}</p>
+        <h4 style="color:#f0c040;margin:12px 0 6px">Editorial draft (excerpt)</h4>
+        <pre style="white-space:pre-wrap;font-size:11px;color:#ccc">${escapeHtml(String(data.article?.body || '').slice(0, 2500))}</pre>
+        <p class="sub">Draft only — not saved or published. Work continues only while you click Continue (no background worker).</p>`;
+    }
+
+    async function refreshWriterDraftTabUi({ estimate, progress, draft, errorMessage }) {
+      const depth = $('#articleDepth')?.value || 'medium';
+      const runId = sessionStorage.getItem(writerRunStorageKey('multipass_preview'));
+      let progressBlock = renderWriterRunProgress(progress);
+      let draftBlock = draft ? renderWriterDraftResult(draft) : '';
+      if (errorMessage) draftBlock = `<p class="sub">${escapeHtml(errorMessage)}</p>${draftBlock}`;
+      $('#researchTabWriterDraft').innerHTML = `
+        <p class="sub">Writer Draft (3b) · checkpointed runs · depth ${escapeHtml(depth)} · opening this tab performs <strong>zero</strong> OpenAI calls.</p>
+        <h4 style="color:#f0c040;margin:12px 0 6px">Cost estimate (deterministic)</h4>
+        ${renderWriterCostEstimate(estimate)}
+        <div class="generate-row" style="margin-top:10px;flex-wrap:wrap;gap:8px">
+          <button type="button" class="btn btn-primary" id="writerStartPaidBtn">Start Paid Writer Run</button>
+          <button type="button" class="btn btn-secondary" id="writerContinueBtn" ${runId ? '' : 'disabled'}>Continue</button>
+          <button type="button" class="btn btn-secondary" id="writerResumeBtn" ${runId ? '' : 'disabled'}>Resume</button>
+          <button type="button" class="btn btn-secondary" id="writerCancelBtn" ${runId ? '' : 'disabled'}>Cancel</button>
+          <button type="button" class="btn btn-secondary" id="writerRestartBtn">Restart (new run)</button>
+        </div>
+        ${progressBlock}
+        ${draftBlock}`;
+      $('#writerStartPaidBtn')?.addEventListener('click', () => startCheckpointedWriterRun('multipass_preview'));
+      $('#writerContinueBtn')?.addEventListener('click', () => continueCheckpointedWriterRun('multipass_preview'));
+      $('#writerResumeBtn')?.addEventListener('click', () => continueCheckpointedWriterRun('multipass_preview'));
+      $('#writerCancelBtn')?.addEventListener('click', () => cancelCheckpointedWriterRun('multipass_preview'));
+      $('#writerRestartBtn')?.addEventListener('click', () => restartCheckpointedWriterRun('multipass_preview'));
+    }
+
+    async function startCheckpointedWriterRun(runType) {
+      const depth = $('#articleDepth')?.value || 'medium';
+      const label = runType === 'shadow_compare' ? 'Start Paid Shadow Run' : 'Start Paid Writer Run';
+      const ok = window.confirm(`${label}? This will use OpenAI for the selected race and depth.`);
+      if (!ok) return;
+      setMsg('Starting paid writer run…');
+      const data = await researchPost('research-writer-start', {
+        articleDepth: depth,
+        articleType: 'race-recap',
+        runType,
+        confirmPaid: true,
+        manualNotes: $('#manualNotes')?.value || '',
+      });
+      if (data.progress?.runId) sessionStorage.setItem(writerRunStorageKey(runType), data.progress.runId);
+      const ui = {
+        estimate: data.estimate,
+        progress: data.progress,
+        errorMessage: data.stale ? data.message : null,
+      };
+      if (runType === 'shadow_compare') {
+        await refreshWriterShadowTabUi({ ...ui, comparison: data.draft?.mode === 'shadow' ? data.draft : null });
+      } else {
+        await refreshWriterDraftTabUi({ ...ui, draft: data.draft });
+      }
+      if (data.done && !data.stale) setMsg('Writer run complete (draft only).');
+      else if (data.stale) setMsg(data.message || 'Package changed — start a new run.', true);
+      else setMsg('Writer run in progress — click Continue.');
+    }
+
+    async function continueCheckpointedWriterRun(runType) {
+      const runId = sessionStorage.getItem(writerRunStorageKey(runType));
+      if (!runId) return setMsg('No run to continue — start a paid run first.', true);
+      setMsg('Continuing writer run…');
+      const data = await researchPost('research-writer-continue', { runId });
+      const ui = {
+        estimate: null,
+        progress: data.progress,
+        errorMessage: data.stale ? data.message : null,
+      };
+      if (runType === 'shadow_compare') {
+        await refreshWriterShadowTabUi({ ...ui, comparison: data.draft?.mode === 'shadow' ? data.draft : null });
+      } else {
+        await refreshWriterDraftTabUi({ ...ui, draft: data.draft });
+      }
+      if (data.done && !data.stale) setMsg('Writer run complete.');
+      else if (data.stale) setMsg(data.message || 'Package stale.', true);
+      else setMsg('Partial progress saved — Continue again.');
+    }
+
+    async function cancelCheckpointedWriterRun(runType) {
+      const runId = sessionStorage.getItem(writerRunStorageKey(runType));
+      if (!runId) return;
+      await researchPost('research-writer-cancel', { runId });
+      sessionStorage.removeItem(writerRunStorageKey(runType));
+      setMsg('Writer run cancelled.');
+      if (runType === 'shadow_compare') await loadResearchWriterShadowTab();
+      else await loadResearchWriterDraftTab();
+    }
+
+    async function restartCheckpointedWriterRun(runType) {
+      sessionStorage.removeItem(writerRunStorageKey(runType));
+      if (runType === 'shadow_compare') await loadResearchWriterShadowTab();
+      else await loadResearchWriterDraftTab();
+      setMsg('Ready for a new run — review estimate and click Start Paid Writer Run.');
+    }
+
+    async function loadResearchWriterDraftTab() {
+      const depth = $('#articleDepth')?.value || 'medium';
+      $('#researchTabWriterDraft').innerHTML = '<p class="sub">Loading cost estimate (no OpenAI)…</p>';
+      const estimate = await researchPost('research-writer-estimate', { articleDepth: depth, articleType: 'race-recap', runType: 'multipass_preview' });
+      const runId = sessionStorage.getItem(writerRunStorageKey('multipass_preview'));
+      let progress = null;
+      let draft = null;
+      if (runId) {
+        try {
+          const status = await researchPost('research-writer-status', { runId });
+          progress = status.progress;
+          if (status.draft) draft = status.draft;
+        } catch {
+          sessionStorage.removeItem(writerRunStorageKey('multipass_preview'));
+        }
+      }
+      await refreshWriterDraftTabUi({ estimate, progress, draft });
+    }
+
+    function renderWriterShadowComparison(data) {
+      const cmp = data.comparison || {};
+      const diff = data.differences || {};
+      const leg = cmp.legacy || {};
+      const mul = cmp.multipass || {};
+      const legacyArticle = data.legacy?.article || {};
+      const multiArticle = data.multipass?.article || {};
+      return `
+        <p class="sub">Shadow comparison · Package ${escapeHtml(data.packageFingerprint || '—')} · ${escapeHtml(data.packageFactCount ?? '—')} facts · ${escapeHtml(data.totalElapsedMs ?? 0)} ms total · pinned package: ${data.pinnedIntelligencePackage ? 'yes' : 'no'}</p>
+        <table class="research-table">
+          <thead><tr><th>Metric</th><th>Legacy</th><th>Multipass</th></tr></thead>
+          <tbody>
+            <tr><td>Headline</td><td>${escapeHtml(leg.headline || '—')}</td><td>${escapeHtml(mul.headline || '—')}</td></tr>
+            <tr><td>Word count</td><td>${escapeHtml(leg.wordCount ?? '—')}</td><td>${escapeHtml(mul.wordCount ?? '—')}</td></tr>
+            <tr><td>Validation score</td><td>${escapeHtml(leg.validationScore ?? '—')}</td><td>${escapeHtml(mul.validationScore ?? '—')}</td></tr>
+            <tr><td>Takeaway coverage</td><td>${escapeHtml(leg.takeawayCoveragePercent ?? '—')}%</td><td>${escapeHtml(mul.takeawayCoveragePercent ?? '—')}%</td></tr>
+            <tr><td>Critical fact usage</td><td>—</td><td>${escapeHtml(mul.canonicalCoveragePercent ?? '—')}%</td></tr>
+            <tr><td>OpenAI calls</td><td>${escapeHtml(leg.openAiCalls ?? '—')}</td><td>${escapeHtml(mul.openAiCalls ?? '—')}</td></tr>
+            <tr><td>Prompt tokens</td><td>${escapeHtml(leg.promptTokens ?? '—')}</td><td>${escapeHtml(mul.promptTokens ?? '—')}</td></tr>
+            <tr><td>Completion tokens</td><td>${escapeHtml(leg.completionTokens ?? '—')}</td><td>${escapeHtml(mul.completionTokens ?? '—')}</td></tr>
+            <tr><td>Est. cost (USD)</td><td>${escapeHtml(leg.estimatedCostUsd != null ? Number(leg.estimatedCostUsd).toFixed(4) : '—')}</td><td>${escapeHtml(mul.estimatedCostUsd != null ? Number(mul.estimatedCostUsd).toFixed(4) : '—')}</td></tr>
+            <tr><td>Generation time</td><td>${escapeHtml(leg.generationTimeMs ?? '—')} ms</td><td>${escapeHtml(mul.generationTimeMs ?? '—')} ms</td></tr>
+            <tr><td>Repair attempts</td><td>${escapeHtml(leg.repairAttempts ?? 0)}</td><td>${escapeHtml(mul.repairAttempts ?? 0)}</td></tr>
+            <tr><td>Sections</td><td>1</td><td>${escapeHtml(mul.sectionCount ?? '—')}</td></tr>
+            <tr><td>Facts used</td><td>—</td><td>${escapeHtml(mul.factsUsed ?? '—')}</td></tr>
+          </tbody>
+        </table>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">
+          <div class="research-detail-block"><strong>Legacy</strong><pre style="white-space:pre-wrap;font-size:10px;color:#ccc;max-height:280px;overflow:auto">${escapeHtml(String(legacyArticle.body || '').slice(0, 4000))}</pre></div>
+          <div class="research-detail-block"><strong>Multipass</strong><pre style="white-space:pre-wrap;font-size:10px;color:#ccc;max-height:280px;overflow:auto">${escapeHtml(String(multiArticle.body || '').slice(0, 4000))}</pre></div>
+        </div>
+        <h4 style="color:#f0c040;margin:12px 0 6px">Article differences</h4>
+        <ul class="sub">
+          <li>Headline changed: ${diff.headlineDiff?.changed ? 'yes' : 'no'}</li>
+          <li>Lead paragraph changed: ${diff.leadParagraphDiff?.changed ? 'yes' : 'no'}</li>
+          <li>${escapeHtml(diff.storyOrderingNote || '')}</li>
+        </ul>
+        <div class="generate-row" style="margin-top:10px">
+          <button type="button" class="btn btn-secondary" id="loadLegacyShadowDraftBtn">Load Legacy into Editor</button>
+          <button type="button" class="btn btn-secondary" id="loadMultipassShadowDraftBtn">Load Multipass into Editor</button>
+        </div>
+        <p class="sub">Choose a draft to load, then Save Draft — no auto-publish.</p>`;
+    }
+
+    async function refreshWriterShadowTabUi({ estimate, progress, comparison, errorMessage }) {
+      const depth = $('#articleDepth')?.value || 'medium';
+      const runId = sessionStorage.getItem(writerRunStorageKey('shadow_compare'));
+      let body = `
+        <p class="sub">Shadow Compare · checkpointed · depth ${escapeHtml(depth)} · zero OpenAI on tab open.</p>
+        <h4 style="color:#f0c040;margin:12px 0 6px">Cost estimate (legacy + multipass)</h4>
+        ${renderWriterCostEstimate(estimate)}
+        <div class="generate-row" style="margin-top:10px;flex-wrap:wrap;gap:8px">
+          <button type="button" class="btn btn-primary" id="shadowStartPaidBtn">Start Paid Shadow Run</button>
+          <button type="button" class="btn btn-secondary" id="shadowContinueBtn" ${runId ? '' : 'disabled'}>Continue</button>
+          <button type="button" class="btn btn-secondary" id="shadowCancelBtn" ${runId ? '' : 'disabled'}>Cancel</button>
+          <button type="button" class="btn btn-secondary" id="shadowRestartBtn">Restart</button>
+        </div>
+        ${renderWriterRunProgress(progress)}`;
+      if (errorMessage) body += `<p class="sub">${escapeHtml(errorMessage)}</p>`;
+      if (comparison) body += renderWriterShadowComparison(comparison);
+      $('#researchTabWriterShadow').innerHTML = body;
+      $('#shadowStartPaidBtn')?.addEventListener('click', () => startCheckpointedWriterRun('shadow_compare'));
+      $('#shadowContinueBtn')?.addEventListener('click', () => continueCheckpointedWriterRun('shadow_compare'));
+      $('#shadowCancelBtn')?.addEventListener('click', () => cancelCheckpointedWriterRun('shadow_compare'));
+      $('#shadowRestartBtn')?.addEventListener('click', () => restartCheckpointedWriterRun('shadow_compare'));
+      if (comparison) {
+        lastWriterShadowComparison = comparison;
+        $('#loadLegacyShadowDraftBtn')?.addEventListener('click', () => applyDraftToEditor(comparison.legacy?.article, 'legacy'));
+        $('#loadMultipassShadowDraftBtn')?.addEventListener('click', () => applyDraftToEditor(comparison.multipass?.article, 'multipass'));
+      }
+    }
+
+    async function loadResearchWriterShadowTab(prefetched) {
+      const depth = $('#articleDepth')?.value || 'medium';
+      if (prefetched && prefetched.mode === 'shadow') {
+        await refreshWriterShadowTabUi({ estimate: null, progress: null, comparison: prefetched });
+        return;
+      }
+      $('#researchTabWriterShadow').innerHTML = '<p class="sub">Loading shadow cost estimate (no OpenAI)…</p>';
+      try {
+        const estimate = await researchPost('research-writer-estimate', {
+          articleDepth: depth,
+          articleType: 'race-recap',
+          runType: 'shadow_compare',
+        });
+        const runId = sessionStorage.getItem(writerRunStorageKey('shadow_compare'));
+        let progress = null;
+        let comparison = null;
+        if (runId) {
+          const status = await researchPost('research-writer-status', { runId });
+          progress = status.progress;
+          if (status.result?.mode === 'shadow') comparison = status.result;
+        }
+        await refreshWriterShadowTabUi({ estimate, progress, comparison });
+      } catch (e) {
+        $('#researchTabWriterShadow').innerHTML = `<p class="sub">${escapeHtml(e.message)}</p>`;
+      }
     }
 
     async function loadResearchQualityTab() {
@@ -2310,6 +2622,8 @@
         else if (name === 'source-history') await loadResearchSourceHistoryTab();
         else if (name === 'evidence') await loadResearchEvidenceTab();
         else if (name === 'story-plan') await loadResearchStoryPlanTab();
+        else if (name === 'writer-draft') await loadResearchWriterDraftTab();
+        else if (name === 'writer-shadow') await loadResearchWriterShadowTab();
         else if (name === 'quality') await loadResearchQualityTab();
       } catch (e) {
         setMsg(e.message, true);

@@ -17,6 +17,15 @@ import { runDiagnoseQuality } from './_race-research-diagnose.js';
 import { selectEvidenceForArticle } from './_race-research-evidence.js';
 import { buildNewsArticlePlan } from './_race-research-plan.js';
 import { buildDeterministicArticlePlan } from './_news-writer-deterministic-plan.js';
+export {
+  handleResearchWriterPreview,
+  handleResearchWriterShadow,
+  handleResearchWriterEstimate,
+  handleResearchWriterStart,
+  handleResearchWriterContinue,
+  handleResearchWriterStatus,
+  handleResearchWriterCancel,
+} from './_news-writer-run-handlers.js';
 import {
   createResearchOperationId,
   logResearchOperation,
@@ -352,7 +361,7 @@ export async function loadIntelligenceSupplementForNews(options = {}) {
   }
 }
 
-function formatIntelligencePromptBlock(pkg, evidence, plan) {
+export function formatIntelligencePromptBlock(pkg, evidence, plan) {
   const factLines = (evidence.selectedFacts || []).map(
     (f) => `- [${f.confidence}] (${f.factType}) ${f.summary} {factId:${f.id}}`
   );
