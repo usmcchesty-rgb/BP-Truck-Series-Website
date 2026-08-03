@@ -152,6 +152,55 @@
     .research-table { width: 100%; border-collapse: collapse; font-size: 11px; }
     .research-table th, .research-table td { border-bottom: 1px solid #333; padding: 6px 8px; text-align: left; vertical-align: top; }
     .research-table th { color: #999; font-size: 10px; text-transform: uppercase; }
+    .writer-run-panel {
+      margin: 14px 0;
+      padding: 14px 16px;
+      border: 1px solid #333;
+      background: linear-gradient(180deg, #0f0f0f 0%, #080808 100%);
+      border-radius: 6px;
+    }
+    .writer-run-panel h3 { margin: 0 0 10px; font-size: 15px; color: #fff; font-weight: 800; }
+    .writer-run-bar-wrap {
+      height: 10px;
+      background: #1a1a1a;
+      border-radius: 999px;
+      overflow: hidden;
+      border: 1px solid #333;
+      margin: 8px 0 6px;
+    }
+    .writer-run-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #c62828, #ff3030);
+      border-radius: 999px;
+      transition: width 0.35s ease;
+      min-width: 0;
+    }
+    .writer-run-pct { font-size: 22px; font-weight: 900; color: #f0c040; letter-spacing: 0.02em; }
+    .writer-run-metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 10px 16px;
+      margin-top: 12px;
+      font-size: 11px;
+    }
+    .writer-run-metrics dt { color: #888; text-transform: uppercase; font-size: 9px; font-weight: 800; margin: 0 0 2px; }
+    .writer-run-metrics dd { margin: 0; color: #eee; font-weight: 600; }
+    .writer-run-banner {
+      margin: 10px 0;
+      padding: 10px 12px;
+      border-left: 3px solid #f0c040;
+      background: #14110a;
+      font-size: 12px;
+      color: #ddd;
+    }
+    .writer-run-error {
+      margin: 10px 0;
+      padding: 10px 12px;
+      border-left: 3px solid #ff3030;
+      background: #1a0a0a;
+      color: #ffb4b4;
+      font-size: 12px;
+    }
     .status-pill { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: 900; text-transform: uppercase; border: 1px solid #555; }
     .status-pill.complete { border-color: #285; color: #9f9; }
     .status-pill.partial { border-color: #863; color: #fc8; }
@@ -1632,6 +1681,93 @@
     }
 
     let lastWriterShadowComparison = null;
+    let writerRunUiModule = null;
+    const writerRunControllers = {};
+
+    function isAdminDebugMode() {
+      try {
+        return new URLSearchParams(location.search).has('debug');
+      } catch {
+        return false;
+      }
+    }
+
+    async function loadWriterRunUiModule() {
+      if (writerRunUiModule) return writerRunUiModule;
+      writerRunUiModule = await import('./writer-run-ui-client.js');
+      writerRunUiModule.clearWriterAutoAllowFlags();
+      return writerRunUiModule;
+    }
+
+    function raceLabelForWriterUi() {
+      const n = $('#raceNumber')?.value || '—';
+      return `Race ${escapeHtml(n)}`;
+    }
+
+    async function getWriterRunController(runType) {
+      const mod = await loadWriterRunUiModule();
+      if (!writerRunControllers[runType]) {
+        writerRunControllers[runType] = new mod.WriterRunController(runType, {
+          debugEnabled: () => isAdminDebugMode(),
+          debugLog: (entry) => {
+            if (isAdminDebugMode()) console.info('[writer-run]', runType, entry);
+          },
+          fetchStatus: async (runId) => fetchWriterRunStatus(runId),
+          continueRun: async (runId) => {
+            const data = await researchPost('research-writer-continue', { runId });
+            const nextRunId = extractRunIdFromWriterPayload(data) || runId;
+            persistWriterRunId(runType, nextRunId);
+            return {
+              ...data,
+              progress: data.progress || null,
+              draft: data.draft,
+              done: data.done,
+              stale: data.stale,
+              cancelled: data.cancelled,
+              message: data.message,
+              error: data.error,
+            };
+          },
+          onStateChange: () => {
+            queueWriterRunUiRefresh(runType);
+          },
+        });
+      }
+      return writerRunControllers[runType];
+    }
+
+    let writerRunUiRefreshTimer = null;
+    function queueWriterRunUiRefresh(runType) {
+      if (writerRunUiRefreshTimer) return;
+      writerRunUiRefreshTimer = setTimeout(async () => {
+        writerRunUiRefreshTimer = null;
+        const ctrl = writerRunControllers[runType];
+        if (!ctrl) return;
+        const snap = ctrl.getLastSnapshot();
+        const state = ctrl.getState();
+        if (snap.progress?.status === 'complete') {
+          setMsg(runType === 'shadow_compare' ? 'Shadow run complete.' : 'Writer run complete (draft only).');
+        }
+        if (runType === 'shadow_compare') {
+          await refreshWriterShadowTabUi({
+            estimate: null,
+            progress: snap.progress,
+            comparison: snap.comparison,
+            clientState: state,
+            errorMessage: state.lastError?.message || null,
+          });
+        } else {
+          await refreshWriterDraftTabUi({
+            estimate: null,
+            progress: snap.progress,
+            draft: snap.draft,
+            clientState: state,
+            errorMessage: state.lastError?.message || null,
+          });
+        }
+      }, 0);
+    }
+
 
     function applyDraftToEditor(article, sourceLabel) {
       const a = article || {};
@@ -2487,17 +2623,115 @@
         </table>`;
     }
 
-    function renderWriterRunProgress(progress) {
-      if (!progress) return '';
-      const stale = progress.packageStale ? statusPill('Package stale — start new run', 'missing') : '';
+    function renderWriterRunProgressPanel(runType, progress, clientState, title) {
+      if (!progress && !clientState?.runId) return '';
+      const mod = writerRunUiModule;
+      const pct = mod && progress
+        ? mod.computeWriterRunProgressPercent(progress, runType)
+        : (String(progress?.status || '').toLowerCase() === 'complete' ? 100 : 0);
+      const stageName = mod ? mod.formatWriterStageName(progress?.currentStep) : (progress?.currentStep || '—');
+      const elapsed = mod ? mod.formatDurationMs(progress?.elapsedMs) : `${progress?.elapsedMs ?? 0} ms`;
+      const remaining = mod ? mod.formatDurationMs(mod.estimateRemainingMs(progress?.elapsedMs, pct)) : '—';
+      const barBlocks = Math.round(pct / 4);
+      const barFill = '█'.repeat(Math.min(25, barBlocks)) + '░'.repeat(Math.max(0, 25 - barBlocks));
+      const activity = clientState?.requestInFlight
+        ? (clientState.activityLabel || 'Processing…')
+        : (clientState?.activityLabel || 'Waiting…');
+      let banners = '';
+      if (clientState?.pausedAfterRefresh && clientState?.paused && !clientState?.cancelled) {
+        banners += `<div class="writer-run-banner"><strong>Run paused after refresh.</strong> Press Resume to continue paid processing.</div>`;
+      }
+      if (clientState?.lastError && !clientState?.requestInFlight) {
+        banners += `<div class="writer-run-error">${escapeHtml(clientState.lastError.message || String(clientState.lastError))}</div>`;
+      }
+      if (progress?.packageStale) {
+        banners += `<div class="writer-run-error">Package fingerprint mismatch — start a new run.</div>`;
+      }
+      const stale = progress?.packageStale ? statusPill('Package stale', 'missing') : '';
       return `
-        <div class="research-detail-block">
-          <strong>Run progress</strong> ${stale}
-          <p class="sub">Run ${escapeHtml(progress.runId || '—')} · Status ${escapeHtml(progress.status)} · Step ${escapeHtml(progress.currentStep || '—')}</p>
-          <p class="sub">Sections ${escapeHtml(progress.sectionsCompleted ?? 0)} / ${escapeHtml(progress.sectionsTotal ?? '—')} · Steps ${escapeHtml(progress.stepsCompleted ?? 0)} / ${escapeHtml(progress.stepsTotal ?? '—')}</p>
-          <p class="sub">OpenAI calls so far: ${escapeHtml(progress.openAiUsage?.calls ?? 0)} · Tokens: ${escapeHtml(progress.openAiUsage?.totalTokens ?? 0)} · Est. cost: $${escapeHtml(Number(progress.estimatedCostUsd || 0).toFixed(4))} · Elapsed: ${escapeHtml(progress.elapsedMs ?? 0)} ms</p>
-          <p class="sub">Fingerprint <code>${escapeHtml(progress.packageFingerprint || '—')}</code> · Planner ${escapeHtml(progress.plannerVersion || '—')}</p>
+        ${banners}
+        <div class="writer-run-panel">
+          <h3>${escapeHtml(title)} — ${raceLabelForWriterUi()} ${stale}</h3>
+          <div style="font-family:Consolas,monospace;font-size:11px;color:#666;letter-spacing:1px">${escapeHtml(barFill)}</div>
+          <div class="writer-run-pct">${escapeHtml(pct)}%</div>
+          <dl class="writer-run-metrics">
+            <div><dt>Current stage</dt><dd>${escapeHtml(stageName)}</dd></div>
+            <div><dt>Sections</dt><dd>${escapeHtml(progress?.sectionsCompleted ?? 0)} / ${escapeHtml(progress?.sectionsTotal ?? '—')}</dd></div>
+            <div><dt>Completed steps</dt><dd>${escapeHtml(progress?.stepsCompleted ?? 0)} / ${escapeHtml(progress?.stepsTotal ?? '—')}</dd></div>
+            <div><dt>OpenAI calls</dt><dd>${escapeHtml(progress?.openAiUsage?.calls ?? 0)}</dd></div>
+            <div><dt>Tokens</dt><dd>${escapeHtml(progress?.openAiUsage?.totalTokens ?? 0)}</dd></div>
+            <div><dt>Cost</dt><dd>$${escapeHtml(Number(progress?.estimatedCostUsd || 0).toFixed(4))}</dd></div>
+            <div><dt>Elapsed</dt><dd>${escapeHtml(elapsed)}</dd></div>
+            <div><dt>Remaining</dt><dd>~${escapeHtml(remaining)}</dd></div>
+            <div><dt>Current request</dt><dd>${escapeHtml(activity)}</dd></div>
+          </dl>
+          <p class="sub">Run ${escapeHtml(progress?.runId || clientState?.runId || '—')} · Status ${escapeHtml(progress?.status || '—')} · Fingerprint <code>${escapeHtml(progress?.packageFingerprint || '—')}</code></p>
         </div>`;
+    }
+
+    function renderCompletedSectionsBlock(progress, draft) {
+      const sections = draft?.generatedSections || [];
+      if (sections.length) {
+        const rows = sections.map((s) => `
+          <tr><td>${escapeHtml(s.sectionId)}</td><td>${escapeHtml(s.title || '')}</td><td>${escapeHtml(s.wordCount ?? '—')}</td></tr>`).join('');
+        return `
+          <details class="sub" open><summary>Completed sections (${sections.length})</summary>
+          <table class="research-table"><thead><tr><th>Section</th><th>Title</th><th>Words</th></tr></thead><tbody>${rows}</tbody></table>
+          </details>`;
+      }
+      const mod = writerRunUiModule;
+      const ids = mod ? mod.listCompletedSectionSteps(progress) : (progress?.completedStepIds || []).filter((s) => String(s).startsWith('section:'));
+      if (!ids.length) return '';
+      const labels = ids.map((id) => escapeHtml(mod ? mod.formatWriterStageName(id) : id)).join(', ');
+      return `<p class="sub"><strong>Completed sections:</strong> ${labels} (full text available when run completes)</p>`;
+    }
+
+    function bindWriterRunControls(runType, { runId, activeRun, clientState, estimateHtml }) {
+      const ctrlPromise = getWriterRunController(runType);
+      const pauseBtn = $(runType === 'shadow_compare' ? '#shadowPauseBtn' : '#writerPauseBtn');
+      const resumeBtn = $(runType === 'shadow_compare' ? '#shadowResumeBtn' : '#writerResumeBtn');
+      const oneStepBtn = $(runType === 'shadow_compare' ? '#shadowOneStepBtn' : '#writerOneStepBtn');
+      const cancelBtn = $(runType === 'shadow_compare' ? '#shadowCancelBtn' : '#writerCancelBtn');
+      const restartBtn = $(runType === 'shadow_compare' ? '#shadowRestartBtn' : '#writerRestartBtn');
+      const startBtn = $(runType === 'shadow_compare' ? '#shadowStartPaidBtn' : '#writerStartPaidBtn');
+      const sectionsBtn = $(runType === 'shadow_compare' ? '#shadowSectionsBtn' : '#writerSectionsBtn');
+      const retryBtn = $(runType === 'shadow_compare' ? '#shadowRetryBtn' : '#writerRetryBtn');
+
+      startBtn?.addEventListener('click', () => startCheckpointedWriterRun(runType));
+      restartBtn?.addEventListener('click', () => restartCheckpointedWriterRun(runType));
+      cancelBtn?.addEventListener('click', () => cancelCheckpointedWriterRun(runType));
+
+      pauseBtn?.addEventListener('click', async () => {
+        const ctrl = await ctrlPromise;
+        ctrl.pause();
+      });
+      resumeBtn?.addEventListener('click', async () => {
+        const ctrl = await ctrlPromise;
+        ctrl.resume();
+        if (!ctrl.getState().requestInFlight) await ctrl.tickContinue();
+      });
+      oneStepBtn?.addEventListener('click', async () => {
+        const ctrl = await ctrlPromise;
+        await ctrl.runOneStep();
+      });
+      retryBtn?.addEventListener('click', async () => {
+        const ctrl = await ctrlPromise;
+        await ctrl.retryAfterError();
+      });
+      sectionsBtn?.addEventListener('click', () => {
+        const wrap = document.getElementById(runType === 'shadow_compare' ? 'shadowSectionsPanel' : 'writerSectionsPanel');
+        if (wrap) wrap.hidden = !wrap.hidden;
+      });
+
+      void ctrlPromise.then((ctrl) => {
+        if (runId && !ctrl.getState().runId) {
+          ctrl.syncProgress({ runId, status: progress?.status || 'partial' }, {});
+        }
+      });
+    }
+
+    function renderWriterRunProgress(progress) {
+      return renderWriterRunProgressPanel('multipass_preview', progress, null, 'Writer Draft');
     }
 
     function renderWriterDraftResult(data) {
@@ -2526,33 +2760,43 @@
         <p class="sub">${escapeHtml(data.headlinePack?.subheadline || '')}</p>
         <h4 style="color:#f0c040;margin:12px 0 6px">Editorial draft (excerpt)</h4>
         <pre style="white-space:pre-wrap;font-size:11px;color:#ccc">${escapeHtml(String(data.article?.body || '').slice(0, 2500))}</pre>
-        <p class="sub">Draft only — not saved or published. Work continues only while you click Continue (no background worker).</p>`;
+        <p class="sub">Draft only — not saved or published. Auto-continue drives checkpointed steps after you start a paid run.</p>`;
     }
 
-    async function refreshWriterDraftTabUi({ estimate, progress, draft, errorMessage }) {
+    async function refreshWriterDraftTabUi({ estimate, progress, draft, errorMessage, clientState }) {
+      await loadWriterRunUiModule();
       const depth = $('#articleDepth')?.value || 'medium';
-      const runId = sessionStorage.getItem(writerRunStorageKey('multipass_preview'));
-      let progressBlock = renderWriterRunProgress(progress);
+      const runId = resolveWriterRunId('multipass_preview') || progress?.runId || clientState?.runId || null;
+      const activeRun = isWriterRunActive(progress);
+      const complete = String(progress?.status || '').toLowerCase() === 'complete';
+      const title = 'Writer Draft';
+      let progressBlock = (progress || runId)
+        ? renderWriterRunProgressPanel('multipass_preview', progress, clientState, title)
+        : '';
       let draftBlock = draft ? renderWriterDraftResult(draft) : '';
-      if (errorMessage) draftBlock = `<p class="sub">${escapeHtml(errorMessage)}</p>${draftBlock}`;
+      if (errorMessage && !clientState?.lastError) {
+        draftBlock = `<p class="sub">${escapeHtml(errorMessage)}</p>${draftBlock}`;
+      }
+      const sectionsPanel = renderCompletedSectionsBlock(progress, draft);
+      const showRetry = !!(clientState?.lastError && runId && !complete);
       $('#researchTabWriterDraft').innerHTML = `
         <p class="sub">Writer Draft (3b) · checkpointed runs · depth ${escapeHtml(depth)} · opening this tab performs <strong>zero</strong> OpenAI calls.</p>
         <h4 style="color:#f0c040;margin:12px 0 6px">Cost estimate (deterministic)</h4>
         ${renderWriterCostEstimate(estimate)}
         <div class="generate-row" style="margin-top:10px;flex-wrap:wrap;gap:8px">
-          <button type="button" class="btn btn-primary" id="writerStartPaidBtn">Start Paid Writer Run</button>
-          <button type="button" class="btn btn-secondary" id="writerContinueBtn" ${runId ? '' : 'disabled'}>Continue</button>
-          <button type="button" class="btn btn-secondary" id="writerResumeBtn" ${runId ? '' : 'disabled'}>Resume</button>
-          <button type="button" class="btn btn-secondary" id="writerCancelBtn" ${runId ? '' : 'disabled'}>Cancel</button>
+          <button type="button" class="btn btn-primary" id="writerStartPaidBtn" ${activeRun ? 'disabled' : ''}>Start Paid Writer Run</button>
+          <button type="button" class="btn btn-secondary" id="writerPauseBtn" ${activeRun && !complete ? '' : 'disabled'}>Pause</button>
+          <button type="button" class="btn btn-secondary" id="writerResumeBtn" ${runId && (activeRun || clientState?.pausedAfterRefresh) ? '' : 'disabled'}>Resume</button>
+          <button type="button" class="btn btn-secondary" id="writerOneStepBtn" ${runId && activeRun ? '' : 'disabled'}>Run One Step</button>
+          <button type="button" class="btn btn-secondary" id="writerCancelBtn" ${runId && activeRun ? '' : 'disabled'}>Cancel</button>
           <button type="button" class="btn btn-secondary" id="writerRestartBtn">Restart (new run)</button>
+          <button type="button" class="btn btn-secondary" id="writerSectionsBtn" ${runId ? '' : 'disabled'}>View Completed Sections</button>
+          ${showRetry ? '<button type="button" class="btn btn-secondary" id="writerRetryBtn">Retry</button>' : ''}
         </div>
         ${progressBlock}
+        <div id="writerSectionsPanel" hidden>${sectionsPanel}</div>
         ${draftBlock}`;
-      $('#writerStartPaidBtn')?.addEventListener('click', () => startCheckpointedWriterRun('multipass_preview'));
-      $('#writerContinueBtn')?.addEventListener('click', () => continueCheckpointedWriterRun('multipass_preview'));
-      $('#writerResumeBtn')?.addEventListener('click', () => continueCheckpointedWriterRun('multipass_preview'));
-      $('#writerCancelBtn')?.addEventListener('click', () => cancelCheckpointedWriterRun('multipass_preview'));
-      $('#writerRestartBtn')?.addEventListener('click', () => restartCheckpointedWriterRun('multipass_preview'));
+      bindWriterRunControls('multipass_preview', { runId, activeRun, clientState, estimate });
     }
 
     async function startCheckpointedWriterRun(runType) {
@@ -2587,6 +2831,18 @@
         progress,
         errorMessage: data.stale ? data.message : null,
       };
+      const ctrl = await getWriterRunController(runType);
+      if (runId) {
+        if (data.stale) {
+          ctrl.syncProgress(progress, { draft: data.draft, comparison });
+        } else if (data.done) {
+          ctrl.syncProgress(progress, { draft: data.draft, comparison });
+          ctrl.markComplete();
+        } else if (runId) {
+          ctrl.beginAutoAfterStart(runId, progress, { draft: data.draft, comparison });
+        }
+      }
+      ui.clientState = ctrl.getState();
       if (runType === 'shadow_compare') {
         await refreshWriterShadowTabUi({ ...ui, comparison });
       } else {
@@ -2594,7 +2850,7 @@
       }
       if (data.done && !data.stale) setMsg('Writer run complete (draft only).');
       else if (data.stale) setMsg(data.message || 'Package changed — start a new run.', true);
-      else setMsg('Writer run in progress — click Continue.');
+      else setMsg('Writer run started — auto-continuing checkpoints.');
       } catch (e) {
         setMsg(e.message || 'Writer start failed.', true);
         if (runType === 'shadow_compare') {
@@ -2613,38 +2869,16 @@
       }
     }
 
-    async function continueCheckpointedWriterRun(runType) {
-      let runId = resolveWriterRunId(runType);
-      if (!runId) {
-        if (runType === 'shadow_compare') {
-          const resolved = await resolveShadowWriterRunState();
-          runId = resolved.runId;
-        }
-      }
-      if (!runId) return setMsg('No run to continue — start a paid run first.', true);
-      setMsg('Continuing writer run…');
-      const data = await researchPost('research-writer-continue', { runId });
-      const nextRunId = extractRunIdFromWriterPayload(data) || runId;
-      persistWriterRunId(runType, nextRunId);
-      const ui = {
-        estimate: null,
-        progress: data.progress || null,
-        errorMessage: data.stale ? data.message : null,
-      };
-      if (runType === 'shadow_compare') {
-        await refreshWriterShadowTabUi({ ...ui, comparison: data.draft?.mode === 'shadow' ? data.draft : null });
-      } else {
-        await refreshWriterDraftTabUi({ ...ui, draft: data.draft });
-      }
-      if (data.done && !data.stale) setMsg('Writer run complete.');
-      else if (data.stale) setMsg(data.message || 'Package stale.', true);
-      else setMsg('Partial progress saved — Continue again.');
-    }
-
     async function cancelCheckpointedWriterRun(runType) {
       const runId = resolveWriterRunId(runType);
       if (!runId) return;
-      await researchPost('research-writer-cancel', { runId });
+      const ctrl = await getWriterRunController(runType);
+      ctrl.cancelLocal();
+      try {
+        await researchPost('research-writer-cancel', { runId });
+      } catch (e) {
+        setMsg(e.message || 'Cancel request failed.', true);
+      }
       clearWriterRunId(runType);
       setMsg('Writer run cancelled.');
       if (runType === 'shadow_compare') await loadResearchWriterShadowTab();
@@ -2652,17 +2886,19 @@
     }
 
     async function restartCheckpointedWriterRun(runType) {
+      const ctrl = await getWriterRunController(runType);
+      ctrl.resetForNewRun();
       clearWriterRunId(runType);
       if (runType === 'shadow_compare') await loadResearchWriterShadowTab();
       else await loadResearchWriterDraftTab();
-      setMsg('Ready for a new run — review estimate and click Start Paid Writer Run.');
+      setMsg('Ready for a new run — review estimate and click Start.');
     }
 
     async function loadResearchWriterDraftTab() {
       const depth = $('#articleDepth')?.value || 'medium';
       $('#researchTabWriterDraft').innerHTML = '<p class="sub">Loading cost estimate (no OpenAI)…</p>';
       const estimate = await researchPost('research-writer-estimate', { articleDepth: depth, articleType: 'race-recap', runType: 'multipass_preview' });
-      const runId = sessionStorage.getItem(writerRunStorageKey('multipass_preview'));
+      const runId = resolveWriterRunId('multipass_preview');
       let progress = null;
       let draft = null;
       if (runId) {
@@ -2671,10 +2907,15 @@
           progress = status.progress;
           if (status.draft) draft = status.draft;
         } catch {
-          sessionStorage.removeItem(writerRunStorageKey('multipass_preview'));
+          clearWriterRunId('multipass_preview');
         }
       }
-      await refreshWriterDraftTabUi({ estimate, progress, draft });
+      const ctrl = await getWriterRunController('multipass_preview');
+      if (runId && progress) {
+        ctrl.syncProgress(progress, { draft });
+        if (isWriterRunActive(progress)) ctrl.applyPausedAfterRefreshIfNeeded(true);
+      }
+      await refreshWriterDraftTabUi({ estimate, progress, draft, clientState: ctrl.getState() });
     }
 
     function renderWriterShadowComparison(data) {
@@ -2721,39 +2962,42 @@
         <p class="sub">Choose a draft to load, then Save Draft — no auto-publish.</p>`;
     }
 
-    async function refreshWriterShadowTabUi({ estimate, progress, comparison, errorMessage }) {
+    async function refreshWriterShadowTabUi({ estimate, progress, comparison, errorMessage, clientState }) {
+      await loadWriterRunUiModule();
       const depth = $('#articleDepth')?.value || 'medium';
-      const runId = resolveWriterRunId('shadow_compare') || progress?.runId || null;
+      const runId = resolveWriterRunId('shadow_compare') || progress?.runId || clientState?.runId || null;
       if (progress?.runId) persistWriterRunId('shadow_compare', progress.runId);
       const activeRun = isWriterRunActive(progress);
-      const showEstimate = !activeRun && !progress;
-      const canContinue = !!(runId && activeRun);
+      const complete = String(progress?.status || '').toLowerCase() === 'complete';
+      const showEstimate = !activeRun && !complete;
       const estimateBlock = showEstimate
         ? `<h4 style="color:#f0c040;margin:12px 0 6px">Cost estimate (legacy + multipass)</h4>${renderWriterCostEstimate(estimate)}`
         : (activeRun
           ? '<p class="sub">Active checkpointed shadow run — cost estimate hidden while run is in progress.</p>'
-          : (progress?.status === 'complete'
+          : (complete
             ? '<p class="sub">Shadow run complete — see comparison below.</p>'
             : `<h4 style="color:#f0c040;margin:12px 0 6px">Cost estimate (legacy + multipass)</h4>${renderWriterCostEstimate(estimate)}`));
+      const showRetry = !!(clientState?.lastError && runId && !complete);
+      const sectionsPanel = renderCompletedSectionsBlock(progress, comparison?.multipass);
       let body = `
         <p class="sub">Shadow Compare · checkpointed · depth ${escapeHtml(depth)} · zero OpenAI on tab open.</p>
         ${estimateBlock}
         <div class="generate-row" style="margin-top:10px;flex-wrap:wrap;gap:8px">
           <button type="button" class="btn btn-primary" id="shadowStartPaidBtn" ${activeRun ? 'disabled' : ''}>Start Paid Shadow Run</button>
-          <button type="button" class="btn btn-secondary" id="shadowContinueBtn" ${canContinue ? '' : 'disabled'}>Continue</button>
-          <button type="button" class="btn btn-secondary" id="shadowResumeBtn" ${canContinue ? '' : 'disabled'}>Resume</button>
+          <button type="button" class="btn btn-secondary" id="shadowPauseBtn" ${activeRun && !complete ? '' : 'disabled'}>Pause</button>
+          <button type="button" class="btn btn-secondary" id="shadowResumeBtn" ${runId && (activeRun || clientState?.pausedAfterRefresh) ? '' : 'disabled'}>Resume</button>
+          <button type="button" class="btn btn-secondary" id="shadowOneStepBtn" ${runId && activeRun ? '' : 'disabled'}>Run One Step</button>
           <button type="button" class="btn btn-secondary" id="shadowCancelBtn" ${runId && activeRun ? '' : 'disabled'}>Cancel</button>
           <button type="button" class="btn btn-secondary" id="shadowRestartBtn">Restart</button>
+          <button type="button" class="btn btn-secondary" id="shadowSectionsBtn" ${runId ? '' : 'disabled'}>View Completed Sections</button>
+          ${showRetry ? '<button type="button" class="btn btn-secondary" id="shadowRetryBtn">Retry</button>' : ''}
         </div>
-        ${renderWriterRunProgress(progress)}`;
-      if (errorMessage) body += `<p class="sub">${escapeHtml(errorMessage)}</p>`;
+        ${(progress || runId) ? renderWriterRunProgressPanel('shadow_compare', progress, clientState, 'Shadow Compare') : ''}
+        <div id="shadowSectionsPanel" hidden>${sectionsPanel}</div>`;
+      if (errorMessage && !clientState?.lastError) body += `<p class="sub">${escapeHtml(errorMessage)}</p>`;
       if (comparison) body += renderWriterShadowComparison(comparison);
       $('#researchTabWriterShadow').innerHTML = body;
-      $('#shadowStartPaidBtn')?.addEventListener('click', () => startCheckpointedWriterRun('shadow_compare'));
-      $('#shadowContinueBtn')?.addEventListener('click', () => continueCheckpointedWriterRun('shadow_compare'));
-      $('#shadowResumeBtn')?.addEventListener('click', () => continueCheckpointedWriterRun('shadow_compare'));
-      $('#shadowCancelBtn')?.addEventListener('click', () => cancelCheckpointedWriterRun('shadow_compare'));
-      $('#shadowRestartBtn')?.addEventListener('click', () => restartCheckpointedWriterRun('shadow_compare'));
+      bindWriterRunControls('shadow_compare', { runId, activeRun, clientState, estimate });
       if (comparison) {
         lastWriterShadowComparison = comparison;
         $('#loadLegacyShadowDraftBtn')?.addEventListener('click', () => applyDraftToEditor(comparison.legacy?.article, 'legacy'));
@@ -2785,7 +3029,12 @@
           progress = synced.progress;
           comparison = synced.comparison;
         }
-        await refreshWriterShadowTabUi({ estimate, progress, comparison });
+        const ctrl = await getWriterRunController('shadow_compare');
+        if (resolved.runId && progress) {
+          ctrl.syncProgress(progress, { comparison, draft: comparison });
+          if (isWriterRunActive(progress)) ctrl.applyPausedAfterRefreshIfNeeded(true);
+        }
+        await refreshWriterShadowTabUi({ estimate, progress, comparison, clientState: ctrl.getState() });
       } catch (e) {
         $('#researchTabWriterShadow').innerHTML = `<p class="sub">${escapeHtml(e.message)}</p>`;
       }
