@@ -15,6 +15,7 @@ import {
   computeWriterRunProgressPercent,
   formatWriterStageName,
   shouldStopWriterAutoContinue,
+  shouldScheduleNextContinue,
   clearWriterAutoAllowFlags,
   markWriterAutoAllowed,
   isWriterAutoAllowed,
@@ -164,5 +165,26 @@ assert.ok(failCtrl.getState().lastError);
 
 failCtrl.cancelLocal();
 assert.equal(failCtrl.getState().cancelled, true);
+
+const partialPayload = { done: false, progress: progressPartial(['section:introduction']) };
+assert.equal(
+  shouldScheduleNextContinue(partialPayload, { autoContinue: true, paused: false, cancelled: false, lastError: null }),
+  true
+);
+assert.equal(
+  shouldScheduleNextContinue(partialPayload, { autoContinue: true, paused: false, cancelled: false, lastError: null }, { forceOneStep: true }),
+  false
+);
+
+const loopCtrl = new WriterRunController('multipass_preview', {
+  continueRun: async () => partialPayload,
+});
+loopCtrl.state.runId = 'run-loop';
+loopCtrl.state.autoContinue = true;
+loopCtrl.state.running = true;
+await loopCtrl.tickContinue();
+assert.equal(loopCtrl.getState().requestInFlight, false, 'requestInFlight must clear after continue');
+assert.equal(loopCtrl.getState().activityLabel, 'Waiting…', 'must not stay on Saving checkpoint');
+assert.ok(loopCtrl._autoTimer != null, 'scheduleNextTick must run after requestInFlight clears');
 
 console.log('Phase 3e writer run UI client tests passed.');

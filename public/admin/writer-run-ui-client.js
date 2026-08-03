@@ -141,6 +141,15 @@ export function shouldStopWriterAutoContinue(payload, { offline = false } = {}) 
   return { stop: false };
 }
 
+/** Whether another auto-continue should run after a successful continue response. */
+export function shouldScheduleNextContinue(payload, state, { forceOneStep = false } = {}) {
+  if (forceOneStep) return false;
+  if (!state?.autoContinue || state.paused || state.cancelled || state.lastError) return false;
+  const stop = shouldStopWriterAutoContinue(payload);
+  if (stop.stop) return false;
+  return true;
+}
+
 export function createInitialWriterRunClientState(runId = null) {
   return {
     running: false,
@@ -160,6 +169,12 @@ export function createInitialWriterRunClientState(runId = null) {
 
 function randomContinueDelayMs() {
   return 250 + Math.floor(Math.random() * 501);
+}
+
+function isBrowserOffline() {
+  if (typeof navigator === 'undefined') return false;
+  if (typeof navigator.onLine !== 'boolean') return false;
+  return navigator.onLine === false;
 }
 
 /**
@@ -330,26 +345,58 @@ export class WriterRunController {
 
   scheduleAutoContinue() {
     this._clearAutoTimer();
-    if (!this.state.autoContinue || this.state.paused || this.state.cancelled || this.state.lastError) return;
-    if (this.state.requestInFlight) return;
+    if (!this.state.autoContinue || this.state.paused || this.state.cancelled || this.state.lastError) {
+      this._debug({ event: 'scheduleNextTick', skipped: 'auto_continue_off' });
+      return;
+    }
+    if (this.state.requestInFlight) {
+      this._debug({ event: 'scheduleNextTick', skipped: 'request_in_flight' });
+      return;
+    }
     const delay = randomContinueDelayMs();
     this.state.activityLabel = 'Waiting…';
     this._notify();
+    this._debug({ event: 'scheduleNextTick', delayMs: delay });
     this._autoTimer = setTimeout(() => {
+      this._debug({ event: 'timer fired' });
       this.tickContinue().catch(() => {});
     }, delay);
   }
 
+  _clearSavingCheckpointIndicator(shouldScheduleNext) {
+    if (this.state.activityLabel === 'Saving checkpoint…') {
+      this.state.activityLabel = shouldScheduleNext ? 'Waiting…' : 'Waiting…';
+    }
+  }
+
   async tickContinue({ forceOneStep = false } = {}) {
     const { runId } = this.state;
-    if (!runId) return null;
-    if (this.state.requestInFlight) return null;
-    if (this.state.cancelled) return null;
-    if (this.state.paused && !forceOneStep) return null;
-    if (!forceOneStep && !this.state.autoContinue) return null;
-    if (this.state.runId !== runId) return null;
+    if (!runId) {
+      this._debug({ event: 'tick exited', reason: 'no_run_id' });
+      return null;
+    }
+    if (this.state.requestInFlight) {
+      this._debug({ event: 'tick exited', reason: 'request_in_flight' });
+      return null;
+    }
+    if (this.state.cancelled) {
+      this._debug({ event: 'tick exited', reason: 'cancelled' });
+      return null;
+    }
+    if (this.state.paused && !forceOneStep) {
+      this._debug({ event: 'tick exited', reason: 'paused' });
+      return null;
+    }
+    if (!forceOneStep && !this.state.autoContinue) {
+      this._debug({ event: 'tick exited', reason: 'auto_continue_off' });
+      return null;
+    }
+    if (this.state.runId !== runId) {
+      this._debug({ event: 'tick exited', reason: 'run_id_mismatch' });
+      return null;
+    }
 
-    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    if (isBrowserOffline()) {
       this.state.lastError = new Error('Browser is offline.');
       this.state.autoContinue = false;
       this.state.paused = true;
@@ -359,6 +406,7 @@ export class WriterRunController {
 
     this._clearAutoTimer();
     this.state.requestInFlight = true;
+    this._debug({ event: 'requestInFlight=true' });
     const stepBefore = this._lastProgress?.currentStep;
     this.state.activityLabel = activityLabelForStep(stepBefore, true);
     this._notify();
@@ -366,11 +414,16 @@ export class WriterRunController {
     const started = Date.now();
     this.state.requestNumber += 1;
     const reqNum = this.state.requestNumber;
+    let shouldScheduleNext = false;
+    let stopReason = null;
+    let result = null;
 
     try {
+      this._debug({ event: 'BEGIN continue', requestNumber: reqNum });
       const data = await this.hooks.continueRun(runId);
-      if (this.state.runId !== runId || this.state.cancelled) return data;
-
+      if (this.state.runId !== runId || this.state.cancelled) {
+        result = data;
+      } else {
       this.state.lastContinueDurationMs = Date.now() - started;
       this.state.lastContinueAt = Date.now();
 
@@ -383,8 +436,9 @@ export class WriterRunController {
         if (data.draft?.mode === 'shadow') this._lastComparison = data.draft;
       }
 
-      const stop = shouldStopWriterAutoContinue(data, { offline: typeof navigator !== 'undefined' && !navigator.onLine });
+      const stop = shouldStopWriterAutoContinue(data, { offline: isBrowserOffline() });
       if (stop.stop) {
+        stopReason = stop.reason;
         this.state.autoContinue = false;
         this.state.running = stop.reason !== 'complete' && stop.reason !== 'cancelled';
         if (stop.reason === 'complete') this.markComplete();
@@ -394,46 +448,60 @@ export class WriterRunController {
           this.state.lastError = new Error(data?.message || data?.error || 'Run stopped.');
           this.state.paused = true;
         }
-        this.state.activityLabel = stop.reason === 'complete' ? 'Complete' : 'Waiting…';
+        if (stop.reason !== 'complete') {
+          this.state.activityLabel = 'Waiting…';
+        }
         this._debug({
-          stage: data?.progress?.currentStep,
+          event: 'END continue',
+          stopReason: stop.reason,
           progress: computeWriterRunProgressPercent(data?.progress, this.runType),
           durationMs: this.state.lastContinueDurationMs,
-          cost: data?.progress?.estimatedCostUsd,
-          stop: stop.reason,
         });
         this._notify();
-        return data;
+        result = data;
+      } else {
+      if (forceOneStep) {
+        this.state.autoContinue = false;
       }
 
-      if (forceOneStep) this.state.autoContinue = false;
+      this._debug({ event: 'Saving checkpoint start' });
       this.state.activityLabel = 'Saving checkpoint…';
+      this._notify();
+
+      shouldScheduleNext = shouldScheduleNextContinue(data, this.state, { forceOneStep });
       this._debug({
+        shouldScheduleNext,
         stage: data?.progress?.currentStep,
         progress: computeWriterRunProgressPercent(data?.progress, this.runType),
         durationMs: this.state.lastContinueDurationMs,
-        cost: data?.progress?.estimatedCostUsd,
       });
-      this._notify();
-
-      if (!forceOneStep && this.state.autoContinue && !this.state.paused) {
-        this.scheduleAutoContinue();
-      } else {
-        this.state.activityLabel = 'Waiting…';
+      result = data;
       }
-      return data;
+      }
     } catch (err) {
+      stopReason = 'error';
       this.state.lastError = err instanceof Error ? err : new Error(String(err));
       this.state.autoContinue = false;
       this.state.paused = true;
       this.state.activityLabel = 'Waiting…';
-      this._debug({ error: this.state.lastError.message, requestNumber: reqNum });
+      this._debug({ event: 'END continue', error: this.state.lastError.message, requestNumber: reqNum });
       this._notify();
-      return null;
+      result = null;
     } finally {
+      this._debug({ event: 'Saving checkpoint end' });
       this.state.requestInFlight = false;
+      this._debug({ event: 'requestInFlight=false' });
+      this._clearSavingCheckpointIndicator(shouldScheduleNext);
       this._notify();
+      this._debug({ event: 'END continue', tickExited: true, shouldScheduleNext });
     }
+
+    if (shouldScheduleNext) {
+      this.scheduleAutoContinue();
+    } else if (stopReason) {
+      this._debug({ stopReason });
+    }
+    return result;
   }
 }
 
