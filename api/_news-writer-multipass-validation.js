@@ -3,6 +3,7 @@ import {
   normalizeArticleDepth,
 } from '../server/config/race-research-config.js';
 import { CANONICAL_COVERAGE_TARGETS } from './_news-writer-config.js';
+import { buildFactCorrectnessValidation, factCorrectnessValidationScore } from './_news-writer-fact-verification.js';
 
 function normalizeText(text) {
   return String(text || '').toLowerCase();
@@ -22,6 +23,7 @@ export function validateMultipassDraft({
   ledgerSnapshot,
   coverageTargets,
   allowedDriverNames = [],
+  factVerification = null,
 }) {
   const errors = [];
   const warnings = [];
@@ -103,11 +105,31 @@ export function validateMultipassDraft({
     seen.add(key);
   }
 
+  const factCorrectness = buildFactCorrectnessValidation(factVerification, {
+    body: editedArticle.body,
+    headline: headlinePack?.headline || editedArticle.headline,
+  });
+  for (const check of factCorrectness.checks) {
+    if (check.warn && check.ok) {
+      warnings.push({ type: check.id, message: check.label });
+    } else if (!check.ok && !check.warn) {
+      errors.push({ type: check.id, message: check.label });
+    } else if (!check.ok && check.warn) {
+      warnings.push({ type: check.id, message: check.label });
+    }
+  }
+
+  const stylePenalty = errors.filter((e) => !String(e.type).includes('verified') && !String(e.type).includes('unsupported')).length * 8;
+  const factPenalty = factCorrectness.scorePenalty;
+  const validationScore = Math.max(0, 100 - stylePenalty - factPenalty);
+
   return {
     ok: errors.length === 0,
     errors,
     warnings,
     wordCount: words,
+    validationScore,
+    factCorrectness,
     checksRun: [
       'required_recap',
       'lead_story',
@@ -117,6 +139,7 @@ export function validateMultipassDraft({
       'driver_artifacts',
       'headline_match',
       'duplicate_paragraphs',
+      'fact_correctness',
     ],
   };
 }

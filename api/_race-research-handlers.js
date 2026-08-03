@@ -17,6 +17,8 @@ import { runDiagnoseQuality } from './_race-research-diagnose.js';
 import { selectEvidenceForArticle } from './_race-research-evidence.js';
 import { buildNewsArticlePlan } from './_race-research-plan.js';
 import { buildDeterministicArticlePlan } from './_news-writer-deterministic-plan.js';
+import { prepareFactsForPlanning } from './_news-writer-fact-quality.js';
+import { buildFactVerificationReport } from './_news-writer-fact-verification.js';
 export {
   handleResearchWriterPreview,
   handleResearchWriterShadow,
@@ -302,6 +304,11 @@ export async function handleResearchPreview(body) {
       articleDepth,
       driverLookup: previewDriverLookup,
     });
+    const preparedFacts = prepareFactsForPlanning(pkg, previewDriverLookup);
+    const factVerification = buildFactVerificationReport({
+      racePackage: pkg,
+      preparedFacts,
+    });
     const allDepths = await runDiagnoseEvidence(seasonId, raceNumber);
     return {
       articleDepth,
@@ -309,6 +316,7 @@ export async function handleResearchPreview(body) {
       evidence,
       plan,
       deterministicPlan,
+      factVerification,
       samePackage: {
         factCount: pkg.facts?.length ?? 0,
         message: 'Short, Medium, and In-Depth previews use the same stored Race Intelligence Package.',

@@ -2273,6 +2273,18 @@
         <tr><td>${escapeHtml(d.displayName || d.driverId)}</td><td>${escapeHtml((d.roles || []).join(', '))}</td></tr>`).join('');
       const tempDiag = (temp?.diagnostics || temp?.signals || []).map((s) => `
         <li>${escapeHtml(s.signal || s.tag)} · weight ${escapeHtml(s.weight ?? s.score)} · conf ${escapeHtml(s.sourceConfidence || '—')} · facts ${(s.supportingFactIds || s.factIds || []).length}</li>`).join('');
+      const fv = data.factVerification || {};
+      const fvIssues = (fv.canonicalIssues || []).map((issue) => `
+        <div class="research-detail-block" style="margin-top:8px;border-left:3px solid #f0c040;padding-left:10px">
+          <strong>⚠ ${escapeHtml(issue.topic || 'Canonical issue')}</strong>
+          <p class="sub">Status: ${escapeHtml(issue.status)} · Canonical: ${escapeHtml(issue.canonicalFactId || '—')}</p>
+          <p class="sub">Preferred: ${escapeHtml(issue.preferredSummary || '—')} (${escapeHtml(issue.preferredSource || '—')}, ${escapeHtml(issue.preferredConfidence || '—')})</p>
+          ${issue.conflictDetail ? `<p class="sub">Conflict on ${escapeHtml(issue.conflictDetail.field)}: ${escapeHtml(issue.conflictDetail.a)} vs ${escapeHtml(issue.conflictDetail.b)} (${escapeHtml(issue.conflictDetail.lowerSource || 'lower source')})</p>` : ''}
+          <p class="sub">Action: ${escapeHtml(issue.action || '—')}</p>
+        </div>`).join('') || '<p class="sub">No canonical conflicts detected.</p>';
+      const fvRepairs = (fv.repairSuggestions || []).map((r) => `
+        <tr><td>${escapeHtml(String(r.factId || '').slice(0, 10))}</td><td>${escapeHtml(r.currentValue)}</td><td>${escapeHtml(r.preferredValue)}</td><td>${escapeHtml(r.source || '')}</td><td class="sub">${escapeHtml(r.reason || '')}</td></tr>`).join('');
+      const fvSuppressed = (fv.suppressedFactIds || []).map((id) => `<li class="sub">${escapeHtml(String(id).slice(0, 12))}</li>`).join('') || '<li class="sub">None</li>';
 
       $('#researchTabStoryPlan').innerHTML = `
         <p class="sub">Phase 3a preview only · Operation ${escapeHtml(dp.operationId)} · Fingerprint ${escapeHtml(sp.packageFingerprint)} · Planner ${escapeHtml(sp.plannerVersion)}</p>
@@ -2316,6 +2328,14 @@
         <ul>${dupUnused}</ul>
         <h4 style="color:#f0c040;margin:12px 0 6px">Low-quality transcript excluded from planning</h4>
         <ul>${lowQual}</ul>
+        <h4 style="color:#f0c040;margin:12px 0 6px">Fact Verification (Phase 3c — deterministic)</h4>
+        <p class="sub">Verification ${escapeHtml(fv.version || '—')} · Issues ${escapeHtml(fv.summary?.issueCount ?? 0)} · Suppressed facts ${escapeHtml(fv.summary?.suppressedFactCount ?? 0)}</p>
+        <h4 style="color:#f0c040;margin:12px 0 6px">Canonical Fact Issues</h4>
+        ${fvIssues}
+        <h4 style="color:#f0c040;margin:12px 0 6px">Suggested canonical corrections (diagnostics only)</h4>
+        <table class="research-table"><thead><tr><th>Fact</th><th>Current</th><th>Preferred</th><th>Source</th><th>Reason</th></tr></thead><tbody>${fvRepairs || '<tr><td colspan="5" class="sub">None</td></tr>'}</tbody></table>
+        <h4 style="color:#f0c040;margin:12px 0 6px">Suppressed for writer</h4>
+        <ul>${fvSuppressed}</ul>
         <p class="sub">Deterministic planning only — no article prose generated.</p>`;
     }
 

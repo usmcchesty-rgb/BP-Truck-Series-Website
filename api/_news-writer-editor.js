@@ -8,6 +8,7 @@ export async function editArticle({
   requiredRecap,
   callOpenAi = callOpenAiWriterJson,
   repairHints = null,
+  factVerification = null,
 }) {
   const payload = {
     sections: sectionDrafts.map((s) => ({
@@ -27,6 +28,13 @@ export async function editArticle({
     },
     requiredRecap: requiredRecap?.items || [],
     repairHints,
+    factVerificationGuidance: factVerification
+      ? {
+          suppressedNumericTokens: factVerification.suppressedNumericTokens,
+          safePhrasingHints: factVerification.safePhrasingHints,
+          writerRules: factVerification.writerRules,
+        }
+      : null,
   };
 
   const { parsed, usage, model, elapsedMs } = await callOpenAi({

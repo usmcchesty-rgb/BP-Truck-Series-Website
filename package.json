@@ -38,6 +38,7 @@
     "test:news-writer-phase3b": "node scripts/test-news-writer-phase3b.mjs",
     "test:news-writer-shadow": "node scripts/test-news-writer-shadow.mjs",
     "test:news-writer-runs": "node scripts/test-news-writer-runs.mjs",
+    "test:news-writer-phase3c": "node scripts/test-news-writer-phase3c.mjs",
     "diagnose:race15-research-package": "node scripts/diagnose-race15-research-package.mjs",
     "test:provisional-results": "node scripts/test-provisional-results.mjs",
     "test:driver-provisional-sync": "node scripts/test-driver-provisional-sync.mjs",

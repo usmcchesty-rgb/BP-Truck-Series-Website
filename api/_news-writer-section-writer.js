@@ -6,6 +6,7 @@ import {
 import { buildSectionEvidenceBundle } from './_news-writer-section-evidence.js';
 import { compactMemoryForPrompt } from './_news-writer-section-memory.js';
 import { filterUsedFactIdsToEvidence } from './_news-writer-ledger-writer.js';
+import { applyVerificationToSectionEvidence, sanitizeWriterText } from './_news-writer-fact-verification.js';
 
 function wordCount(text) {
   return String(text || '')
@@ -22,13 +23,15 @@ export async function writeArticleSection({
   racePackage,
   sectionMemory,
   callOpenAi = callOpenAiWriterJson,
+  factVerification = null,
 }) {
-  const evidence = buildSectionEvidenceBundle({
+  let evidence = buildSectionEvidenceBundle({
     section,
     preparedFacts,
     racePackage,
     storyPlan,
   });
+  evidence = applyVerificationToSectionEvidence(evidence, factVerification);
 
   const memoryCompact = compactMemoryForPrompt(sectionMemory);
 
@@ -50,6 +53,7 @@ export async function writeArticleSection({
     ledgerHint: {
       sectionFactIds: evidence.facts.map((f) => f.factId),
     },
+    factVerificationGuidance: evidence.factVerificationGuidance || null,
   };
 
   const { parsed, usage, model, elapsedMs } = await callOpenAi({
@@ -64,7 +68,10 @@ export async function writeArticleSection({
     logLabel: `section-${section.sectionId}`,
   });
 
-  const sectionText = String(parsed.sectionText || parsed.text || '').trim();
+  const sectionText = sanitizeWriterText(
+    String(parsed.sectionText || parsed.text || '').trim(),
+    factVerification
+  );
   const rawUsedFactIds = parsed.usedFactIds || parsed.used_fact_ids || [];
   const rawUsedCanonicalIds = parsed.usedCanonicalIds || parsed.used_canonical_ids || [];
   const { usedFactIds, usedCanonicalIds } = filterUsedFactIdsToEvidence(

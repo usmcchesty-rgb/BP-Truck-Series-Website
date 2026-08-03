@@ -35,6 +35,11 @@ import {
   buildComparisonMetrics,
 } from './_news-writer-shadow.js';
 import {
+  buildFactVerificationReport,
+  sanitizeHeadlinePack,
+  sanitizeWriterText,
+} from './_news-writer-fact-verification.js';
+import {
   countOutlineSections,
   WRITER_RUN_MAX_OPENAI_CALLS_PER_REQUEST,
 } from './_news-writer-cost-estimate.js';
@@ -125,7 +130,13 @@ export function createInitialCheckpoint({
   runType,
   manualNotes = '',
   stepQueue,
+  racePackage = null,
+  preparedFacts = null,
 }) {
+  const factVerification =
+    racePackage && preparedFacts
+      ? buildFactVerificationReport({ racePackage, preparedFacts })
+      : null;
   return {
     v: 1,
     runType,
@@ -154,6 +165,7 @@ export function createInitialCheckpoint({
     usageLog: [],
     packageStale: false,
     startedAtMs: Date.now(),
+    factVerification,
   };
 }
 
@@ -214,6 +226,7 @@ function outlineByIdFromCheckpoint(checkpoint) {
 function buildMultipassPipelineResult(checkpoint, { seasonId, raceNumber, articleType, articleDepth }) {
   const planResult = rebuildPlanFromCheckpoint(checkpoint);
   const storyPlan = planResult.storyPlan;
+  const factVerification = checkpoint.factVerification || null;
   const edited = checkpoint.edited || {};
   const headlinePack = checkpoint.headlinePack || {};
   const usage = totalUsageFromCheckpoint(checkpoint);
@@ -237,6 +250,7 @@ function buildMultipassPipelineResult(checkpoint, { seasonId, raceNumber, articl
     repairAttempted: checkpoint.repairAttempted,
     factUsageLedgerAfterWrite: checkpoint.ledger,
     ledgerCoverageAfterWrite: ledgerCoverageSnapshot(checkpoint.ledger),
+    factVerification,
     openAiUsage: { ...usage, elapsedMs },
     article: draft,
     author: NEWS_AUTHOR,
@@ -337,6 +351,13 @@ export async function advanceWriterRun(run, {
 
   const planResult = rebuildPlanFromCheckpoint(checkpoint);
   const storyPlan = planResult.storyPlan;
+  if (!checkpoint.factVerification && ctx.racePackage && ctx.preparedFacts) {
+    checkpoint.factVerification = buildFactVerificationReport({
+      racePackage: ctx.racePackage,
+      preparedFacts: ctx.preparedFacts,
+    });
+  }
+  const activeVerification = checkpoint.factVerification || null;
   const outlineById = outlineByIdFromCheckpoint(checkpoint);
   let openAiBudget = maxOpenAiCalls;
   let tickOpenAiCalls = 0;
@@ -366,6 +387,7 @@ export async function advanceWriterRun(run, {
         racePackage: ctx.racePackage,
         sectionMemory: checkpoint.sectionMemory,
         callOpenAi,
+        factVerification: activeVerification,
       });
       checkpoint.sectionDrafts.push(draft);
       appendSectionMemory(checkpoint.sectionMemory, draft);
@@ -389,7 +411,10 @@ export async function advanceWriterRun(run, {
         outline: planResult.outline,
         requiredRecap: planResult.requiredRecap,
         callOpenAi,
+        factVerification: activeVerification,
       });
+      edited.body = sanitizeWriterText(edited.body, activeVerification);
+      edited.summary = sanitizeWriterText(edited.summary, activeVerification);
       checkpoint.edited = edited;
       pushUsage(checkpoint, edited.editorDiagnostics?.usage || {});
       markStepComplete(checkpoint, step);
@@ -404,11 +429,13 @@ export async function advanceWriterRun(run, {
     }
 
     if (step === 'headline') {
-      const headlinePack = await buildHeadlinePack({
+      let headlinePack = await buildHeadlinePack({
         editedArticle: checkpoint.edited,
         storyPlan,
         callOpenAi,
+        factVerification: activeVerification,
       });
+      headlinePack = sanitizeHeadlinePack(headlinePack, activeVerification);
       checkpoint.headlinePack = headlinePack;
       pushUsage(checkpoint, headlinePack.headlineDiagnostics?.usage || {});
       checkpoint.edited = {
@@ -436,6 +463,7 @@ export async function advanceWriterRun(run, {
         ledgerSnapshot: ledgerCoverageSnapshot(checkpoint.ledger),
         coverageTargets: planResult.coverageTargets,
         allowedDriverNames: allowedDriverNames(storyPlan, ctx.preparedFacts),
+        factVerification: activeVerification,
       });
       checkpoint.validation = validation;
 
@@ -474,6 +502,7 @@ export async function advanceWriterRun(run, {
         ledgerSnapshot: ledgerCoverageSnapshot(checkpoint.ledger),
         coverageTargets: planResult.coverageTargets,
         allowedDriverNames: allowedDriverNames(storyPlan, ctx.preparedFacts),
+        factVerification: activeVerification,
       });
       checkpoint.validation = validation;
       markStepComplete(checkpoint, step);
@@ -541,11 +570,13 @@ export async function advanceWriterRun(run, {
     }
 
     if (step === 'repair:headline') {
-      const headlinePack = await buildHeadlinePack({
+      let headlinePack = await buildHeadlinePack({
         editedArticle: checkpoint.edited,
         storyPlan,
         callOpenAi,
+        factVerification: activeVerification,
       });
+      headlinePack = sanitizeHeadlinePack(headlinePack, activeVerification);
       checkpoint.headlinePack = headlinePack;
       pushUsage(checkpoint, headlinePack.headlineDiagnostics?.usage || {});
       checkpoint.edited = {
@@ -737,6 +768,8 @@ export async function initializeAndPersistRun({
     runType,
     manualNotes,
     stepQueue,
+    racePackage: ctx.racePackage,
+    preparedFacts: ctx.preparedFacts,
   });
   const run = await createRun({
     runType,

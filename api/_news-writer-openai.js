@@ -62,13 +62,16 @@ export function milesApexSectionSystemPrompt() {
 
 Write ONE section of a Blazing Pedals Truck Series race article in third-person NASCAR broadcast journalism style.
 Use ONLY facts in the evidence bundle. Do not invent drivers, results, cautions, or quotes.
-Return JSON only with keys: sectionText, usedFactIds, usedCanonicalIds, sectionSummary, entitiesIntroduced, tone.`;
+Return JSON only with keys: sectionText, usedFactIds, usedCanonicalIds, sectionSummary, entitiesIntroduced, tone.
+If factVerificationGuidance lists suppressedNumericTokens, never use those numbers. Prefer racecraft and verified quotes over generic adjectives.`;
 }
 
 export function milesApexEditorSystemPrompt() {
   return `# Miles Apex — Editorial Pass (${NEWS_AUTHOR})
 
-Merge section drafts into one cohesive article. Remove repetition, improve transitions, preserve facts.
+Merge section drafts into one cohesive article. Remove repetition, improve transitions, preserve verified facts only.
+Avoid generic AI adjectives (stunning, incredible, epic). Prefer motorsports broadcast voice and racecraft detail.
+Never use numeric tokens listed in factVerificationGuidance.suppressedNumericTokens.
 If rewriteSectionId is set, you may replace ONLY that section's portion in the merged body.
 Return JSON: headline (placeholder ok), subheadline, summary, body, rewriteSectionId (or null), editorNotes.`;
 }
@@ -77,6 +80,7 @@ export function milesApexHeadlineSystemPrompt() {
   return `# Miles Apex — Headline Pack (${NEWS_AUTHOR})
 
 Write headline assets from the edited article and story plan cues. No hype beyond evidence.
+Do not use disputed numeric statistics from headlineRules.doNotUseNumericTokens.
 Return JSON: headline, subheadline, seoDescription, socialTeaser.`;
 }
 

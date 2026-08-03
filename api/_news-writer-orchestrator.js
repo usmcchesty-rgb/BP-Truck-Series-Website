@@ -9,6 +9,7 @@ import { loadRaceResearchBootstrapContext } from './_race-research-sync.js';
 import { getSettings } from './_lib.js';
 import { buildDeterministicArticlePlan } from './_news-writer-deterministic-plan.js';
 import { prepareFactsForPlanning } from './_news-writer-fact-quality.js';
+import { buildFactVerificationReport, sanitizeHeadlinePack, sanitizeWriterText } from './_news-writer-fact-verification.js';
 import { writeArticleSection } from './_news-writer-section-writer.js';
 import { editArticle, rewriteOneSection } from './_news-writer-editor.js';
 import { buildHeadlinePack } from './_news-writer-headline.js';
@@ -108,6 +109,7 @@ export async function runMultipassWriterPipeline({
   });
 
   const preparedFacts = prepareFactsForPlanning(racePackage, previewDriverLookup);
+  const factVerification = buildFactVerificationReport({ racePackage, preparedFacts });
   const storyPlan = planResult.storyPlan;
   const outline = planResult.outline;
   let ledger = cloneLedger(planResult.factUsageLedger);
@@ -129,6 +131,7 @@ export async function runMultipassWriterPipeline({
       racePackage,
       sectionMemory,
       callOpenAi,
+      factVerification,
     });
     sectionDrafts.push(draft);
     appendSectionMemory(sectionMemory, draft);
@@ -142,14 +145,22 @@ export async function runMultipassWriterPipeline({
     outline,
     requiredRecap: planResult.requiredRecap,
     callOpenAi,
+    factVerification,
   });
+  edited = {
+    ...edited,
+    body: sanitizeWriterText(edited.body, factVerification),
+    summary: sanitizeWriterText(edited.summary, factVerification),
+  };
   openAiUsages.push(edited.editorDiagnostics?.usage || {});
 
   let headlinePack = await buildHeadlinePack({
     editedArticle: edited,
     storyPlan,
     callOpenAi,
+    factVerification,
   });
+  headlinePack = sanitizeHeadlinePack(headlinePack, factVerification);
   openAiUsages.push(headlinePack.headlineDiagnostics?.usage || {});
 
   edited = {
@@ -166,6 +177,7 @@ export async function runMultipassWriterPipeline({
     ledgerSnapshot: ledgerCoverageSnapshot(ledger),
     coverageTargets: planResult.coverageTargets,
     allowedDriverNames: allowedDriverNames(storyPlan, preparedFacts),
+    factVerification,
   });
 
   let repairAttempted = false;
@@ -199,10 +211,17 @@ export async function runMultipassWriterPipeline({
       requiredRecap: planResult.requiredRecap,
       callOpenAi,
       repairHints: hints,
+      factVerification,
     });
     openAiUsages.push(edited.editorDiagnostics?.usage || {});
 
-    headlinePack = await buildHeadlinePack({ editedArticle: edited, storyPlan, callOpenAi });
+    headlinePack = await buildHeadlinePack({
+      editedArticle: edited,
+      storyPlan,
+      callOpenAi,
+      factVerification,
+    });
+    headlinePack = sanitizeHeadlinePack(headlinePack, factVerification);
     openAiUsages.push(headlinePack.headlineDiagnostics?.usage || {});
 
     validation = validateMultipassDraft({
@@ -213,6 +232,7 @@ export async function runMultipassWriterPipeline({
       ledgerSnapshot: ledgerCoverageSnapshot(ledger),
       coverageTargets: planResult.coverageTargets,
       allowedDriverNames: allowedDriverNames(storyPlan, preparedFacts),
+      factVerification,
     });
   }
 
@@ -239,6 +259,7 @@ export async function runMultipassWriterPipeline({
     repairAttempted,
     factUsageLedgerAfterWrite: ledger,
     ledgerCoverageAfterWrite: ledgerCoverageSnapshot(ledger),
+    factVerification,
     openAiUsage: { ...usage, elapsedMs },
     article: draft,
     author: NEWS_AUTHOR,
