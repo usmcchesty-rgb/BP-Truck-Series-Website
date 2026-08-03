@@ -2324,6 +2324,97 @@
       return `bp-writer-run:${runType}:${race}`;
     }
 
+    function writerRunIndexKey(runType) {
+      const race = $('#raceNumber')?.value || '';
+      return `bp-writer-run-index:${runType}:${race}`;
+    }
+
+    function extractRunIdFromWriterPayload(data) {
+      if (!data || typeof data !== 'object') return null;
+      return (
+        data.progress?.runId
+        || data.progress?.run?.id
+        || data.run?.id
+        || data.runId
+        || data.run_id
+        || null
+      );
+    }
+
+    function persistWriterRunId(runType, runId) {
+      if (!runId) return;
+      const key = writerRunStorageKey(runType);
+      sessionStorage.setItem(key, runId);
+      try {
+        localStorage.setItem(key, runId);
+        localStorage.setItem(writerRunIndexKey(runType), runId);
+      } catch {
+        /* ignore quota / private mode */
+      }
+    }
+
+    function resolveWriterRunId(runType) {
+      const key = writerRunStorageKey(runType);
+      let runId = sessionStorage.getItem(key);
+      if (runId) return runId;
+      try {
+        runId = localStorage.getItem(key) || localStorage.getItem(writerRunIndexKey(runType));
+      } catch {
+        runId = null;
+      }
+      if (runId) sessionStorage.setItem(key, runId);
+      return runId || null;
+    }
+
+    function clearWriterRunId(runType) {
+      sessionStorage.removeItem(writerRunStorageKey(runType));
+      try {
+        localStorage.removeItem(writerRunStorageKey(runType));
+        localStorage.removeItem(writerRunIndexKey(runType));
+      } catch {
+        /* ignore */
+      }
+    }
+
+    function isWriterRunActive(progress) {
+      if (!progress) return false;
+      const st = String(progress.status || '').toLowerCase();
+      return st === 'running' || st === 'partial';
+    }
+
+    function isWriterRunTerminal(progress) {
+      if (!progress) return true;
+      const st = String(progress.status || '').toLowerCase();
+      return st === 'complete' || st === 'cancelled' || st === 'failed';
+    }
+
+    async function fetchWriterRunStatus(runId) {
+      if (!runId) return null;
+      const status = await researchPost('research-writer-status', { runId });
+      return {
+        progress: status.progress || null,
+        draft: status.draft || status.result || null,
+        comparison: status.result?.mode === 'shadow' ? status.result : null,
+      };
+    }
+
+    async function resolveShadowWriterRunState() {
+      let runId = resolveWriterRunId('shadow_compare');
+      if (!runId) return { runId: null, progress: null, comparison: null, draft: null };
+      try {
+        const fetched = await fetchWriterRunStatus(runId);
+        if (fetched?.progress?.runId) persistWriterRunId('shadow_compare', fetched.progress.runId);
+        if (fetched?.progress && isWriterRunTerminal(fetched.progress) && fetched.progress.status !== 'complete') {
+          clearWriterRunId('shadow_compare');
+          return { runId: null, progress: null, comparison: null, draft: null };
+        }
+        return { runId, ...fetched };
+      } catch {
+        clearWriterRunId('shadow_compare');
+        return { runId: null, progress: null, comparison: null, draft: null };
+      }
+    }
+
     function renderWriterCostEstimate(estimate) {
       if (!estimate) return '<p class="sub">No estimate available.</p>';
       return `
@@ -2418,6 +2509,7 @@
       const ok = window.confirm(`${label}? This will use OpenAI for the selected race and depth.`);
       if (!ok) return;
       setMsg('Starting paid writer run…');
+      try {
       const data = await researchPost('research-writer-start', {
         articleDepth: depth,
         articleType: 'race-recap',
@@ -2425,30 +2517,66 @@
         confirmPaid: true,
         manualNotes: $('#manualNotes')?.value || '',
       });
-      if (data.progress?.runId) sessionStorage.setItem(writerRunStorageKey(runType), data.progress.runId);
+      const runId = extractRunIdFromWriterPayload(data);
+      if (runId) persistWriterRunId(runType, runId);
+      let progress = data.progress || null;
+      let comparison = data.draft?.mode === 'shadow' ? data.draft : null;
+      if (runId && (!progress || !progress.runId)) {
+        try {
+          const synced = await fetchWriterRunStatus(runId);
+          progress = synced.progress || progress;
+          if (!comparison && synced.comparison) comparison = synced.comparison;
+        } catch {
+          /* keep start response progress if any */
+        }
+      }
       const ui = {
         estimate: data.estimate,
-        progress: data.progress,
+        progress,
         errorMessage: data.stale ? data.message : null,
       };
       if (runType === 'shadow_compare') {
-        await refreshWriterShadowTabUi({ ...ui, comparison: data.draft?.mode === 'shadow' ? data.draft : null });
+        await refreshWriterShadowTabUi({ ...ui, comparison });
       } else {
         await refreshWriterDraftTabUi({ ...ui, draft: data.draft });
       }
       if (data.done && !data.stale) setMsg('Writer run complete (draft only).');
       else if (data.stale) setMsg(data.message || 'Package changed — start a new run.', true);
       else setMsg('Writer run in progress — click Continue.');
+      } catch (e) {
+        setMsg(e.message || 'Writer start failed.', true);
+        if (runType === 'shadow_compare') {
+          try {
+            const resolved = await resolveShadowWriterRunState();
+            await refreshWriterShadowTabUi({
+              estimate: null,
+              progress: resolved.progress,
+              comparison: resolved.comparison,
+              errorMessage: e.message,
+            });
+          } catch {
+            /* ignore secondary failure */
+          }
+        }
+      }
     }
 
     async function continueCheckpointedWriterRun(runType) {
-      const runId = sessionStorage.getItem(writerRunStorageKey(runType));
+      let runId = resolveWriterRunId(runType);
+      if (!runId) {
+        if (runType === 'shadow_compare') {
+          const resolved = await resolveShadowWriterRunState();
+          runId = resolved.runId;
+        }
+      }
       if (!runId) return setMsg('No run to continue — start a paid run first.', true);
       setMsg('Continuing writer run…');
       const data = await researchPost('research-writer-continue', { runId });
+      const nextRunId = extractRunIdFromWriterPayload(data) || runId;
+      persistWriterRunId(runType, nextRunId);
       const ui = {
         estimate: null,
-        progress: data.progress,
+        progress: data.progress || null,
         errorMessage: data.stale ? data.message : null,
       };
       if (runType === 'shadow_compare') {
@@ -2462,17 +2590,17 @@
     }
 
     async function cancelCheckpointedWriterRun(runType) {
-      const runId = sessionStorage.getItem(writerRunStorageKey(runType));
+      const runId = resolveWriterRunId(runType);
       if (!runId) return;
       await researchPost('research-writer-cancel', { runId });
-      sessionStorage.removeItem(writerRunStorageKey(runType));
+      clearWriterRunId(runType);
       setMsg('Writer run cancelled.');
       if (runType === 'shadow_compare') await loadResearchWriterShadowTab();
       else await loadResearchWriterDraftTab();
     }
 
     async function restartCheckpointedWriterRun(runType) {
-      sessionStorage.removeItem(writerRunStorageKey(runType));
+      clearWriterRunId(runType);
       if (runType === 'shadow_compare') await loadResearchWriterShadowTab();
       else await loadResearchWriterDraftTab();
       setMsg('Ready for a new run — review estimate and click Start Paid Writer Run.');
@@ -2543,15 +2671,26 @@
 
     async function refreshWriterShadowTabUi({ estimate, progress, comparison, errorMessage }) {
       const depth = $('#articleDepth')?.value || 'medium';
-      const runId = sessionStorage.getItem(writerRunStorageKey('shadow_compare'));
+      const runId = resolveWriterRunId('shadow_compare') || progress?.runId || null;
+      if (progress?.runId) persistWriterRunId('shadow_compare', progress.runId);
+      const activeRun = isWriterRunActive(progress);
+      const showEstimate = !activeRun && !progress;
+      const canContinue = !!(runId && activeRun);
+      const estimateBlock = showEstimate
+        ? `<h4 style="color:#f0c040;margin:12px 0 6px">Cost estimate (legacy + multipass)</h4>${renderWriterCostEstimate(estimate)}`
+        : (activeRun
+          ? '<p class="sub">Active checkpointed shadow run — cost estimate hidden while run is in progress.</p>'
+          : (progress?.status === 'complete'
+            ? '<p class="sub">Shadow run complete — see comparison below.</p>'
+            : `<h4 style="color:#f0c040;margin:12px 0 6px">Cost estimate (legacy + multipass)</h4>${renderWriterCostEstimate(estimate)}`));
       let body = `
         <p class="sub">Shadow Compare · checkpointed · depth ${escapeHtml(depth)} · zero OpenAI on tab open.</p>
-        <h4 style="color:#f0c040;margin:12px 0 6px">Cost estimate (legacy + multipass)</h4>
-        ${renderWriterCostEstimate(estimate)}
+        ${estimateBlock}
         <div class="generate-row" style="margin-top:10px;flex-wrap:wrap;gap:8px">
-          <button type="button" class="btn btn-primary" id="shadowStartPaidBtn">Start Paid Shadow Run</button>
-          <button type="button" class="btn btn-secondary" id="shadowContinueBtn" ${runId ? '' : 'disabled'}>Continue</button>
-          <button type="button" class="btn btn-secondary" id="shadowCancelBtn" ${runId ? '' : 'disabled'}>Cancel</button>
+          <button type="button" class="btn btn-primary" id="shadowStartPaidBtn" ${activeRun ? 'disabled' : ''}>Start Paid Shadow Run</button>
+          <button type="button" class="btn btn-secondary" id="shadowContinueBtn" ${canContinue ? '' : 'disabled'}>Continue</button>
+          <button type="button" class="btn btn-secondary" id="shadowResumeBtn" ${canContinue ? '' : 'disabled'}>Resume</button>
+          <button type="button" class="btn btn-secondary" id="shadowCancelBtn" ${runId && activeRun ? '' : 'disabled'}>Cancel</button>
           <button type="button" class="btn btn-secondary" id="shadowRestartBtn">Restart</button>
         </div>
         ${renderWriterRunProgress(progress)}`;
@@ -2560,6 +2699,7 @@
       $('#researchTabWriterShadow').innerHTML = body;
       $('#shadowStartPaidBtn')?.addEventListener('click', () => startCheckpointedWriterRun('shadow_compare'));
       $('#shadowContinueBtn')?.addEventListener('click', () => continueCheckpointedWriterRun('shadow_compare'));
+      $('#shadowResumeBtn')?.addEventListener('click', () => continueCheckpointedWriterRun('shadow_compare'));
       $('#shadowCancelBtn')?.addEventListener('click', () => cancelCheckpointedWriterRun('shadow_compare'));
       $('#shadowRestartBtn')?.addEventListener('click', () => restartCheckpointedWriterRun('shadow_compare'));
       if (comparison) {
@@ -2575,20 +2715,23 @@
         await refreshWriterShadowTabUi({ estimate: null, progress: null, comparison: prefetched });
         return;
       }
-      $('#researchTabWriterShadow').innerHTML = '<p class="sub">Loading shadow cost estimate (no OpenAI)…</p>';
+      $('#researchTabWriterShadow').innerHTML = '<p class="sub">Loading shadow run state (no OpenAI)…</p>';
       try {
-        const estimate = await researchPost('research-writer-estimate', {
-          articleDepth: depth,
-          articleType: 'race-recap',
-          runType: 'shadow_compare',
-        });
-        const runId = sessionStorage.getItem(writerRunStorageKey('shadow_compare'));
-        let progress = null;
-        let comparison = null;
-        if (runId) {
-          const status = await researchPost('research-writer-status', { runId });
-          progress = status.progress;
-          if (status.result?.mode === 'shadow') comparison = status.result;
+        const resolved = await resolveShadowWriterRunState();
+        let estimate = null;
+        let progress = resolved.progress;
+        let comparison = resolved.comparison;
+        if (!progress || !isWriterRunActive(progress)) {
+          estimate = await researchPost('research-writer-estimate', {
+            articleDepth: depth,
+            articleType: 'race-recap',
+            runType: 'shadow_compare',
+          });
+        }
+        if (resolved.runId && !progress) {
+          const synced = await fetchWriterRunStatus(resolved.runId);
+          progress = synced.progress;
+          comparison = synced.comparison;
         }
         await refreshWriterShadowTabUi({ estimate, progress, comparison });
       } catch (e) {
