@@ -16,7 +16,7 @@ const nextRace = {
   date: '2026-08-09',
 };
 
-const latest = buildBroadcastPresentation(featured, nextRace, 'last-completed-race');
+const latest = buildBroadcastPresentation(featured, nextRace, 'newest-valid-playlist-upload');
 assert.equal(latest.heading, 'Latest Broadcast');
 assert.equal(latest.videoTitle, featured.title);
 assert.equal(latest.represents, 'latest-upload');
