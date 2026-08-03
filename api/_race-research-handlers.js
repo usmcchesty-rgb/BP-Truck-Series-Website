@@ -16,6 +16,7 @@ import { formatResearchQualityReport, assessArticleReadiness } from './_race-res
 import { runDiagnoseQuality } from './_race-research-diagnose.js';
 import { selectEvidenceForArticle } from './_race-research-evidence.js';
 import { buildNewsArticlePlan } from './_race-research-plan.js';
+import { buildDeterministicArticlePlan } from './_news-writer-deterministic-plan.js';
 import {
   createResearchOperationId,
   logResearchOperation,
@@ -277,12 +278,20 @@ export async function handleResearchPreview(body) {
     const pkg = await buildRaceIntelligencePackage({ seasonId, raceNumber });
     const evidence = selectEvidenceForArticle({ racePackage: pkg, articleType, articleDepth });
     const plan = buildNewsArticlePlan({ articleType, articleDepth, evidenceSelection: evidence });
+    const deterministicPlan = buildDeterministicArticlePlan({
+      racePackage: pkg,
+      seasonId,
+      raceNumber,
+      articleType,
+      articleDepth,
+    });
     const allDepths = await runDiagnoseEvidence(seasonId, raceNumber);
     return {
       articleDepth,
       diagnostics: pkg.diagnostics,
       evidence,
       plan,
+      deterministicPlan,
       samePackage: {
         factCount: pkg.facts?.length ?? 0,
         message: 'Short, Medium, and In-Depth previews use the same stored Race Intelligence Package.',

@@ -347,6 +347,7 @@
           <button type="button" class="research-tab-btn" data-research-tab="canonical">Canonical Facts</button>
           <button type="button" class="research-tab-btn" data-research-tab="source-history">Source History</button>
           <button type="button" class="research-tab-btn" data-research-tab="evidence">Evidence Preview</button>
+          <button type="button" class="research-tab-btn" data-research-tab="story-plan">Story Plan (3a)</button>
           <button type="button" class="research-tab-btn" data-research-tab="quality">Research Quality</button>
         </div>
         <div id="researchTabOverview" class="research-tab-panel is-active"></div>
@@ -359,6 +360,7 @@
         <div id="researchTabCanonical" class="research-tab-panel"></div>
         <div id="researchTabSourceHistory" class="research-tab-panel"></div>
         <div id="researchTabEvidence" class="research-tab-panel"></div>
+        <div id="researchTabStoryPlan" class="research-tab-panel"></div>
         <div id="researchTabQuality" class="research-tab-panel"></div>
         <pre id="researchPackageStatus" hidden>Select a race number, check the database, then Refresh Status.</pre>
       </div>
@@ -1811,6 +1813,7 @@
         canonical: 'researchTabCanonical',
         'source-history': 'researchTabSourceHistory',
         evidence: 'researchTabEvidence',
+        'story-plan': 'researchTabStoryPlan',
         quality: 'researchTabQuality',
       };
       Object.entries(map).forEach(([key, id]) => {
@@ -2187,6 +2190,61 @@
       $('#researchTabEvidence').innerHTML = html;
     }
 
+    async function loadResearchStoryPlanTab() {
+      const depth = $('#articleDepth')?.value || 'medium';
+      $('#researchTabStoryPlan').innerHTML = '<p class="sub">Loading deterministic story plan (Phase 3a — no article text)…</p>';
+      const data = await researchPost('research-preview', { articleDepth: depth, articleType: 'race-recap' });
+      const dp = data.deterministicPlan;
+      if (!dp) {
+        $('#researchTabStoryPlan').innerHTML = '<p class="sub">Deterministic plan unavailable.</p>';
+        return;
+      }
+      const sp = dp.storyPlan;
+      const temp = sp.raceTemperature;
+      const storyRows = (sp.stories || []).map((s) => `
+        <tr>
+          <td>${escapeHtml(s.storyId)}</td>
+          <td>${s.empty ? statusPill('Empty', 'missing') : statusPill('Active', 'complete')}</td>
+          <td>${escapeHtml(s.importanceScore)}</td>
+          <td>${escapeHtml(s.confidence)}</td>
+          <td>${(s.factIds || []).length}</td>
+        </tr>`).join('');
+      const takeawayRows = (sp.readerTakeaways || []).map((t) => `
+        <tr><td>P${escapeHtml(t.priority)}</td><td>${escapeHtml(t.label)}</td><td>${(t.factIds || []).length} facts</td></tr>`).join('');
+      const outlineRows = (dp.outline?.sections || []).map((s) => `
+        <tr><td>${escapeHtml(s.sectionId)}</td><td>${escapeHtml(s.title)}</td><td>${(s.evidence?.factIds || []).length}</td><td>${escapeHtml(s.targetWords)}</td></tr>`).join('');
+      const ledgerRows = Object.values(dp.factUsageLedger?.facts || {}).slice(0, 40).map((e) => `
+        <tr>
+          <td>${escapeHtml(String(e.factId).slice(0, 8))}</td>
+          <td>${escapeHtml(e.priorityTier)}</td>
+          <td>${escapeHtml(e.status)}</td>
+          <td>${escapeHtml((e.assignedSectionIds || []).join(', '))}</td>
+        </tr>`).join('');
+      const unused = (dp.unusedCriticalFacts || []).map((u) => `<li>${escapeHtml(u.summaryShort)} (${escapeHtml(String(u.factId).slice(0, 8))})</li>`).join('') || '<li class="sub">None</li>';
+
+      $('#researchTabStoryPlan').innerHTML = `
+        <p class="sub">Phase 3a preview only · Operation ${escapeHtml(dp.operationId)} · Fingerprint ${escapeHtml(sp.packageFingerprint)} · Planner ${escapeHtml(sp.plannerVersion)}</p>
+        <div class="research-detail-block">
+          <strong>Race Temperature</strong>
+          <div>Primary: ${escapeHtml(temp?.primary || '—')} · Secondary: ${escapeHtml(temp?.secondary || '—')} · Confidence: ${escapeHtml(temp?.confidence ?? '—')}%</div>
+        </div>
+        <div class="research-detail-block">
+          <strong>Lead Story</strong> ${escapeHtml(sp.leadStoryId)}
+        </div>
+        <h4 style="color:#f0c040;margin:12px 0 6px">Story hierarchy</h4>
+        <table class="research-table"><thead><tr><th>Story</th><th>Status</th><th>Score</th><th>Conf</th><th>Facts</th></tr></thead><tbody>${storyRows}</tbody></table>
+        <h4 style="color:#f0c040;margin:12px 0 6px">Reader Takeaways</h4>
+        <table class="research-table"><thead><tr><th>Pri</th><th>Label</th><th>Evidence</th></tr></thead><tbody>${takeawayRows}</tbody></table>
+        <h4 style="color:#f0c040;margin:12px 0 6px">Article Outline</h4>
+        <table class="research-table"><thead><tr><th>Section</th><th>Title</th><th>Facts</th><th>Target words</th></tr></thead><tbody>${outlineRows}</tbody></table>
+        <h4 style="color:#f0c040;margin:12px 0 6px">Fact Usage Ledger (sample)</h4>
+        <p class="sub">Coverage: ${escapeHtml(dp.ledgerCoverage?.coveragePercent ?? 0)}% · High-priority planned: ${escapeHtml(dp.ledgerCoverage?.highPriorityCoveragePercent ?? 0)}%</p>
+        <table class="research-table"><thead><tr><th>Fact</th><th>Tier</th><th>Status</th><th>Sections</th></tr></thead><tbody>${ledgerRows}</tbody></table>
+        <h4 style="color:#f0c040;margin:12px 0 6px">Unused critical facts</h4>
+        <ul>${unused}</ul>
+        <p class="sub">Deterministic planning only — no article prose generated.</p>`;
+    }
+
     async function loadResearchQualityTab() {
       $('#researchTabQuality').innerHTML = '<p class="sub">Loading…</p>';
       const data = await researchPost('research-quality');
@@ -2212,6 +2270,7 @@
         else if (name === 'canonical') await loadResearchCanonicalTab();
         else if (name === 'source-history') await loadResearchSourceHistoryTab();
         else if (name === 'evidence') await loadResearchEvidenceTab();
+        else if (name === 'story-plan') await loadResearchStoryPlanTab();
         else if (name === 'quality') await loadResearchQualityTab();
       } catch (e) {
         setMsg(e.message, true);
