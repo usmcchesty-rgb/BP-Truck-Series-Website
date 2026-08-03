@@ -1,5 +1,5 @@
 /** Phase 3a deterministic planner — version bumps invalidate cached plans in later phases. */
-export const NEWS_WRITER_PLANNER_VERSION = '1.0.0';
+export const NEWS_WRITER_PLANNER_VERSION = '1.1.0';
 
 export const STORY_CATEGORY_ORDER = [
   'lead_story',
@@ -44,3 +44,10 @@ export const OUTLINE_SECTION_TYPES = [
   'looking_ahead',
   'controversy',
 ];
+
+/** Primary planning-quality targets (canonical event coverage). */
+export const CANONICAL_COVERAGE_TARGETS = {
+  short: { critical: 60, high: 40 },
+  medium: { critical: 85, high: 65 },
+  'in-depth': { critical: 95, high: 80 },
+};

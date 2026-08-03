@@ -278,12 +278,20 @@ export async function handleResearchPreview(body) {
     const pkg = await buildRaceIntelligencePackage({ seasonId, raceNumber });
     const evidence = selectEvidenceForArticle({ racePackage: pkg, articleType, articleDepth });
     const plan = buildNewsArticlePlan({ articleType, articleDepth, evidenceSelection: evidence });
+    let previewDriverLookup = null;
+    try {
+      const ctx = await loadRaceResearchBootstrapContext(seasonId, raceNumber);
+      previewDriverLookup = ctx.driverLookup;
+    } catch {
+      previewDriverLookup = null;
+    }
     const deterministicPlan = buildDeterministicArticlePlan({
       racePackage: pkg,
       seasonId,
       raceNumber,
       articleType,
       articleDepth,
+      driverLookup: previewDriverLookup,
     });
     const allDepths = await runDiagnoseEvidence(seasonId, raceNumber);
     return {

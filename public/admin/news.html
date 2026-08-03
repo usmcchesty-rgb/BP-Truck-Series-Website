@@ -2221,27 +2221,66 @@
           <td>${escapeHtml((e.assignedSectionIds || []).join(', '))}</td>
         </tr>`).join('');
       const unused = (dp.unusedCriticalFacts || []).map((u) => `<li>${escapeHtml(u.summaryShort)} (${escapeHtml(String(u.factId).slice(0, 8))})</li>`).join('') || '<li class="sub">None</li>';
+      const reqRows = (dp.requiredRecap?.items || []).map((r) => `
+        <tr><td>${escapeHtml(r.role)}</td><td>${r.present ? statusPill('Present', 'complete') : statusPill('Missing', 'missing')}</td><td>${escapeHtml(r.label || '')}</td></tr>`).join('');
+      const leadCand = (sp.plannerDiagnostics?.leadCandidateScores || []).map((c) => `
+        <tr>
+          <td>${escapeHtml(c.candidateType)}</td>
+          <td>${c.selected ? statusPill('Selected', 'complete') : '—'}</td>
+          <td>${escapeHtml(c.score)}</td>
+          <td>${escapeHtml(JSON.stringify(c.scoreComponents || {}))}</td>
+          <td>${(c.supportingFactIds || []).length}</td>
+          <td class="sub">${escapeHtml(c.suppressedReason || '')}</td>
+        </tr>`).join('');
+      const canon = dp.ledgerCoverage?.canonical || {};
+      const covTargets = dp.coverageTargets || {};
+      const unusedGroups = dp.unusedFactDiagnostics || {};
+      const dupUnused = (unusedGroups.duplicate_of_canonical || []).slice(0, 8).map((u) => `<li class="sub">${escapeHtml(u.summaryShort)}</li>`).join('') || '<li class="sub">None</li>';
+      const lowQual = (dp.excludedPlanningFacts || []).slice(0, 10).map((u) => `<li class="sub">${escapeHtml(u.summaryShort)} (${escapeHtml(u.reason)})</li>`).join('') || '<li class="sub">None</li>';
+      const wordAlloc = (dp.outline?.wordAllocation || []).map((w) => `<li>${escapeHtml(w.sectionId)}: ${escapeHtml(w.targetWords)} words (base ${escapeHtml(w.baseWeight)}, facts ${escapeHtml(w.evidenceFactCount)})</li>`).join('');
+      const driverRows = (sp.rankedDrivers || []).slice(0, 12).map((d) => `
+        <tr><td>${escapeHtml(d.displayName || d.driverId)}</td><td>${escapeHtml((d.roles || []).join(', '))}</td></tr>`).join('');
+      const tempDiag = (temp?.diagnostics || temp?.signals || []).map((s) => `
+        <li>${escapeHtml(s.signal || s.tag)} · weight ${escapeHtml(s.weight ?? s.score)} · conf ${escapeHtml(s.sourceConfidence || '—')} · facts ${(s.supportingFactIds || s.factIds || []).length}</li>`).join('');
 
       $('#researchTabStoryPlan').innerHTML = `
         <p class="sub">Phase 3a preview only · Operation ${escapeHtml(dp.operationId)} · Fingerprint ${escapeHtml(sp.packageFingerprint)} · Planner ${escapeHtml(sp.plannerVersion)}</p>
         <div class="research-detail-block">
-          <strong>Race Temperature</strong>
-          <div>Primary: ${escapeHtml(temp?.primary || '—')} · Secondary: ${escapeHtml(temp?.secondary || '—')} · Confidence: ${escapeHtml(temp?.confidence ?? '—')}%</div>
+          <strong>Required recap facts</strong> · Coverage ${escapeHtml(dp.requiredRecap?.requiredCoveragePercent ?? '—')}%
+          <table class="research-table"><thead><tr><th>Role</th><th>Status</th><th>Detail</th></tr></thead><tbody>${reqRows || '<tr><td colspan="3" class="sub">—</td></tr>'}</tbody></table>
         </div>
         <div class="research-detail-block">
-          <strong>Lead Story</strong> ${escapeHtml(sp.leadStoryId)}
+          <strong>Race Temperature</strong>
+          <div>Primary: ${escapeHtml(temp?.primary || '—')} · Secondary: ${escapeHtml(temp?.secondary || '—')} · Confidence: ${escapeHtml(temp?.confidence ?? '—')}%</div>
+          <ul class="sub">${tempDiag || '<li>—</li>'}</ul>
         </div>
+        <div class="research-detail-block">
+          <strong>Lead story</strong> ${escapeHtml(sp.leadStoryId)} · Winner diagnostic: ${escapeHtml(sp.plannerDiagnostics?.leadWinner || '—')}
+        </div>
+        <h4 style="color:#f0c040;margin:12px 0 6px">Lead candidate scoring</h4>
+        <table class="research-table"><thead><tr><th>Type</th><th>Selected</th><th>Score</th><th>Components</th><th>Facts</th><th>Suppressed</th></tr></thead><tbody>${leadCand || '<tr><td colspan="6" class="sub">—</td></tr>'}</tbody></table>
         <h4 style="color:#f0c040;margin:12px 0 6px">Story hierarchy</h4>
         <table class="research-table"><thead><tr><th>Story</th><th>Status</th><th>Score</th><th>Conf</th><th>Facts</th></tr></thead><tbody>${storyRows}</tbody></table>
+        <h4 style="color:#f0c040;margin:12px 0 6px">Normalized drivers</h4>
+        <table class="research-table"><thead><tr><th>Name</th><th>Roles</th></tr></thead><tbody>${driverRows || '<tr><td colspan="2" class="sub">—</td></tr>'}</tbody></table>
         <h4 style="color:#f0c040;margin:12px 0 6px">Reader Takeaways</h4>
         <table class="research-table"><thead><tr><th>Pri</th><th>Label</th><th>Evidence</th></tr></thead><tbody>${takeawayRows}</tbody></table>
         <h4 style="color:#f0c040;margin:12px 0 6px">Article Outline</h4>
         <table class="research-table"><thead><tr><th>Section</th><th>Title</th><th>Facts</th><th>Target words</th></tr></thead><tbody>${outlineRows}</tbody></table>
+        <p class="sub"><strong>Word allocation:</strong></p><ul class="sub">${wordAlloc || '<li>—</li>'}</ul>
+        <h4 style="color:#f0c040;margin:12px 0 6px">Coverage</h4>
+        <p class="sub">Raw facts: ${escapeHtml(dp.ledgerCoverage?.coveragePercent ?? 0)}% · High-priority raw: ${escapeHtml(dp.ledgerCoverage?.highPriorityCoveragePercent ?? 0)}%</p>
+        <p class="sub">Canonical events: ${escapeHtml(canon.coveragePercent ?? 0)}% · Critical canonical: ${escapeHtml(canon.criticalCoveragePercent ?? 0)}% · High-priority canonical: ${escapeHtml(canon.highPriorityCoveragePercent ?? 0)}%</p>
+        <p class="sub">Targets (medium): critical ≥ ${escapeHtml(covTargets.targets?.critical ?? '—')}%, high ≥ ${escapeHtml(covTargets.targets?.high ?? '—')}% · Met: ${covTargets.met ? statusPill('Yes', 'complete') : statusPill('No', 'missing')}</p>
+        ${(covTargets.reasons || []).length ? `<ul class="sub">${covTargets.reasons.map((r) => `<li>${escapeHtml(r)}</li>`).join('')}</ul>` : ''}
         <h4 style="color:#f0c040;margin:12px 0 6px">Fact Usage Ledger (sample)</h4>
-        <p class="sub">Coverage: ${escapeHtml(dp.ledgerCoverage?.coveragePercent ?? 0)}% · High-priority planned: ${escapeHtml(dp.ledgerCoverage?.highPriorityCoveragePercent ?? 0)}%</p>
         <table class="research-table"><thead><tr><th>Fact</th><th>Tier</th><th>Status</th><th>Sections</th></tr></thead><tbody>${ledgerRows}</tbody></table>
-        <h4 style="color:#f0c040;margin:12px 0 6px">Unused critical facts</h4>
+        <h4 style="color:#f0c040;margin:12px 0 6px">Genuine unused critical facts</h4>
         <ul>${unused}</ul>
+        <h4 style="color:#f0c040;margin:12px 0 6px">Duplicate / supporting unused</h4>
+        <ul>${dupUnused}</ul>
+        <h4 style="color:#f0c040;margin:12px 0 6px">Low-quality transcript excluded from planning</h4>
+        <ul>${lowQual}</ul>
         <p class="sub">Deterministic planning only — no article prose generated.</p>`;
     }
 

@@ -2,18 +2,89 @@
   "seasonId": "27987",
   "raceNumber": 17,
   "identity": { "seasonId": "27987", "raceNumber": 17, "track": "Test Track", "date": "2026-01-01" },
+  "planningDriverLookup": [
+    { "driverId": "d-levine", "driverName": "Justin Levine", "carNumber": "12" },
+    { "driverId": "99", "driverName": "Chris Carroll", "carNumber": "99" },
+    { "driverId": "d-taylor", "driverName": "Jordan Taylor", "carNumber": "22" }
+  ],
   "facts": [
     {
-      "id": "fact-r17-winner",
+      "id": "fact-r17-winner-official",
       "factType": "result",
       "category": "winner",
-      "summary": "Chris Carroll won Race 17 after leading the final 12 laps.",
-      "driverIds": ["d-carroll"],
-      "driverNames": ["Chris Carroll"],
-      "importanceScore": 90,
+      "summary": "Justin Levine won the race from P25.",
+      "driverIds": ["d-levine"],
+      "driverNames": ["Justin Levine"],
+      "importanceScore": 95,
       "confidence": "official",
-      "structuredData": { "finishPosition": 1, "startPosition": 3, "positionsGained": 2 },
-      "canonicalFactId": "can-winner"
+      "structuredData": { "finishPosition": 1, "startPosition": 25, "positionsGained": 24 },
+      "canonicalFactId": "can-winner-r17"
+    },
+    {
+      "id": "fact-r17-winner-transcript-dup",
+      "factType": "race_event",
+      "category": "winner",
+      "summary": "12:41 Justin Levine takes the checkered",
+      "driverIds": ["d-levine"],
+      "driverNames": ["Justin Levine"],
+      "importanceScore": 88,
+      "confidence": "broadcast_reported",
+      "canonicalFactId": "can-winner-r17"
+    },
+    {
+      "id": "fact-r17-caution-official",
+      "factType": "race_event",
+      "category": "race_control",
+      "summary": "Race Control reports 6 cautions.",
+      "importanceScore": 72,
+      "confidence": "official",
+      "structuredData": { "cautionCount": 6 },
+      "canonicalFactId": "can-cautions-r17"
+    },
+    {
+      "id": "fact-r17-milestone",
+      "factType": "historical",
+      "category": "driver_story",
+      "summary": "Third win on the season for Justin Levine.",
+      "driverIds": ["d-levine"],
+      "driverNames": ["Justin Levine"],
+      "importanceScore": 78,
+      "confidence": "officially_confirmed",
+      "canonicalFactId": "can-milestone-r17"
+    },
+    {
+      "id": "fact-r17-champ",
+      "factType": "championship",
+      "category": "standings_snapshot",
+      "summary": "Chris Carroll3 lost 8 points in the title fight after Race 17.",
+      "driverIds": ["99"],
+      "driverNames": ["Chris Carroll3"],
+      "importanceScore": 82,
+      "confidence": "official",
+      "structuredData": { "movement": -8, "position": 2 },
+      "canonicalFactId": "can-champ-r17"
+    },
+    {
+      "id": "fact-r17-champ-leader",
+      "factType": "championship",
+      "category": "points_leader",
+      "summary": "Justin Levine leads standings by 6 points after Race 17.",
+      "driverIds": ["d-levine"],
+      "driverNames": ["Justin Levine"],
+      "importanceScore": 70,
+      "confidence": "official",
+      "structuredData": { "movement": 6, "position": 1 }
+    },
+    {
+      "id": "fact-r17-strategy",
+      "factType": "strategy",
+      "category": "pit_strategy",
+      "summary": "Leaders pitted under final caution; two-tire call on lap 111 for Levine.",
+      "driverIds": ["d-levine"],
+      "driverNames": ["Justin Levine"],
+      "importanceScore": 65,
+      "confidence": "broadcast_reported",
+      "lapNumber": 111
     },
     {
       "id": "fact-r17-p2",
@@ -27,94 +98,6 @@
       "structuredData": { "finishPosition": 2, "startPosition": 1 }
     },
     {
-      "id": "fact-r17-champ",
-      "factType": "championship",
-      "category": "standings_snapshot",
-      "summary": "Chris Carroll extended points lead; Taylor lost 5 points in title fight.",
-      "driverIds": ["d-carroll"],
-      "driverNames": ["Chris Carroll"],
-      "importanceScore": 82,
-      "confidence": "official",
-      "structuredData": { "movement": -5, "position": 2 }
-    },
-    {
-      "id": "fact-r17-champ-leader",
-      "factType": "championship",
-      "category": "points_leader",
-      "summary": "Carroll leads standings by 12 points after Race 17.",
-      "driverIds": ["d-carroll"],
-      "driverNames": ["Chris Carroll"],
-      "importanceScore": 70,
-      "confidence": "official",
-      "structuredData": { "movement": 3, "position": 1 }
-    },
-    {
-      "id": "fact-r17-caution-1",
-      "factType": "caution",
-      "category": "caution",
-      "summary": "Caution lap 45 for debris in Turn 2.",
-      "importanceScore": 55,
-      "confidence": "officially_confirmed",
-      "lapNumber": 45
-    },
-    {
-      "id": "fact-r17-caution-2",
-      "factType": "caution",
-      "category": "caution",
-      "summary": "Caution lap 78 for incident involving Smith.",
-      "driverIds": ["d-smith"],
-      "driverNames": ["Smith"],
-      "importanceScore": 58,
-      "confidence": "broadcast_reported",
-      "lapNumber": 78
-    },
-    {
-      "id": "fact-r17-caution-3",
-      "factType": "caution",
-      "category": "restart",
-      "summary": "Restart lap 80 after caution.",
-      "importanceScore": 50,
-      "confidence": "broadcast_reported",
-      "lapNumber": 80
-    },
-    {
-      "id": "fact-r17-caution-4",
-      "factType": "caution",
-      "category": "caution",
-      "summary": "Caution lap 102 for oil on track.",
-      "importanceScore": 52,
-      "confidence": "broadcast_reported",
-      "lapNumber": 102
-    },
-    {
-      "id": "fact-r17-caution-5",
-      "factType": "caution",
-      "category": "caution",
-      "summary": "Caution lap 110 for multi-car incident.",
-      "importanceScore": 60,
-      "confidence": "officially_confirmed",
-      "lapNumber": 110
-    },
-    {
-      "id": "fact-r17-strategy",
-      "factType": "strategy",
-      "category": "pit_strategy",
-      "summary": "Leaders pitted under final caution; fuel mileage shaped closing stint.",
-      "importanceScore": 65,
-      "confidence": "broadcast_reported"
-    },
-    {
-      "id": "fact-r17-strategy-2",
-      "factType": "strategy",
-      "category": "pit_strategy",
-      "summary": "Two-tire call on lap 111 for Carroll.",
-      "driverIds": ["d-carroll"],
-      "driverNames": ["Chris Carroll"],
-      "importanceScore": 62,
-      "confidence": "broadcast_reported",
-      "lapNumber": 111
-    },
-    {
       "id": "fact-r17-incident",
       "factType": "incident",
       "category": "incident",
@@ -126,15 +109,40 @@
       "lapNumber": 77
     },
     {
-      "id": "fact-r17-recovery",
-      "factType": "result",
-      "category": "recovery",
-      "summary": "Smith recovered to P12 after lap 77 spin.",
-      "driverIds": ["d-smith"],
-      "driverNames": ["Smith"],
-      "importanceScore": 45,
-      "confidence": "official",
-      "structuredData": { "finishPosition": 12 }
+      "id": "fact-r17-fragment-ts",
+      "factType": "lead_change",
+      "category": "lead_change",
+      "summary": "14:02:11 and he goes to the inside trying to",
+      "importanceScore": 91,
+      "confidence": "broadcast_reported"
+    },
+    {
+      "id": "fact-r17-fragment-spec",
+      "factType": "quote",
+      "category": "quote",
+      "summary": "I expect to try and go for the win on the final restart.",
+      "driverIds": ["d-taylor"],
+      "driverNames": ["Jordan Taylor"],
+      "importanceScore": 86,
+      "confidence": "broadcast_reported"
+    },
+    {
+      "id": "fact-r17-fragment-incomplete",
+      "factType": "race_event",
+      "category": "race_event",
+      "summary": "Green flag lap 52 leaders battle",
+      "importanceScore": 84,
+      "confidence": "broadcast_reported"
+    },
+    {
+      "id": "fact-r17-caution-1",
+      "factType": "caution",
+      "category": "caution",
+      "summary": "Caution lap 45 for debris in Turn 2.",
+      "importanceScore": 55,
+      "confidence": "officially_confirmed",
+      "lapNumber": 45,
+      "canonicalFactId": "can-cautions-r17"
     }
   ],
   "diagnostics": { "coverageScore": 70, "factCount": 13 }
