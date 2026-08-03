@@ -5,12 +5,18 @@ export const NEWS_WRITER_RUNS_MIGRATION_HINT =
 
 let runsTableProbeCache = null;
 
-export async function checkNewsWriterRunsTableReady(sb = supabase) {
-  if (!sb) {
+function resolveSupabaseClient(sb) {
+  if (sb && typeof sb.from === 'function') return sb;
+  return supabase();
+}
+
+export async function checkNewsWriterRunsTableReady(sb) {
+  const client = resolveSupabaseClient(sb);
+  if (!client) {
     return { configured: false, ready: false, hint: NEWS_WRITER_RUNS_MIGRATION_HINT };
   }
   if (runsTableProbeCache) return runsTableProbeCache;
-  const { error } = await sb.from('news_writer_runs').select('id').limit(1);
+  const { error } = await client.from('news_writer_runs').select('id').limit(1);
   if (error) {
     const missing =
       error.code === '42P01' ||
@@ -73,9 +79,11 @@ export async function createNewsWriterRun(
     checkpoint,
     estimatedCostUsd,
   },
-  sb = supabase
+  sb
 ) {
-  const { data, error } = await sb
+  const client = resolveSupabaseClient(sb);
+  if (!client) throw Object.assign(new Error('Supabase not configured.'), { status: 400, code: 'SUPABASE_MISSING' });
+  const { data, error } = await client
     .from('news_writer_runs')
     .insert({
       run_type: runType,
@@ -96,13 +104,17 @@ export async function createNewsWriterRun(
   return rowToRun(data);
 }
 
-export async function getNewsWriterRun(runId, sb = supabase) {
-  const { data, error } = await sb.from('news_writer_runs').select('*').eq('id', runId).maybeSingle();
+export async function getNewsWriterRun(runId, sb) {
+  const client = resolveSupabaseClient(sb);
+  if (!client) throw Object.assign(new Error('Supabase not configured.'), { status: 400, code: 'SUPABASE_MISSING' });
+  const { data, error } = await client.from('news_writer_runs').select('*').eq('id', runId).maybeSingle();
   if (error) throw Object.assign(new Error(error.message), { code: error.code });
   return rowToRun(data);
 }
 
-export async function updateNewsWriterRun(runId, patch, sb = supabase) {
+export async function updateNewsWriterRun(runId, patch, sb) {
+  const client = resolveSupabaseClient(sb);
+  if (!client) throw Object.assign(new Error('Supabase not configured.'), { status: 400, code: 'SUPABASE_MISSING' });
   const row = {};
   if (patch.status != null) row.status = patch.status;
   if (patch.currentStep != null) row.current_step = patch.currentStep;
@@ -120,12 +132,12 @@ export async function updateNewsWriterRun(runId, patch, sb = supabase) {
   if (patch.completedAt != null) row.completed_at = patch.completedAt;
   row.updated_at = new Date().toISOString();
 
-  const { data, error } = await sb.from('news_writer_runs').update(row).eq('id', runId).select('*').single();
+  const { data, error } = await client.from('news_writer_runs').update(row).eq('id', runId).select('*').single();
   if (error) throw Object.assign(new Error(error.message), { code: error.code });
   return rowToRun(data);
 }
 
-export async function cancelNewsWriterRun(runId, sb = supabase) {
+export async function cancelNewsWriterRun(runId, sb) {
   return updateNewsWriterRun(
     runId,
     {

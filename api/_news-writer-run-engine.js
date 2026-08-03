@@ -722,7 +722,7 @@ export async function initializeAndPersistRun({
   createRun,
   updateRun,
 }) {
-  const ctx = await loadRunPackageContextFn({
+  const ctx = await loadRunPackageContext({
     seasonId,
     raceNumber,
     articleType,

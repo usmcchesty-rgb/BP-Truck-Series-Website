@@ -89,7 +89,22 @@ async function driveRunUntilYield(run) {
   };
 }
 
+function writerHandlerFailure(action, error) {
+  const message = error?.message || String(error);
+  console.error(`[news-writer] ${action} failed:`, message, error?.code || '');
+  return {
+    error: message,
+    status: error?.status || 500,
+    data: { success: false, code: error?.code || 'WRITER_HANDLER_ERROR' },
+  };
+}
+
 export async function handleResearchWriterEstimate(body) {
+  console.log('[news-writer] research-writer-estimate entered', {
+    raceNumber: body.raceNumber ?? body.race_number,
+    runType: body.runType ?? body.run_type,
+  });
+  try {
   const parsed = parseRaceBody(body);
   if (parsed.error) return { error: parsed.error, status: parsed.status, data: null };
   const seasonId = await resolveSeasonId(parsed.seasonId);
@@ -116,9 +131,18 @@ export async function handleResearchWriterEstimate(body) {
       confirmationField: 'confirmPaid',
     },
   };
+  } catch (error) {
+    return writerHandlerFailure('research-writer-estimate', error);
+  }
 }
 
 export async function handleResearchWriterStart(body) {
+  console.log('[news-writer] research-writer-start entered', {
+    raceNumber: body.raceNumber ?? body.race_number,
+    runType: body.runType ?? body.run_type,
+    confirmPaid: body.confirmPaid ?? body.confirm_paid,
+  });
+  try {
   const parsed = parseRaceBody(body);
   if (parsed.error) return { error: parsed.error, status: parsed.status, data: null };
   const confirmErr = requirePaidConfirmation(body);
@@ -167,9 +191,14 @@ export async function handleResearchWriterStart(body) {
       draft: driven.result,
     },
   };
+  } catch (error) {
+    return writerHandlerFailure('research-writer-start', error);
+  }
 }
 
 export async function handleResearchWriterContinue(body) {
+  console.log('[news-writer] research-writer-continue entered', { runId: body.runId ?? body.run_id });
+  try {
   const runId = body.runId ?? body.run_id;
   if (!runId) return { error: 'runId is required.', status: 400, data: null };
   try {
@@ -197,9 +226,14 @@ export async function handleResearchWriterContinue(body) {
       draft: driven.result,
     },
   };
+  } catch (error) {
+    return writerHandlerFailure('research-writer-continue', error);
+  }
 }
 
 export async function handleResearchWriterStatus(body) {
+  console.log('[news-writer] research-writer-status entered', { runId: body.runId ?? body.run_id });
+  try {
   const runId = body.runId ?? body.run_id;
   if (!runId) return { error: 'runId is required.', status: 400, data: null };
   try {
@@ -218,9 +252,14 @@ export async function handleResearchWriterStatus(body) {
       draft: run.status === 'complete' ? run.result : null,
     },
   };
+  } catch (error) {
+    return writerHandlerFailure('research-writer-status', error);
+  }
 }
 
 export async function handleResearchWriterCancel(body) {
+  console.log('[news-writer] research-writer-cancel entered', { runId: body.runId ?? body.run_id });
+  try {
   const runId = body.runId ?? body.run_id;
   if (!runId) return { error: 'runId is required.', status: 400, data: null };
   try {
@@ -233,6 +272,9 @@ export async function handleResearchWriterCancel(body) {
     status: 200,
     data: { phase: 'writer-run-cancelled', progress: publicRunStatus(run) },
   };
+  } catch (error) {
+    return writerHandlerFailure('research-writer-cancel', error);
+  }
 }
 
 /** Legacy monolithic preview — blocked unless explicit escape hatch for scripts. */
