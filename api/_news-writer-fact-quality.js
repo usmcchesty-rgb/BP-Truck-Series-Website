@@ -6,6 +6,39 @@ const TIMESTAMP_PREFIX =
 
 const OFFICIAL_CONFIDENCE = new Set(['official', 'officially_confirmed', 'manual']);
 
+const PLACEHOLDER_DRIVER_PATTERN =
+  /^(unknown driver|driver|unknown|n\/a|—|-)$/i;
+
+/** Strip iRacing-style trailing car-number artifacts from display names (e.g. Carroll3 → Carroll). */
+export function stripTrailingDriverIdArtifact(name) {
+  const text = String(name || '').trim();
+  if (!text) return '';
+  const m = text.match(/^(.+?)(\d{1,2})$/);
+  if (m && /[a-zA-Z]/.test(m[1]) && m[1].trim().length >= 3) {
+    return m[1].trim();
+  }
+  return text;
+}
+
+export function isPlaceholderDriverName(name) {
+  const text = stripTrailingDriverIdArtifact(name);
+  if (!text) return true;
+  return PLACEHOLDER_DRIVER_PATTERN.test(text);
+}
+
+/** Writer-safe label — never returns placeholders or digit artifacts. */
+export function planningDriverDisplayName(rawName, lookupMap, driverId = null) {
+  const fromId = driverId ? lookupMap.get(String(driverId))?.driverName : null;
+  const resolved = resolveDriverEntity(rawName || fromId || '', lookupMap);
+  let label = stripTrailingDriverIdArtifact(resolved.canonicalName || rawName || fromId || '');
+  if (isPlaceholderDriverName(label)) return null;
+  if (/\d{1,2}$/.test(label) && resolved.matchMethod === 'unresolved') {
+    label = stripTrailingDriverIdArtifact(label);
+  }
+  if (isPlaceholderDriverName(label)) return null;
+  return label;
+}
+
 export function isOfficialConfidence(confidence) {
   return OFFICIAL_CONFIDENCE.has(confidence);
 }
@@ -16,12 +49,14 @@ export function buildPlanningDriverLookup(racePackage, driverLookup) {
 
   function addRow(driverId, driverName, carNumber) {
     const id = driverId ? String(driverId) : null;
-    const key = id || String(driverName || '').toLowerCase();
+    const cleaned = stripTrailingDriverIdArtifact(driverName);
+    if (!id && !cleaned) return;
+    const key = id || cleaned.toLowerCase();
     if (!key || seen.has(key)) return;
     seen.add(key);
     rows.push({
       driverId: id || key,
-      driverName: driverName || 'Unknown driver',
+      driverName: cleaned || null,
       carNumber: carNumber || null,
     });
   }
@@ -54,25 +89,77 @@ export function normalizeFactDrivers(fact, lookupMap) {
   const ids = fact.driverIds || [];
   const normalizedNames = [];
   const normalizedIds = [];
+  const unresolvedDrivers = [];
+  const count = Math.max(names.length, ids.length);
 
-  for (let i = 0; i < Math.max(names.length, ids.length, names.length ? 0 : 1); i += 1) {
-    const rawName = names[i] || names[0] || '';
-    const rawId = ids[i] || ids[0] || null;
+  for (let i = 0; i < count; i += 1) {
+    const rawName = names[i] ?? names[0] ?? '';
+    const rawId = ids[i] ?? ids[0] ?? null;
     const resolved = resolveDriverEntity(rawName || lookupMap.get(String(rawId))?.driverName, lookupMap);
-    const canon = resolved.canonicalName || rawName;
+    const display = planningDriverDisplayName(rawName, lookupMap, rawId);
     const id = resolved.matchedDriverId || (rawId ? String(rawId) : null);
-    if (canon && !normalizedNames.includes(canon)) normalizedNames.push(canon);
+
+    if (!display) {
+      if (rawName || rawId) {
+        unresolvedDrivers.push({
+          rawName: rawName || null,
+          driverId: rawId ? String(rawId) : null,
+          matchMethod: resolved.matchMethod,
+          requiresReview: true,
+        });
+      }
+      continue;
+    }
+    if (!normalizedNames.includes(display)) normalizedNames.push(display);
     if (id && !normalizedIds.includes(id)) normalizedIds.push(id);
   }
 
   return {
     ...fact,
-    driverNames: normalizedNames.length ? normalizedNames : fact.driverNames,
-    driverIds: normalizedIds.length ? normalizedIds : fact.driverIds,
+    driverNames: normalizedNames,
+    driverIds: normalizedIds,
     _driverResolution: {
       rawDriverNames: [...(fact.driverNames || [])],
+      unresolvedDrivers,
     },
   };
+}
+
+export function collectUnresolvedDriverDiagnostics(preparedFacts) {
+  const byKey = new Map();
+  for (const fact of preparedFacts || []) {
+    for (const row of fact._driverResolution?.unresolvedDrivers || []) {
+      const key = `${row.driverId || ''}|${row.rawName || ''}`;
+      if (!byKey.has(key)) {
+        byKey.set(key, {
+          rawName: row.rawName,
+          driverId: row.driverId,
+          matchMethod: row.matchMethod,
+          requiresReview: true,
+          factIds: [],
+        });
+      }
+      byKey.get(key).factIds.push(fact.id);
+    }
+    for (const raw of fact._driverResolution?.rawDriverNames || []) {
+      if (!raw) continue;
+      const stripped = stripTrailingDriverIdArtifact(raw);
+      if (stripped !== raw && /^\d{1,2}$/.test(raw.slice(-2))) {
+        const key = `artifact|${raw}`;
+        if (!byKey.has(key)) {
+          byKey.set(key, {
+            rawName: raw,
+            driverId: null,
+            matchMethod: 'trailing_digit_artifact',
+            requiresReview: true,
+            factIds: [],
+          });
+        }
+        byKey.get(key).factIds.push(fact.id);
+      }
+    }
+  }
+  return [...byKey.values()];
 }
 
 function hasVerifiedOutcome(fact) {

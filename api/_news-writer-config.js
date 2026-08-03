@@ -1,5 +1,5 @@
-/** Phase 3a deterministic planner — version bumps invalidate cached plans in later phases. */
-export const NEWS_WRITER_PLANNER_VERSION = '1.1.0';
+/** Phase 3a deterministic planner — frozen after final cleanup; bump only for planner bugfixes. */
+export const NEWS_WRITER_PLANNER_VERSION = '1.2.0';
 
 export const STORY_CATEGORY_ORDER = [
   'lead_story',

@@ -51,7 +51,7 @@ export function buildDeterministicArticlePlan({
   outline = injectRequiredFactsIntoOutline(outline, requiredRecap);
   outline = assignOrphanFactsToOutline(outline, preparedFacts);
 
-  storyPlan = refreshTakeawaysForOutline(storyPlan, preparedFacts, articleDepth, outline);
+  storyPlan = refreshTakeawaysForOutline(storyPlan, preparedFacts, articleDepth, outline, driverLookup);
 
   let ledger = initFactUsageLedger(preparedFacts, { operationId, packageFingerprint: fingerprint });
   ledger = assignFactsToStories(ledger, storyPlan);
@@ -66,11 +66,25 @@ export function buildDeterministicArticlePlan({
     storyPlan,
     outline,
     factUsageLedger: ledger,
+    planningCoverage: {
+      primary: ledgerCoverage.canonical,
+      coverageTargets,
+    },
     ledgerCoverage,
     coverageTargets,
     unusedCriticalFacts: getUnusedCriticalFacts(ledger),
     unusedFactDiagnostics: getUnusedFactDiagnostics(ledger),
     excludedPlanningFacts: getExcludedPlanningFacts(ledger),
+    secondaryDiagnostics: {
+      rawFactCoverage: {
+        coveragePercent: ledgerCoverage.coveragePercent,
+        highPriorityCoveragePercent: ledgerCoverage.highPriorityCoveragePercent,
+        plannedOrUsed: ledgerCoverage.plannedOrUsed,
+        totalFacts: ledgerCoverage.totalFacts,
+      },
+      supportingFactCount: ledgerCoverage.supportingFactCount,
+      lowQualityOrDuplicateExcluded: ledgerCoverage.lowQualityOrDuplicateExcluded,
+    },
     requiredRecap: {
       items: requiredRecap.items,
       missingRequired: requiredRecap.missingRequired,

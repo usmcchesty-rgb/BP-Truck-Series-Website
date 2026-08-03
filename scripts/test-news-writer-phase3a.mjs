@@ -100,7 +100,15 @@ const totalWords = words.reduce((a, b) => a + b, 0);
 const range = ARTICLE_DEPTH_WORD_RANGES.medium;
 assert.ok(totalWords >= range.minimum && totalWords <= range.maximum + 120, 'total words near medium range');
 
-assert.ok(run1.storyPlan.raceTemperature.confidence < 100, 'temperature confidence does not reach 100 without overwhelming multi-signal evidence');
+assert.ok(
+  !(run1.storyPlan.rankedDrivers || []).some((d) => /Carroll3|Unknown driver/i.test(d.displayName || '')),
+  'ranked drivers use normalized names only'
+);
+assert.ok(
+  !(run1.storyPlan.readerTakeaways || []).some((t) => /Carroll3|Unknown driver/i.test(t.label || '')),
+  'takeaways use normalized names only'
+);
+assert.ok(run1.storyPlan.raceTemperature.confidence <= 99, 'fixture does not hit 100 confidence');
 
 const leadScores = run1.storyPlan.plannerDiagnostics.leadCandidateScores;
 assert.ok(

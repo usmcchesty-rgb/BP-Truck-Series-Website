@@ -325,7 +325,16 @@ export async function generateNewsArticle(options = {}) {
   let finalUserPrompt = userPrompt;
   let intelligenceDiagnostics = null;
 
-  if (isNewsIntelligencePackageEnabled() && hasRequestedRace && !isDriverSpotlight) {
+  const pinnedBlock = options.pinnedIntelligencePromptBlock;
+  const skipAutoIntelligence = options.skipIntelligenceAutoLoad === true;
+
+  if (pinnedBlock && hasRequestedRace && !isDriverSpotlight) {
+    finalUserPrompt = `${userPrompt}\n\n${pinnedBlock}`;
+    intelligenceDiagnostics = {
+      pinned: true,
+      packageFingerprint: options.pinnedPackageFingerprint || null,
+    };
+  } else if (isNewsIntelligencePackageEnabled() && hasRequestedRace && !isDriverSpotlight && !skipAutoIntelligence) {
     const supplement = await loadIntelligenceSupplementForNews({
       seasonId: generationContext.settings?.seasonId,
       raceNumber: Number(rawRace),

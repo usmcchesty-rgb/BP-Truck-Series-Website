@@ -6,6 +6,7 @@ import {
   RACE_RESEARCH_MAX_CHUNKS_PER_SOURCE_DEFAULT,
   TRANSCRIPT_CHUNK_TARGET_CHARACTERS,
 } from '../server/config/race-research-config.js';
+import { isNewsWriterMultipassEnabled, isNewsWriterShadowModeEnabled } from '../server/config/news-writer-multipass-config.js';
 import { chunkTextForResearch, shouldChunkSource } from './_race-research-chunking.js';
 import { chunksMatchSourceContent } from './_race-research-chunk-validate.js';
 import {
@@ -49,6 +50,8 @@ export function getResearchConfigStatus() {
     packageBasedArticlePrompt: isNewsIntelligencePackageEnabled(),
     transcriptProcessingMode: getRaceResearchTranscriptMode(),
     aiTranscriptExtraction: isRaceResearchAiExtractionEnabled(),
+    multipassWriterEnabled: isNewsWriterMultipassEnabled(),
+    shadowModeEnabled: isNewsWriterShadowModeEnabled(),
   };
 }
 

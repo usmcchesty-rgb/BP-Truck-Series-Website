@@ -7,7 +7,7 @@ import {
 } from './_news-writer-config.js';
 import { rankFactImportance, combinedConfidence } from './_news-writer-ledger.js';
 import { computePackageFingerprint, deterministicOperationId } from './_news-writer-fingerprint.js';
-import { isOfficialConfidence, planningFactsOnly } from './_news-writer-fact-quality.js';
+import { isOfficialConfidence, planningFactsOnly, buildPlanningDriverLookup, planningDriverDisplayName, collectUnresolvedDriverDiagnostics } from './_news-writer-fact-quality.js';
 import {
   applyRequiredRecapToStories,
   buildRequiredRecapFacts,
@@ -110,6 +110,32 @@ function milestoneFacts(facts) {
   return facts.filter((f) => /third win|3rd win|three wins on the season|season win/i.test(String(f.summary || '')));
 }
 
+/** Official evidence that the championship picture actually changed — not standings presence alone. */
+function championshipChangingFacts(facts) {
+  const championship = championshipFacts(facts);
+  const official = championship.filter((f) => isOfficialConfidence(f.confidence));
+  if (!official.length) return [];
+
+  const definitive = official.filter((f) => {
+    const mv = Math.abs(Number(f.structuredData?.movement) || 0);
+    const pos = Number(f.structuredData?.position);
+    if (f.category === 'points_leader' && mv >= 1) return true;
+    if (f.category === 'points_leader' && pos === 1) return true;
+    if (pos === 1 && mv >= 1) return true;
+    if (pos <= 2 && mv >= 5) return true;
+    if (mv >= 8) return true;
+    return false;
+  });
+
+  if (!definitive.length) return [];
+
+  const hasNewLeader = definitive.some((f) => f.category === 'points_leader');
+  const hasLargeSwing = definitive.some((f) => Math.abs(Number(f.structuredData?.movement) || 0) >= 8);
+  if (hasNewLeader || hasLargeSwing) return definitive;
+  if (definitive.length >= 2) return definitive;
+  return [];
+}
+
 export function computeRaceTemperature(facts) {
   const signalRows = [];
   const tagScores = Object.fromEntries(RACE_TEMPERATURE_TAGS.map((t) => [t, 0]));
@@ -160,10 +186,7 @@ export function computeRaceTemperature(facts) {
     });
   }
 
-  const meaningfulChamp = championship.filter((f) => {
-    const mv = Math.abs(Number(f.structuredData?.movement) || 0);
-    return mv >= 3 && isOfficialConfidence(f.confidence);
-  });
+  const meaningfulChamp = championshipChangingFacts(facts);
   if (meaningfulChamp.length >= 1) {
     const weight = 42 + meaningfulChamp.length * 6;
     tagScores.championship_defining += weight;
@@ -173,7 +196,7 @@ export function computeRaceTemperature(facts) {
       weight,
       factIds: meaningfulChamp.map((f) => f.id),
       sourceConfidence: combinedConfidence(meaningfulChamp),
-      reason: 'meaningful_standings_change',
+      reason: 'verified_championship_change',
     });
   }
 
@@ -251,9 +274,18 @@ export function computeRaceTemperature(facts) {
   const strongSignals = signalRows.filter((s) => s.weight >= 22);
   let confidence = 38 + strongSignals.length * 11 + Math.min(18, Math.round((ranked[0].score || 0) / 4));
   if (strongSignals.length < 2) confidence = Math.min(confidence, 82);
-  if (strongSignals.length < 3) confidence = Math.min(confidence, 94);
-  if (strongSignals.length < 4) confidence = Math.min(confidence, 99);
-  confidence = Math.min(100, Math.max(35, confidence));
+  if (strongSignals.length < 3) confidence = Math.min(confidence, 90);
+  if (strongSignals.length < 4) confidence = Math.min(confidence, 95);
+  confidence = Math.min(99, Math.max(35, confidence));
+
+  const uniqueTags = new Set(strongSignals.map((s) => s.tag));
+  const exceptional =
+    strongSignals.length >= 5 &&
+    uniqueTags.size >= 4 &&
+    !conflicts.length &&
+    (ranked[0]?.score || 0) >= 50 &&
+    (ranked[1]?.score || 0) >= 28;
+  if (exceptional) confidence = 100;
 
   const supportingFactIds = [...new Set(signalRows.flatMap((s) => s.factIds).filter(Boolean))].slice(0, 24);
   const canonicalFactIds = [
@@ -281,15 +313,18 @@ export function computeRaceTemperature(facts) {
   };
 }
 
-function driverDisplayName(fact) {
-  return fact?.driverNames?.[0] || 'Driver';
+function driverDisplayName(fact, lookupMap) {
+  const name = planningDriverDisplayName(fact?.driverNames?.[0], lookupMap, fact?.driverIds?.[0]);
+  if (name) return name;
+  return null;
 }
 
-export function buildReaderTakeaways(storyPlan, facts, articleDepth, outlineFactIds = null) {
+export function buildReaderTakeaways(storyPlan, facts, articleDepth, outlineFactIds = null, driverLookup = null) {
   const depth = normalizeArticleDepth(articleDepth);
   const max = TAKEAWAY_MAX_BY_DEPTH[depth] || 6;
   const allowedFacts = outlineFactIds ? new Set(outlineFactIds) : null;
   const takeaways = [];
+  const lookupMap = driverLookup instanceof Map ? driverLookup : buildPlanningDriverLookup({ facts }, driverLookup);
 
   function factsAllowed(factIds) {
     if (!allowedFacts) return factIds.length > 0;
@@ -313,12 +348,14 @@ export function buildReaderTakeaways(storyPlan, facts, articleDepth, outlineFact
 
   const win = winnerFact(facts);
   if (win) {
-    const name = driverDisplayName(win);
-    const start = win.structuredData?.startPosition;
-    if (start != null && start >= 10) {
-      pushTakeaway('winner_recovery', `${name} won after starting ${start}th`, [win.id], 'result', 1, ['lead_story']);
-    } else {
-      pushTakeaway('winner_result', `${name} won the race`, [win.id], 'result', 1, ['lead_story']);
+    const name = driverDisplayName(win, lookupMap);
+    if (name) {
+      const start = win.structuredData?.startPosition;
+      if (start != null && start >= 10) {
+        pushTakeaway('winner_recovery', `${name} won after starting ${start}th`, [win.id], 'result', 1, ['lead_story']);
+      } else {
+        pushTakeaway('winner_result', `${name} won the race`, [win.id], 'result', 1, ['lead_story']);
+      }
     }
   }
 
@@ -335,17 +372,12 @@ export function buildReaderTakeaways(storyPlan, facts, articleDepth, outlineFact
 
   const milestone = milestoneFacts(facts)[0];
   if (milestone) {
-    const name = driverDisplayName(milestone);
-    pushTakeaway(
-      'season_milestone',
-      `${name} earned a key season victory milestone`,
-      [milestone.id],
-      'milestone',
-      2,
-      ['feature_story']
-    );
-    if (/third win|3rd win|three wins/i.test(milestone.summary || '')) {
-      takeaways[takeaways.length - 1].label = `${name} earned third victory of the season`;
+    const name = driverDisplayName(milestone, lookupMap);
+    if (name) {
+      const label = /third win|3rd win|three wins/i.test(milestone.summary || '')
+        ? `${name} earned third victory of the season`
+        : `${name} earned a key season victory milestone`;
+      pushTakeaway('season_milestone', label, [milestone.id], 'milestone', 2, ['feature_story']);
     }
   }
 
@@ -368,15 +400,17 @@ export function buildReaderTakeaways(storyPlan, facts, articleDepth, outlineFact
   const momentumStory = (storyPlan.stories || []).find((s) => s.storyId === 'momentum_story' && !s.empty);
   if (momentumStory?.driverIds?.[0]) {
     const fact = facts.find((f) => momentumStory.factIds.includes(f.id));
-    const name = fact ? driverDisplayName(fact) : 'Driver';
-    pushTakeaway(
-      'driver_momentum',
-      `${name} gained points momentum`,
-      momentumStory.factIds.slice(0, 3),
-      'momentum',
-      3,
-      ['momentum_story']
-    );
+    const name = fact ? driverDisplayName(fact, lookupMap) : null;
+    if (name) {
+      pushTakeaway(
+        'driver_momentum',
+        `${name} gained points momentum`,
+        momentumStory.factIds.slice(0, 3),
+        'momentum',
+        3,
+        ['momentum_story']
+      );
+    }
   }
 
   return takeaways
@@ -424,7 +458,8 @@ export function buildStoryPlan({
   const facts = [...planningPool].sort((a, b) => rankFactImportance(b) - rankFactImportance(a));
   const fingerprint = computePackageFingerprint(racePackage, seasonId, raceNumber);
   const operationId = opIn || deterministicOperationId(fingerprint, depth);
-  const driverPackages = buildRaceDriverStoryPackages({ racePackage: { facts: allPrepared }, driverLookup }).sort(
+  const planningLookup = buildPlanningDriverLookup(racePackage, driverLookup);
+  const driverPackages = buildRaceDriverStoryPackages({ racePackage: { facts: allPrepared }, driverLookup: planningLookup }).sort(
     (a, b) => b.storyImportanceScore - a.storyImportanceScore
   );
 
@@ -663,21 +698,30 @@ export function buildStoryPlan({
   secondaryStory = stories.find((s) => s.storyId === 'secondary_story');
 
   const raceTemperature = computeRaceTemperature(planningPool);
-  let readerTakeaways = buildReaderTakeaways({ stories, leadStoryId: 'lead_story' }, allPrepared, depth);
+  let readerTakeaways = buildReaderTakeaways({ stories, leadStoryId: 'lead_story' }, allPrepared, depth, null, planningLookup);
 
-  const rankedDrivers = driverPackages.slice(0, depth === 'short' ? 4 : depth === 'medium' ? 8 : 12).map((d, i) => ({
-    driverId: d.driverId,
-    displayName: d.canonicalName,
-    roles: [
-      d.finishingPosition === 1 ? 'winner' : null,
-      d.positionsChanged > 5 ? 'gainer' : null,
-      d.positionsChanged < -5 ? 'loser' : null,
-      d.storyImportanceScore >= 50 ? 'storyline' : null,
-    ].filter(Boolean),
-    priority: i + 1,
-    factIds: [...new Set([...(d.timelineFactIds || []), ...(d.incidentFactIds || [])])].slice(0, 12),
-    storyImportanceScore: d.storyImportanceScore,
-  }));
+  const rankedDrivers = driverPackages
+    .slice(0, depth === 'short' ? 4 : depth === 'medium' ? 8 : 12)
+    .map((d, i) => {
+      const displayName = planningDriverDisplayName(d.canonicalName, planningLookup, d.driverId);
+      if (!displayName) return null;
+      return {
+        driverId: d.driverId,
+        displayName,
+        roles: [
+          d.finishingPosition === 1 ? 'winner' : null,
+          d.positionsChanged > 5 ? 'gainer' : null,
+          d.positionsChanged < -5 ? 'loser' : null,
+          d.storyImportanceScore >= 50 ? 'storyline' : null,
+        ].filter(Boolean),
+        priority: i + 1,
+        factIds: [...new Set([...(d.timelineFactIds || []), ...(d.incidentFactIds || [])])].slice(0, 12),
+        storyImportanceScore: d.storyImportanceScore,
+      };
+    })
+    .filter(Boolean);
+
+  const unresolvedDrivers = collectUnresolvedDriverDiagnostics(allPrepared);
 
   return {
     operationId,
@@ -692,6 +736,7 @@ export function buildStoryPlan({
     raceTemperature,
     readerTakeaways,
     rankedDrivers,
+    unresolvedDrivers,
     leadStoryId: 'lead_story',
     requiredRecap,
     plannerDiagnostics: {
@@ -713,8 +758,14 @@ export function buildStoryPlan({
   };
 }
 
-export function refreshTakeawaysForOutline(storyPlan, preparedFacts, articleDepth, outline) {
+export function refreshTakeawaysForOutline(storyPlan, preparedFacts, articleDepth, outline, driverLookup = null) {
   const outlineFactIds = outline.sections.flatMap((s) => s.evidence?.factIds || []);
-  storyPlan.readerTakeaways = buildReaderTakeaways(storyPlan, preparedFacts, articleDepth, outlineFactIds);
+  storyPlan.readerTakeaways = buildReaderTakeaways(
+    storyPlan,
+    preparedFacts,
+    articleDepth,
+    outlineFactIds,
+    driverLookup
+  );
   return storyPlan;
 }
