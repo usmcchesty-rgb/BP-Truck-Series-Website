@@ -18,6 +18,7 @@ import {
   validateMultipassDraft,
   buildRepairHints,
 } from './_news-writer-multipass-validation.js';
+import { thinSectionIdsForDepthRepair } from './_news-writer-pipeline-diagnostics.js';
 import {
   cloneLedger,
   applySectionDraftToLedger,
@@ -198,10 +199,16 @@ export async function runMultipassWriterPipeline({
   if (!validation.ok) {
     repairAttempted = true;
     const hints = buildRepairHints(validation);
-    const rewriteId = edited.rewriteSectionId || sectionDrafts[0]?.sectionId;
-    const section = outlineById[rewriteId];
-    if (section) {
+    const rewriteIds = thinSectionIdsForDepthRepair(validation);
+    const sectionIdsToRewrite =
+      rewriteIds.length > 0
+        ? rewriteIds
+        : [edited.rewriteSectionId || sectionDrafts[0]?.sectionId].filter(Boolean);
+    for (const rewriteId of sectionIdsToRewrite) {
+      const section = outlineById[rewriteId];
+      if (!section) continue;
       const idx = sectionDrafts.findIndex((s) => s.sectionId === rewriteId);
+      if (idx < 0) continue;
       const redraft = await rewriteOneSection({
         sectionDraft: sectionDrafts[idx],
         storyPlan,
@@ -212,8 +219,10 @@ export async function runMultipassWriterPipeline({
         repairReason: JSON.stringify(hints),
         writeArticleSectionFn,
         callOpenAi,
+        factVerification,
+        newsworthinessReport,
       });
-      if (idx >= 0) sectionDrafts[idx] = redraft;
+      sectionDrafts[idx] = redraft;
       applySectionDraftToLedger(ledger, redraft);
       openAiUsages.push(redraft.writerDiagnostics?.usage || {});
     }

@@ -52,7 +52,7 @@ export const MULTIPASS_DEPTH_PROFILES = {
     label: 'Medium',
     wordRange: { min: 700, max: 1000, target: 850 },
     factRange: { min: 25, max: 40, target: 30 },
-    validationWordFloor: 650,
+    validationWordFloor: 700,
     validationWordCeiling: null,
     validationFactFloor: 20,
     sectionWordBudgets: {
@@ -190,32 +190,44 @@ export function prepareSectionForDepthWrite(section, articleDepth, preparedFacts
   };
 }
 
-export function compactDepthGuidanceForEditor(storyPlan, outline) {
+export function compactDepthGuidanceForEditor(storyPlan, outline, sectionDrafts = []) {
   const profile = getMultipassDepthProfile(storyPlan?.articleDepth);
+  const pre = sectionDrafts?.length
+    ? sectionDrafts.reduce((sum, s) => sum + (s.wordCount || 0), 0)
+    : 0;
   return {
     version: MULTIPASS_DEPTH_VERSION,
     depth: normalizeArticleDepth(storyPlan?.articleDepth),
     articleWordTarget: profile.wordRange,
     articleFactTarget: profile.factRange,
-    totalTargetWords: outline?.totalTargetWords || profile.wordRange.target,
+    requiredMinimumBodyWords: profile.wordRange.min,
+    sectionDraftWordTotal: pre,
+    mergeMode: profile.label === 'Short' ? 'tight_merge' : 'preserve_length',
+    totalTargetWords: profile.wordRange.target,
     preserveUniqueFacts: true,
     editorRules: [
       'Do NOT compress medium or long articles by deleting unique verified facts.',
       'Remove duplicate ideas, repeated adjectives, and repeated transitions only.',
       'Preserve championship analysis, strategy detail, historical context, and driver-specific verified details.',
-      'Merged body should meet the article word target range using information density, not filler adjectives.',
+      `Merged body MUST be at least ${profile.wordRange.min} words when section drafts collectively contain enough material.`,
+      'Do not summarize eight sections into a short recap — combine with transitions while keeping fact-level detail.',
     ],
   };
 }
 
 export function resolveSectionMaxTokens(section, articleDepth) {
-  const target = section?.targetWords || getMultipassDepthProfile(articleDepth).wordRange.target / 8;
-  return Math.min(4096, Math.max(650, Math.round(target * 2.4)));
+  const profile = getMultipassDepthProfile(articleDepth);
+  const enforcement = section?.writingBrief?.depthEnforcement;
+  const target = enforcement?.wordTarget || section?.targetWords || profile.wordRange.target / 8;
+  const maxWords = enforcement?.wordMax || target;
+  return Math.min(4096, Math.max(900, Math.round(Math.max(target, maxWords) * 3.2)));
 }
 
 export function resolveEditorMaxTokens(articleDepth) {
   const profile = getMultipassDepthProfile(articleDepth);
-  return Math.min(4096, Math.max(1800, Math.round(profile.wordRange.target * 2.2)));
+  const fromTarget = Math.round(profile.wordRange.target * 2.8);
+  const fromMin = Math.round(profile.wordRange.min * 2.4);
+  return Math.min(4096, Math.max(fromMin, fromTarget, 1200));
 }
 
 function wordCount(text) {
@@ -390,6 +402,9 @@ export function buildDepthValidation({
     scorePenalty,
     depthCompliance: report,
     informationDensity: report.informationDensity,
+    depthRepairRequired:
+      (profile.validationWordFloor != null && report.actual.words < profile.validationWordFloor) ||
+      (profile.validationFactFloor != null && report.actual.facts < profile.validationFactFloor),
   };
 }
 

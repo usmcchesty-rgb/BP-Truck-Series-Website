@@ -11,6 +11,10 @@ import {
   prepareSectionForDepthWrite,
   resolveSectionMaxTokens,
 } from './_news-writer-depth-enforcement.js';
+import {
+  buildSectionWriteAudit,
+  logWriterPipelineDebug,
+} from './_news-writer-pipeline-diagnostics.js';
 
 function wordCount(text) {
   return String(text || '')
@@ -66,15 +70,19 @@ export async function writeArticleSection({
     newsroomGuidance: compactNewsroomGuidanceForPrompt(newsworthinessReport),
   };
 
+  const promptTargetWords = depthSection.targetWords;
+  const wordMin = depthSection.writingBrief?.depthEnforcement?.wordMin || promptTargetWords;
+  const maxTokens = resolveSectionMaxTokens(depthSection, storyPlan.articleDepth);
+
   const { parsed, usage, model, elapsedMs } = await callOpenAi({
     messages: [
       { role: 'system', content: milesApexSectionSystemPrompt() },
       {
         role: 'user',
-        content: `Write this section only. Target ~${depthSection.targetWords} words (minimum ~${depthSection.writingBrief?.depthEnforcement?.wordMin || depthSection.targetWords} unless evidence is thin).\n\n${JSON.stringify(userPayload, null, 2)}`,
+        content: `Write this section only. Target ~${promptTargetWords} words (required minimum ~${wordMin} when evidence includes 3+ facts).\n\n${JSON.stringify(userPayload, null, 2)}`,
       },
     ],
-    maxTokens: resolveSectionMaxTokens(depthSection, storyPlan.articleDepth),
+    maxTokens,
     logLabel: `section-${section.sectionId}`,
   });
 
@@ -88,6 +96,16 @@ export async function writeArticleSection({
     { usedFactIds: rawUsedFactIds, usedCanonicalIds: rawUsedCanonicalIds },
     evidence.facts.map((f) => f.factId)
   );
+
+  const sectionAudit = buildSectionWriteAudit({
+    section,
+    depthSection,
+    promptTargetWords,
+    maxTokens,
+    sectionText,
+    completionTokens: usage?.completionTokens,
+  });
+  logWriterPipelineDebug('section-write', sectionAudit);
 
   return {
     sectionId: depthSection.sectionId,
@@ -107,6 +125,9 @@ export async function writeArticleSection({
       evidenceFactCount: evidence.facts.length,
       transcriptExcerptCount: evidence.transcriptExcerpts.length,
       raceControlExcerptCount: evidence.raceControlExcerpts.length,
+      depthAudit: sectionAudit,
+      outlineTargetWords: section.targetWords,
+      depthEnforcedTargetWords: depthSection.targetWords,
     },
     evidenceBundleSize: evidence.facts.length,
   };

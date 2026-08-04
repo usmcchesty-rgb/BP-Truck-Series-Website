@@ -1,11 +1,15 @@
 import {
-  ARTICLE_DEPTH_WORD_RANGES,
   normalizeArticleDepth,
 } from '../server/config/race-research-config.js';
+import { getMultipassDepthProfile } from './_news-writer-depth-enforcement.js';
 import { CANONICAL_COVERAGE_TARGETS } from './_news-writer-config.js';
 import { buildFactCorrectnessValidation } from './_news-writer-fact-verification.js';
 import { buildNewsworthinessValidation } from './_news-writer-newsworthiness.js';
 import { buildDepthValidation } from './_news-writer-depth-enforcement.js';
+import {
+  buildDepthRepairHints,
+  validationRequiresDepthRepair,
+} from './_news-writer-pipeline-diagnostics.js';
 
 function normalizeText(text) {
   return String(text || '').toLowerCase();
@@ -36,17 +40,19 @@ export function validateMultipassDraft({
   const headline = normalizeText(headlinePack?.headline || editedArticle.headline);
 
   const depth = normalizeArticleDepth(storyPlan.articleDepth);
-  const range = ARTICLE_DEPTH_WORD_RANGES[depth];
+  const depthProfile = getMultipassDepthProfile(depth);
+  const rangeMin = depthProfile.wordRange.min;
+  const rangeMax = depthProfile.wordRange.max;
   const words = String(editedArticle.body || '')
     .trim()
     .split(/\s+/)
     .filter(Boolean).length;
 
-  if (words < range.minimum * 0.85) {
-    errors.push({ type: 'word_count_low', message: `Body ${words} words below depth minimum ${range.minimum}.` });
+  if (words < rangeMin * 0.85) {
+    errors.push({ type: 'word_count_low', message: `Body ${words} words below depth minimum ${rangeMin}.` });
   }
-  if (words > range.maximum * 1.15) {
-    warnings.push({ type: 'word_count_high', message: `Body ${words} words above depth maximum ${range.maximum}.` });
+  if (words > rangeMax * 1.15) {
+    warnings.push({ type: 'word_count_high', message: `Body ${words} words above depth maximum ${rangeMax}.` });
   }
 
   for (const item of requiredRecap?.items || []) {
@@ -154,10 +160,11 @@ export function validateMultipassDraft({
   const factPenalty = factCorrectness.scorePenalty;
   const newsPenalty = newsworthinessValidation.scorePenalty;
   const depthPenalty = depthValidation.scorePenalty;
+  const depthRepairRequired = depthValidation.depthRepairRequired === true;
   const validationScore = Math.max(0, 100 - stylePenalty - factPenalty - newsPenalty - depthPenalty);
 
   return {
-    ok: errors.length === 0,
+    ok: errors.length === 0 && !depthRepairRequired,
     errors,
     warnings,
     wordCount: words,
@@ -166,6 +173,7 @@ export function validateMultipassDraft({
     newsworthinessValidation,
     depthValidation,
     depthCompliance: depthValidation.depthCompliance,
+    depthRepairRequired,
     checksRun: [
       'required_recap',
       'lead_story',
@@ -183,7 +191,10 @@ export function validateMultipassDraft({
 }
 
 export function buildRepairHints(validation) {
-  if (validation.ok) return null;
+  if (validation.ok && !validation.depthRepairRequired) return null;
+  if (validationRequiresDepthRepair(validation) || validation.depthRepairRequired) {
+    return buildDepthRepairHints(validation);
+  }
   return {
     validationErrors: validation.errors,
     validationWarnings: validation.warnings,

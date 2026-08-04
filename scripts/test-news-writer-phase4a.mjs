@@ -12,6 +12,10 @@ import {
   compareDepthProfilesOrdering,
   resolveEditorMaxTokens,
 } from '../api/_news-writer-depth-enforcement.js';
+import {
+  shouldUseDeterministicEditorStitch,
+  validationRequiresDepthRepair,
+} from '../api/_news-writer-pipeline-diagnostics.js';
 import { validateMultipassDraft } from '../api/_news-writer-multipass-validation.js';
 import { buildDeterministicArticlePlan } from '../api/_news-writer-deterministic-plan.js';
 import { prepareFactsForPlanning } from '../api/_news-writer-fact-quality.js';
@@ -89,7 +93,20 @@ const denseVal = buildDepthValidation({
   outline: plan.outline,
   ledgerSnapshot: { factsUsed: 32 },
 });
-assert.ok(denseVal.depthCompliance.actual.words >= 650);
+assert.ok(shallowValidation.depthRepairRequired === true);
+assert.ok(validationRequiresDepthRepair(shallowValidation));
+assert.ok(!shallowValidation.ok);
+
+assert.ok(
+  shouldUseDeterministicEditorStitch({
+    articleDepth: 'medium',
+    sectionDrafts: denseSections.map((s) => ({ ...s, sectionText: s.sectionText })),
+    editedBody: shallowBody,
+  }),
+  'stitch when drafts meet material threshold but editor body below floor'
+);
+
+assert.ok(denseVal.depthCompliance.actual.words >= 700);
 assert.ok(denseVal.depthCompliance.actual.facts >= 20);
 
 assert.ok(resolveEditorMaxTokens('medium') > resolveEditorMaxTokens('short'));

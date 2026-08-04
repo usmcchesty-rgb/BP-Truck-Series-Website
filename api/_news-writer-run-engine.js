@@ -17,6 +17,7 @@ import {
   validateMultipassDraft,
   buildRepairHints,
 } from './_news-writer-multipass-validation.js';
+import { thinSectionIdsForDepthRepair } from './_news-writer-pipeline-diagnostics.js';
 import {
   cloneLedger,
   applySectionDraftToLedger,
@@ -499,10 +500,15 @@ export async function advanceWriterRun(run, {
 
       if (!validation.ok && !checkpoint.repairAttempted) {
         checkpoint.repairAttempted = true;
-        const rewriteId =
-          checkpoint.edited?.rewriteSectionId || checkpoint.sectionDrafts[0]?.sectionId;
         const repairSteps = [];
-        if (rewriteId) repairSteps.push(`repair:section:${rewriteId}`);
+        const thinIds = thinSectionIdsForDepthRepair(validation);
+        if (thinIds.length) {
+          for (const id of thinIds) repairSteps.push(`repair:section:${id}`);
+        } else {
+          const rewriteId =
+            checkpoint.edited?.rewriteSectionId || checkpoint.sectionDrafts[0]?.sectionId;
+          if (rewriteId) repairSteps.push(`repair:section:${rewriteId}`);
+        }
         repairSteps.push('repair:editor', 'repair:headline', 'validation:post-repair');
         checkpoint.stepQueue = [...(checkpoint.stepQueue || []), ...repairSteps];
         markStepComplete(checkpoint, step);
@@ -563,6 +569,8 @@ export async function advanceWriterRun(run, {
           repairReason: JSON.stringify(hints),
           writeArticleSectionFn,
           callOpenAi,
+          factVerification: activeVerification,
+          newsworthinessReport: activeNewsworthiness,
         });
         checkpoint.sectionDrafts[idx] = redraft;
         applySectionDraftToLedger(checkpoint.ledger, redraft);

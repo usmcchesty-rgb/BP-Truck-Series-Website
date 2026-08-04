@@ -36,9 +36,10 @@ const sectionIdsInOrder = SECTION_WRITE_ORDER.filter((id) =>
 assert.ok(sectionIdsInOrder.length >= 3, 'outline has ordered sections');
 
 function sectionMock(sectionId, factIds) {
+  const padding = 'Verified race detail and championship context. '.repeat(18);
   return {
-    sectionText: `Section ${sectionId} covering verified race evidence with professional tone.`,
-    usedFactIds: factIds.slice(0, 2),
+    sectionText: `Section ${sectionId} covering verified race evidence with professional tone. ${padding}`,
+    usedFactIds: factIds.slice(0, 6),
     usedCanonicalIds: [],
     sectionSummary: `Summary for ${sectionId}`,
     entitiesIntroduced: ['Justin Levine'],
@@ -69,8 +70,12 @@ mockResponses.push({
   seoDescription: 'Recap of Race 17 with winner, cautions, and points impact.',
   socialTeaser: 'Levine wins from P25; title fight heats up.',
 });
-// spare if bounded repair runs
-mockResponses.push(sectionMock(sectionIdsInOrder[0], plan.outline.sections[0].evidence.factIds));
+// depth repair may rewrite up to four thin sections, then editor + headline
+for (let i = 0; i < 5; i++) {
+  const sid = sectionIdsInOrder[i % sectionIdsInOrder.length];
+  const section = plan.outline.sections.find((s) => s.sectionId === sid);
+  mockResponses.push(sectionMock(sid, section.evidence.factIds));
+}
 mockResponses.push({
   headline: 'Placeholder',
   subheadline: 'Placeholder sub',
@@ -86,9 +91,47 @@ mockResponses.push({
 });
 
 const responseQueue = [...mockResponses];
-const callOpenAi = async () => {
+const callOpenAi = async (opts = {}) => {
+  const label = String(opts.logLabel || '');
+  if (label.startsWith('section-')) {
+    const sid = label.slice('section-'.length);
+    const section = plan.outline.sections.find((s) => s.sectionId === sid) || plan.outline.sections[0];
+    return {
+      parsed: sectionMock(sid, section.evidence.factIds),
+      usage: { promptTokens: 10, completionTokens: 12, totalTokens: 22 },
+      model: 'mock',
+      elapsedMs: 1,
+    };
+  }
+  if (label === 'editorial-pass') {
+    return {
+      parsed: {
+        headline: 'Placeholder',
+        subheadline: 'Placeholder sub',
+        summary: 'Justin Levine won after starting 25th. Six cautions shaped the race.',
+        body: longBody,
+        rewriteSectionId: null,
+      },
+      usage: { promptTokens: 10, completionTokens: 12, totalTokens: 22 },
+      model: 'mock',
+      elapsedMs: 1,
+    };
+  }
+  if (label.includes('headline')) {
+    return {
+      parsed: {
+        headline: 'Justin Levine Wins From Deep in the Field',
+        subheadline: 'Championship battle tightens after Race 17',
+        seoDescription: 'Recap of Race 17 with winner, cautions, and points impact.',
+        socialTeaser: 'Levine wins from P25; title fight heats up.',
+      },
+      usage: { promptTokens: 10, completionTokens: 12, totalTokens: 22 },
+      model: 'mock',
+      elapsedMs: 1,
+    };
+  }
   const next = responseQueue.shift();
-  if (!next) throw new Error('Mock OpenAI queue exhausted');
+  if (!next) throw new Error(`Mock OpenAI queue exhausted (${label})`);
   return {
     parsed: next,
     usage: { promptTokens: 10, completionTokens: 12, totalTokens: 22 },

@@ -65,17 +65,18 @@ Use ONLY facts in the evidence bundle. Do not invent drivers, results, cautions,
 Return JSON only with keys: sectionText, usedFactIds, usedCanonicalIds, sectionSummary, entitiesIntroduced, tone.
 If factVerificationGuidance lists suppressedNumericTokens, never use those numbers. Prefer racecraft and verified quotes over generic adjectives.
 When newsroomGuidance is present, lead with primaryNarrative and follow editorialGuidance (emphasis and de-emphasize lists). Do not bury the primary story.
-When depthEnforcement or depthGuidance is present, hit the section word target using distinct verified facts — never generic filler.`;
+When depthEnforcement is present in writingBrief, sectionText MUST reach at least depthEnforcement.wordMin words when evidence includes 3+ facts. Use each verified fact in the bundle with race-specific detail.`;
 }
 
 export function milesApexEditorSystemPrompt() {
   return `# Miles Apex — Editorial Pass (${NEWS_AUTHOR})
 
-Merge section drafts into one cohesive article. Remove repetition, improve transitions, preserve verified facts only.
+Combine section drafts into one cohesive article with smooth transitions. Preserve verified facts and section-level detail.
 Avoid generic AI adjectives (stunning, incredible, epic). Prefer motorsports broadcast voice and racecraft detail.
 Never use numeric tokens listed in factVerificationGuidance.suppressedNumericTokens.
 When newsroomGuidance is present, preserve its lead emphasis and driver spotlight order in the opening paragraphs.
-When depthGuidance is present for medium or in-depth depth, preserve information density: do not shorten by removing unique verified facts. Remove duplicate phrasing only. Meet depthGuidance.articleWordTarget using retained evidence.
+When depthGuidance.mergeMode is preserve_length, do NOT shorten the combined draft: meet depthGuidance.requiredMinimumBodyWords and keep unique verified facts from every section.
+When depthGuidance is present for medium or in-depth depth, preserve information density: do not shorten by removing unique verified facts. Remove duplicate phrasing only.
 If rewriteSectionId is set, you may replace ONLY that section's portion in the merged body.
 Return JSON: headline (placeholder ok), subheadline, summary, body, rewriteSectionId (or null), editorNotes.`;
 }
