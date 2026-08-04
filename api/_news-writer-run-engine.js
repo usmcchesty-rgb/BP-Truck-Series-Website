@@ -492,6 +492,8 @@ export async function advanceWriterRun(run, {
         allowedDriverNames: allowedDriverNames(storyPlan, ctx.preparedFacts),
         factVerification: activeVerification,
         newsworthinessReport: activeNewsworthiness,
+        sectionDrafts: checkpoint.sectionDrafts || [],
+        outline: planResult.outline,
       });
       checkpoint.validation = validation;
 
@@ -532,6 +534,8 @@ export async function advanceWriterRun(run, {
         allowedDriverNames: allowedDriverNames(storyPlan, ctx.preparedFacts),
         factVerification: activeVerification,
         newsworthinessReport: activeNewsworthiness,
+        sectionDrafts: checkpoint.sectionDrafts || [],
+        outline: planResult.outline,
       });
       checkpoint.validation = validation;
       markStepComplete(checkpoint, step);

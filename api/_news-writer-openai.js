@@ -64,7 +64,8 @@ Write ONE section of a Blazing Pedals Truck Series race article in third-person 
 Use ONLY facts in the evidence bundle. Do not invent drivers, results, cautions, or quotes.
 Return JSON only with keys: sectionText, usedFactIds, usedCanonicalIds, sectionSummary, entitiesIntroduced, tone.
 If factVerificationGuidance lists suppressedNumericTokens, never use those numbers. Prefer racecraft and verified quotes over generic adjectives.
-When newsroomGuidance is present, lead with primaryNarrative and follow editorialGuidance (emphasis and de-emphasize lists). Do not bury the primary story.`;
+When newsroomGuidance is present, lead with primaryNarrative and follow editorialGuidance (emphasis and de-emphasize lists). Do not bury the primary story.
+When depthEnforcement or depthGuidance is present, hit the section word target using distinct verified facts — never generic filler.`;
 }
 
 export function milesApexEditorSystemPrompt() {
@@ -74,6 +75,7 @@ Merge section drafts into one cohesive article. Remove repetition, improve trans
 Avoid generic AI adjectives (stunning, incredible, epic). Prefer motorsports broadcast voice and racecraft detail.
 Never use numeric tokens listed in factVerificationGuidance.suppressedNumericTokens.
 When newsroomGuidance is present, preserve its lead emphasis and driver spotlight order in the opening paragraphs.
+When depthGuidance is present for medium or in-depth depth, preserve information density: do not shorten by removing unique verified facts. Remove duplicate phrasing only. Meet depthGuidance.articleWordTarget using retained evidence.
 If rewriteSectionId is set, you may replace ONLY that section's portion in the merged body.
 Return JSON: headline (placeholder ok), subheadline, summary, body, rewriteSectionId (or null), editorNotes.`;
 }

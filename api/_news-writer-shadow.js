@@ -145,6 +145,11 @@ export function buildComparisonMetrics({ legacyResult, multipassResult, packageF
         storyPlan?.readerTakeaways || multipassResult?.deterministicPlan?.storyPlan?.readerTakeaways
       ),
       factsUsed: multipassResult?.ledgerCoverageAfterWrite?.factsUsed ?? null,
+      depthCompliance: multipassResult?.depthCompliance || multipassResult?.validation?.depthCompliance || null,
+      depthScore:
+        multipassResult?.validation?.depthCompliance?.overallDepthScore ??
+        multipassResult?.depthCompliance?.overallDepthScore ??
+        null,
     },
   };
 }

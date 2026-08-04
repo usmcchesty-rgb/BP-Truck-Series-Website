@@ -1,6 +1,9 @@
-import { MULTIPASS_OPENAI_EDITOR_MAX_TOKENS } from '../server/config/news-writer-multipass-config.js';
 import { callOpenAiWriterJson, milesApexEditorSystemPrompt } from './_news-writer-openai.js';
 import { compactNewsroomGuidanceForPrompt } from './_news-writer-newsworthiness.js';
+import {
+  compactDepthGuidanceForEditor,
+  resolveEditorMaxTokens,
+} from './_news-writer-depth-enforcement.js';
 
 export async function editArticle({
   sectionDrafts,
@@ -38,6 +41,7 @@ export async function editArticle({
         }
       : null,
     newsroomGuidance: compactNewsroomGuidanceForPrompt(newsworthinessReport),
+    depthGuidance: compactDepthGuidanceForEditor(storyPlan, outline),
   };
 
   const { parsed, usage, model, elapsedMs } = await callOpenAi({
@@ -48,7 +52,7 @@ export async function editArticle({
         content: `Merge these sections into one article body with summary.\n\n${JSON.stringify(payload, null, 2)}`,
       },
     ],
-    maxTokens: MULTIPASS_OPENAI_EDITOR_MAX_TOKENS,
+    maxTokens: resolveEditorMaxTokens(storyPlan.articleDepth),
     logLabel: 'editorial-pass',
   });
 

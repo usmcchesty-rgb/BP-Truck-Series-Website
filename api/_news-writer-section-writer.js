@@ -1,4 +1,3 @@
-import { MULTIPASS_OPENAI_MAX_SECTION_TOKENS } from '../server/config/news-writer-multipass-config.js';
 import {
   callOpenAiWriterJson,
   milesApexSectionSystemPrompt,
@@ -8,6 +7,10 @@ import { compactMemoryForPrompt } from './_news-writer-section-memory.js';
 import { filterUsedFactIdsToEvidence } from './_news-writer-ledger-writer.js';
 import { applyVerificationToSectionEvidence, sanitizeWriterText } from './_news-writer-fact-verification.js';
 import { compactNewsroomGuidanceForPrompt } from './_news-writer-newsworthiness.js';
+import {
+  prepareSectionForDepthWrite,
+  resolveSectionMaxTokens,
+} from './_news-writer-depth-enforcement.js';
 
 function wordCount(text) {
   return String(text || '')
@@ -27,11 +30,15 @@ export async function writeArticleSection({
   factVerification = null,
   newsworthinessReport = null,
 }) {
+  const depthSection = prepareSectionForDepthWrite(section, storyPlan.articleDepth, preparedFacts, {
+    suppressedFactIds: factVerification?.suppressedFactIds || [],
+  });
   let evidence = buildSectionEvidenceBundle({
-    section,
+    section: depthSection,
     preparedFacts,
     racePackage,
     storyPlan,
+    maxFacts: depthSection.depthMaxFacts || 14,
   });
   evidence = applyVerificationToSectionEvidence(evidence, factVerification);
 
@@ -39,11 +46,11 @@ export async function writeArticleSection({
 
   const userPayload = {
     section: {
-      sectionId: section.sectionId,
-      title: section.title,
-      purpose: section.purpose,
-      targetWords: section.targetWords,
-      writingBrief: section.writingBrief,
+      sectionId: depthSection.sectionId,
+      title: depthSection.title,
+      purpose: depthSection.purpose,
+      targetWords: depthSection.targetWords,
+      writingBrief: depthSection.writingBrief,
     },
     storyPlan: {
       leadStoryId: storyPlan.leadStoryId,
@@ -64,10 +71,10 @@ export async function writeArticleSection({
       { role: 'system', content: milesApexSectionSystemPrompt() },
       {
         role: 'user',
-        content: `Write this section only. Target ~${section.targetWords} words.\n\n${JSON.stringify(userPayload, null, 2)}`,
+        content: `Write this section only. Target ~${depthSection.targetWords} words (minimum ~${depthSection.writingBrief?.depthEnforcement?.wordMin || depthSection.targetWords} unless evidence is thin).\n\n${JSON.stringify(userPayload, null, 2)}`,
       },
     ],
-    maxTokens: MULTIPASS_OPENAI_MAX_SECTION_TOKENS,
+    maxTokens: resolveSectionMaxTokens(depthSection, storyPlan.articleDepth),
     logLabel: `section-${section.sectionId}`,
   });
 
@@ -83,9 +90,9 @@ export async function writeArticleSection({
   );
 
   return {
-    sectionId: section.sectionId,
-    sectionType: section.sectionType,
-    title: section.title,
+    sectionId: depthSection.sectionId,
+    sectionType: depthSection.sectionType,
+    title: depthSection.title,
     sectionText,
     sectionSummary: String(parsed.sectionSummary || parsed.summary || '').slice(0, 400),
     entitiesIntroduced: parsed.entitiesIntroduced || parsed.entities || [],

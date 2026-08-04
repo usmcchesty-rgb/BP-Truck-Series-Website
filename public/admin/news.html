@@ -2753,7 +2753,8 @@
         <h4 style="color:#f0c040;margin:12px 0 6px">Fact coverage after write</h4>
         <p class="sub">Facts used: ${escapeHtml(cov.factsUsed ?? '—')} / ${escapeHtml(cov.totalFacts ?? '—')} · Critical used: ${escapeHtml(cov.criticalCoveragePercent ?? '—')}%</p>
         <h4 style="color:#f0c040;margin:12px 0 6px">Validation</h4>
-        <p>${val.ok ? statusPill('Passed', 'complete') : statusPill('Issues', 'missing')} · Words: ${escapeHtml(val.wordCount ?? '—')}${data.repairAttempted ? ' · Repair attempted' : ''}</p>
+        <p>${val.ok ? statusPill('Passed', 'complete') : statusPill('Issues', 'missing')} · Words: ${escapeHtml(val.wordCount ?? '—')}${data.repairAttempted ? ' · Repair attempted' : ''} · Score: ${escapeHtml(val.validationScore ?? '—')}</p>
+        ${renderDepthComplianceBlock(val.depthCompliance)}
         <ul>${valRows}</ul>
         <h4 style="color:#f0c040;margin:12px 0 6px">Headline pack</h4>
         <p><strong>${escapeHtml(data.headlinePack?.headline || '—')}</strong></p>
@@ -2918,6 +2919,20 @@
       await refreshWriterDraftTabUi({ estimate, progress, draft, clientState: ctrl.getState() });
     }
 
+    function renderDepthComplianceBlock(depthCompliance) {
+      const dc = depthCompliance;
+      if (!dc) return '';
+      const pill = (ok) => (ok ? statusPill('Yes', 'complete') : statusPill('No', 'missing'));
+      return `
+        <h4 style="color:#f0c040;margin:12px 0 6px">Depth Compliance (Phase 4a — deterministic)</h4>
+        <p class="sub">Depth ${escapeHtml(dc.label || dc.depth || '—')} · Overall depth score ${escapeHtml(dc.overallDepthScore ?? '—')}% · Information density ${escapeHtml(dc.informationDensity ?? '—')} facts per 1k words</p>
+        <table class="research-table"><tbody>
+          <tr><td>Words</td><td>${escapeHtml(dc.display?.wordsLine || '—')}</td><td>${pill(dc.checks?.wordsOk)}</td></tr>
+          <tr><td>Verified facts</td><td>${escapeHtml(dc.display?.factsLine || '—')}</td><td>${pill(dc.checks?.factsOk)}</td></tr>
+          <tr><td>Sections</td><td>${escapeHtml(dc.display?.sectionsLine || '—')}</td><td>${pill(dc.checks?.sectionsOk)}</td></tr>
+        </tbody></table>`;
+    }
+
     function renderWriterShadowComparison(data) {
       const cmp = data.comparison || {};
       const diff = data.differences || {};
@@ -2943,8 +2958,10 @@
             <tr><td>Repair attempts</td><td>${escapeHtml(leg.repairAttempts ?? 0)}</td><td>${escapeHtml(mul.repairAttempts ?? 0)}</td></tr>
             <tr><td>Sections</td><td>1</td><td>${escapeHtml(mul.sectionCount ?? '—')}</td></tr>
             <tr><td>Facts used</td><td>—</td><td>${escapeHtml(mul.factsUsed ?? '—')}</td></tr>
+            <tr><td>Depth score</td><td>—</td><td>${escapeHtml(mul.depthScore ?? '—')}%</td></tr>
           </tbody>
         </table>
+        ${renderDepthComplianceBlock(mul.depthCompliance || data.multipass?.validation?.depthCompliance)}
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">
           <div class="research-detail-block"><strong>Legacy</strong><pre style="white-space:pre-wrap;font-size:10px;color:#ccc;max-height:280px;overflow:auto">${escapeHtml(String(legacyArticle.body || '').slice(0, 4000))}</pre></div>
           <div class="research-detail-block"><strong>Multipass</strong><pre style="white-space:pre-wrap;font-size:10px;color:#ccc;max-height:280px;overflow:auto">${escapeHtml(String(multiArticle.body || '').slice(0, 4000))}</pre></div>

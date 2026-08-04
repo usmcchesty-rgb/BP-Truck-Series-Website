@@ -190,6 +190,8 @@ export async function runMultipassWriterPipeline({
     allowedDriverNames: allowedDriverNames(storyPlan, preparedFacts),
     factVerification,
     newsworthinessReport,
+    sectionDrafts,
+    outline,
   });
 
   let repairAttempted = false;
@@ -248,6 +250,8 @@ export async function runMultipassWriterPipeline({
       allowedDriverNames: allowedDriverNames(storyPlan, preparedFacts),
       factVerification,
       newsworthinessReport,
+      sectionDrafts,
+      outline,
     });
   }
 

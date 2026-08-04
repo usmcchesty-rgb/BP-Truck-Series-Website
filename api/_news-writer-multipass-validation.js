@@ -5,6 +5,7 @@ import {
 import { CANONICAL_COVERAGE_TARGETS } from './_news-writer-config.js';
 import { buildFactCorrectnessValidation } from './_news-writer-fact-verification.js';
 import { buildNewsworthinessValidation } from './_news-writer-newsworthiness.js';
+import { buildDepthValidation } from './_news-writer-depth-enforcement.js';
 
 function normalizeText(text) {
   return String(text || '').toLowerCase();
@@ -26,6 +27,8 @@ export function validateMultipassDraft({
   allowedDriverNames = [],
   factVerification = null,
   newsworthinessReport = null,
+  sectionDrafts = [],
+  outline = null,
 }) {
   const errors = [];
   const warnings = [];
@@ -132,10 +135,26 @@ export function validateMultipassDraft({
     }
   }
 
+  const depthValidation = buildDepthValidation({
+    articleDepth: storyPlan.articleDepth,
+    body: editedArticle.body,
+    sectionDrafts,
+    outline,
+    ledgerSnapshot,
+  });
+  for (const check of depthValidation.checks) {
+    if (!check.ok && !check.warn) {
+      errors.push({ type: check.id, message: check.label });
+    } else if (!check.ok && check.warn) {
+      warnings.push({ type: check.id, message: check.label });
+    }
+  }
+
   const stylePenalty = errors.filter((e) => !String(e.type).includes('verified') && !String(e.type).includes('unsupported')).length * 8;
   const factPenalty = factCorrectness.scorePenalty;
   const newsPenalty = newsworthinessValidation.scorePenalty;
-  const validationScore = Math.max(0, 100 - stylePenalty - factPenalty - newsPenalty);
+  const depthPenalty = depthValidation.scorePenalty;
+  const validationScore = Math.max(0, 100 - stylePenalty - factPenalty - newsPenalty - depthPenalty);
 
   return {
     ok: errors.length === 0,
@@ -145,6 +164,8 @@ export function validateMultipassDraft({
     validationScore,
     factCorrectness,
     newsworthinessValidation,
+    depthValidation,
+    depthCompliance: depthValidation.depthCompliance,
     checksRun: [
       'required_recap',
       'lead_story',
@@ -156,6 +177,7 @@ export function validateMultipassDraft({
       'duplicate_paragraphs',
       'fact_correctness',
       'newsroom_intelligence',
+      'depth_compliance',
     ],
   };
 }
