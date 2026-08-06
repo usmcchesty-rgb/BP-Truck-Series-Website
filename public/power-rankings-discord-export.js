@@ -1,11 +1,36 @@
 (function () {
   const PLACEHOLDER = "/assets/drivers/placeholder.png";
-  const EXPORT_WIDTH = 1600;
-  const CANVAS_SCALE = 2;
+  const EXPORT_WIDTH = 1920;
+  const EXPORT_HEIGHT = 1080;
+  const CANVAS_SCALE = 1;
   const MOVEMENT_NEW_SENTINEL = 100;
   const NON_POINTS_LABEL_PATTERN = /\b(duel|duels|non-points|exhibition|clash)\b/i;
+  const BP_LOGO = "/assets/logos/New%20Clean%20Logo.png";
+  const PROPHET_LOGO = "/assets/logos/pedal-prophet-logo.png";
+  const TRUCK_COLOR_CACHE_KEY = "bp_pr_truck_colors_v1";
+  const DEFAULT_CAR_FILL = "#ffffff";
+  const DEFAULT_CAR_OUTLINE = "#1a4fd6";
 
   let scheduleTrackMapCache = null;
+  const truckColorCache = new Map();
+
+  try {
+    const stored = JSON.parse(localStorage.getItem(TRUCK_COLOR_CACHE_KEY) || "{}");
+    Object.entries(stored).forEach(([key, value]) => {
+      if (value?.fill && value?.outline) truckColorCache.set(key, value);
+    });
+  } catch {
+    /* ignore corrupt cache */
+  }
+
+  function persistTruckColorCache() {
+    try {
+      const obj = Object.fromEntries(truckColorCache.entries());
+      localStorage.setItem(TRUCK_COLOR_CACHE_KEY, JSON.stringify(obj));
+    } catch {
+      /* quota / private mode */
+    }
+  }
 
   function escapeHtml(value) {
     return String(value ?? "")
@@ -24,6 +49,16 @@
       day: "numeric",
       year: "numeric",
     });
+  }
+
+  function formatPublishedUpper(value) {
+    const formatted = formatPublishedDate(value);
+    return formatted ? `PUBLISHED ${formatted.toUpperCase()}` : "";
+  }
+
+  function normalizeSeasonLabel(seasonName) {
+    const raw = String(seasonName || "Season 11").trim() || "Season 11";
+    return raw.toUpperCase();
   }
 
   function slugifyName(name) {
@@ -93,7 +128,7 @@
     if (type === "new") return { text: "NEW", class: "new" };
     const value = Number(movement);
     if (!Number.isFinite(value) || value === MOVEMENT_NEW_SENTINEL || value === 0) {
-      return { text: "—", class: "" };
+      return { text: "—", class: "unchanged" };
     }
     if (value > 0) return { text: `▲${value}`, class: "positive" };
     return { text: `▼${Math.abs(value)}`, class: "negative" };
@@ -133,6 +168,10 @@
     return slug ? `/assets/drivers/${slug}.png` : PLACEHOLDER;
   }
 
+  function driverCarImageUrl(profile) {
+    return stripUrlQuery(profile?.car_image_url || profile?.carImageUrl || "");
+  }
+
   function normalizeEntry(entry) {
     const movementParsed = parseMovementInput(entry.movementInput ?? entry.movement);
     const movementType = entry.movementType || movementParsed?.movementType;
@@ -144,8 +183,10 @@
 
     return {
       rank: Number(entry.rank),
+      driverId: entry.driverId || entry.driver_id || "",
       driverName: entry.driverName || "Unknown Driver",
       carNumber: entry.carNumber || "",
+      carImageUrl: entry.carImageUrl || "",
       photoUrl: entry.photoUrl || PLACEHOLDER,
       movementText: entry.movementText || movement.text,
       movementClass: entry.movementClass || movement.class,
@@ -154,49 +195,90 @@
     };
   }
 
-  function renderEntryHtml(entry) {
-    const normalized = normalizeEntry(entry);
-    const num = normalized.carNumber
-      ? `<span class="num">${escapeHtml(normalized.carNumber)}</span>`
-      : "";
-    const movementClass = normalized.movementClass ? ` ${normalized.movementClass}` : "";
-    const rankClass = normalized.rank === 1 ? " power-ranking-card-first" : "";
+  function cardTierClass(rank) {
+    if (rank === 1) return "pr-de-card--gold";
+    if (rank === 2) return "pr-de-card--silver";
+    if (rank === 3) return "pr-de-card--bronze";
+    return "";
+  }
 
-    return `<article class="power-ranking-card${rankClass}">
-      <div class="power-ranking-rank">#${normalized.rank}</div>
-      <img
-        class="power-ranking-photo"
-        src="${escapeHtml(normalized.photoUrl)}"
-        alt=""
-        crossorigin="anonymous"
-      />
-      <div class="power-ranking-body">
-        <div class="power-ranking-title-row">
-          <h3>${escapeHtml(normalized.driverName)}${num}</h3>
-          <span class="power-ranking-movement${movementClass}">${escapeHtml(normalized.movementText)}</span>
-        </div>
-        <p class="power-ranking-subtitle">${escapeHtml(normalized.subtitle)}</p>
-        <p class="power-ranking-writeup">${escapeHtml(normalized.writeup)}</p>
+  function subtitleToneClass(entry) {
+    const rank = Number(entry.rank);
+    if (rank === 1) return "pr-de-subtitle--gold";
+    if (rank === 2) return "pr-de-subtitle--silver";
+    if (rank === 3) return "pr-de-subtitle--bronze";
+    if (entry.movementClass === "positive") return "pr-de-subtitle--positive";
+    if (entry.movementClass === "negative") return "pr-de-subtitle--negative";
+    if (entry.movementClass === "new") return "pr-de-subtitle--new";
+    return "";
+  }
+
+  function carColorStyleAttr(colors) {
+    const fill = colors?.fill || DEFAULT_CAR_FILL;
+    const outline = colors?.outline || DEFAULT_CAR_OUTLINE;
+    const keyline = colors?.keyline || "";
+    return ` style="--pr-car-fill:${fill};--pr-car-outline:${outline};${keyline ? `--pr-car-keyline:${keyline};` : ""}"`;
+  }
+
+  function renderCardHtml(entry) {
+    const normalized = normalizeEntry(entry);
+    const tier = cardTierClass(normalized.rank);
+    const subtitleTone = subtitleToneClass(normalized);
+    const moveClass = normalized.movementClass || "unchanged";
+
+    return `<article class="pr-de-card ${tier}" data-driver-id="${escapeHtml(normalized.driverId)}" data-car-image="${escapeHtml(normalized.carImageUrl)}">
+      <div class="pr-de-card-top">
+        <span class="pr-de-rank">${normalized.rank}</span>
+        <span class="pr-de-move ${escapeHtml(moveClass)}">${escapeHtml(normalized.movementText)}</span>
       </div>
+      <div class="pr-de-card-mid">
+        <span class="pr-de-car-num"${carColorStyleAttr()}>${escapeHtml(normalized.carNumber || "—")}</span>
+        <img class="pr-de-photo" src="${escapeHtml(normalized.photoUrl)}" alt="" crossorigin="anonymous" />
+      </div>
+      <p class="pr-de-name">${escapeHtml(normalized.driverName)}</p>
+      <p class="pr-de-subtitle ${subtitleTone}">${escapeHtml(normalized.subtitle)}</p>
     </article>`;
+  }
+
+  function renderHonorableHtml(mention) {
+    const normalized = normalizeEntry({
+      ...mention,
+      rank: 0,
+      movement: 0,
+      movementType: "unchanged",
+      subtitle: "",
+    });
+
+    return `<div class="pr-de-honorable-item" data-driver-id="${escapeHtml(normalized.driverId)}" data-car-image="${escapeHtml(normalized.carImageUrl)}">
+      <span class="pr-de-honorable-num"${carColorStyleAttr()}>${escapeHtml(normalized.carNumber || "—")}</span>
+      <img class="pr-de-honorable-photo" src="${escapeHtml(normalized.photoUrl)}" alt="" crossorigin="anonymous" />
+      <p class="pr-de-honorable-name">${escapeHtml(normalized.driverName)}</p>
+    </div>`;
   }
 
   function renderExportBanner(week) {
     const raceNumber = Number(week.raceNumber);
-    const trackName = String(week.trackName || "").trim();
-    const raceLine = trackName
-      ? `Race ${raceNumber} • ${trackName}`
-      : `Race ${raceNumber}`;
-    const published = formatPublishedDate(week.publishedDate);
-    const publishedLine = published ? `Published ${published}` : "";
+    const season = normalizeSeasonLabel(week.seasonName);
+    const raceLabel = `RACE ${raceNumber} RANKINGS`;
+    const published = formatPublishedUpper(week.publishedDate);
 
-    return `<header class="pr-discord-export-banner">
-      <h1 class="pr-discord-export-kicker">POWER RANKINGS</h1>
-      <p class="pr-discord-export-race-line">${escapeHtml(raceLine)}</p>
-      <p class="pr-discord-export-presented">Presented by The Pedal Prophet</p>
-      ${publishedLine ? `<p class="pr-discord-export-published">${escapeHtml(publishedLine)}</p>` : ""}
-      <div class="pr-discord-export-divider" aria-hidden="true"></div>
-    </header>`;
+    return `<header class="pr-de-header">
+      <div class="pr-de-header-bp">
+        <img class="pr-de-bp-logo" src="${BP_LOGO}" alt="" crossorigin="anonymous" />
+        <p class="pr-de-season">${escapeHtml(season)}</p>
+      </div>
+      <div class="pr-de-title-wrap">
+        <h1 class="pr-de-kicker">POWER RANKINGS</h1>
+      </div>
+      <div class="pr-de-header-prophet">
+        <img class="pr-de-prophet-logo" src="${PROPHET_LOGO}" alt="" crossorigin="anonymous" />
+        <p class="pr-de-prophet-tag">Power Rankings &amp; Race Analysis</p>
+      </div>
+    </header>
+    <div class="pr-de-subbar">
+      <div class="pr-de-subbar-left">${escapeHtml(raceLabel)}</div>
+      <div class="pr-de-subbar-right">${escapeHtml(published)}</div>
+    </div>`;
   }
 
   function buildExportHtml(week) {
@@ -205,12 +287,26 @@
       .sort((a, b) => Number(a.rank) - Number(b.rank))
       .slice(0, 10);
 
-    return `<div class="pr-discord-export-root">
+    const mentions = (week.honorableMentions || []).filter(
+      (m) => m.driverName || m.driverId,
+    );
+
+    const honorableBlock = mentions.length
+      ? `<section class="pr-de-honorable">
+          <h2 class="pr-de-honorable-head">Honorable Mentions</h2>
+          <div class="pr-de-honorable-list">
+            ${mentions.map(renderHonorableHtml).join("")}
+          </div>
+        </section>`
+      : "";
+
+    return `<div class="pr-discord-export-root${mentions.length ? " pr-discord-export-root--with-honorable" : ""}">
       ${renderExportBanner(week)}
-      <div class="power-rankings-list">
-        ${entries.map(renderEntryHtml).join("")}
+      <div class="pr-de-grid">
+        ${entries.map(renderCardHtml).join("")}
       </div>
-      <p class="pr-discord-export-brand-footer">Blazing Pedals Truck Series</p>
+      ${honorableBlock}
+      <p class="pr-de-footer">FAST DRIVERS. CLOSE RACING. BIG FUN.</p>
     </div>`;
   }
 
@@ -235,6 +331,210 @@
     }
   }
 
+  function relativeLuminance(r, g, b) {
+    const channel = (v) => {
+      const s = v / 255;
+      return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+    };
+    return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+  }
+
+  function contrastRatio(l1, l2) {
+    const lighter = Math.max(l1, l2);
+    const darker = Math.min(l1, l2);
+    return (lighter + 0.05) / (darker + 0.05);
+  }
+
+  function rgbToHex(r, g, b) {
+    const part = (n) => n.toString(16).padStart(2, "0");
+    return `#${part(r)}${part(g)}${part(b)}`;
+  }
+
+  function parseHex(hex) {
+    const clean = String(hex || "").replace("#", "");
+    if (clean.length !== 6) return null;
+    const num = Number.parseInt(clean, 16);
+    if (!Number.isFinite(num)) return null;
+    return { r: (num >> 16) & 255, g: (num >> 8) & 255, b: num & 255 };
+  }
+
+  function colorDistance(a, b) {
+    return Math.sqrt((a.r - b.r) ** 2 + (a.g - b.g) ** 2 + (a.b - b.b) ** 2);
+  }
+
+  function isIgnorablePixel(r, g, b, a) {
+    if (a < 120) return true;
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const lightness = (max + min) / 2 / 255;
+    if (lightness < 0.07 || lightness > 0.94) return true;
+    const saturation = max === 0 ? 0 : (max - min) / max;
+    if (saturation < 0.12 && lightness > 0.2 && lightness < 0.85) return true;
+    return false;
+  }
+
+  function extractDominantColorsFromImageData(data) {
+    const buckets = new Map();
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      const a = data[i + 3];
+      if (isIgnorablePixel(r, g, b, a)) continue;
+      const key = `${Math.round(r / 24) * 24},${Math.round(g / 24) * 24},${Math.round(b / 24) * 24}`;
+      buckets.set(key, (buckets.get(key) || 0) + 1);
+    }
+
+    const sorted = [...buckets.entries()].sort((a, b) => b[1] - a[1]);
+    if (!sorted.length) return null;
+
+    const toRgb = (key) => {
+      const [r, g, b] = key.split(",").map((v) => Number(v));
+      return { r, g, b };
+    };
+
+    const primary = toRgb(sorted[0][0]);
+    let secondary = primary;
+    for (let i = 1; i < sorted.length; i += 1) {
+      const candidate = toRgb(sorted[i][0]);
+      if (colorDistance(primary, candidate) >= 48) {
+        secondary = candidate;
+        break;
+      }
+    }
+
+    if (colorDistance(primary, secondary) < 48) {
+      secondary = {
+        r: Math.min(255, Math.max(0, 255 - primary.r)),
+        g: Math.min(255, Math.max(0, 255 - primary.g)),
+        b: Math.min(255, Math.max(0, 255 - primary.b)),
+      };
+    }
+
+    return {
+      fill: rgbToHex(primary.r, primary.g, primary.b),
+      outline: rgbToHex(secondary.r, secondary.g, secondary.b),
+    };
+  }
+
+  function finalizeCarColors(colors) {
+    const fillRgb = parseHex(colors.fill);
+    const outlineRgb = parseHex(colors.outline);
+    if (!fillRgb || !outlineRgb) {
+      return {
+        fill: DEFAULT_CAR_FILL,
+        outline: DEFAULT_CAR_OUTLINE,
+        keyline: "1px 1px 0 #000,-1px -1px 0 #000",
+      };
+    }
+
+    const fillLum = relativeLuminance(fillRgb.r, fillRgb.g, fillRgb.b);
+    const outlineLum = relativeLuminance(outlineRgb.r, outlineRgb.g, outlineRgb.b);
+    const ratio = contrastRatio(fillLum, outlineLum);
+    let keyline = "";
+    if (ratio < 2.8) {
+      keyline =
+        fillLum > 0.45
+          ? "1px 1px 0 #000,-1px 1px 0 #000,-1px -1px 0 #000,1px -1px 0 #000"
+          : "1px 1px 0 #fff,-1px 1px 0 #fff,-1px -1px 0 #fff,1px -1px 0 #fff";
+    }
+
+    return { fill: colors.fill, outline: colors.outline, keyline };
+  }
+
+  function cacheKeyForCarImage(url, driverId) {
+    const image = stripUrlQuery(url);
+    if (image) return image;
+    if (driverId) return `driver:${driverId}`;
+    return "";
+  }
+
+  async function loadImageElement(url) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      if (isCrossOrigin(url)) img.crossOrigin = "anonymous";
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error(`Failed to load ${url}`));
+      img.src = url;
+    });
+  }
+
+  async function resolveTruckColors(carImageUrl, driverId) {
+    const key = cacheKeyForCarImage(carImageUrl, driverId);
+    if (!key) return finalizeCarColors({ fill: DEFAULT_CAR_FILL, outline: DEFAULT_CAR_OUTLINE });
+    if (truckColorCache.has(key)) return truckColorCache.get(key);
+
+    const url = stripUrlQuery(carImageUrl);
+    if (!url) {
+      const fallback = finalizeCarColors({ fill: DEFAULT_CAR_FILL, outline: DEFAULT_CAR_OUTLINE });
+      truckColorCache.set(key, fallback);
+      persistTruckColorCache();
+      return fallback;
+    }
+
+    try {
+      const img = await loadImageElement(url);
+      const canvas = document.createElement("canvas");
+      const size = 72;
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      ctx.drawImage(img, 0, 0, size, size);
+      const extracted = extractDominantColorsFromImageData(ctx.getImageData(0, 0, size, size).data);
+      const finalized = finalizeCarColors(
+        extracted || { fill: DEFAULT_CAR_FILL, outline: DEFAULT_CAR_OUTLINE },
+      );
+      truckColorCache.set(key, finalized);
+      persistTruckColorCache();
+      return finalized;
+    } catch {
+      const fallback = finalizeCarColors({ fill: DEFAULT_CAR_FILL, outline: DEFAULT_CAR_OUTLINE });
+      truckColorCache.set(key, fallback);
+      persistTruckColorCache();
+      return fallback;
+    }
+  }
+
+  function applyColorsToElement(el, colors) {
+    if (!el || !colors) return;
+    el.style.setProperty("--pr-car-fill", colors.fill);
+    el.style.setProperty("--pr-car-outline", colors.outline);
+    if (colors.keyline) {
+      el.style.setProperty("--pr-car-keyline", colors.keyline);
+    } else {
+      el.style.removeProperty("--pr-car-keyline");
+    }
+  }
+
+  async function applyTruckColorsToExportRoot(root, week) {
+    const cards = [...root.querySelectorAll(".pr-de-card")];
+    const entries = (week.entries || [])
+      .slice()
+      .sort((a, b) => Number(a.rank) - Number(b.rank))
+      .slice(0, 10);
+
+    const cardTasks = entries.map(async (entry, index) => {
+      const normalized = normalizeEntry(entry);
+      const numEl = cards[index]?.querySelector(".pr-de-car-num");
+      if (!numEl) return;
+      const colors = await resolveTruckColors(normalized.carImageUrl, normalized.driverId);
+      applyColorsToElement(numEl, colors);
+    });
+
+    const honorableItems = [...root.querySelectorAll(".pr-de-honorable-item")];
+    const mentions = (week.honorableMentions || []).filter((m) => m.driverName || m.driverId);
+
+    const mentionTasks = mentions.map(async (mention, index) => {
+      const normalized = normalizeEntry(mention);
+      const numEl = honorableItems[index]?.querySelector(".pr-de-honorable-num");
+      if (!numEl) return;
+      const colors = await resolveTruckColors(normalized.carImageUrl, normalized.driverId);
+      applyColorsToElement(numEl, colors);
+    });
+
+    await Promise.all([...cardTasks, ...mentionTasks]);
+  }
+
   async function preloadExportImages(container) {
     const images = [...container.querySelectorAll("img")];
     await Promise.all(
@@ -242,6 +542,14 @@
         (img) =>
           new Promise((resolve) => {
             const fallback = () => {
+              if (img.classList.contains("pr-de-bp-logo")) {
+                resolve();
+                return;
+              }
+              if (img.classList.contains("pr-de-prophet-logo")) {
+                resolve();
+                return;
+              }
               img.src = PLACEHOLDER;
               img.removeAttribute("crossorigin");
               resolve();
@@ -353,17 +661,14 @@
     return raceNumber;
   }
 
-  async function exportWeek(week, options = {}) {
+  async function renderWeekToPng(week, options = {}) {
     if (typeof html2canvas !== "function") {
       throw new Error("Export library failed to load. Refresh and try again.");
     }
 
     const raceNumber = validateWeek(week);
-    const trackName = await resolveTrackName(raceNumber, week);
-    const exportWeekData = { ...week, trackName };
-
     const host = getExportHost();
-    host.innerHTML = buildExportHtml(exportWeekData);
+    host.innerHTML = buildExportHtml(week);
     const root = host.querySelector(".pr-discord-export-root");
     if (!root) throw new Error("Could not build export layout.");
 
@@ -374,20 +679,35 @@
         await document.fonts.ready;
       }
       await preloadExportImages(root);
+      await applyTruckColorsToExportRoot(root, week);
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
       const canvas = await html2canvas(root, {
-        backgroundColor: "#060606",
+        backgroundColor: "#0a0a0a",
         scale: CANVAS_SCALE,
         useCORS: true,
         allowTaint: false,
         logging: false,
         width: EXPORT_WIDTH,
+        height: EXPORT_HEIGHT,
         windowWidth: EXPORT_WIDTH,
+        windowHeight: EXPORT_HEIGHT,
         scrollX: 0,
         scrollY: 0,
         ...options.canvasOptions,
       });
+
+      if (canvas.width !== EXPORT_WIDTH || canvas.height !== EXPORT_HEIGHT) {
+        const fitted = document.createElement("canvas");
+        fitted.width = EXPORT_WIDTH;
+        fitted.height = EXPORT_HEIGHT;
+        const ctx = fitted.getContext("2d");
+        ctx.drawImage(canvas, 0, 0, EXPORT_WIDTH, EXPORT_HEIGHT);
+        canvas.width = EXPORT_WIDTH;
+        canvas.height = EXPORT_HEIGHT;
+        const targetCtx = canvas.getContext("2d");
+        targetCtx.drawImage(fitted, 0, 0);
+      }
 
       const blob = await new Promise((resolve, reject) => {
         canvas.toBlob(
@@ -400,12 +720,12 @@
         );
       });
 
-      downloadBlob(blob, `bp-power-rankings-race-${raceNumber}.png`);
       return {
         raceNumber,
-        trackName,
-        width: canvas.width,
-        height: canvas.height,
+        blob,
+        canvas,
+        width: EXPORT_WIDTH,
+        height: EXPORT_HEIGHT,
       };
     } finally {
       host.innerHTML = "";
@@ -413,66 +733,94 @@
     }
   }
 
+  async function exportWeek(week, options = {}) {
+    const result = await renderWeekToPng(week, options);
+    downloadBlob(result.blob, `bp-power-rankings-race-${result.raceNumber}.png`);
+    return result;
+  }
+
+  async function downloadWeekPng(week, options = {}) {
+    return exportWeek(week, options);
+  }
+
+  async function previewWeekPng(week, options = {}) {
+    const result = await renderWeekToPng(week, options);
+    const url = URL.createObjectURL(result.blob);
+    return { ...result, objectUrl: url };
+  }
+
   function buildWeekFromAdminForm(formData, driverOptions = [], profileById = {}) {
     const byDriverId = Object.fromEntries(
       (driverOptions || []).map((driver) => [String(driver.driver_id), driver]),
     );
 
+    const mapDriverEntry = (entry, rank) => {
+      const driver =
+        byDriverId[String(entry.driverId)] || profileById[String(entry.driverId)] || {};
+      const profile = profileById[String(entry.driverId)] || driver;
+      const name =
+        driver.display_name ||
+        driver.displayName ||
+        profile?.display_name ||
+        profile?.iracing_name ||
+        "Unknown Driver";
+      const movementParsed = parseMovementInput(entry.movement);
+      const movement = movementParsed
+        ? formatMovementDisplay(movementParsed.movement, movementParsed.movementType)
+        : formatMovementDisplay(0, "unchanged");
+
+      return {
+        rank,
+        driverId: entry.driverId,
+        driverName: name,
+        carNumber: driver.car_number || profile?.car_number || "",
+        carImageUrl: driverCarImageUrl(profile),
+        photoUrl: driverPhotoUrl(profile, name),
+        movement: movementParsed?.movement ?? 0,
+        movementType: movementParsed?.movementType,
+        movementText: movement.text,
+        movementClass: movement.class,
+        subtitle: entry.subtitle || "",
+        writeup: entry.writeup || "",
+      };
+    };
+
     const entries = (formData.entries || [])
       .filter((entry) => entry.driverId)
-      .map((entry) => {
-        const driver =
-          byDriverId[String(entry.driverId)] ||
-          profileById[String(entry.driverId)] ||
-          {};
-        const profile = profileById[String(entry.driverId)] || driver;
-        const name =
-          driver.display_name ||
-          driver.displayName ||
-          profile?.display_name ||
-          profile?.iracing_name ||
-          "Unknown Driver";
-        const movementParsed = parseMovementInput(entry.movement);
-        const movement = movementParsed
-          ? formatMovementDisplay(movementParsed.movement, movementParsed.movementType)
-          : formatMovementDisplay(0, "unchanged");
+      .map((entry) => mapDriverEntry(entry, entry.rank));
 
-        return {
-          rank: entry.rank,
-          driverId: entry.driverId,
-          driverName: name,
-          carNumber: driver.car_number || profile?.car_number || "",
-          photoUrl: driverPhotoUrl(profile, name),
-          movement: movementParsed?.movement ?? 0,
-          movementType: movementParsed?.movementType,
-          movementText: movement.text,
-          movementClass: movement.class,
-          subtitle: entry.subtitle || "",
-          writeup: entry.writeup || "",
-        };
-      });
+    const honorableMentions = (formData.honorableMentions || [])
+      .filter((mention) => mention.driverId)
+      .map((mention) => mapDriverEntry(mention, 0));
 
     return {
       raceNumber: formData.raceNumber,
       publishedDate: formData.publishedDate,
+      seasonName: formData.seasonName || "Season 11",
       label: `Race ${formData.raceNumber} Rankings`,
       trackName: formData.trackName || "",
       entries,
+      honorableMentions,
     };
   }
 
   window.BPPowerRankingsDiscordExport = {
     EXPORT_WIDTH,
+    EXPORT_HEIGHT,
     CANVAS_SCALE,
     PLACEHOLDER,
     buildWeekFromAdminForm,
     exportWeek,
+    downloadWeekPng,
+    previewWeekPng,
+    renderWeekToPng,
     buildExportHtml,
-    renderEntryHtml,
+    renderCardHtml,
     resolveTrackName,
     buildPointsRaceTrackMap,
     buildDiscordText,
     copyDiscordText,
     downloadDiscordText,
+    resolveTruckColors,
   };
 })();

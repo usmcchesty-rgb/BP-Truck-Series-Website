@@ -348,9 +348,10 @@
 
       <div class="discord-export-panel">
         <h3>Discord Export</h3>
-        <p class="sub">Export the current form as a Discord-ready PNG or text post. All 10 drivers must be selected.</p>
+        <p class="sub">Generate a 1920×1080 Discord graphic from the current form (preview matches download). All 10 drivers must be selected.</p>
         <div class="btn-row" style="margin-top:0;">
-          <button id="discordExportPngBtn" class="btn btn-secondary" type="button" onclick="exportDiscordImage()">Export Discord PNG</button>
+          <button id="discordPreviewBtn" class="btn btn-secondary" type="button" onclick="previewDiscordImage()">Preview Discord Image</button>
+          <button id="discordDownloadBtn" class="btn btn-secondary" type="button" onclick="downloadDiscordImage()">Download Discord Image</button>
           <button id="discordCopyTextBtn" class="btn btn-secondary" type="button" onclick="copyDiscordText()">Copy Discord Text</button>
           <button id="discordDownloadTextBtn" class="btn btn-secondary" type="button" onclick="downloadDiscordText()">Download Discord Text</button>
         </div>
@@ -376,6 +377,16 @@
         <pre id="transcriptDiagnostics"></pre>
       </div>
     </div>
+    </div>
+
+    <div id="discordPreviewModal" class="pr-discord-preview-modal" hidden>
+      <div class="pr-discord-preview-backdrop" onclick="closeDiscordPreview()"></div>
+      <div class="pr-discord-preview-dialog" role="dialog" aria-modal="true" aria-label="Discord image preview">
+        <div class="pr-discord-preview-actions">
+          <button class="btn btn-secondary" type="button" onclick="closeDiscordPreview()">Close</button>
+        </div>
+        <img id="discordPreviewImg" alt="Power Rankings Discord preview (1920×1080)" />
+      </div>
     </div>
 
     <div id="prTabFormula" class="pr-tab-panel">
@@ -404,6 +415,8 @@
     let suggestedRaceNumber = 1;
     let currentWriteupWarnings = {};
     let activePrTab = 'rankings';
+    let siteSeasonName = 'Season 11';
+    let discordPreviewObjectUrl = null;
 
     function switchPrTab(tabId) {
       activePrTab = tabId === 'formula' ? 'formula' : 'rankings';
@@ -1978,6 +1991,7 @@
           powerRankingsFormulaImageUrl: stripUrlQuery(data.powerRankingsFormulaImageUrl || ''),
           powerRankingsFormulaImageUpdatedAt: data.powerRankingsFormulaImageUpdatedAt || null,
         };
+        siteSeasonName = String(data.seasonName || 'Season 11').trim() || 'Season 11';
         updateFormulaImagePreview();
       } catch (e) {
         setFormulaImageMsg(e.message, true);
@@ -2097,33 +2111,68 @@
       }
 
       return BPPowerRankingsDiscordExport.buildWeekFromAdminForm(
-        formData,
+        { ...formData, seasonName: siteSeasonName },
         driverOptions,
         profileById
       );
     }
 
     function setDiscordExportBusy(isBusy) {
-      ['discordExportPngBtn', 'discordCopyTextBtn', 'discordDownloadTextBtn'].forEach((id) => {
+      ['discordPreviewBtn', 'discordDownloadBtn', 'discordCopyTextBtn', 'discordDownloadTextBtn'].forEach((id) => {
         const btn = document.getElementById(id);
         if (btn) btn.disabled = isBusy;
       });
     }
 
-    async function exportDiscordImage() {
+    function closeDiscordPreview() {
+      const modal = $('#discordPreviewModal');
+      const img = $('#discordPreviewImg');
+      if (modal) modal.hidden = true;
+      if (img) img.removeAttribute('src');
+      if (discordPreviewObjectUrl) {
+        URL.revokeObjectURL(discordPreviewObjectUrl);
+        discordPreviewObjectUrl = null;
+      }
+    }
+    window.closeDiscordPreview = closeDiscordPreview;
+
+    async function previewDiscordImage() {
       setDiscordExportBusy(true);
-      setDiscordExportStatus('Preparing Discord PNG?');
+      setDiscordExportStatus('Rendering Discord preview…');
+
+      try {
+        closeDiscordPreview();
+        const week = await buildAdminExportWeek();
+        const result = await BPPowerRankingsDiscordExport.previewWeekPng(week);
+        discordPreviewObjectUrl = result.objectUrl;
+        const img = $('#discordPreviewImg');
+        const modal = $('#discordPreviewModal');
+        if (img) img.src = result.objectUrl;
+        if (modal) modal.hidden = false;
+        setDiscordExportStatus('Preview ready (1920×1080). Download uses the same render.');
+      } catch (e) {
+        setDiscordExportStatus(e.message || 'Preview failed.', true);
+      } finally {
+        setDiscordExportBusy(false);
+      }
+    }
+    window.previewDiscordImage = previewDiscordImage;
+
+    async function downloadDiscordImage() {
+      setDiscordExportBusy(true);
+      setDiscordExportStatus('Rendering Discord PNG…');
 
       try {
         const week = await buildAdminExportWeek();
-        await BPPowerRankingsDiscordExport.exportWeek(week);
-        setDiscordExportStatus('PNG download started.');
+        await BPPowerRankingsDiscordExport.downloadWeekPng(week);
+        setDiscordExportStatus('PNG download started (1920×1080).');
       } catch (e) {
         setDiscordExportStatus(e.message || 'PNG export failed.', true);
       } finally {
         setDiscordExportBusy(false);
       }
     }
+    window.downloadDiscordImage = downloadDiscordImage;
 
     async function copyDiscordText() {
       setDiscordExportBusy(true);
