@@ -2149,7 +2149,9 @@
         const modal = $('#discordPreviewModal');
         if (img) img.src = result.objectUrl;
         if (modal) modal.hidden = false;
-        setDiscordExportStatus('Preview ready (1920×1080). Download uses the same render.');
+        setDiscordExportStatus(
+          `Preview ready (1920×1080). ${result.diagnostics?.fontsUsed?.join(", ") || "Fonts loaded."}`,
+        );
       } catch (e) {
         setDiscordExportStatus(e.message || 'Preview failed.', true);
       } finally {
@@ -2209,7 +2211,6 @@
     $('#raceNumber')?.addEventListener('input', refreshSavedTranscriptStatus);
     $('#raceNumber')?.addEventListener('change', refreshSavedTranscriptStatus);
   </script>
-  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script src="/power-rankings-discord-export.js"></script>
 </body>
 </html>

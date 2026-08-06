@@ -1,18 +1,20 @@
 (function () {
-  const PLACEHOLDER = "/assets/drivers/placeholder.png";
   const EXPORT_WIDTH = 1920;
   const EXPORT_HEIGHT = 1080;
-  const CANVAS_SCALE = 1;
+  const PLACEHOLDER = "/assets/drivers/placeholder.png";
   const MOVEMENT_NEW_SENTINEL = 100;
   const NON_POINTS_LABEL_PATTERN = /\b(duel|duels|non-points|exhibition|clash)\b/i;
   const BP_LOGO = "/assets/logos/New%20Clean%20Logo.png";
   const PROPHET_LOGO = "/assets/logos/pedal-prophet-logo.png";
-  const TRUCK_COLOR_CACHE_KEY = "bp_pr_truck_colors_v1";
-  const DEFAULT_CAR_FILL = "#ffffff";
-  const DEFAULT_CAR_OUTLINE = "#1a4fd6";
+  const TRUCK_COLOR_CACHE_KEY = "bp_pr_truck_colors_v2";
+
+  const FONT_DISPLAY = 'Impact, "Arial Narrow", "Roboto Condensed", Arial, sans-serif';
+  const FONT_BODY = '"Arial Narrow", "Roboto Condensed", Impact, Arial, sans-serif';
 
   let scheduleTrackMapCache = null;
   const truckColorCache = new Map();
+  const imageAssetCache = new Map();
+  let lastRenderDiagnostics = null;
 
   try {
     const stored = JSON.parse(localStorage.getItem(TRUCK_COLOR_CACHE_KEY) || "{}");
@@ -20,24 +22,35 @@
       if (value?.fill && value?.outline) truckColorCache.set(key, value);
     });
   } catch {
-    /* ignore corrupt cache */
+    /* ignore */
   }
 
   function persistTruckColorCache() {
     try {
-      const obj = Object.fromEntries(truckColorCache.entries());
-      localStorage.setItem(TRUCK_COLOR_CACHE_KEY, JSON.stringify(obj));
+      localStorage.setItem(
+        TRUCK_COLOR_CACHE_KEY,
+        JSON.stringify(Object.fromEntries(truckColorCache.entries())),
+      );
     } catch {
-      /* quota / private mode */
+      /* ignore */
     }
   }
 
-  function escapeHtml(value) {
-    return String(value ?? "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
+  function resolveAbsoluteUrl(url) {
+    const raw = String(url || "").trim();
+    if (!raw) return "";
+    try {
+      return new URL(raw, window.location.origin).href;
+    } catch {
+      return raw;
+    }
+  }
+
+  function stripUrlQuery(url) {
+    return String(url || "")
+      .trim()
+      .split("?")[0]
+      .split("#")[0];
   }
 
   function formatPublishedDate(value) {
@@ -57,8 +70,7 @@
   }
 
   function normalizeSeasonLabel(seasonName) {
-    const raw = String(seasonName || "Season 11").trim() || "Season 11";
-    return raw.toUpperCase();
+    return (String(seasonName || "Season 11").trim() || "Season 11").toUpperCase();
   }
 
   function slugifyName(name) {
@@ -66,53 +78,6 @@
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-|-$/g, "");
-  }
-
-  function stripUrlQuery(url) {
-    return String(url || "")
-      .trim()
-      .split("?")[0]
-      .split("#")[0];
-  }
-
-  function isNonPointsRace(race) {
-    const points = String(race?.points ?? "")
-      .trim()
-      .toLowerCase();
-    const status = String(race?.status ?? "")
-      .trim()
-      .toLowerCase();
-    const label = String(race?.track ?? "");
-    if (points === "no" || status === "non-points") return true;
-    return NON_POINTS_LABEL_PATTERN.test(label);
-  }
-
-  function buildPointsRaceTrackMap(races) {
-    let officialPointsRaceNumber = 0;
-    const map = {};
-    for (const race of races || []) {
-      if (isNonPointsRace(race)) continue;
-      officialPointsRaceNumber += 1;
-      map[officialPointsRaceNumber] = String(race.track || "").trim();
-    }
-    return map;
-  }
-
-  async function resolveTrackName(raceNumber, week = {}) {
-    const fromWeek = String(week.trackName || week.track || "").trim();
-    if (fromWeek) return fromWeek;
-
-    if (!scheduleTrackMapCache) {
-      try {
-        const res = await fetch("/api/schedule");
-        const data = await res.json();
-        scheduleTrackMapCache = buildPointsRaceTrackMap(data.races || []);
-      } catch {
-        scheduleTrackMapCache = {};
-      }
-    }
-
-    return scheduleTrackMapCache[Number(raceNumber)] || "";
   }
 
   function movementTypeFromStored(movement) {
@@ -183,9 +148,9 @@
 
     return {
       rank: Number(entry.rank),
-      driverId: entry.driverId || entry.driver_id || "",
+      driverId: String(entry.driverId || entry.driver_id || ""),
       driverName: entry.driverName || "Unknown Driver",
-      carNumber: entry.carNumber || "",
+      carNumber: String(entry.carNumber || "").trim(),
       carImageUrl: entry.carImageUrl || "",
       photoUrl: entry.photoUrl || PLACEHOLDER,
       movementText: entry.movementText || movement.text,
@@ -195,201 +160,189 @@
     };
   }
 
-  function cardTierClass(rank) {
-    if (rank === 1) return "pr-de-card--gold";
-    if (rank === 2) return "pr-de-card--silver";
-    if (rank === 3) return "pr-de-card--bronze";
-    return "";
+  function validateWeek(week) {
+    if (!week) throw new Error("No rankings loaded to export.");
+    const raceNumber = Number(week.raceNumber);
+    if (!Number.isInteger(raceNumber) || raceNumber < 1) {
+      throw new Error("Valid race number is required before exporting.");
+    }
+    const entries = (week.entries || []).filter((e) => e.driverName || e.driverId);
+    if (entries.length < 10) {
+      throw new Error("All 10 rankings must have drivers before exporting.");
+    }
+    return raceNumber;
   }
 
-  function subtitleToneClass(entry) {
-    const rank = Number(entry.rank);
-    if (rank === 1) return "pr-de-subtitle--gold";
-    if (rank === 2) return "pr-de-subtitle--silver";
-    if (rank === 3) return "pr-de-subtitle--bronze";
-    if (entry.movementClass === "positive") return "pr-de-subtitle--positive";
-    if (entry.movementClass === "negative") return "pr-de-subtitle--negative";
-    if (entry.movementClass === "new") return "pr-de-subtitle--new";
-    return "";
+  function isNonPointsRace(race) {
+    const points = String(race?.points ?? "").trim().toLowerCase();
+    const status = String(race?.status ?? "").trim().toLowerCase();
+    if (points === "no" || status === "non-points") return true;
+    return NON_POINTS_LABEL_PATTERN.test(String(race?.track ?? ""));
   }
 
-  function carColorStyleAttr(colors) {
-    const fill = colors?.fill || DEFAULT_CAR_FILL;
-    const outline = colors?.outline || DEFAULT_CAR_OUTLINE;
-    const keyline = colors?.keyline || "";
-    return ` style="--pr-car-fill:${fill};--pr-car-outline:${outline};${keyline ? `--pr-car-keyline:${keyline};` : ""}"`;
+  function buildPointsRaceTrackMap(races) {
+    let n = 0;
+    const map = {};
+    for (const race of races || []) {
+      if (isNonPointsRace(race)) continue;
+      n += 1;
+      map[n] = String(race.track || "").trim();
+    }
+    return map;
   }
 
-  function renderCardHtml(entry) {
-    const normalized = normalizeEntry(entry);
-    const tier = cardTierClass(normalized.rank);
-    const subtitleTone = subtitleToneClass(normalized);
-    const moveClass = normalized.movementClass || "unchanged";
-
-    return `<article class="pr-de-card ${tier}" data-driver-id="${escapeHtml(normalized.driverId)}" data-car-image="${escapeHtml(normalized.carImageUrl)}">
-      <div class="pr-de-card-top">
-        <span class="pr-de-rank">${normalized.rank}</span>
-        <span class="pr-de-move ${escapeHtml(moveClass)}">${escapeHtml(normalized.movementText)}</span>
-      </div>
-      <div class="pr-de-card-mid">
-        <span class="pr-de-car-num"${carColorStyleAttr()}>${escapeHtml(normalized.carNumber || "—")}</span>
-        <img class="pr-de-photo" src="${escapeHtml(normalized.photoUrl)}" alt="" crossorigin="anonymous" />
-      </div>
-      <p class="pr-de-name">${escapeHtml(normalized.driverName)}</p>
-      <p class="pr-de-subtitle ${subtitleTone}">${escapeHtml(normalized.subtitle)}</p>
-    </article>`;
+  async function resolveTrackName(raceNumber, week = {}) {
+    const fromWeek = String(week.trackName || week.track || "").trim();
+    if (fromWeek) return fromWeek;
+    if (!scheduleTrackMapCache) {
+      try {
+        const res = await fetch("/api/schedule");
+        const data = await res.json();
+        scheduleTrackMapCache = buildPointsRaceTrackMap(data.races || []);
+      } catch {
+        scheduleTrackMapCache = {};
+      }
+    }
+    return scheduleTrackMapCache[Number(raceNumber)] || "";
   }
 
-  function renderHonorableHtml(mention) {
-    const normalized = normalizeEntry({
-      ...mention,
-      rank: 0,
-      movement: 0,
-      movementType: "unchanged",
-      subtitle: "",
+  async function ensureFontsReady() {
+    if (!document.fonts?.ready) return { fontsUsed: [FONT_DISPLAY, FONT_BODY], fallbackRequired: true };
+    await document.fonts.ready;
+    const probes = [
+      'italic 900 48px Impact, "Arial Narrow", sans-serif',
+      '900 48px "Arial Narrow", Impact, sans-serif',
+    ];
+    await Promise.all(probes.map((spec) => document.fonts.load(spec).catch(() => null)));
+    const impactOk = document.fonts.check('900 48px Impact');
+    const narrowOk = document.fonts.check('900 48px "Arial Narrow"');
+    return {
+      fontsUsed: [FONT_DISPLAY, FONT_BODY],
+      fallbackRequired: !impactOk && !narrowOk,
+      impactLoaded: impactOk,
+      narrowLoaded: narrowOk,
+    };
+  }
+
+  /**
+   * @returns {Promise<{ ok: boolean, img: HTMLImageElement|null, url: string, error?: string, usedFallback?: boolean }>}
+   */
+  async function loadImageAsset(url, meta = {}) {
+    const abs = resolveAbsoluteUrl(url || PLACEHOLDER);
+    if (imageAssetCache.has(abs)) return imageAssetCache.get(abs);
+
+    const task = new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        resolve({ ok: true, img, url: abs, usedFallback: false });
+      };
+      img.onerror = () => {
+        const msg = `Failed to load ${meta.type || "image"} (${meta.driverName || "n/a"}): ${abs}`;
+        console.warn("[pr-discord-export]", msg, meta.errorReason || "network/decode");
+        if (meta.required) {
+          resolve({ ok: false, img: null, url: abs, error: msg, usedFallback: false });
+          return;
+        }
+        if (abs === resolveAbsoluteUrl(PLACEHOLDER)) {
+          resolve({ ok: false, img: null, url: abs, error: msg, usedFallback: true });
+          return;
+        }
+        loadImageAsset(PLACEHOLDER, { ...meta, type: `${meta.type || "image"}-fallback` }).then(
+          (fallback) => {
+            resolve({
+              ok: fallback.ok,
+              img: fallback.img,
+              url: abs,
+              error: msg,
+              usedFallback: true,
+            });
+          },
+        );
+      };
+      img.src = abs;
     });
 
-    return `<div class="pr-de-honorable-item" data-driver-id="${escapeHtml(normalized.driverId)}" data-car-image="${escapeHtml(normalized.carImageUrl)}">
-      <span class="pr-de-honorable-num"${carColorStyleAttr()}>${escapeHtml(normalized.carNumber || "—")}</span>
-      <img class="pr-de-honorable-photo" src="${escapeHtml(normalized.photoUrl)}" alt="" crossorigin="anonymous" />
-      <p class="pr-de-honorable-name">${escapeHtml(normalized.driverName)}</p>
-    </div>`;
-  }
-
-  function renderExportBanner(week) {
-    const raceNumber = Number(week.raceNumber);
-    const season = normalizeSeasonLabel(week.seasonName);
-    const raceLabel = `RACE ${raceNumber} RANKINGS`;
-    const published = formatPublishedUpper(week.publishedDate);
-
-    return `<header class="pr-de-header">
-      <div class="pr-de-header-bp">
-        <img class="pr-de-bp-logo" src="${BP_LOGO}" alt="" crossorigin="anonymous" />
-        <p class="pr-de-season">${escapeHtml(season)}</p>
-      </div>
-      <div class="pr-de-title-wrap">
-        <h1 class="pr-de-kicker">POWER RANKINGS</h1>
-      </div>
-      <div class="pr-de-header-prophet">
-        <img class="pr-de-prophet-logo" src="${PROPHET_LOGO}" alt="" crossorigin="anonymous" />
-        <p class="pr-de-prophet-tag">Power Rankings &amp; Race Analysis</p>
-      </div>
-    </header>
-    <div class="pr-de-subbar">
-      <div class="pr-de-subbar-left">${escapeHtml(raceLabel)}</div>
-      <div class="pr-de-subbar-right">${escapeHtml(published)}</div>
-    </div>`;
-  }
-
-  function buildExportHtml(week) {
-    const entries = (week.entries || [])
-      .slice()
-      .sort((a, b) => Number(a.rank) - Number(b.rank))
-      .slice(0, 10);
-
-    const mentions = (week.honorableMentions || []).filter(
-      (m) => m.driverName || m.driverId,
-    );
-
-    const honorableBlock = mentions.length
-      ? `<section class="pr-de-honorable">
-          <h2 class="pr-de-honorable-head">Honorable Mentions</h2>
-          <div class="pr-de-honorable-list">
-            ${mentions.map(renderHonorableHtml).join("")}
-          </div>
-        </section>`
-      : "";
-
-    return `<div class="pr-discord-export-root${mentions.length ? " pr-discord-export-root--with-honorable" : ""}">
-      ${renderExportBanner(week)}
-      <div class="pr-de-grid">
-        ${entries.map(renderCardHtml).join("")}
-      </div>
-      ${honorableBlock}
-      <p class="pr-de-footer">FAST DRIVERS. CLOSE RACING. BIG FUN.</p>
-    </div>`;
-  }
-
-  function getExportHost() {
-    let host = document.getElementById("prDiscordExportHost");
-    if (!host) {
-      host = document.createElement("div");
-      host.id = "prDiscordExportHost";
-      host.className = "pr-discord-export-host";
-      host.setAttribute("aria-hidden", "true");
-      document.body.appendChild(host);
-    }
-    return host;
-  }
-
-  function isCrossOrigin(url) {
-    try {
-      const parsed = new URL(url, window.location.origin);
-      return parsed.origin !== window.location.origin;
-    } catch {
-      return false;
-    }
-  }
-
-  function relativeLuminance(r, g, b) {
-    const channel = (v) => {
-      const s = v / 255;
-      return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-    };
-    return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
-  }
-
-  function contrastRatio(l1, l2) {
-    const lighter = Math.max(l1, l2);
-    const darker = Math.min(l1, l2);
-    return (lighter + 0.05) / (darker + 0.05);
+    imageAssetCache.set(abs, task);
+    return task;
   }
 
   function rgbToHex(r, g, b) {
-    const part = (n) => n.toString(16).padStart(2, "0");
-    return `#${part(r)}${part(g)}${part(b)}`;
+    const p = (n) => Math.round(n).toString(16).padStart(2, "0");
+    return `#${p(r)}${p(g)}${p(b)}`;
   }
 
   function parseHex(hex) {
     const clean = String(hex || "").replace("#", "");
     if (clean.length !== 6) return null;
-    const num = Number.parseInt(clean, 16);
-    if (!Number.isFinite(num)) return null;
-    return { r: (num >> 16) & 255, g: (num >> 8) & 255, b: num & 255 };
+    const n = Number.parseInt(clean, 16);
+    if (!Number.isFinite(n)) return null;
+    return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
   }
 
   function colorDistance(a, b) {
     return Math.sqrt((a.r - b.r) ** 2 + (a.g - b.g) ** 2 + (a.b - b.b) ** 2);
   }
 
-  function isIgnorablePixel(r, g, b, a) {
-    if (a < 120) return true;
+  function relativeLuminance(r, g, b) {
+    const ch = (v) => {
+      const s = v / 255;
+      return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+    };
+    return 0.2126 * ch(r) + 0.7152 * ch(g) + 0.0722 * ch(b);
+  }
+
+  function isIgnorableSample(r, g, b, a) {
+    if (a < 140) return true;
     const max = Math.max(r, g, b);
     const min = Math.min(r, g, b);
-    const lightness = (max + min) / 2 / 255;
-    if (lightness < 0.07 || lightness > 0.94) return true;
-    const saturation = max === 0 ? 0 : (max - min) / max;
-    if (saturation < 0.12 && lightness > 0.2 && lightness < 0.85) return true;
+    const light = (max + min) / 510;
+    if (light < 0.06 || light > 0.92) return true;
+    const sat = max === 0 ? 0 : (max - min) / max;
+    if (sat < 0.14 && light > 0.15 && light < 0.88) return true;
     return false;
   }
 
-  function extractDominantColorsFromImageData(data) {
+  function sampleTruckColorsFromImage(img) {
+    const sampleSize = 128;
+    const canvas = document.createElement("canvas");
+    canvas.width = sampleSize;
+    canvas.height = sampleSize;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    const iw = img.naturalWidth || sampleSize;
+    const ih = img.naturalHeight || sampleSize;
+    const crop = 0.12;
+    const sx = iw * crop;
+    const sy = ih * crop;
+    const sw = iw * (1 - crop * 2);
+    const sh = ih * (1 - crop * 2);
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sampleSize, sampleSize);
+
+    let data;
+    try {
+      data = ctx.getImageData(0, 0, sampleSize, sampleSize).data;
+    } catch (err) {
+      return { error: "canvas_tainted_cors", detail: String(err?.message || err) };
+    }
+
     const buckets = new Map();
     for (let i = 0; i < data.length; i += 4) {
       const r = data[i];
       const g = data[i + 1];
       const b = data[i + 2];
       const a = data[i + 3];
-      if (isIgnorablePixel(r, g, b, a)) continue;
-      const key = `${Math.round(r / 24) * 24},${Math.round(g / 24) * 24},${Math.round(b / 24) * 24}`;
+      if (isIgnorableSample(r, g, b, a)) continue;
+      const key = `${Math.round(r / 20) * 20},${Math.round(g / 20) * 20},${Math.round(b / 20) * 20}`;
       buckets.set(key, (buckets.get(key) || 0) + 1);
     }
 
     const sorted = [...buckets.entries()].sort((a, b) => b[1] - a[1]);
-    if (!sorted.length) return null;
+    if (!sorted.length) return { error: "no_dominant_colors" };
 
     const toRgb = (key) => {
-      const [r, g, b] = key.split(",").map((v) => Number(v));
+      const [r, g, b] = key.split(",").map(Number);
       return { r, g, b };
     };
 
@@ -397,13 +350,12 @@
     let secondary = primary;
     for (let i = 1; i < sorted.length; i += 1) {
       const candidate = toRgb(sorted[i][0]);
-      if (colorDistance(primary, candidate) >= 48) {
+      if (colorDistance(primary, candidate) >= 55) {
         secondary = candidate;
         break;
       }
     }
-
-    if (colorDistance(primary, secondary) < 48) {
+    if (colorDistance(primary, secondary) < 55) {
       secondary = {
         r: Math.min(255, Math.max(0, 255 - primary.r)),
         g: Math.min(255, Math.max(0, 255 - primary.g)),
@@ -411,171 +363,755 @@
       };
     }
 
-    return {
-      fill: rgbToHex(primary.r, primary.g, primary.b),
-      outline: rgbToHex(secondary.r, secondary.g, secondary.b),
-    };
+    const fill = rgbToHex(primary.r, primary.g, primary.b);
+    const outline = rgbToHex(secondary.r, secondary.g, secondary.b);
+    const fillLum = relativeLuminance(primary.r, primary.g, primary.b);
+    const outlineLum = relativeLuminance(secondary.r, secondary.g, secondary.b);
+    const ratio =
+      (Math.max(fillLum, outlineLum) + 0.05) / (Math.min(fillLum, outlineLum) + 0.05);
+    const keyline = ratio < 2.5 ? (fillLum > 0.5 ? "#000000" : "#ffffff") : null;
+
+    return { fill, outline, keyline, error: null };
   }
 
-  function finalizeCarColors(colors) {
-    const fillRgb = parseHex(colors.fill);
-    const outlineRgb = parseHex(colors.outline);
-    if (!fillRgb || !outlineRgb) {
-      return {
-        fill: DEFAULT_CAR_FILL,
-        outline: DEFAULT_CAR_OUTLINE,
-        keyline: "1px 1px 0 #000,-1px -1px 0 #000",
-      };
-    }
-
-    const fillLum = relativeLuminance(fillRgb.r, fillRgb.g, fillRgb.b);
-    const outlineLum = relativeLuminance(outlineRgb.r, outlineRgb.g, outlineRgb.b);
-    const ratio = contrastRatio(fillLum, outlineLum);
-    let keyline = "";
-    if (ratio < 2.8) {
-      keyline =
-        fillLum > 0.45
-          ? "1px 1px 0 #000,-1px 1px 0 #000,-1px -1px 0 #000,1px -1px 0 #000"
-          : "1px 1px 0 #fff,-1px 1px 0 #fff,-1px -1px 0 #fff,1px -1px 0 #fff";
-    }
-
-    return { fill: colors.fill, outline: colors.outline, keyline };
-  }
-
-  function cacheKeyForCarImage(url, driverId) {
+  function cacheKeyForTruck(url, driverId) {
     const image = stripUrlQuery(url);
     if (image) return image;
     if (driverId) return `driver:${driverId}`;
     return "";
   }
 
-  async function loadImageElement(url) {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      if (isCrossOrigin(url)) img.crossOrigin = "anonymous";
-      img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error(`Failed to load ${url}`));
-      img.src = url;
+  function getCachedTruckColors(driverId, carImageUrl) {
+    const key = cacheKeyForTruck(carImageUrl, driverId);
+    if (!key) return null;
+    return truckColorCache.get(key) || null;
+  }
+
+  async function resolveTruckColorsForDriver(entry, truckImgResult) {
+    const driverName = entry.driverName;
+    const truckUrl = stripUrlQuery(entry.carImageUrl);
+    const key = cacheKeyForTruck(truckUrl, entry.driverId);
+    const cached = key ? truckColorCache.get(key) : null;
+
+    const logDiag = (diag) => {
+      console.log("[pr-discord-export] truck colors", diag);
+      return diag;
+    };
+
+    if (cached) {
+      return logDiag({
+        driverName,
+        truckImageUrl: truckUrl || "(none)",
+        primary: cached.fill,
+        secondary: cached.outline,
+        keyline: cached.keyline,
+        cached: true,
+        fallback: cached.fallback === true,
+        reason: cached.fallbackReason || null,
+      });
+    }
+
+    if (!truckUrl) {
+      const fallback = {
+        fill: "#e50914",
+        outline: "#1a1a1a",
+        keyline: "#ffffff",
+        fallback: true,
+        fallbackReason: "missing_truck_image_url",
+      };
+      if (key) {
+        truckColorCache.set(key, fallback);
+        persistTruckColorCache();
+      }
+      return logDiag({
+        driverName,
+        truckImageUrl: "(none)",
+        primary: fallback.fill,
+        secondary: fallback.outline,
+        keyline: fallback.keyline,
+        cached: false,
+        fallback: true,
+        reason: fallback.fallbackReason,
+      });
+    }
+
+    if (!truckImgResult?.ok || !truckImgResult.img) {
+      const fallback = {
+        fill: "#e50914",
+        outline: "#111111",
+        keyline: "#ffffff",
+        fallback: true,
+        fallbackReason: truckImgResult?.error || "truck_image_load_failed",
+      };
+      if (key) {
+        truckColorCache.set(key, fallback);
+        persistTruckColorCache();
+      }
+      return logDiag({
+        driverName,
+        truckImageUrl: truckUrl,
+        primary: fallback.fill,
+        secondary: fallback.outline,
+        keyline: fallback.keyline,
+        cached: false,
+        fallback: true,
+        reason: fallback.fallbackReason,
+      });
+    }
+
+    const sampled = sampleTruckColorsFromImage(truckImgResult.img);
+    if (sampled.error) {
+      const fallback = {
+        fill: "#e50914",
+        outline: "#111111",
+        keyline: "#ffffff",
+        fallback: true,
+        fallbackReason: sampled.error,
+      };
+      if (key) {
+        truckColorCache.set(key, fallback);
+        persistTruckColorCache();
+      }
+      return logDiag({
+        driverName,
+        truckImageUrl: truckUrl,
+        primary: fallback.fill,
+        secondary: fallback.outline,
+        keyline: fallback.keyline,
+        cached: false,
+        fallback: true,
+        reason: `${sampled.error}${sampled.detail ? `: ${sampled.detail}` : ""}`,
+      });
+    }
+
+    const resolved = {
+      fill: sampled.fill,
+      outline: sampled.outline,
+      keyline: sampled.keyline || "#000000",
+      fallback: false,
+    };
+    if (key) {
+      truckColorCache.set(key, resolved);
+      persistTruckColorCache();
+    }
+    return logDiag({
+      driverName,
+      truckImageUrl: truckUrl,
+      primary: resolved.fill,
+      secondary: resolved.outline,
+      keyline: resolved.keyline,
+      cached: false,
+      fallback: false,
+      reason: null,
     });
   }
 
-  async function resolveTruckColors(carImageUrl, driverId) {
-    const key = cacheKeyForCarImage(carImageUrl, driverId);
-    if (!key) return finalizeCarColors({ fill: DEFAULT_CAR_FILL, outline: DEFAULT_CAR_OUTLINE });
-    if (truckColorCache.has(key)) return truckColorCache.get(key);
-
-    const url = stripUrlQuery(carImageUrl);
-    if (!url) {
-      const fallback = finalizeCarColors({ fill: DEFAULT_CAR_FILL, outline: DEFAULT_CAR_OUTLINE });
-      truckColorCache.set(key, fallback);
-      persistTruckColorCache();
-      return fallback;
-    }
-
-    try {
-      const img = await loadImageElement(url);
-      const canvas = document.createElement("canvas");
-      const size = 72;
-      canvas.width = size;
-      canvas.height = size;
-      const ctx = canvas.getContext("2d", { willReadFrequently: true });
-      ctx.drawImage(img, 0, 0, size, size);
-      const extracted = extractDominantColorsFromImageData(ctx.getImageData(0, 0, size, size).data);
-      const finalized = finalizeCarColors(
-        extracted || { fill: DEFAULT_CAR_FILL, outline: DEFAULT_CAR_OUTLINE },
-      );
-      truckColorCache.set(key, finalized);
-      persistTruckColorCache();
-      return finalized;
-    } catch {
-      const fallback = finalizeCarColors({ fill: DEFAULT_CAR_FILL, outline: DEFAULT_CAR_OUTLINE });
-      truckColorCache.set(key, fallback);
-      persistTruckColorCache();
-      return fallback;
-    }
-  }
-
-  function applyColorsToElement(el, colors) {
-    if (!el || !colors) return;
-    el.style.setProperty("--pr-car-fill", colors.fill);
-    el.style.setProperty("--pr-car-outline", colors.outline);
-    if (colors.keyline) {
-      el.style.setProperty("--pr-car-keyline", colors.keyline);
-    } else {
-      el.style.removeProperty("--pr-car-keyline");
-    }
-  }
-
-  async function applyTruckColorsToExportRoot(root, week) {
-    const cards = [...root.querySelectorAll(".pr-de-card")];
+  async function preloadExportAssets(week) {
     const entries = (week.entries || [])
       .slice()
       .sort((a, b) => Number(a.rank) - Number(b.rank))
-      .slice(0, 10);
+      .slice(0, 10)
+      .map(normalizeEntry);
+    const mentions = (week.honorableMentions || [])
+      .filter((m) => m.driverName || m.driverId)
+      .map(normalizeEntry);
 
-    const cardTasks = entries.map(async (entry, index) => {
-      const normalized = normalizeEntry(entry);
-      const numEl = cards[index]?.querySelector(".pr-de-car-num");
-      if (!numEl) return;
-      const colors = await resolveTruckColors(normalized.carImageUrl, normalized.driverId);
-      applyColorsToElement(numEl, colors);
+    const bpLogo = await loadImageAsset(BP_LOGO, { type: "bp-logo", required: true });
+    const prophetLogo = await loadImageAsset(PROPHET_LOGO, {
+      type: "prophet-logo",
+      required: true,
     });
 
-    const honorableItems = [...root.querySelectorAll(".pr-de-honorable-item")];
-    const mentions = (week.honorableMentions || []).filter((m) => m.driverName || m.driverId);
+    if (!bpLogo.ok || !bpLogo.img) {
+      throw new Error("Blazing Pedals logo failed to load. Export aborted.");
+    }
+    if (!prophetLogo.ok || !prophetLogo.img) {
+      throw new Error("Pedal Prophet logo failed to load. Export aborted.");
+    }
 
-    const mentionTasks = mentions.map(async (mention, index) => {
-      const normalized = normalizeEntry(mention);
-      const numEl = honorableItems[index]?.querySelector(".pr-de-honorable-num");
-      if (!numEl) return;
-      const colors = await resolveTruckColors(normalized.carImageUrl, normalized.driverId);
-      applyColorsToElement(numEl, colors);
-    });
+    const driverAssets = new Map();
+    const allPeople = [...entries, ...mentions];
 
-    await Promise.all([...cardTasks, ...mentionTasks]);
+    await Promise.all(
+      allPeople.map(async (entry) => {
+        const photo = await loadImageAsset(entry.photoUrl, {
+          type: "driver-photo",
+          driverName: entry.driverName,
+        });
+        const truckUrl = entry.carImageUrl || "";
+        const truck = truckUrl
+          ? await loadImageAsset(truckUrl, {
+              type: "truck-image",
+              driverName: entry.driverName,
+            })
+          : { ok: false, img: null, url: "", usedFallback: false, error: "no_url" };
+
+        const diag = await resolveTruckColorsForDriver(entry, truck);
+        const colors = {
+          fill: diag.primary,
+          outline: diag.secondary,
+          keyline: diag.keyline,
+          primary: diag.primary,
+          secondary: diag.secondary,
+          diagnostic: diag,
+        };
+        driverAssets.set(entry.driverId || entry.driverName, {
+          entry,
+          photo,
+          truck,
+          colors,
+        });
+      }),
+    );
+
+    return { bpLogo, prophetLogo, driverAssets, entries, mentions };
   }
 
-  async function preloadExportImages(container) {
-    const images = [...container.querySelectorAll("img")];
-    await Promise.all(
-      images.map(
-        (img) =>
-          new Promise((resolve) => {
-            const fallback = () => {
-              if (img.classList.contains("pr-de-bp-logo")) {
-                resolve();
-                return;
-              }
-              if (img.classList.contains("pr-de-prophet-logo")) {
-                resolve();
-                return;
-              }
-              img.src = PLACEHOLDER;
-              img.removeAttribute("crossorigin");
-              resolve();
-            };
+  function computeLayout(mentionCount) {
+    const padX = 18;
+    const padTop = 10;
+    const headerBottom = 128;
+    const subbarH = 38;
+    const gridTop = headerBottom + subbarH + 8;
+    const footerH = 32;
+    const padBottom = 10;
+    const honorableH = mentionCount > 0 ? 156 : 0;
+    const gridBottom = EXPORT_HEIGHT - padBottom - footerH - honorableH;
+    const gridH = gridBottom - gridTop;
+    const rowGap = 10;
+    const rowH = (gridH - rowGap) / 2;
+    const colGap = 10;
+    const innerW = EXPORT_WIDTH - padX * 2;
+    const cardW = (innerW - colGap * 4) / 5;
 
-            if (!img.getAttribute("src")) {
-              fallback();
-              return;
-            }
+    return {
+      padX,
+      padTop,
+      headerBottom,
+      subbarH,
+      gridTop,
+      gridBottom,
+      gridH,
+      rowH,
+      rowGap,
+      colGap,
+      cardW,
+      honorableY: gridBottom + 6,
+      honorableH,
+      footerY: EXPORT_HEIGHT - padBottom - footerH + 6,
+      mentionCount,
+    };
+  }
 
-            if (isCrossOrigin(img.src)) {
-              img.crossOrigin = "anonymous";
-            } else {
-              img.removeAttribute("crossorigin");
-            }
+  function drawCarbonBackground(ctx) {
+    ctx.fillStyle = "#060606";
+    ctx.fillRect(0, 0, EXPORT_WIDTH, EXPORT_HEIGHT);
 
-            if (img.complete && img.naturalWidth > 0) {
-              resolve();
-              return;
-            }
+    ctx.save();
+    ctx.globalAlpha = 0.22;
+    for (let y = -EXPORT_HEIGHT; y < EXPORT_HEIGHT * 2; y += 12) {
+      ctx.strokeStyle = y % 24 === 0 ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.025)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(EXPORT_WIDTH, y + EXPORT_WIDTH * 0.55);
+      ctx.stroke();
+    }
+    ctx.restore();
 
-            img.onload = () => resolve();
-            img.onerror = fallback;
-          }),
-      ),
+    const grad = ctx.createLinearGradient(0, 0, 0, EXPORT_HEIGHT);
+    grad.addColorStop(0, "rgba(30,30,30,0.55)");
+    grad.addColorStop(0.45, "rgba(8,8,8,0.15)");
+    grad.addColorStop(1, "rgba(0,0,0,0.65)");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, EXPORT_WIDTH, EXPORT_HEIGHT);
+
+    ctx.save();
+    ctx.globalAlpha = 0.35;
+    ctx.strokeStyle = "#8b0000";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(0, 96);
+    ctx.lineTo(EXPORT_WIDTH, 140);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawImageContain(ctx, img, x, y, w, h, opts = {}) {
+    const { hAlign = "center", vAlign = "bottom" } = opts;
+    const iw = img.naturalWidth || 1;
+    const ih = img.naturalHeight || 1;
+    const scale = Math.min(w / iw, h / ih);
+    const dw = iw * scale;
+    const dh = ih * scale;
+    let dx = x + (w - dw) / 2;
+    if (hAlign === "left") dx = x;
+    if (hAlign === "right") dx = x + w - dw;
+    let dy = y + h - dh;
+    if (vAlign === "center") dy = y + (h - dh) / 2;
+    if (vAlign === "top") dy = y;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(img, dx, dy, dw, dh);
+    return { dx, dy, dw, dh };
+  }
+
+  function wrapText(ctx, text, maxWidth) {
+    const words = String(text || "").split(/\s+/).filter(Boolean);
+    if (!words.length) return [];
+    const lines = [];
+    let line = words[0];
+    for (let i = 1; i < words.length; i += 1) {
+      const test = `${line} ${words[i]}`;
+      if (ctx.measureText(test).width <= maxWidth) line = test;
+      else {
+        lines.push(line);
+        line = words[i];
+      }
+    }
+    lines.push(line);
+    return lines.slice(0, 2);
+  }
+
+  function drawTextItalic(ctx, text, x, y, font, fill, align = "left") {
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.font = font;
+    ctx.fillStyle = fill;
+    ctx.textAlign = align;
+    ctx.textBaseline = "alphabetic";
+    const px = align === "center" ? x : Math.round(x) + 0.5;
+    const py = Math.round(y) + 0.5;
+    ctx.fillText(text, px, py);
+    ctx.restore();
+  }
+
+  function drawLayeredNumber(ctx, text, x, y, style) {
+    const {
+      fill,
+      outline,
+      keyline = "#000000",
+      font,
+      skew = -0.14,
+      shadow = true,
+    } = style;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.translate(Math.round(x), Math.round(y));
+    ctx.transform(1, 0, skew, 1, 0, 0);
+    ctx.font = font;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+
+    if (shadow) {
+      ctx.shadowColor = "rgba(0,0,0,0.55)";
+      ctx.shadowBlur = 6;
+      ctx.shadowOffsetY = 2;
+    }
+
+    ctx.strokeStyle = keyline;
+    ctx.lineWidth = 10;
+    ctx.strokeText(text, 0, 0);
+
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetY = 0;
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = 6;
+    ctx.strokeText(text, 0, 0);
+
+    ctx.fillStyle = fill;
+    ctx.fillText(text, 0, 0);
+    ctx.restore();
+  }
+
+  function cardTierStyle(rank, movementClass) {
+    if (rank === 1) {
+      return {
+        border: "#ffd23f",
+        glow: "rgba(255,210,63,0.35)",
+        rankColor: "#ffd23f",
+        subtitleColor: "#ffd23f",
+      };
+    }
+    if (rank === 2) {
+      return {
+        border: "#d8d8d8",
+        glow: "rgba(200,200,200,0.25)",
+        rankColor: "#f0f0f0",
+        subtitleColor: "#c8c8c8",
+      };
+    }
+    if (rank === 3) {
+      return {
+        border: "#cd7f32",
+        glow: "rgba(205,127,50,0.3)",
+        rankColor: "#e8a55a",
+        subtitleColor: "#cd7f32",
+      };
+    }
+    if (movementClass === "positive") {
+      return {
+        border: "#2ecc71",
+        glow: "rgba(46,204,113,0.18)",
+        rankColor: "#ffffff",
+        subtitleColor: "#45d65a",
+      };
+    }
+    if (movementClass === "negative") {
+      return {
+        border: "#ff3030",
+        glow: "rgba(255,48,48,0.2)",
+        rankColor: "#ffffff",
+        subtitleColor: "#ff5050",
+      };
+    }
+    if (movementClass === "new") {
+      return {
+        border: "#ffd23f",
+        glow: "rgba(255,210,63,0.22)",
+        rankColor: "#ffffff",
+        subtitleColor: "#ffd23f",
+      };
+    }
+    return {
+      border: "rgba(255,255,255,0.18)",
+      glow: "rgba(255,255,255,0.05)",
+      rankColor: "#ffffff",
+      subtitleColor: "#cccccc",
+    };
+  }
+
+  function drawHeader(ctx, week, assets, layout) {
+    const { bpLogo, prophetLogo } = assets;
+    drawImageContain(ctx, bpLogo.img, layout.padX, layout.padTop, 290, 68, {
+      hAlign: "left",
+      vAlign: "top",
+    });
+
+    drawTextItalic(
+      ctx,
+      normalizeSeasonLabel(week.seasonName),
+      layout.padX + 4,
+      92,
+      `900 italic 26px ${FONT_DISPLAY}`,
+      "#e50914",
+      "left",
     );
+
+    drawTextItalic(
+      ctx,
+      "POWER RANKINGS",
+      EXPORT_WIDTH / 2,
+      78,
+      `900 italic 78px ${FONT_DISPLAY}`,
+      "#ffffff",
+      "center",
+    );
+
+    drawImageContain(ctx, prophetLogo.img, EXPORT_WIDTH - layout.padX - 120, 8, 120, 120, {
+      hAlign: "right",
+      vAlign: "top",
+    });
+
+    drawTextItalic(
+      ctx,
+      "POWER RANKINGS & RACE ANALYSIS",
+      EXPORT_WIDTH - layout.padX - 4,
+      118,
+      `900 italic 11px ${FONT_BODY}`,
+      "#e50914",
+      "right",
+    );
+
+    const barY = layout.headerBottom - 6;
+    ctx.fillStyle = "#3a0000";
+    ctx.fillRect(layout.padX, barY, EXPORT_WIDTH - layout.padX * 2, layout.subbarH);
+    ctx.fillStyle = "#6e0000";
+    ctx.fillRect(layout.padX, barY, (EXPORT_WIDTH - layout.padX * 2) / 2, layout.subbarH);
+
+    ctx.strokeStyle = "#b80000";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(layout.padX + 0.5, barY + 0.5, EXPORT_WIDTH - layout.padX * 2 - 1, layout.subbarH - 1);
+
+    const raceLabel = `RACE ${Number(week.raceNumber)} RANKINGS`;
+    const published = formatPublishedUpper(week.publishedDate);
+
+    drawTextItalic(
+      ctx,
+      raceLabel,
+      layout.padX + 16,
+      barY + 26,
+      `900 italic 18px ${FONT_BODY}`,
+      "#ffffff",
+      "left",
+    );
+    drawTextItalic(
+      ctx,
+      published,
+      EXPORT_WIDTH - layout.padX - 16,
+      barY + 26,
+      `900 italic 16px ${FONT_BODY}`,
+      "#f2f2f2",
+      "right",
+    );
+  }
+
+  function drawRankingCard(ctx, entry, bounds, driverAsset) {
+    const { x, y, w, h } = bounds;
+    const tier = cardTierStyle(entry.rank, entry.movementClass);
+    const colors = driverAsset.colors;
+
+    ctx.save();
+    ctx.shadowColor = tier.glow;
+    ctx.shadowBlur = entry.rank <= 3 || entry.movementClass === "new" ? 16 : 8;
+    ctx.fillStyle = "rgba(12,12,12,0.94)";
+    ctx.fillRect(x, y, w, h);
+    ctx.shadowBlur = 0;
+
+    const bgGrad = ctx.createLinearGradient(x, y, x, y + h);
+    bgGrad.addColorStop(0, "rgba(28,28,28,0.95)");
+    bgGrad.addColorStop(1, "rgba(4,4,4,0.98)");
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(x + 1, y + 1, w - 2, h - 2);
+
+    ctx.strokeStyle = tier.border;
+    ctx.lineWidth = entry.rank === 1 ? 3 : 2;
+    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+    ctx.restore();
+
+    drawTextItalic(
+      ctx,
+      String(entry.rank),
+      x + 12,
+      y + 52,
+      `900 italic 52px ${FONT_DISPLAY}`,
+      tier.rankColor,
+      "left",
+    );
+
+    let moveColor = "#888888";
+    if (entry.movementClass === "positive") moveColor = "#45d65a";
+    if (entry.movementClass === "negative") moveColor = "#ff2323";
+    if (entry.movementClass === "new") moveColor = "#ffd23f";
+
+    drawTextItalic(
+      ctx,
+      entry.movementText,
+      x + w - 12,
+      y + 36,
+      `900 italic 20px ${FONT_BODY}`,
+      moveColor,
+      "right",
+    );
+
+    const photoBox = { x: x + 8, y: y + 44, w: w - 16, h: h - 118 };
+    const photoImg = driverAsset.photo?.img;
+    if (photoImg) {
+      drawImageContain(ctx, photoImg, photoBox.x, photoBox.y, photoBox.w, photoBox.h, {
+        hAlign: "right",
+        vAlign: "bottom",
+      });
+    }
+
+    const numText = entry.carNumber || "—";
+    drawLayeredNumber(ctx, numText, x + 14, y + h - 78, {
+      fill: colors.fill,
+      outline: colors.outline,
+      keyline: colors.keyline || "#000000",
+      font: `900 italic 86px ${FONT_DISPLAY}`,
+    });
+
+    drawTextItalic(
+      ctx,
+      entry.driverName.toUpperCase(),
+      x + 12,
+      y + h - 38,
+      `900 italic 19px ${FONT_BODY}`,
+      "#ffffff",
+      "left",
+    );
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.font = `700 italic 13px ${FONT_BODY}`;
+    ctx.fillStyle = tier.subtitleColor;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    const subLines = wrapText(ctx, entry.subtitle, w - 24);
+    subLines.forEach((line, i) => {
+      ctx.fillText(line, Math.round(x + 12) + 0.5, Math.round(y + h - 18 + i * 15) + 0.5);
+    });
+    ctx.restore();
+  }
+
+  function drawHonorableMention(ctx, entry, bounds, driverAsset) {
+    const { x, y, w, h } = bounds;
+    const colors = driverAsset.colors;
+
+    ctx.fillStyle = "rgba(0,0,0,0.42)";
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = "#444";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+
+    drawLayeredNumber(ctx, entry.carNumber || "—", x + 18, y + h - 28, {
+      fill: colors.fill,
+      outline: colors.outline,
+      keyline: colors.keyline || "#000000",
+      font: `900 italic 64px ${FONT_DISPLAY}`,
+      shadow: true,
+    });
+
+    const photoImg = driverAsset.photo?.img;
+    if (photoImg) {
+      drawImageContain(ctx, photoImg, x + 96, y + 8, 88, h - 16, {
+        hAlign: "center",
+        vAlign: "bottom",
+      });
+    }
+
+    drawTextItalic(
+      ctx,
+      entry.driverName.toUpperCase(),
+      x + 196,
+      y + h / 2 + 10,
+      `900 italic 26px ${FONT_BODY}`,
+      "#ffffff",
+      "left",
+    );
+  }
+
+  function drawHonorableSection(ctx, week, assets, layout) {
+    const mentions = assets.mentions;
+    if (!mentions.length) return;
+
+    const barX = layout.padX;
+    const barW = EXPORT_WIDTH - layout.padX * 2;
+    const barY = layout.honorableY;
+
+    ctx.fillStyle = "#8b0000";
+    ctx.fillRect(barX, barY, barW, 34);
+    ctx.strokeStyle = "#ff3030";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(barX + 0.5, barY + 0.5, barW - 1, 33);
+
+    drawTextItalic(
+      ctx,
+      "HONORABLE MENTIONS",
+      EXPORT_WIDTH / 2,
+      barY + 24,
+      `900 italic 20px ${FONT_DISPLAY}`,
+      "#ffffff",
+      "center",
+    );
+
+    const panelY = barY + 40;
+    const panelH = layout.honorableH - 44;
+    const gap = 12;
+    const panelW = (barW - gap * (mentions.length - 1)) / mentions.length;
+
+    mentions.forEach((entry, index) => {
+      const x = barX + index * (panelW + gap);
+      const asset = assets.driverAssets.get(entry.driverId || entry.driverName);
+      if (!asset) return;
+      drawHonorableMention(ctx, entry, { x, y: panelY, w: panelW, h: panelH }, asset);
+    });
+  }
+
+  function drawFooter(ctx, layout) {
+    ctx.strokeStyle = "#b80000";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(layout.padX, layout.footerY - 10);
+    ctx.lineTo(EXPORT_WIDTH - layout.padX, layout.footerY - 10);
+    ctx.stroke();
+
+    drawTextItalic(
+      ctx,
+      "FAST DRIVERS. CLOSE RACING. BIG FUN.",
+      EXPORT_WIDTH / 2,
+      layout.footerY + 14,
+      `900 14px ${FONT_BODY}`,
+      "#ffffff",
+      "center",
+    );
+  }
+
+  async function renderPowerRankingsDiscordCanvas(week, options = {}) {
+    validateWeek(week);
+    const fontInfo = await ensureFontsReady();
+    const assets = await preloadExportAssets(week);
+    const layout = computeLayout(assets.mentions.length);
+
+    const canvas = document.createElement("canvas");
+    canvas.width = EXPORT_WIDTH;
+    canvas.height = EXPORT_HEIGHT;
+    const ctx = canvas.getContext("2d", { alpha: false });
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+
+    drawCarbonBackground(ctx);
+    drawHeader(ctx, week, assets, layout);
+
+    assets.entries.forEach((entry, index) => {
+      const col = index % 5;
+      const row = Math.floor(index / 5);
+      const x = layout.padX + col * (layout.cardW + layout.colGap);
+      const y = layout.gridTop + row * (layout.rowH + layout.rowGap);
+      const driverAsset = assets.driverAssets.get(entry.driverId || entry.driverName);
+      drawRankingCard(
+        ctx,
+        entry,
+        { x, y, w: layout.cardW, h: layout.rowH },
+        driverAsset,
+      );
+    });
+
+    drawHonorableSection(ctx, week, assets, layout);
+    drawFooter(ctx, layout);
+
+    const blob = await new Promise((resolve, reject) => {
+      canvas.toBlob(
+        (result) => {
+          if (result) resolve(result);
+          else reject(new Error("PNG export failed."));
+        },
+        "image/png",
+        1,
+      );
+    });
+
+    lastRenderDiagnostics = {
+      canvasInternalResolution: `${EXPORT_WIDTH}×${EXPORT_HEIGHT}`,
+      outputResolution: `${EXPORT_WIDTH}×${EXPORT_HEIGHT}`,
+      fontsUsed: fontInfo.fontsUsed,
+      fontFallbackRequired: fontInfo.fallbackRequired,
+      impactLoaded: fontInfo.impactLoaded,
+      narrowLoaded: fontInfo.narrowLoaded,
+    };
+    console.log("[pr-discord-export] render complete", lastRenderDiagnostics);
+
+    return {
+      canvas,
+      blob,
+      raceNumber: Number(week.raceNumber),
+      width: EXPORT_WIDTH,
+      height: EXPORT_HEIGHT,
+      diagnostics: lastRenderDiagnostics,
+      ...options,
+    };
+  }
+
+  function downloadCanvasPng(canvasOrBlob, filename) {
+    if (canvasOrBlob instanceof Blob) {
+      downloadBlob(canvasOrBlob, filename);
+      return;
+    }
+    canvasOrBlob.toBlob((blob) => {
+      if (blob) downloadBlob(blob, filename);
+    }, "image/png", 1);
   }
 
   function downloadBlob(blob, filename) {
@@ -587,171 +1123,32 @@
     URL.revokeObjectURL(url);
   }
 
-  function formatDiscordEntryText(entry) {
-    const normalized = normalizeEntry(entry);
-    const num = normalized.carNumber ? ` #${normalized.carNumber}` : "";
-    const movement =
-      normalized.movementText && normalized.movementText !== "—"
-        ? ` (${normalized.movementText})`
-        : "";
-    const lines = [`**#${normalized.rank} ${normalized.driverName}${num}**${movement}`];
-    if (normalized.subtitle) lines.push(`*${normalized.subtitle}*`);
-    if (normalized.writeup) lines.push(normalized.writeup);
-    return lines.join("\n");
-  }
-
-  async function buildDiscordText(week) {
-    const raceNumber = Number(week.raceNumber);
-    const trackName = await resolveTrackName(raceNumber, week);
-    const raceLine = trackName
-      ? `Race ${raceNumber} • ${trackName}`
-      : `Race ${raceNumber}`;
-    const published = formatPublishedDate(week.publishedDate);
-    const entries = (week.entries || [])
-      .slice()
-      .sort((a, b) => Number(a.rank) - Number(b.rank))
-      .slice(0, 10);
-
-    const lines = [
-      "**POWER RANKINGS**",
-      raceLine,
-      "Presented by The Pedal Prophet",
-    ];
-    if (published) lines.push(`Published ${published}`);
-    lines.push("");
-
-    for (const entry of entries) {
-      lines.push(formatDiscordEntryText(entry));
-      lines.push("");
-    }
-
-    lines.push("_Blazing Pedals Truck Series_");
-    return lines.join("\n").trim() + "\n";
-  }
-
-  async function copyDiscordText(week) {
-    const text = await buildDiscordText(week);
-    if (!navigator.clipboard?.writeText) {
-      throw new Error("Clipboard access is not available in this browser.");
-    }
-    await navigator.clipboard.writeText(text);
-    return text;
-  }
-
-  async function downloadDiscordText(week) {
-    const raceNumber = validateWeek(week);
-    const text = await buildDiscordText(week);
-    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
-    downloadBlob(blob, `bp-power-rankings-race-${raceNumber}.txt`);
-    return text;
-  }
-
-  function validateWeek(week) {
-    if (!week) throw new Error("No rankings loaded to export.");
-    const raceNumber = Number(week.raceNumber);
-    if (!Number.isInteger(raceNumber) || raceNumber < 1) {
-      throw new Error("Valid race number is required before exporting.");
-    }
-    const entries = (week.entries || []).filter(
-      (entry) => entry.driverName || entry.driverId,
-    );
-    if (entries.length < 10) {
-      throw new Error("All 10 rankings must have drivers before exporting.");
-    }
-    return raceNumber;
-  }
-
   async function renderWeekToPng(week, options = {}) {
-    if (typeof html2canvas !== "function") {
-      throw new Error("Export library failed to load. Refresh and try again.");
-    }
-
-    const raceNumber = validateWeek(week);
-    const host = getExportHost();
-    host.innerHTML = buildExportHtml(week);
-    const root = host.querySelector(".pr-discord-export-root");
-    if (!root) throw new Error("Could not build export layout.");
-
-    host.style.visibility = "visible";
-
-    try {
-      if (document.fonts?.ready) {
-        await document.fonts.ready;
-      }
-      await preloadExportImages(root);
-      await applyTruckColorsToExportRoot(root, week);
-      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-
-      const canvas = await html2canvas(root, {
-        backgroundColor: "#0a0a0a",
-        scale: CANVAS_SCALE,
-        useCORS: true,
-        allowTaint: false,
-        logging: false,
-        width: EXPORT_WIDTH,
-        height: EXPORT_HEIGHT,
-        windowWidth: EXPORT_WIDTH,
-        windowHeight: EXPORT_HEIGHT,
-        scrollX: 0,
-        scrollY: 0,
-        ...options.canvasOptions,
-      });
-
-      if (canvas.width !== EXPORT_WIDTH || canvas.height !== EXPORT_HEIGHT) {
-        const fitted = document.createElement("canvas");
-        fitted.width = EXPORT_WIDTH;
-        fitted.height = EXPORT_HEIGHT;
-        const ctx = fitted.getContext("2d");
-        ctx.drawImage(canvas, 0, 0, EXPORT_WIDTH, EXPORT_HEIGHT);
-        canvas.width = EXPORT_WIDTH;
-        canvas.height = EXPORT_HEIGHT;
-        const targetCtx = canvas.getContext("2d");
-        targetCtx.drawImage(fitted, 0, 0);
-      }
-
-      const blob = await new Promise((resolve, reject) => {
-        canvas.toBlob(
-          (result) => {
-            if (result) resolve(result);
-            else reject(new Error("PNG export failed."));
-          },
-          "image/png",
-          1,
-        );
-      });
-
-      return {
-        raceNumber,
-        blob,
-        canvas,
-        width: EXPORT_WIDTH,
-        height: EXPORT_HEIGHT,
-      };
-    } finally {
-      host.innerHTML = "";
-      host.style.visibility = "hidden";
-    }
+    return renderPowerRankingsDiscordCanvas(week, options);
   }
 
-  async function exportWeek(week, options = {}) {
-    const result = await renderWeekToPng(week, options);
-    downloadBlob(result.blob, `bp-power-rankings-race-${result.raceNumber}.png`);
+  async function downloadWeekPng(week) {
+    const result = await renderPowerRankingsDiscordCanvas(week);
+    downloadBlob(
+      result.blob,
+      `blazing-pedals-power-rankings-race-${result.raceNumber}.png`,
+    );
     return result;
   }
 
-  async function downloadWeekPng(week, options = {}) {
-    return exportWeek(week, options);
+  async function previewWeekPng(week) {
+    const result = await renderPowerRankingsDiscordCanvas(week);
+    const objectUrl = URL.createObjectURL(result.blob);
+    return { ...result, objectUrl };
   }
 
-  async function previewWeekPng(week, options = {}) {
-    const result = await renderWeekToPng(week, options);
-    const url = URL.createObjectURL(result.blob);
-    return { ...result, objectUrl: url };
+  async function exportWeek(week) {
+    return downloadWeekPng(week);
   }
 
   function buildWeekFromAdminForm(formData, driverOptions = [], profileById = {}) {
     const byDriverId = Object.fromEntries(
-      (driverOptions || []).map((driver) => [String(driver.driver_id), driver]),
+      (driverOptions || []).map((d) => [String(d.driver_id), d]),
     );
 
     const mapDriverEntry = (entry, rank) => {
@@ -769,12 +1166,17 @@
         ? formatMovementDisplay(movementParsed.movement, movementParsed.movementType)
         : formatMovementDisplay(0, "unchanged");
 
+      const carImageUrl =
+        driverCarImageUrl(profile) ||
+        driverCarImageUrl(driver) ||
+        stripUrlQuery(driver.car_image_url || driver.carImageUrl || "");
+
       return {
         rank,
-        driverId: entry.driverId,
+        driverId: String(entry.driverId || ""),
         driverName: name,
         carNumber: driver.car_number || profile?.car_number || "",
-        carImageUrl: driverCarImageUrl(profile),
+        carImageUrl,
         photoUrl: driverPhotoUrl(profile, name),
         movement: movementParsed?.movement ?? 0,
         movementType: movementParsed?.movementType,
@@ -804,23 +1206,73 @@
     };
   }
 
+  function formatDiscordEntryText(entry) {
+    const normalized = normalizeEntry(entry);
+    const num = normalized.carNumber ? ` #${normalized.carNumber}` : "";
+    const movement =
+      normalized.movementText && normalized.movementText !== "—"
+        ? ` (${normalized.movementText})`
+        : "";
+    const lines = [`**#${normalized.rank} ${normalized.driverName}${num}**${movement}`];
+    if (normalized.subtitle) lines.push(`*${normalized.subtitle}*`);
+    if (normalized.writeup) lines.push(normalized.writeup);
+    return lines.join("\n");
+  }
+
+  async function buildDiscordText(week) {
+    const raceNumber = Number(week.raceNumber);
+    const trackName = await resolveTrackName(raceNumber, week);
+    const raceLine = trackName ? `Race ${raceNumber} • ${trackName}` : `Race ${raceNumber}`;
+    const published = formatPublishedDate(week.publishedDate);
+    const entries = (week.entries || [])
+      .slice()
+      .sort((a, b) => Number(a.rank) - Number(b.rank))
+      .slice(0, 10);
+
+    const lines = ["**POWER RANKINGS**", raceLine, "Presented by The Pedal Prophet"];
+    if (published) lines.push(`Published ${published}`);
+    lines.push("");
+    for (const entry of entries) {
+      lines.push(formatDiscordEntryText(entry));
+      lines.push("");
+    }
+    lines.push("_Blazing Pedals Truck Series_");
+    return lines.join("\n").trim() + "\n";
+  }
+
+  async function copyDiscordText(week) {
+    const text = await buildDiscordText(week);
+    if (!navigator.clipboard?.writeText) {
+      throw new Error("Clipboard access is not available in this browser.");
+    }
+    await navigator.clipboard.writeText(text);
+    return text;
+  }
+
+  async function downloadDiscordText(week) {
+    const raceNumber = validateWeek(week);
+    const text = await buildDiscordText(week);
+    downloadBlob(new Blob([text], { type: "text/plain;charset=utf-8" }), `bp-power-rankings-race-${raceNumber}.txt`);
+    return text;
+  }
+
   window.BPPowerRankingsDiscordExport = {
     EXPORT_WIDTH,
     EXPORT_HEIGHT,
-    CANVAS_SCALE,
     PLACEHOLDER,
     buildWeekFromAdminForm,
+    renderPowerRankingsDiscordCanvas,
+    renderWeekToPng,
     exportWeek,
     downloadWeekPng,
     previewWeekPng,
-    renderWeekToPng,
-    buildExportHtml,
-    renderCardHtml,
+    downloadCanvasPng,
     resolveTrackName,
     buildPointsRaceTrackMap,
     buildDiscordText,
     copyDiscordText,
     downloadDiscordText,
-    resolveTruckColors,
+    loadImageAsset,
+    getLastRenderDiagnostics: () => lastRenderDiagnostics,
   };
 })();
