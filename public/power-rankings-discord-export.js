@@ -6,20 +6,23 @@
   const NON_POINTS_LABEL_PATTERN = /\b(duel|duels|non-points|exhibition|clash)\b/i;
   const BP_LOGO = "/assets/logos/New%20Clean%20Logo.png";
   const PROPHET_LOGO = "/assets/logos/pedal-prophet-logo.png";
-  const TRUCK_COLOR_CACHE_KEY = "bp_pr_truck_colors_v2";
+  const TRUCK_COLOR_CACHE_KEY = "bp_pr_suit_colors_v1";
+  const WATERMARK_OPACITY = 0.26;
+  const WATERMARK_SIZE = 960;
 
   const FONT_DISPLAY = 'Impact, "Arial Narrow", "Roboto Condensed", Arial, sans-serif';
   const FONT_BODY = '"Arial Narrow", "Roboto Condensed", Impact, Arial, sans-serif';
 
   let scheduleTrackMapCache = null;
-  const truckColorCache = new Map();
+  const suitColorCache = new Map();
   const imageAssetCache = new Map();
   let lastRenderDiagnostics = null;
+  let lastSuitColorReport = [];
 
   try {
     const stored = JSON.parse(localStorage.getItem(TRUCK_COLOR_CACHE_KEY) || "{}");
     Object.entries(stored).forEach(([key, value]) => {
-      if (value?.fill && value?.outline) truckColorCache.set(key, value);
+      if (value?.fill && value?.outline) suitColorCache.set(key, value);
     });
   } catch {
     /* ignore */
@@ -29,7 +32,7 @@
     try {
       localStorage.setItem(
         TRUCK_COLOR_CACHE_KEY,
-        JSON.stringify(Object.fromEntries(truckColorCache.entries())),
+        JSON.stringify(Object.fromEntries(suitColorCache.entries())),
       );
     } catch {
       /* ignore */
@@ -292,54 +295,165 @@
     return 0.2126 * ch(r) + 0.7152 * ch(g) + 0.0722 * ch(b);
   }
 
-  function isIgnorableSample(r, g, b, a) {
-    if (a < 140) return true;
-    const max = Math.max(r, g, b);
-    const min = Math.min(r, g, b);
-    const light = (max + min) / 510;
-    if (light < 0.06 || light > 0.92) return true;
-    const sat = max === 0 ? 0 : (max - min) / max;
-    if (sat < 0.14 && light > 0.15 && light < 0.88) return true;
+  function rgbToHsv(r, g, b) {
+    const rn = r / 255;
+    const gn = g / 255;
+    const bn = b / 255;
+    const max = Math.max(rn, gn, bn);
+    const min = Math.min(rn, gn, bn);
+    const d = max - min;
+    let h = 0;
+    if (d > 0) {
+      if (max === rn) h = ((gn - bn) / d) % 6;
+      else if (max === gn) h = (bn - rn) / d + 2;
+      else h = (rn - gn) / d + 4;
+      h *= 60;
+      if (h < 0) h += 360;
+    }
+    const s = max === 0 ? 0 : d / max;
+    const v = max;
+    return { h, s, v };
+  }
+
+  function isSkinTone(r, g, b) {
+    const { h, s, v } = rgbToHsv(r, g, b);
+    if (v < 0.18 || v > 0.95) return false;
+    if (h <= 55 || h >= 340) {
+      if (s >= 0.08 && s <= 0.62 && v >= 0.28 && v <= 0.9) {
+        if (s < 0.38 && r > g && g >= b * 0.85) return true;
+      }
+    }
+    if (r > 180 && g > 130 && b > 110 && r > g && g > b && r - b < 95 && s < 0.55) {
+      return true;
+    }
     return false;
   }
 
-  function sampleTruckColorsFromImage(img) {
-    const sampleSize = 128;
+  function suitPixelWeight(u, v) {
+    if (v < 0.32 || v > 0.96) return 0;
+    let weight = 1;
+    if (v >= 0.4 && v <= 0.82) weight = 3;
+    if ((u <= 0.26 || u >= 0.74) && v >= 0.36 && v <= 0.78) weight = Math.max(weight, 2);
+    if (v >= 0.32 && v < 0.4) weight = Math.min(weight, 1);
+    return weight;
+  }
+
+  function isIgnorableSuitPixel(r, g, b, a) {
+    if (a < 120) return true;
+    if (isSkinTone(r, g, b)) return true;
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const light = (max + min) / 510;
+    if (light < 0.07 || light > 0.94) return true;
+    const sat = max === 0 ? 0 : (max - min) / max;
+    if (sat < 0.2) return true;
+    return false;
+  }
+
+  function pickKeylineForFill(fillHex) {
+    const rgb = parseHex(fillHex);
+    if (!rgb) return "#000000";
+    const lum = relativeLuminance(rgb.r, rgb.g, rgb.b);
+    return lum > 0.45 ? "#000000" : "#ffffff";
+  }
+
+  function hashFallbackSuitColors(driverName) {
+    let hash = 0;
+    const name = String(driverName || "driver");
+    for (let i = 0; i < name.length; i += 1) {
+      hash = (hash * 33 + name.charCodeAt(i)) >>> 0;
+    }
+    const hue = hash % 360;
+    const hue2 = (hue + 140 + (hash % 80)) % 360;
+    const fill = hslToHex(hue, 0.72, 0.48);
+    const outline = hslToHex(hue2, 0.65, 0.22);
+    return { fill, outline };
+  }
+
+  function hslToHex(h, s, l) {
+    const c = (1 - Math.abs(2 * l - 1)) * s;
+    const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+    const m = l - c / 2;
+    let rn = 0;
+    let gn = 0;
+    let bn = 0;
+    if (h < 60) {
+      rn = c;
+      gn = x;
+    } else if (h < 120) {
+      rn = x;
+      gn = c;
+    } else if (h < 180) {
+      gn = c;
+      bn = x;
+    } else if (h < 240) {
+      gn = x;
+      bn = c;
+    } else if (h < 300) {
+      rn = x;
+      bn = c;
+    } else {
+      rn = c;
+      bn = x;
+    }
+    return rgbToHex((rn + m) * 255, (gn + m) * 255, (bn + m) * 255);
+  }
+
+  function sampleSuitColorsFromPortrait(img) {
+    const iw = img.naturalWidth || 1;
+    const ih = img.naturalHeight || 1;
+    const sampleW = 140;
+    const sampleH = Math.max(80, Math.round(sampleW * (ih / iw)));
     const canvas = document.createElement("canvas");
-    canvas.width = sampleSize;
-    canvas.height = sampleSize;
+    canvas.width = sampleW;
+    canvas.height = sampleH;
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
-    const iw = img.naturalWidth || sampleSize;
-    const ih = img.naturalHeight || sampleSize;
-    const crop = 0.12;
-    const sx = iw * crop;
-    const sy = ih * crop;
-    const sw = iw * (1 - crop * 2);
-    const sh = ih * (1 - crop * 2);
-    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sampleSize, sampleSize);
+    ctx.drawImage(img, 0, 0, sampleW, sampleH);
 
     let data;
     try {
-      data = ctx.getImageData(0, 0, sampleSize, sampleSize).data;
+      data = ctx.getImageData(0, 0, sampleW, sampleH).data;
     } catch (err) {
       return { error: "canvas_tainted_cors", detail: String(err?.message || err) };
     }
 
     const buckets = new Map();
-    for (let i = 0; i < data.length; i += 4) {
-      const r = data[i];
-      const g = data[i + 1];
-      const b = data[i + 2];
-      const a = data[i + 3];
-      if (isIgnorableSample(r, g, b, a)) continue;
-      const key = `${Math.round(r / 20) * 20},${Math.round(g / 20) * 20},${Math.round(b / 20) * 20}`;
-      buckets.set(key, (buckets.get(key) || 0) + 1);
+    let darkBucketWeight = 0;
+
+    for (let py = 0; py < sampleH; py += 1) {
+      for (let px = 0; px < sampleW; px += 1) {
+        const u = px / sampleW;
+        const v = py / sampleH;
+        const weight = suitPixelWeight(u, v);
+        if (!weight) continue;
+
+        const i = (py * sampleW + px) * 4;
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        const a = data[i + 3];
+        if (isIgnorableSuitPixel(r, g, b, a)) {
+          const max = Math.max(r, g, b);
+          const min = Math.min(r, g, b);
+          const light = (max + min) / 510;
+          const sat = max === 0 ? 0 : (max - min) / max;
+          if (light < 0.2 && sat < 0.25 && v >= 0.38 && v <= 0.85) {
+            darkBucketWeight += weight;
+          }
+          continue;
+        }
+
+        const { s } = rgbToHsv(r, g, b);
+        const satBoost = s >= 0.45 ? 2 : s >= 0.28 ? 1.5 : 1;
+        const key = `${Math.round(r / 18) * 18},${Math.round(g / 18) * 18},${Math.round(b / 18) * 18}`;
+        buckets.set(key, (buckets.get(key) || 0) + weight * satBoost);
+      }
     }
 
     const sorted = [...buckets.entries()].sort((a, b) => b[1] - a[1]);
-    if (!sorted.length) return { error: "no_dominant_colors" };
+    if (!sorted.length) return { error: "no_suit_colors_found" };
 
     const toRgb = (key) => {
       const [r, g, b] = key.split(",").map(Number);
@@ -347,137 +461,122 @@
     };
 
     const primary = toRgb(sorted[0][0]);
-    let secondary = primary;
+    let secondary = null;
+
     for (let i = 1; i < sorted.length; i += 1) {
       const candidate = toRgb(sorted[i][0]);
-      if (colorDistance(primary, candidate) >= 55) {
+      if (colorDistance(primary, candidate) >= 50) {
         secondary = candidate;
         break;
       }
     }
-    if (colorDistance(primary, secondary) < 55) {
-      secondary = {
-        r: Math.min(255, Math.max(0, 255 - primary.r)),
-        g: Math.min(255, Math.max(0, 255 - primary.g)),
-        b: Math.min(255, Math.max(0, 255 - primary.b)),
-      };
+
+    if (!secondary && darkBucketWeight >= sorted[0][1] * 0.35) {
+      secondary = { r: 0, g: 0, b: 0 };
+    }
+
+    if (!secondary) {
+      for (let i = 1; i < sorted.length; i += 1) {
+        const candidate = toRgb(sorted[i][0]);
+        const { s } = rgbToHsv(candidate.r, candidate.g, candidate.b);
+        if (s >= 0.22 && colorDistance(primary, candidate) >= 35) {
+          secondary = candidate;
+          break;
+        }
+      }
+    }
+
+    if (!secondary) {
+      const lum = relativeLuminance(primary.r, primary.g, primary.b);
+      secondary = lum > 0.35 ? { r: 0, g: 0, b: 0 } : { r: 255, g: 255, b: 255 };
     }
 
     const fill = rgbToHex(primary.r, primary.g, primary.b);
     const outline = rgbToHex(secondary.r, secondary.g, secondary.b);
-    const fillLum = relativeLuminance(primary.r, primary.g, primary.b);
-    const outlineLum = relativeLuminance(secondary.r, secondary.g, secondary.b);
-    const ratio =
-      (Math.max(fillLum, outlineLum) + 0.05) / (Math.min(fillLum, outlineLum) + 0.05);
-    const keyline = ratio < 2.5 ? (fillLum > 0.5 ? "#000000" : "#ffffff") : null;
+    const keyline = pickKeylineForFill(fill);
 
     return { fill, outline, keyline, error: null };
   }
 
-  function cacheKeyForTruck(url, driverId) {
-    const image = stripUrlQuery(url);
-    if (image) return image;
-    if (driverId) return `driver:${driverId}`;
+  function cacheKeyForSuit(photoUrl, driverId) {
+    const image = stripUrlQuery(photoUrl);
+    if (image) return `suit:${image}`;
+    if (driverId) return `suit:driver:${driverId}`;
     return "";
   }
 
-  function getCachedTruckColors(driverId, carImageUrl) {
-    const key = cacheKeyForTruck(carImageUrl, driverId);
-    if (!key) return null;
-    return truckColorCache.get(key) || null;
-  }
-
-  async function resolveTruckColorsForDriver(entry, truckImgResult) {
+  async function resolveSuitColorsForDriver(entry, photoResult) {
     const driverName = entry.driverName;
-    const truckUrl = stripUrlQuery(entry.carImageUrl);
-    const key = cacheKeyForTruck(truckUrl, entry.driverId);
-    const cached = key ? truckColorCache.get(key) : null;
+    const photoUrl = stripUrlQuery(entry.photoUrl);
+    const key = cacheKeyForSuit(photoUrl, entry.driverId);
+    const cached = key ? suitColorCache.get(key) : null;
 
     const logDiag = (diag) => {
-      console.log("[pr-discord-export] truck colors", diag);
+      const line = `[pr-discord-export] suit colors — ${diag.driverName}: fill=${diag.primaryFill} outline=${diag.innerOutline} keyline=${diag.outerKeyline}${diag.fallback ? ` FALLBACK (${diag.reason})` : diag.cached ? " (cached)" : ""}`;
+      if (diag.fallback) console.warn(line, diag);
+      else console.log(line, diag);
+      lastSuitColorReport.push(diag);
       return diag;
     };
 
-    if (cached) {
+    if (cached && !cached.fallback) {
       return logDiag({
         driverName,
-        truckImageUrl: truckUrl || "(none)",
-        primary: cached.fill,
-        secondary: cached.outline,
-        keyline: cached.keyline,
+        photoUrl: photoUrl || "(none)",
+        primaryFill: cached.fill,
+        innerOutline: cached.outline,
+        outerKeyline: cached.keyline,
         cached: true,
-        fallback: cached.fallback === true,
-        reason: cached.fallbackReason || null,
+        fallback: false,
+        reason: null,
       });
     }
 
-    if (!truckUrl) {
+    if (!photoResult?.ok || !photoResult.img || photoResult.usedFallback) {
+      const hashed = hashFallbackSuitColors(driverName);
       const fallback = {
-        fill: "#e50914",
-        outline: "#1a1a1a",
-        keyline: "#ffffff",
+        fill: hashed.fill,
+        outline: hashed.outline,
+        keyline: pickKeylineForFill(hashed.fill),
         fallback: true,
-        fallbackReason: "missing_truck_image_url",
+        fallbackReason: photoResult?.error || "driver_photo_unavailable",
       };
       if (key) {
-        truckColorCache.set(key, fallback);
+        suitColorCache.set(key, fallback);
         persistTruckColorCache();
       }
       return logDiag({
         driverName,
-        truckImageUrl: "(none)",
-        primary: fallback.fill,
-        secondary: fallback.outline,
-        keyline: fallback.keyline,
+        photoUrl: photoUrl || "(none)",
+        primaryFill: fallback.fill,
+        innerOutline: fallback.outline,
+        outerKeyline: fallback.keyline,
         cached: false,
         fallback: true,
         reason: fallback.fallbackReason,
       });
     }
 
-    if (!truckImgResult?.ok || !truckImgResult.img) {
-      const fallback = {
-        fill: "#e50914",
-        outline: "#111111",
-        keyline: "#ffffff",
-        fallback: true,
-        fallbackReason: truckImgResult?.error || "truck_image_load_failed",
-      };
-      if (key) {
-        truckColorCache.set(key, fallback);
-        persistTruckColorCache();
-      }
-      return logDiag({
-        driverName,
-        truckImageUrl: truckUrl,
-        primary: fallback.fill,
-        secondary: fallback.outline,
-        keyline: fallback.keyline,
-        cached: false,
-        fallback: true,
-        reason: fallback.fallbackReason,
-      });
-    }
-
-    const sampled = sampleTruckColorsFromImage(truckImgResult.img);
+    const sampled = sampleSuitColorsFromPortrait(photoResult.img);
     if (sampled.error) {
+      const hashed = hashFallbackSuitColors(driverName);
       const fallback = {
-        fill: "#e50914",
-        outline: "#111111",
-        keyline: "#ffffff",
+        fill: hashed.fill,
+        outline: hashed.outline,
+        keyline: pickKeylineForFill(hashed.fill),
         fallback: true,
         fallbackReason: sampled.error,
       };
       if (key) {
-        truckColorCache.set(key, fallback);
+        suitColorCache.set(key, fallback);
         persistTruckColorCache();
       }
       return logDiag({
         driverName,
-        truckImageUrl: truckUrl,
-        primary: fallback.fill,
-        secondary: fallback.outline,
-        keyline: fallback.keyline,
+        photoUrl,
+        primaryFill: fallback.fill,
+        innerOutline: fallback.outline,
+        outerKeyline: fallback.keyline,
         cached: false,
         fallback: true,
         reason: `${sampled.error}${sampled.detail ? `: ${sampled.detail}` : ""}`,
@@ -487,23 +586,28 @@
     const resolved = {
       fill: sampled.fill,
       outline: sampled.outline,
-      keyline: sampled.keyline || "#000000",
+      keyline: sampled.keyline,
       fallback: false,
     };
     if (key) {
-      truckColorCache.set(key, resolved);
+      suitColorCache.set(key, resolved);
       persistTruckColorCache();
     }
     return logDiag({
       driverName,
-      truckImageUrl: truckUrl,
-      primary: resolved.fill,
-      secondary: resolved.outline,
-      keyline: resolved.keyline,
+      photoUrl,
+      primaryFill: resolved.fill,
+      innerOutline: resolved.outline,
+      outerKeyline: resolved.keyline,
       cached: false,
       fallback: false,
       reason: null,
     });
+  }
+
+  /** @deprecated renamed — suit colors from portrait */
+  function sampleTruckColorsFromImage(img) {
+    return sampleSuitColorsFromPortrait(img);
   }
 
   async function preloadExportAssets(week) {
@@ -531,6 +635,7 @@
 
     const driverAssets = new Map();
     const allPeople = [...entries, ...mentions];
+    lastSuitColorReport = [];
 
     await Promise.all(
       allPeople.map(async (entry) => {
@@ -538,27 +643,17 @@
           type: "driver-photo",
           driverName: entry.driverName,
         });
-        const truckUrl = entry.carImageUrl || "";
-        const truck = truckUrl
-          ? await loadImageAsset(truckUrl, {
-              type: "truck-image",
-              driverName: entry.driverName,
-            })
-          : { ok: false, img: null, url: "", usedFallback: false, error: "no_url" };
 
-        const diag = await resolveTruckColorsForDriver(entry, truck);
+        const diag = await resolveSuitColorsForDriver(entry, photo);
         const colors = {
-          fill: diag.primary,
-          outline: diag.secondary,
-          keyline: diag.keyline,
-          primary: diag.primary,
-          secondary: diag.secondary,
+          fill: diag.primaryFill,
+          outline: diag.innerOutline,
+          keyline: diag.outerKeyline,
           diagnostic: diag,
         };
         driverAssets.set(entry.driverId || entry.driverName, {
           entry,
           photo,
-          truck,
           colors,
         });
       }),
@@ -637,6 +732,23 @@
     ctx.restore();
   }
 
+  function drawProphetWatermark(ctx, prophetImg, layout) {
+    const cx = EXPORT_WIDTH / 2;
+    const cy = layout.padTop + (layout.gridTop + layout.rowH * 0.52 - layout.padTop) * 0.55;
+    const x = cx - WATERMARK_SIZE / 2;
+    const y = cy - WATERMARK_SIZE / 2;
+
+    ctx.save();
+    ctx.globalAlpha = WATERMARK_OPACITY;
+    ctx.filter = "grayscale(100%) brightness(0.62) contrast(0.95)";
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(prophetImg, x, y, WATERMARK_SIZE, WATERMARK_SIZE);
+    ctx.filter = "none";
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
   function drawImageContain(ctx, img, x, y, w, h, opts = {}) {
     const { hAlign = "center", vAlign = "bottom" } = opts;
     const iw = img.naturalWidth || 1;
@@ -706,19 +818,19 @@
     ctx.lineCap = "round";
 
     if (shadow) {
-      ctx.shadowColor = "rgba(0,0,0,0.55)";
-      ctx.shadowBlur = 6;
+      ctx.shadowColor = "rgba(0,0,0,0.45)";
+      ctx.shadowBlur = 5;
       ctx.shadowOffsetY = 2;
     }
 
     ctx.strokeStyle = keyline;
-    ctx.lineWidth = 10;
+    ctx.lineWidth = 9;
     ctx.strokeText(text, 0, 0);
 
     ctx.shadowBlur = 0;
     ctx.shadowOffsetY = 0;
     ctx.strokeStyle = outline;
-    ctx.lineWidth = 6;
+    ctx.lineWidth = 5;
     ctx.strokeText(text, 0, 0);
 
     ctx.fillStyle = fill;
@@ -1053,6 +1165,7 @@
     ctx.imageSmoothingQuality = "high";
 
     drawCarbonBackground(ctx);
+    drawProphetWatermark(ctx, assets.prophetLogo.img, layout);
     drawHeader(ctx, week, assets, layout);
 
     assets.entries.forEach((entry, index) => {
@@ -1090,8 +1203,28 @@
       fontFallbackRequired: fontInfo.fallbackRequired,
       impactLoaded: fontInfo.impactLoaded,
       narrowLoaded: fontInfo.narrowLoaded,
+      prophetWatermark: {
+        opacity: WATERMARK_OPACITY,
+        sizePx: WATERMARK_SIZE,
+        centerX: EXPORT_WIDTH / 2,
+        centerY:
+          layout.padTop + (layout.gridTop + layout.rowH * 0.52 - layout.padTop) * 0.55,
+        filter: "grayscale(100%) brightness(0.62)",
+      },
+      suitColors: lastSuitColorReport,
     };
     console.log("[pr-discord-export] render complete", lastRenderDiagnostics);
+    if (lastSuitColorReport.length) {
+      console.table(
+        lastSuitColorReport.map((row) => ({
+          driver: row.driverName,
+          fill: row.primaryFill,
+          outline: row.innerOutline,
+          keyline: row.outerKeyline,
+          fallback: row.fallback ? row.reason : "",
+        })),
+      );
+    }
 
     return {
       canvas,
@@ -1274,5 +1407,6 @@
     downloadDiscordText,
     loadImageAsset,
     getLastRenderDiagnostics: () => lastRenderDiagnostics,
+    getLastSuitColorReport: () => lastSuitColorReport,
   };
 })();
