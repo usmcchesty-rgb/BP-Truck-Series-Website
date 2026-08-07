@@ -6,9 +6,13 @@
   const NON_POINTS_LABEL_PATTERN = /\b(duel|duels|non-points|exhibition|clash)\b/i;
   const BP_LOGO = "/assets/logos/New%20Clean%20Logo.png";
   const PROPHET_LOGO = "/assets/logos/pedal-prophet-logo.png";
-  const TRUCK_COLOR_CACHE_KEY = "bp_pr_suit_colors_v1";
-  const WATERMARK_OPACITY = 0.26;
+  const TRUCK_COLOR_CACHE_KEY = "bp_pr_suit_colors_v3";
+  const WATERMARK_OPACITY = 0.35;
   const WATERMARK_SIZE = 960;
+  const CARD_PANEL_ALPHA = 0.86;
+  const PORTRAIT_SCALE = 1.1;
+  const HONORABLE_PORTRAIT_SCALE = 1.62;
+  const CARD_BOTTOM_TEXT_PAD = 9;
 
   const FONT_DISPLAY = 'Impact, "Arial Narrow", "Roboto Condensed", Arial, sans-serif';
   const FONT_BODY = '"Arial Narrow", "Roboto Condensed", Impact, Arial, sans-serif';
@@ -70,6 +74,33 @@
   function formatPublishedUpper(value) {
     const formatted = formatPublishedDate(value);
     return formatted ? `PUBLISHED ${formatted.toUpperCase()}` : "";
+  }
+
+  function formatTrackLabel(trackName) {
+    return String(trackName || "")
+      .trim()
+      .toUpperCase();
+  }
+
+  function cleanDriverDisplayName(name, carNumber = "") {
+    let cleaned = String(name || "").trim();
+    const num = String(carNumber || "").trim();
+    if (!cleaned) return cleaned;
+
+    if (num) {
+      if (cleaned.endsWith(` #${num}`)) cleaned = cleaned.slice(0, -(num.length + 2)).trim();
+      if (cleaned.endsWith(`#${num}`)) cleaned = cleaned.slice(0, -(num.length + 1)).trim();
+      if (cleaned.endsWith(num) && cleaned.length > num.length) {
+        const prefix = cleaned.slice(0, -num.length);
+        if (prefix && !/\d$/.test(prefix)) cleaned = prefix.trim();
+      }
+    }
+
+    return cleaned;
+  }
+
+  function displayNameForEntry(entry) {
+    return cleanDriverDisplayName(entry.driverName, entry.carNumber);
   }
 
   function normalizeSeasonLabel(seasonName) {
@@ -152,7 +183,10 @@
     return {
       rank: Number(entry.rank),
       driverId: String(entry.driverId || entry.driver_id || ""),
-      driverName: entry.driverName || "Unknown Driver",
+      driverName: cleanDriverDisplayName(
+        entry.driverName || "Unknown Driver",
+        entry.carNumber,
+      ),
       carNumber: String(entry.carNumber || "").trim(),
       carImageUrl: entry.carImageUrl || "",
       photoUrl: entry.photoUrl || PLACEHOLDER,
@@ -338,16 +372,56 @@
     return weight;
   }
 
+  function isNeutralGrayNoise(r, g, b) {
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const light = (max + min) / 510;
+    const sat = max === 0 ? 0 : (max - min) / max;
+    return sat < 0.12 && light > 0.1 && light < 0.88;
+  }
+
+  function isLightSuitFabric(r, g, b, a) {
+    if (a < 120 || isSkinTone(r, g, b)) return false;
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const light = (max + min) / 510;
+    const sat = max === 0 ? 0 : (max - min) / max;
+    return light >= 0.7 && sat < 0.24;
+  }
+
+  function isDarkSuitFabric(r, g, b, a) {
+    if (a < 120 || isSkinTone(r, g, b)) return false;
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const light = (max + min) / 510;
+    const sat = max === 0 ? 0 : (max - min) / max;
+    return light < 0.18 && sat < 0.35;
+  }
+
+  function isSaturatedSuitPixel(r, g, b, a) {
+    if (a < 120 || isSkinTone(r, g, b)) return false;
+    if (isLightSuitFabric(r, g, b, a) || isDarkSuitFabric(r, g, b, a)) return false;
+    if (isNeutralGrayNoise(r, g, b)) return false;
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const light = (max + min) / 510;
+    if (light < 0.07 || light > 0.94) return false;
+    const { s } = rgbToHsv(r, g, b);
+    return s >= 0.22;
+  }
+
   function isIgnorableSuitPixel(r, g, b, a) {
     if (a < 120) return true;
     if (isSkinTone(r, g, b)) return true;
+    if (isLightSuitFabric(r, g, b, a)) return false;
+    if (isDarkSuitFabric(r, g, b, a)) return false;
+    if (isSaturatedSuitPixel(r, g, b, a)) return false;
+    if (isNeutralGrayNoise(r, g, b)) return true;
     const max = Math.max(r, g, b);
     const min = Math.min(r, g, b);
     const light = (max + min) / 510;
     if (light < 0.07 || light > 0.94) return true;
-    const sat = max === 0 ? 0 : (max - min) / max;
-    if (sat < 0.2) return true;
-    return false;
+    return true;
   }
 
   function pickKeylineForFill(fillHex) {
@@ -419,8 +493,10 @@
       return { error: "canvas_tainted_cors", detail: String(err?.message || err) };
     }
 
-    const buckets = new Map();
-    let darkBucketWeight = 0;
+    const satBuckets = new Map();
+    let lightWeight = 0;
+    let darkWeight = 0;
+    let totalWeighted = 0;
 
     for (let py = 0; py < sampleH; py += 1) {
       for (let px = 0; px < sampleW; px += 1) {
@@ -434,61 +510,85 @@
         const g = data[i + 1];
         const b = data[i + 2];
         const a = data[i + 3];
-        if (isIgnorableSuitPixel(r, g, b, a)) {
-          const max = Math.max(r, g, b);
-          const min = Math.min(r, g, b);
-          const light = (max + min) / 510;
-          const sat = max === 0 ? 0 : (max - min) / max;
-          if (light < 0.2 && sat < 0.25 && v >= 0.38 && v <= 0.85) {
-            darkBucketWeight += weight;
-          }
+        if (a < 120 || isSkinTone(r, g, b)) continue;
+
+        if (isLightSuitFabric(r, g, b, a)) {
+          lightWeight += weight;
+          totalWeighted += weight;
           continue;
         }
+        if (isDarkSuitFabric(r, g, b, a)) {
+          darkWeight += weight;
+          totalWeighted += weight;
+          continue;
+        }
+        if (!isSaturatedSuitPixel(r, g, b, a)) continue;
 
+        totalWeighted += weight;
         const { s } = rgbToHsv(r, g, b);
-        const satBoost = s >= 0.45 ? 2 : s >= 0.28 ? 1.5 : 1;
+        const satBoost = s >= 0.45 ? 2.2 : s >= 0.28 ? 1.6 : 1;
         const key = `${Math.round(r / 18) * 18},${Math.round(g / 18) * 18},${Math.round(b / 18) * 18}`;
-        buckets.set(key, (buckets.get(key) || 0) + weight * satBoost);
+        satBuckets.set(key, (satBuckets.get(key) || 0) + weight * satBoost);
       }
     }
 
-    const sorted = [...buckets.entries()].sort((a, b) => b[1] - a[1]);
-    if (!sorted.length) return { error: "no_suit_colors_found" };
+    const sorted = [...satBuckets.entries()].sort((a, b) => b[1] - a[1]);
+    const lightRatio = totalWeighted > 0 ? lightWeight / totalWeighted : 0;
 
     const toRgb = (key) => {
       const [r, g, b] = key.split(",").map(Number);
       return { r, g, b };
     };
 
+    const pickSecondaryFromSorted = (primaryRgb, list) => {
+      for (let i = 0; i < list.length; i += 1) {
+        const candidate = toRgb(list[i][0]);
+        if (colorDistance(primaryRgb, candidate) >= 45) return candidate;
+      }
+      if (darkWeight >= (list[0]?.[1] || 0) * 0.3) return { r: 0, g: 0, b: 0 };
+      const lum = relativeLuminance(primaryRgb.r, primaryRgb.g, primaryRgb.b);
+      return lum > 0.4 ? { r: 0, g: 0, b: 0 } : { r: 255, g: 255, b: 255 };
+    };
+
+    if (lightRatio >= 0.3 && sorted.length) {
+      const accent = toRgb(sorted[0][0]);
+      const fill = "#ffffff";
+      let outline = rgbToHex(accent.r, accent.g, accent.b);
+      if (darkWeight > lightWeight * 0.25) outline = "#000000";
+      else if (sorted.length > 1) {
+        const second = toRgb(sorted[1][0]);
+        if (colorDistance(accent, second) >= 40) outline = rgbToHex(second.r, second.g, second.b);
+      }
+      return { fill, outline, keyline: pickKeylineForFill(fill), error: null, lightDominant: true };
+    }
+
+    if (!sorted.length) {
+      if (lightRatio >= 0.45) {
+        return {
+          fill: "#ffffff",
+          outline: darkWeight > 0 ? "#000000" : "#e50914",
+          keyline: "#000000",
+          error: null,
+          lightDominant: true,
+        };
+      }
+      return { error: "no_suit_colors_found" };
+    }
+
     const primary = toRgb(sorted[0][0]);
-    let secondary = null;
+    let secondary = pickSecondaryFromSorted(primary, sorted.slice(1));
 
-    for (let i = 1; i < sorted.length; i += 1) {
-      const candidate = toRgb(sorted[i][0]);
-      if (colorDistance(primary, candidate) >= 50) {
-        secondary = candidate;
-        break;
+    if (relativeLuminance(primary.r, primary.g, primary.b) < 0.12 && sorted.length > 1) {
+      const accent = toRgb(sorted[1][0]);
+      if (colorDistance(primary, accent) >= 40) {
+        const fill = rgbToHex(accent.r, accent.g, accent.b);
+        return {
+          fill,
+          outline: "#000000",
+          keyline: pickKeylineForFill(fill),
+          error: null,
+        };
       }
-    }
-
-    if (!secondary && darkBucketWeight >= sorted[0][1] * 0.35) {
-      secondary = { r: 0, g: 0, b: 0 };
-    }
-
-    if (!secondary) {
-      for (let i = 1; i < sorted.length; i += 1) {
-        const candidate = toRgb(sorted[i][0]);
-        const { s } = rgbToHsv(candidate.r, candidate.g, candidate.b);
-        if (s >= 0.22 && colorDistance(primary, candidate) >= 35) {
-          secondary = candidate;
-          break;
-        }
-      }
-    }
-
-    if (!secondary) {
-      const lum = relativeLuminance(primary.r, primary.g, primary.b);
-      secondary = lum > 0.35 ? { r: 0, g: 0, b: 0 } : { r: 255, g: 255, b: 255 };
     }
 
     const fill = rgbToHex(primary.r, primary.g, primary.b);
@@ -496,6 +596,11 @@
     const keyline = pickKeylineForFill(fill);
 
     return { fill, outline, keyline, error: null };
+  }
+
+  /** legacy name */
+  function sampleTruckColorsFromImage(img) {
+    return sampleSuitColorsFromPortrait(img);
   }
 
   function cacheKeyForSuit(photoUrl, driverId) {
@@ -603,11 +708,6 @@
       fallback: false,
       reason: null,
     });
-  }
-
-  /** @deprecated renamed — suit colors from portrait */
-  function sampleTruckColorsFromImage(img) {
-    return sampleSuitColorsFromPortrait(img);
   }
 
   async function preloadExportAssets(week) {
@@ -734,13 +834,13 @@
 
   function drawProphetWatermark(ctx, prophetImg, layout) {
     const cx = EXPORT_WIDTH / 2;
-    const cy = layout.padTop + (layout.gridTop + layout.rowH * 0.52 - layout.padTop) * 0.55;
+    const cy = layout.gridTop + layout.rowH * 0.72;
     const x = cx - WATERMARK_SIZE / 2;
     const y = cy - WATERMARK_SIZE / 2;
 
     ctx.save();
     ctx.globalAlpha = WATERMARK_OPACITY;
-    ctx.filter = "grayscale(100%) brightness(0.62) contrast(0.95)";
+    ctx.filter = "grayscale(100%) brightness(0.58) contrast(0.92)";
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
     ctx.drawImage(prophetImg, x, y, WATERMARK_SIZE, WATERMARK_SIZE);
@@ -750,10 +850,10 @@
   }
 
   function drawImageContain(ctx, img, x, y, w, h, opts = {}) {
-    const { hAlign = "center", vAlign = "bottom" } = opts;
+    const { hAlign = "center", vAlign = "bottom", scaleMult = 1 } = opts;
     const iw = img.naturalWidth || 1;
     const ih = img.naturalHeight || 1;
-    const scale = Math.min(w / iw, h / ih);
+    const scale = Math.min(w / iw, h / ih) * scaleMult;
     const dw = iw * scale;
     const dh = ih * scale;
     let dx = x + (w - dw) / 2;
@@ -895,7 +995,7 @@
     };
   }
 
-  function drawHeader(ctx, week, assets, layout) {
+  function drawHeader(ctx, week, assets, layout, trackName) {
     const { bpLogo, prophetLogo } = assets;
     drawImageContain(ctx, bpLogo.img, layout.padX, layout.padTop, 290, 68, {
       hAlign: "left",
@@ -949,6 +1049,7 @@
 
     const raceLabel = `RACE ${Number(week.raceNumber)} RANKINGS`;
     const published = formatPublishedUpper(week.publishedDate);
+    const trackLabel = formatTrackLabel(trackName);
 
     drawTextItalic(
       ctx,
@@ -959,6 +1060,17 @@
       "#ffffff",
       "left",
     );
+    if (trackLabel) {
+      drawTextItalic(
+        ctx,
+        trackLabel,
+        EXPORT_WIDTH / 2,
+        barY + 26,
+        `900 italic 17px ${FONT_BODY}`,
+        "#f0f0f0",
+        "center",
+      );
+    }
     drawTextItalic(
       ctx,
       published,
@@ -975,16 +1087,17 @@
     const tier = cardTierStyle(entry.rank, entry.movementClass);
     const colors = driverAsset.colors;
 
+    const panelAlpha = CARD_PANEL_ALPHA;
     ctx.save();
     ctx.shadowColor = tier.glow;
     ctx.shadowBlur = entry.rank <= 3 || entry.movementClass === "new" ? 16 : 8;
-    ctx.fillStyle = "rgba(12,12,12,0.94)";
+    ctx.fillStyle = `rgba(12,12,12,${panelAlpha})`;
     ctx.fillRect(x, y, w, h);
     ctx.shadowBlur = 0;
 
     const bgGrad = ctx.createLinearGradient(x, y, x, y + h);
-    bgGrad.addColorStop(0, "rgba(28,28,28,0.95)");
-    bgGrad.addColorStop(1, "rgba(4,4,4,0.98)");
+    bgGrad.addColorStop(0, `rgba(28,28,28,${Math.min(0.98, panelAlpha + 0.06)})`);
+    bgGrad.addColorStop(1, `rgba(4,4,4,${Math.min(0.98, panelAlpha + 0.08)})`);
     ctx.fillStyle = bgGrad;
     ctx.fillRect(x + 1, y + 1, w - 2, h - 2);
 
@@ -1018,28 +1131,31 @@
       "right",
     );
 
-    const photoBox = { x: x + 8, y: y + 44, w: w - 16, h: h - 118 };
+    const bottomPad = CARD_BOTTOM_TEXT_PAD;
+    const photoBox = { x: x + 6, y: y + 42, w: w - 10, h: h - 112 };
     const photoImg = driverAsset.photo?.img;
     if (photoImg) {
       drawImageContain(ctx, photoImg, photoBox.x, photoBox.y, photoBox.w, photoBox.h, {
         hAlign: "right",
         vAlign: "bottom",
+        scaleMult: PORTRAIT_SCALE,
       });
     }
 
     const numText = entry.carNumber || "—";
-    drawLayeredNumber(ctx, numText, x + 14, y + h - 78, {
+    drawLayeredNumber(ctx, numText, x + 14, y + h - 82 - bottomPad, {
       fill: colors.fill,
       outline: colors.outline,
       keyline: colors.keyline || "#000000",
       font: `900 italic 86px ${FONT_DISPLAY}`,
     });
 
+    const nameText = displayNameForEntry(entry).toUpperCase();
     drawTextItalic(
       ctx,
-      entry.driverName.toUpperCase(),
-      x + 12,
-      y + h - 38,
+      nameText,
+      x + 118,
+      y + h - 42 - bottomPad,
       `900 italic 19px ${FONT_BODY}`,
       "#ffffff",
       "left",
@@ -1051,9 +1167,13 @@
     ctx.fillStyle = tier.subtitleColor;
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
-    const subLines = wrapText(ctx, entry.subtitle, w - 24);
+    const subLines = wrapText(ctx, entry.subtitle, w - 130);
     subLines.forEach((line, i) => {
-      ctx.fillText(line, Math.round(x + 12) + 0.5, Math.round(y + h - 18 + i * 15) + 0.5);
+      ctx.fillText(
+        line,
+        Math.round(x + 118) + 0.5,
+        Math.round(y + h - 22 - bottomPad + i * 15) + 0.5,
+      );
     });
     ctx.restore();
   }
@@ -1078,16 +1198,17 @@
 
     const photoImg = driverAsset.photo?.img;
     if (photoImg) {
-      drawImageContain(ctx, photoImg, x + 96, y + 8, 88, h - 16, {
+      drawImageContain(ctx, photoImg, x + 88, y + 6, 132, h - 12, {
         hAlign: "center",
         vAlign: "bottom",
+        scaleMult: HONORABLE_PORTRAIT_SCALE,
       });
     }
 
     drawTextItalic(
       ctx,
-      entry.driverName.toUpperCase(),
-      x + 196,
+      displayNameForEntry(entry).toUpperCase(),
+      x + 232,
       y + h / 2 + 10,
       `900 italic 26px ${FONT_BODY}`,
       "#ffffff",
@@ -1156,6 +1277,7 @@
     const fontInfo = await ensureFontsReady();
     const assets = await preloadExportAssets(week);
     const layout = computeLayout(assets.mentions.length);
+    const trackName = await resolveTrackName(Number(week.raceNumber), week);
 
     const canvas = document.createElement("canvas");
     canvas.width = EXPORT_WIDTH;
@@ -1166,7 +1288,7 @@
 
     drawCarbonBackground(ctx);
     drawProphetWatermark(ctx, assets.prophetLogo.img, layout);
-    drawHeader(ctx, week, assets, layout);
+    drawHeader(ctx, week, assets, layout, trackName);
 
     assets.entries.forEach((entry, index) => {
       const col = index % 5;
@@ -1207,10 +1329,14 @@
         opacity: WATERMARK_OPACITY,
         sizePx: WATERMARK_SIZE,
         centerX: EXPORT_WIDTH / 2,
-        centerY:
-          layout.padTop + (layout.gridTop + layout.rowH * 0.52 - layout.padTop) * 0.55,
-        filter: "grayscale(100%) brightness(0.62)",
+        centerY: layout.gridTop + layout.rowH * 0.72,
+        filter: "grayscale(100%) brightness(0.58)",
       },
+      cardPanelAlpha: CARD_PANEL_ALPHA,
+      portraitScale: PORTRAIT_SCALE,
+      honorablePortraitScale: HONORABLE_PORTRAIT_SCALE,
+      cardBottomTextPad: CARD_BOTTOM_TEXT_PAD,
+      trackName: trackName || null,
       suitColors: lastSuitColorReport,
     };
     console.log("[pr-discord-export] render complete", lastRenderDiagnostics);
@@ -1288,12 +1414,14 @@
       const driver =
         byDriverId[String(entry.driverId)] || profileById[String(entry.driverId)] || {};
       const profile = profileById[String(entry.driverId)] || driver;
-      const name =
+      const name = cleanDriverDisplayName(
         driver.display_name ||
-        driver.displayName ||
-        profile?.display_name ||
-        profile?.iracing_name ||
-        "Unknown Driver";
+          driver.displayName ||
+          profile?.display_name ||
+          profile?.iracing_name ||
+          "Unknown Driver",
+        driver.car_number || profile?.car_number || "",
+      );
       const movementParsed = parseMovementInput(entry.movement);
       const movement = movementParsed
         ? formatMovementDisplay(movementParsed.movement, movementParsed.movementType)

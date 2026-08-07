@@ -192,6 +192,7 @@ create table if not exists power_rankings_weeks (
 
 -- Existing deployments: run once to add The Pedal Prophet weekly article column
 -- alter table power_rankings_weeks add column if not exists prophet_take text;
+-- alter table power_rankings_weeks add column if not exists track_name text;
 
 create unique index if not exists power_rankings_weeks_race_number_idx
   on power_rankings_weeks (race_number);

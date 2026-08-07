@@ -134,6 +134,7 @@ function normalizeWeek(week, entries, honorable, profiles) {
     publishedDate: week.published_date || null,
     published: week.published === true,
     label: weekLabel(week),
+    trackName: week.track_name || week.trackName || '',
     prophetTake: week.prophet_take || '',
     entries: (entries || [])
       .filter((e) => e.week_id === week.id)
@@ -257,6 +258,7 @@ async function saveWeekBundle(body, publish = false) {
     race_number: raceNumber,
     published_date: body.publishedDate || body.published_date || null,
     prophet_take: String(body.prophetTake ?? body.prophet_take ?? ''),
+    track_name: String(body.trackName ?? body.track_name ?? '').trim() || null,
     updated_at: new Date().toISOString(),
   };
 

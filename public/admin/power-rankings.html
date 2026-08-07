@@ -417,6 +417,8 @@
     let activePrTab = 'rankings';
     let siteSeasonName = 'Season 11';
     let discordPreviewObjectUrl = null;
+    let scheduleTrackByRace = {};
+    let currentWeekTrackName = '';
 
     function switchPrTab(tabId) {
       activePrTab = tabId === 'formula' ? 'formula' : 'rankings';
@@ -498,12 +500,21 @@
       return maxSaved + 1;
     }
 
+    function trackNameForRaceNumber(raceNumber) {
+      const rn = Number(raceNumber);
+      if (!Number.isInteger(rn) || rn < 1) return '';
+      return String(scheduleTrackByRace[rn] || '').trim();
+    }
+
     async function refreshSuggestedRaceNumber() {
       suggestedRaceNumber = suggestNextRaceNumberFromWeeks();
 
       try {
         const res = await fetch('/api/schedule');
         const data = await res.json();
+        if (window.BPPowerRankingsDiscordExport?.buildPointsRaceTrackMap) {
+          scheduleTrackByRace = BPPowerRankingsDiscordExport.buildPointsRaceTrackMap(data.races || []);
+        }
         const completed = (data.races || []).filter((race) => race.winner).length;
         if (completed > 0 || data.raceProgression?.suggestedPointsRaceNumber) {
           const progressionSuggested = Number(data.raceProgression?.suggestedPointsRaceNumber);
@@ -1538,6 +1549,7 @@
         raceNumber: readRaceNumberInput(),
         publishedDate: $('#publishedDate').value || null,
         prophetTake: $('#prophetTake')?.value || '',
+        trackName: trackNameForRaceNumber(readRaceNumberInput()) || currentWeekTrackName || '',
         entries,
         honorableMentions,
       };
@@ -1568,6 +1580,7 @@
     async function startNewWeek() {
       await refreshSuggestedRaceNumber();
       currentWeekId = null;
+      currentWeekTrackName = '';
       $('#editorTitle').textContent = 'Create Rankings';
       setRaceNumberInput(suggestedRaceNumber);
       $('#publishedDate').value = new Date().toISOString().slice(0, 10);
@@ -1583,6 +1596,7 @@
 
     function loadWeekIntoForm(week, options = {}) {
       currentWeekId = week.id;
+      currentWeekTrackName = String(week.trackName || '').trim();
       $('#editorTitle').textContent = `Edit ${week.label || `Race ${week.raceNumber}`}`;
       setRaceNumberInput(week.raceNumber);
       $('#publishedDate').value = week.publishedDate || '';
@@ -2111,7 +2125,13 @@
       }
 
       return BPPowerRankingsDiscordExport.buildWeekFromAdminForm(
-        { ...formData, seasonName: siteSeasonName },
+        {
+          ...formData,
+          seasonName: siteSeasonName,
+          trackName:
+            formData.trackName ||
+            trackNameForRaceNumber(formData.raceNumber),
+        },
         driverOptions,
         profileById
       );
