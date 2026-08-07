@@ -8,8 +8,9 @@
   const PROPHET_LOGO = "/assets/logos/pedal-prophet-logo.png";
   const TRUCK_COLOR_CACHE_KEY = "bp_pr_suit_colors_v3";
   const WATERMARK_OPACITY = 0.35;
-  const WATERMARK_SIZE = 960;
-  const CARD_PANEL_ALPHA = 0.86;
+  const WATERMARK_SIZE = 1080;
+  const WATERMARK_CENTER_Y = 520;
+  const CARD_PANEL_ALPHA = 0.72;
   const PORTRAIT_SCALE = 1.1;
   const HONORABLE_PORTRAIT_SCALE = 1.62;
   const CARD_BOTTOM_TEXT_PAD = 9;
@@ -834,13 +835,13 @@
 
   function drawProphetWatermark(ctx, prophetImg, layout) {
     const cx = EXPORT_WIDTH / 2;
-    const cy = layout.gridTop + layout.rowH * 0.72;
+    const cy = WATERMARK_CENTER_Y;
     const x = cx - WATERMARK_SIZE / 2;
     const y = cy - WATERMARK_SIZE / 2;
 
     ctx.save();
     ctx.globalAlpha = WATERMARK_OPACITY;
-    ctx.filter = "grayscale(100%) brightness(0.58) contrast(0.92)";
+    ctx.filter = "grayscale(100%) brightness(0.72) contrast(0.95)";
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
     ctx.drawImage(prophetImg, x, y, WATERMARK_SIZE, WATERMARK_SIZE);
@@ -883,6 +884,73 @@
     }
     lines.push(line);
     return lines.slice(0, 2);
+  }
+
+  function drawFittedCenteredText(
+    ctx,
+    text,
+    centerX,
+    y,
+    maxWidth,
+    fontWeightStyle,
+    startingFontSize,
+    minimumFontSize,
+    fill,
+  ) {
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = fill;
+    let size = startingFontSize;
+    let font = `${fontWeightStyle} ${size}px ${FONT_BODY}`;
+    while (size > minimumFontSize) {
+      ctx.font = font;
+      if (ctx.measureText(text).width <= maxWidth) break;
+      size -= 1;
+      font = `${fontWeightStyle} ${size}px ${FONT_BODY}`;
+    }
+    ctx.font = font;
+    ctx.fillText(text, Math.round(centerX) + 0.5, Math.round(y) + 0.5);
+    ctx.restore();
+    return size;
+  }
+
+  function drawCenteredSubtitleLines(ctx, text, centerX, startY, maxWidth, fill) {
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.font = `700 italic 13px ${FONT_BODY}`;
+    ctx.fillStyle = fill;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+    const lines = wrapText(ctx, text, maxWidth);
+    lines.forEach((line, i) => {
+      ctx.fillText(line, Math.round(centerX) + 0.5, Math.round(startY + i * 15) + 0.5);
+    });
+    ctx.restore();
+  }
+
+  function drawRankNumber(ctx, rank, x, y, tier) {
+    const fontSpec = `900 italic 52px ${FONT_DISPLAY}`;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.font = fontSpec;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    const px = Math.round(x) + 0.5;
+    const py = Math.round(y) + 0.5;
+
+    if (Number(rank) === 2) {
+      const grad = ctx.createLinearGradient(px, py - 50, px, py + 2);
+      grad.addColorStop(0, "#F2F2F2");
+      grad.addColorStop(0.45, "#BFC3C8");
+      grad.addColorStop(1, "#8F949A");
+      ctx.fillStyle = grad;
+    } else {
+      ctx.fillStyle = tier.rankColor;
+    }
+    ctx.fillText(String(rank), px, py);
+    ctx.restore();
   }
 
   function drawTextItalic(ctx, text, x, y, font, fill, align = "left") {
@@ -1086,35 +1154,34 @@
     const { x, y, w, h } = bounds;
     const tier = cardTierStyle(entry.rank, entry.movementClass);
     const colors = driverAsset.colors;
+    const centerX = x + w / 2;
+    const maxTextWidth = w - 24;
+    const bottomPad = CARD_BOTTOM_TEXT_PAD;
+    const nameBaselineY = y + h - bottomPad - 30;
+    const subtitleStartY = y + h - bottomPad - 12;
+    const textZoneTop = nameBaselineY - 86;
+    const carNumBaseline = textZoneTop - 6;
 
-    const panelAlpha = CARD_PANEL_ALPHA;
     ctx.save();
-    ctx.shadowColor = tier.glow;
-    ctx.shadowBlur = entry.rank <= 3 || entry.movementClass === "new" ? 16 : 8;
-    ctx.fillStyle = `rgba(12,12,12,${panelAlpha})`;
+    const panelGrad = ctx.createLinearGradient(x, y, x, y + h);
+    panelGrad.addColorStop(0, "rgba(28,28,28,0.74)");
+    panelGrad.addColorStop(1, "rgba(5,5,5,0.70)");
+    ctx.fillStyle = panelGrad;
     ctx.fillRect(x, y, w, h);
-    ctx.shadowBlur = 0;
-
-    const bgGrad = ctx.createLinearGradient(x, y, x, y + h);
-    bgGrad.addColorStop(0, `rgba(28,28,28,${Math.min(0.98, panelAlpha + 0.06)})`);
-    bgGrad.addColorStop(1, `rgba(4,4,4,${Math.min(0.98, panelAlpha + 0.08)})`);
-    ctx.fillStyle = bgGrad;
-    ctx.fillRect(x + 1, y + 1, w - 2, h - 2);
-
-    ctx.strokeStyle = tier.border;
-    ctx.lineWidth = entry.rank === 1 ? 3 : 2;
-    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
     ctx.restore();
 
-    drawTextItalic(
-      ctx,
-      String(entry.rank),
-      x + 12,
-      y + 52,
-      `900 italic 52px ${FONT_DISPLAY}`,
-      tier.rankColor,
-      "left",
-    );
+    ctx.save();
+    ctx.strokeStyle = tier.border;
+    ctx.lineWidth = entry.rank === 1 ? 3 : 2;
+    if (tier.glow) {
+      ctx.shadowColor = tier.glow;
+      ctx.shadowBlur = entry.rank <= 3 || entry.movementClass === "new" ? 14 : 6;
+    }
+    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+    ctx.shadowBlur = 0;
+    ctx.restore();
+
+    drawRankNumber(ctx, entry.rank, x + 12, y + 52, tier);
 
     let moveColor = "#888888";
     if (entry.movementClass === "positive") moveColor = "#45d65a";
@@ -1131,8 +1198,12 @@
       "right",
     );
 
-    const bottomPad = CARD_BOTTOM_TEXT_PAD;
-    const photoBox = { x: x + 6, y: y + 42, w: w - 10, h: h - 112 };
+    const photoBox = {
+      x: x + 6,
+      y: y + 42,
+      w: w - 10,
+      h: Math.max(48, textZoneTop - (y + 42) - 4),
+    };
     const photoImg = driverAsset.photo?.img;
     if (photoImg) {
       drawImageContain(ctx, photoImg, photoBox.x, photoBox.y, photoBox.w, photoBox.h, {
@@ -1143,7 +1214,7 @@
     }
 
     const numText = entry.carNumber || "—";
-    drawLayeredNumber(ctx, numText, x + 14, y + h - 82 - bottomPad, {
+    drawLayeredNumber(ctx, numText, x + 14, carNumBaseline, {
       fill: colors.fill,
       outline: colors.outline,
       keyline: colors.keyline || "#000000",
@@ -1151,31 +1222,26 @@
     });
 
     const nameText = displayNameForEntry(entry).toUpperCase();
-    drawTextItalic(
+    drawFittedCenteredText(
       ctx,
       nameText,
-      x + 118,
-      y + h - 42 - bottomPad,
-      `900 italic 19px ${FONT_BODY}`,
+      centerX,
+      nameBaselineY,
+      maxTextWidth,
+      "900 italic",
+      19,
+      13,
       "#ffffff",
-      "left",
     );
 
-    ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.font = `700 italic 13px ${FONT_BODY}`;
-    ctx.fillStyle = tier.subtitleColor;
-    ctx.textAlign = "left";
-    ctx.textBaseline = "alphabetic";
-    const subLines = wrapText(ctx, entry.subtitle, w - 130);
-    subLines.forEach((line, i) => {
-      ctx.fillText(
-        line,
-        Math.round(x + 118) + 0.5,
-        Math.round(y + h - 22 - bottomPad + i * 15) + 0.5,
-      );
-    });
-    ctx.restore();
+    drawCenteredSubtitleLines(
+      ctx,
+      entry.subtitle,
+      centerX,
+      subtitleStartY,
+      maxTextWidth,
+      tier.subtitleColor,
+    );
   }
 
   function drawHonorableMention(ctx, entry, bounds, driverAsset) {
@@ -1329,10 +1395,11 @@
         opacity: WATERMARK_OPACITY,
         sizePx: WATERMARK_SIZE,
         centerX: EXPORT_WIDTH / 2,
-        centerY: layout.gridTop + layout.rowH * 0.72,
-        filter: "grayscale(100%) brightness(0.58)",
+        centerY: WATERMARK_CENTER_Y,
+        filter: "grayscale(100%) brightness(0.72)",
       },
       cardPanelAlpha: CARD_PANEL_ALPHA,
+      cardPanelGradient: "rgba(28,28,28,0.74) → rgba(5,5,5,0.70)",
       portraitScale: PORTRAIT_SCALE,
       honorablePortraitScale: HONORABLE_PORTRAIT_SCALE,
       cardBottomTextPad: CARD_BOTTOM_TEXT_PAD,
