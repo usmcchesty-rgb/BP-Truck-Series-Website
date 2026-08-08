@@ -6,7 +6,7 @@
   const NON_POINTS_LABEL_PATTERN = /\b(duel|duels|non-points|exhibition|clash)\b/i;
   const BP_LOGO = "/assets/logos/New%20Clean%20Logo.png";
   const PROPHET_LOGO = "/assets/logos/pedal-prophet-logo.png";
-  const TRUCK_COLOR_CACHE_KEY = "bp_pr_suit_colors_v3";
+  const TRUCK_COLOR_CACHE_KEY = "bp_pr_suit_colors_v4";
   const WATERMARK_OPACITY = 0.35;
   const WATERMARK_SIZE = 1080;
   const WATERMARK_CENTER_Y = 520;
@@ -14,9 +14,13 @@
   const PORTRAIT_SCALE = 1.1;
   const HONORABLE_PORTRAIT_SCALE = 1.62;
   const CARD_BOTTOM_TEXT_PAD = 9;
+  const RENDER_SCALE = 2;
+  const MIN_NUMBER_CONTRAST = 2.5;
 
-  const FONT_DISPLAY = 'Impact, "Arial Narrow", "Roboto Condensed", Arial, sans-serif';
-  const FONT_BODY = '"Arial Narrow", "Roboto Condensed", Impact, Arial, sans-serif';
+  // Prefer real locally-available heavy faces. Avoid unloaded "Roboto Condensed"
+  // and synthetic 900/italic faces that Canvas softens.
+  const FONT_DISPLAY = 'Impact, Haettenschweiler, "Arial Black", "Arial Narrow", Arial, sans-serif';
+  const FONT_BODY = 'Impact, "Arial Black", "Arial Narrow", Arial, sans-serif';
 
   let scheduleTrackMapCache = null;
   const suitColorCache = new Map();
@@ -245,21 +249,74 @@
   }
 
   async function ensureFontsReady() {
-    if (!document.fonts?.ready) return { fontsUsed: [FONT_DISPLAY, FONT_BODY], fallbackRequired: true };
+    if (!document.fonts?.ready) {
+      return {
+        fontsUsed: [FONT_DISPLAY, FONT_BODY],
+        fontWeightsUsed: ["bold"],
+        fallbackRequired: true,
+        warnings: ["document.fonts API unavailable"],
+      };
+    }
+
     await document.fonts.ready;
-    const probes = [
-      'italic 900 48px Impact, "Arial Narrow", sans-serif',
-      '900 48px "Arial Narrow", Impact, sans-serif',
+
+    const requiredChecks = [
+      { name: "Impact", spec: "bold 48px Impact" },
+      { name: "Arial Black", spec: 'bold 48px "Arial Black"' },
+      { name: "Arial Narrow", spec: 'bold 48px "Arial Narrow"' },
+      { name: "Arial", spec: "bold 48px Arial" },
+      { name: "Haettenschweiler", spec: "bold 48px Haettenschweiler" },
     ];
-    await Promise.all(probes.map((spec) => document.fonts.load(spec).catch(() => null)));
-    const impactOk = document.fonts.check('900 48px Impact');
-    const narrowOk = document.fonts.check('900 48px "Arial Narrow"');
+
+    await Promise.all(
+      requiredChecks.map((item) => document.fonts.load(item.spec).catch(() => null)),
+    );
+
+    const availability = {};
+    const warnings = [];
+    requiredChecks.forEach((item) => {
+      const ok = document.fonts.check(item.spec);
+      availability[item.name] = ok;
+      if (!ok) {
+        warnings.push(`Font unavailable or not loaded: ${item.name} (${item.spec})`);
+        console.warn(`[pr-discord-export] ${warnings[warnings.length - 1]}`);
+      }
+    });
+
+    const impactOk = availability.Impact;
+    const blackOk = availability["Arial Black"];
+    const narrowOk = availability["Arial Narrow"];
+    const arialOk = availability.Arial;
+
     return {
       fontsUsed: [FONT_DISPLAY, FONT_BODY],
-      fallbackRequired: !impactOk && !narrowOk,
+      fontWeightsUsed: ["bold"],
+      fallbackRequired: !impactOk && !blackOk && !narrowOk && !arialOk,
       impactLoaded: impactOk,
+      arialBlackLoaded: blackOk,
       narrowLoaded: narrowOk,
+      arialLoaded: arialOk,
+      haettenschweilerLoaded: availability.Haettenschweiler,
+      warnings,
+      renderScale: RENDER_SCALE,
     };
+  }
+
+  function resetTextRenderingState(ctx) {
+    ctx.globalAlpha = 1;
+    ctx.filter = "none";
+    ctx.shadowBlur = 0;
+    ctx.shadowColor = "transparent";
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+    ctx.lineWidth = 1;
+  }
+
+  function applySharpTextShadow(ctx) {
+    ctx.shadowColor = "rgba(0,0,0,0.85)";
+    ctx.shadowBlur = 1.5;
+    ctx.shadowOffsetX = 1;
+    ctx.shadowOffsetY = 1;
   }
 
   /**
@@ -328,6 +385,101 @@
       return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
     };
     return 0.2126 * ch(r) + 0.7152 * ch(g) + 0.0722 * ch(b);
+  }
+
+  function contrastRatioRgb(a, b) {
+    if (!a || !b) return 1;
+    const L1 = relativeLuminance(a.r, a.g, a.b);
+    const L2 = relativeLuminance(b.r, b.g, b.b);
+    const lighter = Math.max(L1, L2);
+    const darker = Math.min(L1, L2);
+    return (lighter + 0.05) / (darker + 0.05);
+  }
+
+  function contrastRatioHex(hexA, hexB) {
+    return contrastRatioRgb(parseHex(hexA), parseHex(hexB));
+  }
+
+  function isDarkRgb(rgb) {
+    if (!rgb) return true;
+    return relativeLuminance(rgb.r, rgb.g, rgb.b) <= 0.45;
+  }
+
+  function pickKeylineForSecondary(secondaryHex) {
+    const rgb = parseHex(secondaryHex);
+    if (!rgb) return "#000000";
+    return isDarkRgb(rgb) ? "#ffffff" : "#000000";
+  }
+
+  function enforceNumberLayerContrast(fillHex, outlineHex) {
+    let fill = fillHex;
+    let outline = outlineHex;
+    let contrastFallback = false;
+    let reason = null;
+
+    let fillRgb = parseHex(fill);
+    let outlineRgb = parseHex(outline);
+    let ratio = contrastRatioRgb(fillRgb, outlineRgb);
+
+    if (ratio < MIN_NUMBER_CONTRAST) {
+      const white = { r: 255, g: 255, b: 255 };
+      const black = { r: 0, g: 0, b: 0 };
+      const whiteRatio = contrastRatioRgb(fillRgb, white);
+      const blackRatio = contrastRatioRgb(fillRgb, black);
+      if (whiteRatio >= blackRatio && whiteRatio >= MIN_NUMBER_CONTRAST) {
+        outline = "#ffffff";
+        contrastFallback = true;
+        reason = `outline_contrast_boost_white (${ratio.toFixed(2)}→${whiteRatio.toFixed(2)})`;
+      } else if (blackRatio >= MIN_NUMBER_CONTRAST) {
+        outline = "#000000";
+        contrastFallback = true;
+        reason = `outline_contrast_boost_black (${ratio.toFixed(2)}→${blackRatio.toFixed(2)})`;
+      } else if (whiteRatio >= blackRatio) {
+        outline = "#ffffff";
+        contrastFallback = true;
+        reason = `outline_contrast_best_effort_white (${whiteRatio.toFixed(2)})`;
+      } else {
+        outline = "#000000";
+        contrastFallback = true;
+        reason = `outline_contrast_best_effort_black (${blackRatio.toFixed(2)})`;
+      }
+      outlineRgb = parseHex(outline);
+      ratio = contrastRatioRgb(fillRgb, outlineRgb);
+    }
+
+    let keyline = pickKeylineForSecondary(outline);
+    let keylineRgb = parseHex(keyline);
+    let keylineRatio = contrastRatioRgb(outlineRgb, keylineRgb);
+    if (keylineRatio < 1.8) {
+      keyline = isDarkRgb(outlineRgb) ? "#ffffff" : "#000000";
+      keylineRgb = parseHex(keyline);
+      keylineRatio = contrastRatioRgb(outlineRgb, keylineRgb);
+    }
+
+    // Avoid muddy triple stacks: dark/dark/black or light/light/white
+    if (
+      (isDarkRgb(fillRgb) && isDarkRgb(outlineRgb) && keyline === "#000000") ||
+      (!isDarkRgb(fillRgb) && !isDarkRgb(outlineRgb) && keyline === "#ffffff")
+    ) {
+      keyline = isDarkRgb(outlineRgb) ? "#ffffff" : "#000000";
+      contrastFallback = true;
+      reason = reason || "keyline_stack_correction";
+    }
+
+    return {
+      fill,
+      outline,
+      keyline,
+      fillOutlineContrast: contrastRatioHex(fill, outline),
+      outlineKeylineContrast: contrastRatioHex(outline, keyline),
+      contrastFallback,
+      reason,
+    };
+  }
+
+  /** @deprecated use pickKeylineForSecondary — kept for compatibility */
+  function pickKeylineForFill(fillHex) {
+    return pickKeylineForSecondary(fillHex);
   }
 
   function rgbToHsv(r, g, b) {
@@ -423,13 +575,6 @@
     const light = (max + min) / 510;
     if (light < 0.07 || light > 0.94) return true;
     return true;
-  }
-
-  function pickKeylineForFill(fillHex) {
-    const rgb = parseHex(fillHex);
-    if (!rgb) return "#000000";
-    const lum = relativeLuminance(rgb.r, rgb.g, rgb.b);
-    return lum > 0.45 ? "#000000" : "#ffffff";
   }
 
   function hashFallbackSuitColors(driverName) {
@@ -535,68 +680,138 @@
 
     const sorted = [...satBuckets.entries()].sort((a, b) => b[1] - a[1]);
     const lightRatio = totalWeighted > 0 ? lightWeight / totalWeighted : 0;
+    const maxFreq = sorted[0]?.[1] || 1;
 
     const toRgb = (key) => {
       const [r, g, b] = key.split(",").map(Number);
       return { r, g, b };
     };
 
-    const pickSecondaryFromSorted = (primaryRgb, list) => {
-      for (let i = 0; i < list.length; i += 1) {
-        const candidate = toRgb(list[i][0]);
-        if (colorDistance(primaryRgb, candidate) >= 45) return candidate;
+    const pickSecondaryByContrast = (primaryRgb, list) => {
+      const candidates = [];
+
+      list.forEach(([key, freq]) => {
+        const candidate = toRgb(key);
+        const contrast = contrastRatioRgb(primaryRgb, candidate);
+        const freqScore = freq / maxFreq;
+        // Prefer strong contrast over near-duplicate dominant colors.
+        const score = freqScore * 0.35 + Math.min(contrast / 6, 1) * 0.65;
+        candidates.push({ rgb: candidate, contrast, score, source: "suit" });
+      });
+
+      if (lightWeight > 0) {
+        const white = { r: 255, g: 255, b: 255 };
+        candidates.push({
+          rgb: white,
+          contrast: contrastRatioRgb(primaryRgb, white),
+          score: 0.25 + Math.min(contrastRatioRgb(primaryRgb, white) / 6, 1) * 0.75,
+          source: "white",
+        });
       }
-      if (darkWeight >= (list[0]?.[1] || 0) * 0.3) return { r: 0, g: 0, b: 0 };
-      const lum = relativeLuminance(primaryRgb.r, primaryRgb.g, primaryRgb.b);
-      return lum > 0.4 ? { r: 0, g: 0, b: 0 } : { r: 255, g: 255, b: 255 };
+      if (darkWeight > 0) {
+        const black = { r: 0, g: 0, b: 0 };
+        candidates.push({
+          rgb: black,
+          contrast: contrastRatioRgb(primaryRgb, black),
+          score: 0.25 + Math.min(contrastRatioRgb(primaryRgb, black) / 6, 1) * 0.75,
+          source: "black",
+        });
+      }
+
+      // Always allow white/black as valid trim even if fabric sampling was sparse.
+      const white = { r: 255, g: 255, b: 255 };
+      const black = { r: 0, g: 0, b: 0 };
+      if (!candidates.some((c) => c.source === "white")) {
+        candidates.push({
+          rgb: white,
+          contrast: contrastRatioRgb(primaryRgb, white),
+          score: Math.min(contrastRatioRgb(primaryRgb, white) / 6, 1),
+          source: "white-fallback",
+        });
+      }
+      if (!candidates.some((c) => c.source === "black")) {
+        candidates.push({
+          rgb: black,
+          contrast: contrastRatioRgb(primaryRgb, black),
+          score: Math.min(contrastRatioRgb(primaryRgb, black) / 6, 1),
+          source: "black-fallback",
+        });
+      }
+
+      candidates.sort((a, b) => {
+        const aPass = a.contrast >= MIN_NUMBER_CONTRAST ? 1 : 0;
+        const bPass = b.contrast >= MIN_NUMBER_CONTRAST ? 1 : 0;
+        if (aPass !== bPass) return bPass - aPass;
+        return b.score - a.score;
+      });
+
+      return candidates[0] || {
+        rgb: isDarkRgb(primaryRgb) ? white : black,
+        contrast: 1,
+        score: 0,
+        source: "default",
+      };
+    };
+
+    const finalizePair = (fillHex, outlineHex, extra = {}) => {
+      const enforced = enforceNumberLayerContrast(fillHex, outlineHex);
+      return {
+        fill: enforced.fill,
+        outline: enforced.outline,
+        keyline: enforced.keyline,
+        fillOutlineContrast: enforced.fillOutlineContrast,
+        outlineKeylineContrast: enforced.outlineKeylineContrast,
+        contrastFallback: enforced.contrastFallback,
+        contrastReason: enforced.reason,
+        error: null,
+        ...extra,
+      };
     };
 
     if (lightRatio >= 0.3 && sorted.length) {
       const accent = toRgb(sorted[0][0]);
       const fill = "#ffffff";
-      let outline = rgbToHex(accent.r, accent.g, accent.b);
-      if (darkWeight > lightWeight * 0.25) outline = "#000000";
-      else if (sorted.length > 1) {
-        const second = toRgb(sorted[1][0]);
-        if (colorDistance(accent, second) >= 40) outline = rgbToHex(second.r, second.g, second.b);
+      const secondaryPick = pickSecondaryByContrast(
+        { r: 255, g: 255, b: 255 },
+        sorted.map(([key, freq]) => [key, freq]),
+      );
+      let outline = rgbToHex(secondaryPick.rgb.r, secondaryPick.rgb.g, secondaryPick.rgb.b);
+      if (darkWeight > lightWeight * 0.25 && contrastRatioHex(fill, "#000000") >= MIN_NUMBER_CONTRAST) {
+        outline = "#000000";
+      } else if (sorted.length) {
+        // Prefer saturated accent over near-white trim on white suits.
+        const accentHex = rgbToHex(accent.r, accent.g, accent.b);
+        if (contrastRatioHex(fill, accentHex) >= MIN_NUMBER_CONTRAST) outline = accentHex;
       }
-      return { fill, outline, keyline: pickKeylineForFill(fill), error: null, lightDominant: true };
+      return finalizePair(fill, outline, { lightDominant: true });
     }
 
     if (!sorted.length) {
       if (lightRatio >= 0.45) {
-        return {
-          fill: "#ffffff",
-          outline: darkWeight > 0 ? "#000000" : "#e50914",
-          keyline: "#000000",
-          error: null,
+        return finalizePair("#ffffff", darkWeight > 0 ? "#000000" : "#e50914", {
           lightDominant: true,
-        };
+        });
       }
       return { error: "no_suit_colors_found" };
     }
 
-    const primary = toRgb(sorted[0][0]);
-    let secondary = pickSecondaryFromSorted(primary, sorted.slice(1));
+    let primary = toRgb(sorted[0][0]);
 
+    // Very dark primary: promote a brighter suit accent to fill when available.
     if (relativeLuminance(primary.r, primary.g, primary.b) < 0.12 && sorted.length > 1) {
-      const accent = toRgb(sorted[1][0]);
-      if (colorDistance(primary, accent) >= 40) {
-        const fill = rgbToHex(accent.r, accent.g, accent.b);
-        return {
-          fill,
-          outline: "#000000",
-          keyline: pickKeylineForFill(fill),
-          error: null,
-        };
+      const accentPick = pickSecondaryByContrast(primary, sorted.slice(1));
+      if (accentPick.contrast >= 1.8 && !isDarkRgb(accentPick.rgb)) {
+        primary = accentPick.rgb;
       }
     }
 
+    const secondaryPick = pickSecondaryByContrast(primary, sorted.slice(1));
     const fill = rgbToHex(primary.r, primary.g, primary.b);
-    const outline = rgbToHex(secondary.r, secondary.g, secondary.b);
-    const keyline = pickKeylineForFill(fill);
-
-    return { fill, outline, keyline, error: null };
+    const outline = rgbToHex(secondaryPick.rgb.r, secondaryPick.rgb.g, secondaryPick.rgb.b);
+    return finalizePair(fill, outline, {
+      secondarySource: secondaryPick.source,
+      secondaryScore: secondaryPick.score,
+    });
   }
 
   /** legacy name */
@@ -618,95 +833,151 @@
     const cached = key ? suitColorCache.get(key) : null;
 
     const logDiag = (diag) => {
-      const line = `[pr-discord-export] suit colors — ${diag.driverName}: fill=${diag.primaryFill} outline=${diag.innerOutline} keyline=${diag.outerKeyline}${diag.fallback ? ` FALLBACK (${diag.reason})` : diag.cached ? " (cached)" : ""}`;
-      if (diag.fallback) console.warn(line, diag);
+      const contrastNote =
+        diag.fillOutlineContrast != null
+          ? ` contrast=${Number(diag.fillOutlineContrast).toFixed(2)}`
+          : "";
+      const line = `[pr-discord-export] suit colors — ${diag.driverName}: fill=${diag.primaryFill} outline=${diag.innerOutline} keyline=${diag.outerKeyline}${contrastNote}${diag.fallback ? ` FALLBACK (${diag.reason})` : diag.cached ? " (cached)" : ""}${diag.contrastFallback ? ` CONTRAST_FIX (${diag.contrastReason})` : ""}`;
+      if (diag.fallback || diag.contrastFallback) console.warn(line, diag);
       else console.log(line, diag);
       lastSuitColorReport.push(diag);
       return diag;
     };
 
+    const packageColors = (fill, outline, keyline, meta = {}) => {
+      const enforced = enforceNumberLayerContrast(fill, outline || keyline);
+      return {
+        ...meta,
+        fill: enforced.fill,
+        outline: enforced.outline,
+        keyline: enforced.keyline || keyline || pickKeylineForSecondary(enforced.outline),
+        fillOutlineContrast: enforced.fillOutlineContrast,
+        outlineKeylineContrast: enforced.outlineKeylineContrast,
+        contrastFallback: Boolean(enforced.contrastFallback || meta.contrastFallback),
+        contrastReason: enforced.reason || meta.contrastReason || null,
+      };
+    };
+
     if (cached && !cached.fallback) {
+      const packaged = packageColors(cached.fill, cached.outline, cached.keyline, {
+        cached: true,
+      });
+      // Refresh cache when older low-contrast pairs are corrected.
+      if (key && packaged.contrastFallback) {
+        suitColorCache.set(key, {
+          fill: packaged.fill,
+          outline: packaged.outline,
+          keyline: packaged.keyline,
+          fallback: false,
+        });
+        persistTruckColorCache();
+      }
       return logDiag({
         driverName,
         photoUrl: photoUrl || "(none)",
-        primaryFill: cached.fill,
-        innerOutline: cached.outline,
-        outerKeyline: cached.keyline,
+        primaryFill: packaged.fill,
+        innerOutline: packaged.outline,
+        outerKeyline: packaged.keyline,
+        fillOutlineContrast: packaged.fillOutlineContrast,
+        outlineKeylineContrast: packaged.outlineKeylineContrast,
         cached: true,
         fallback: false,
+        contrastFallback: packaged.contrastFallback,
+        contrastReason: packaged.contrastReason,
         reason: null,
       });
     }
 
     if (!photoResult?.ok || !photoResult.img || photoResult.usedFallback) {
       const hashed = hashFallbackSuitColors(driverName);
-      const fallback = {
-        fill: hashed.fill,
-        outline: hashed.outline,
-        keyline: pickKeylineForFill(hashed.fill),
+      const packaged = packageColors(hashed.fill, hashed.outline, null, {
         fallback: true,
         fallbackReason: photoResult?.error || "driver_photo_unavailable",
-      };
+      });
       if (key) {
-        suitColorCache.set(key, fallback);
+        suitColorCache.set(key, {
+          fill: packaged.fill,
+          outline: packaged.outline,
+          keyline: packaged.keyline,
+          fallback: true,
+          fallbackReason: packaged.fallbackReason,
+        });
         persistTruckColorCache();
       }
       return logDiag({
         driverName,
         photoUrl: photoUrl || "(none)",
-        primaryFill: fallback.fill,
-        innerOutline: fallback.outline,
-        outerKeyline: fallback.keyline,
+        primaryFill: packaged.fill,
+        innerOutline: packaged.outline,
+        outerKeyline: packaged.keyline,
+        fillOutlineContrast: packaged.fillOutlineContrast,
+        outlineKeylineContrast: packaged.outlineKeylineContrast,
         cached: false,
         fallback: true,
-        reason: fallback.fallbackReason,
+        contrastFallback: packaged.contrastFallback,
+        contrastReason: packaged.contrastReason,
+        reason: packaged.fallbackReason,
       });
     }
 
     const sampled = sampleSuitColorsFromPortrait(photoResult.img);
     if (sampled.error) {
       const hashed = hashFallbackSuitColors(driverName);
-      const fallback = {
-        fill: hashed.fill,
-        outline: hashed.outline,
-        keyline: pickKeylineForFill(hashed.fill),
+      const packaged = packageColors(hashed.fill, hashed.outline, null, {
         fallback: true,
         fallbackReason: sampled.error,
-      };
+      });
       if (key) {
-        suitColorCache.set(key, fallback);
+        suitColorCache.set(key, {
+          fill: packaged.fill,
+          outline: packaged.outline,
+          keyline: packaged.keyline,
+          fallback: true,
+          fallbackReason: `${sampled.error}${sampled.detail ? `: ${sampled.detail}` : ""}`,
+        });
         persistTruckColorCache();
       }
       return logDiag({
         driverName,
         photoUrl,
-        primaryFill: fallback.fill,
-        innerOutline: fallback.outline,
-        outerKeyline: fallback.keyline,
+        primaryFill: packaged.fill,
+        innerOutline: packaged.outline,
+        outerKeyline: packaged.keyline,
+        fillOutlineContrast: packaged.fillOutlineContrast,
+        outlineKeylineContrast: packaged.outlineKeylineContrast,
         cached: false,
         fallback: true,
+        contrastFallback: packaged.contrastFallback,
+        contrastReason: packaged.contrastReason,
         reason: `${sampled.error}${sampled.detail ? `: ${sampled.detail}` : ""}`,
       });
     }
 
-    const resolved = {
-      fill: sampled.fill,
-      outline: sampled.outline,
-      keyline: sampled.keyline,
-      fallback: false,
-    };
+    const packaged = packageColors(sampled.fill, sampled.outline, sampled.keyline, {
+      contrastFallback: sampled.contrastFallback,
+      contrastReason: sampled.contrastReason,
+    });
     if (key) {
-      suitColorCache.set(key, resolved);
+      suitColorCache.set(key, {
+        fill: packaged.fill,
+        outline: packaged.outline,
+        keyline: packaged.keyline,
+        fallback: false,
+      });
       persistTruckColorCache();
     }
     return logDiag({
       driverName,
       photoUrl,
-      primaryFill: resolved.fill,
-      innerOutline: resolved.outline,
-      outerKeyline: resolved.keyline,
+      primaryFill: packaged.fill,
+      innerOutline: packaged.outline,
+      outerKeyline: packaged.keyline,
+      fillOutlineContrast: packaged.fillOutlineContrast,
+      outlineKeylineContrast: packaged.outlineKeylineContrast,
       cached: false,
       fallback: false,
+      contrastFallback: packaged.contrastFallback,
+      contrastReason: packaged.contrastReason,
       reason: null,
     });
   }
@@ -898,7 +1169,7 @@
     fill,
   ) {
     ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    resetTextRenderingState(ctx);
     ctx.textAlign = "center";
     ctx.textBaseline = "alphabetic";
     ctx.fillStyle = fill;
@@ -911,34 +1182,36 @@
       font = `${fontWeightStyle} ${size}px ${FONT_BODY}`;
     }
     ctx.font = font;
-    ctx.fillText(text, Math.round(centerX) + 0.5, Math.round(y) + 0.5);
+    applySharpTextShadow(ctx);
+    ctx.fillText(text, Math.round(centerX), Math.round(y));
     ctx.restore();
     return size;
   }
 
   function drawCenteredSubtitleLines(ctx, text, centerX, startY, maxWidth, fill) {
     ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.font = `700 italic 13px ${FONT_BODY}`;
+    resetTextRenderingState(ctx);
+    ctx.font = `bold 13px ${FONT_BODY}`;
     ctx.fillStyle = fill;
     ctx.textAlign = "center";
     ctx.textBaseline = "alphabetic";
     const lines = wrapText(ctx, text, maxWidth);
+    applySharpTextShadow(ctx);
     lines.forEach((line, i) => {
-      ctx.fillText(line, Math.round(centerX) + 0.5, Math.round(startY + i * 15) + 0.5);
+      ctx.fillText(line, Math.round(centerX), Math.round(startY + i * 15));
     });
     ctx.restore();
   }
 
   function drawRankNumber(ctx, rank, x, y, tier) {
-    const fontSpec = `900 italic 52px ${FONT_DISPLAY}`;
+    const fontSpec = `bold 52px ${FONT_DISPLAY}`;
     ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    resetTextRenderingState(ctx);
     ctx.font = fontSpec;
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
-    const px = Math.round(x) + 0.5;
-    const py = Math.round(y) + 0.5;
+    const px = Math.round(x);
+    const py = Math.round(y);
 
     if (Number(rank) === 2) {
       const grad = ctx.createLinearGradient(px, py - 50, px, py + 2);
@@ -949,19 +1222,21 @@
     } else {
       ctx.fillStyle = tier.rankColor;
     }
+    applySharpTextShadow(ctx);
     ctx.fillText(String(rank), px, py);
     ctx.restore();
   }
 
   function drawTextItalic(ctx, text, x, y, font, fill, align = "left") {
     ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    resetTextRenderingState(ctx);
     ctx.font = font;
     ctx.fillStyle = fill;
     ctx.textAlign = align;
     ctx.textBaseline = "alphabetic";
-    const px = align === "center" ? x : Math.round(x) + 0.5;
-    const py = Math.round(y) + 0.5;
+    const px = Math.round(x);
+    const py = Math.round(y);
+    applySharpTextShadow(ctx);
     ctx.fillText(text, px, py);
     ctx.restore();
   }
@@ -974,9 +1249,11 @@
       font,
       skew = -0.14,
       shadow = true,
+      outerStroke = 7,
+      innerStroke = 4,
     } = style;
     ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    resetTextRenderingState(ctx);
     ctx.translate(Math.round(x), Math.round(y));
     ctx.transform(1, 0, skew, 1, 0, 0);
     ctx.font = font;
@@ -984,21 +1261,26 @@
     ctx.textBaseline = "alphabetic";
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
+    ctx.globalAlpha = 1;
 
     if (shadow) {
-      ctx.shadowColor = "rgba(0,0,0,0.45)";
-      ctx.shadowBlur = 5;
+      ctx.shadowColor = "rgba(0,0,0,0.8)";
+      ctx.shadowBlur = 2.5;
+      ctx.shadowOffsetX = 2;
       ctx.shadowOffsetY = 2;
     }
 
     ctx.strokeStyle = keyline;
-    ctx.lineWidth = 9;
+    ctx.lineWidth = outerStroke;
     ctx.strokeText(text, 0, 0);
 
     ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
+    ctx.shadowColor = "transparent";
+
     ctx.strokeStyle = outline;
-    ctx.lineWidth = 5;
+    ctx.lineWidth = innerStroke;
     ctx.strokeText(text, 0, 0);
 
     ctx.fillStyle = fill;
@@ -1012,7 +1294,7 @@
         border: "#ffd23f",
         glow: "rgba(255,210,63,0.35)",
         rankColor: "#ffd23f",
-        subtitleColor: "#ffd23f",
+        subtitleColor: "#FFD21A",
       };
     }
     if (rank === 2) {
@@ -1020,7 +1302,7 @@
         border: "#d8d8d8",
         glow: "rgba(200,200,200,0.25)",
         rankColor: "#f0f0f0",
-        subtitleColor: "#c8c8c8",
+        subtitleColor: "#F2F2F2",
       };
     }
     if (rank === 3) {
@@ -1028,7 +1310,7 @@
         border: "#cd7f32",
         glow: "rgba(205,127,50,0.3)",
         rankColor: "#e8a55a",
-        subtitleColor: "#cd7f32",
+        subtitleColor: "#FFD21A",
       };
     }
     if (movementClass === "positive") {
@@ -1036,7 +1318,7 @@
         border: "#2ecc71",
         glow: "rgba(46,204,113,0.18)",
         rankColor: "#ffffff",
-        subtitleColor: "#45d65a",
+        subtitleColor: "#00E85A",
       };
     }
     if (movementClass === "negative") {
@@ -1044,7 +1326,7 @@
         border: "#ff3030",
         glow: "rgba(255,48,48,0.2)",
         rankColor: "#ffffff",
-        subtitleColor: "#ff5050",
+        subtitleColor: "#FF3038",
       };
     }
     if (movementClass === "new") {
@@ -1052,14 +1334,14 @@
         border: "#ffd23f",
         glow: "rgba(255,210,63,0.22)",
         rankColor: "#ffffff",
-        subtitleColor: "#ffd23f",
+        subtitleColor: "#FFD21A",
       };
     }
     return {
       border: "rgba(255,255,255,0.18)",
       glow: "rgba(255,255,255,0.05)",
       rankColor: "#ffffff",
-      subtitleColor: "#cccccc",
+      subtitleColor: "#F2F2F2",
     };
   }
 
@@ -1075,7 +1357,7 @@
       normalizeSeasonLabel(week.seasonName),
       layout.padX + 4,
       92,
-      `900 italic 26px ${FONT_DISPLAY}`,
+      `bold 26px ${FONT_DISPLAY}`,
       "#e50914",
       "left",
     );
@@ -1085,8 +1367,8 @@
       "POWER RANKINGS",
       EXPORT_WIDTH / 2,
       78,
-      `900 italic 78px ${FONT_DISPLAY}`,
-      "#ffffff",
+      `bold 78px ${FONT_DISPLAY}`,
+      "#FFFFFF",
       "center",
     );
 
@@ -1100,12 +1382,14 @@
       "POWER RANKINGS & RACE ANALYSIS",
       EXPORT_WIDTH - layout.padX - 4,
       118,
-      `900 italic 11px ${FONT_BODY}`,
+      `bold 11px ${FONT_BODY}`,
       "#e50914",
       "right",
     );
 
     const barY = layout.headerBottom - 6;
+    ctx.save();
+    resetTextRenderingState(ctx);
     ctx.fillStyle = "#3a0000";
     ctx.fillRect(layout.padX, barY, EXPORT_WIDTH - layout.padX * 2, layout.subbarH);
     ctx.fillStyle = "#6e0000";
@@ -1114,6 +1398,7 @@
     ctx.strokeStyle = "#b80000";
     ctx.lineWidth = 2;
     ctx.strokeRect(layout.padX + 0.5, barY + 0.5, EXPORT_WIDTH - layout.padX * 2 - 1, layout.subbarH - 1);
+    ctx.restore();
 
     const raceLabel = `RACE ${Number(week.raceNumber)} RANKINGS`;
     const published = formatPublishedUpper(week.publishedDate);
@@ -1124,8 +1409,8 @@
       raceLabel,
       layout.padX + 16,
       barY + 26,
-      `900 italic 18px ${FONT_BODY}`,
-      "#ffffff",
+      `bold 18px ${FONT_BODY}`,
+      "#FFFFFF",
       "left",
     );
     if (trackLabel) {
@@ -1134,8 +1419,8 @@
         trackLabel,
         EXPORT_WIDTH / 2,
         barY + 26,
-        `900 italic 17px ${FONT_BODY}`,
-        "#f0f0f0",
+        `bold 17px ${FONT_BODY}`,
+        "#FFFFFF",
         "center",
       );
     }
@@ -1144,8 +1429,8 @@
       published,
       EXPORT_WIDTH - layout.padX - 16,
       barY + 26,
-      `900 italic 16px ${FONT_BODY}`,
-      "#f2f2f2",
+      `bold 16px ${FONT_BODY}`,
+      "#FFFFFF",
       "right",
     );
   }
@@ -1163,6 +1448,7 @@
     const carNumBaseline = textZoneTop - 6;
 
     ctx.save();
+    resetTextRenderingState(ctx);
     const panelGrad = ctx.createLinearGradient(x, y, x, y + h);
     panelGrad.addColorStop(0, "rgba(28,28,28,0.74)");
     panelGrad.addColorStop(1, "rgba(5,5,5,0.70)");
@@ -1171,6 +1457,7 @@
     ctx.restore();
 
     ctx.save();
+    resetTextRenderingState(ctx);
     ctx.strokeStyle = tier.border;
     ctx.lineWidth = entry.rank === 1 ? 3 : 2;
     if (tier.glow) {
@@ -1178,22 +1465,25 @@
       ctx.shadowBlur = entry.rank <= 3 || entry.movementClass === "new" ? 14 : 6;
     }
     ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
-    ctx.shadowBlur = 0;
     ctx.restore();
+
+    // Explicit opaque text pass — never inherit card/watermark alpha.
+    ctx.save();
+    resetTextRenderingState(ctx);
 
     drawRankNumber(ctx, entry.rank, x + 12, y + 52, tier);
 
     let moveColor = "#888888";
-    if (entry.movementClass === "positive") moveColor = "#45d65a";
-    if (entry.movementClass === "negative") moveColor = "#ff2323";
-    if (entry.movementClass === "new") moveColor = "#ffd23f";
+    if (entry.movementClass === "positive") moveColor = "#00E85A";
+    if (entry.movementClass === "negative") moveColor = "#FF3038";
+    if (entry.movementClass === "new") moveColor = "#FFD21A";
 
     drawTextItalic(
       ctx,
       entry.movementText,
       x + w - 12,
       y + 36,
-      `900 italic 20px ${FONT_BODY}`,
+      `bold 20px ${FONT_BODY}`,
       moveColor,
       "right",
     );
@@ -1218,7 +1508,9 @@
       fill: colors.fill,
       outline: colors.outline,
       keyline: colors.keyline || "#000000",
-      font: `900 italic 86px ${FONT_DISPLAY}`,
+      font: `bold 86px ${FONT_DISPLAY}`,
+      outerStroke: 7,
+      innerStroke: 4,
     });
 
     const nameText = displayNameForEntry(entry).toUpperCase();
@@ -1228,10 +1520,10 @@
       centerX,
       nameBaselineY,
       maxTextWidth,
-      "900 italic",
+      "bold",
       19,
       13,
-      "#ffffff",
+      "#FFFFFF",
     );
 
     drawCenteredSubtitleLines(
@@ -1242,24 +1534,30 @@
       maxTextWidth,
       tier.subtitleColor,
     );
+    ctx.restore();
   }
 
   function drawHonorableMention(ctx, entry, bounds, driverAsset) {
     const { x, y, w, h } = bounds;
     const colors = driverAsset.colors;
 
+    ctx.save();
+    resetTextRenderingState(ctx);
     ctx.fillStyle = "rgba(0,0,0,0.42)";
     ctx.fillRect(x, y, w, h);
     ctx.strokeStyle = "#444";
     ctx.lineWidth = 1;
     ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+    ctx.restore();
 
     drawLayeredNumber(ctx, entry.carNumber || "—", x + 18, y + h - 28, {
       fill: colors.fill,
       outline: colors.outline,
       keyline: colors.keyline || "#000000",
-      font: `900 italic 64px ${FONT_DISPLAY}`,
+      font: `bold 64px ${FONT_DISPLAY}`,
       shadow: true,
+      outerStroke: 6,
+      innerStroke: 3.5,
     });
 
     const photoImg = driverAsset.photo?.img;
@@ -1276,8 +1574,8 @@
       displayNameForEntry(entry).toUpperCase(),
       x + 232,
       y + h / 2 + 10,
-      `900 italic 26px ${FONT_BODY}`,
-      "#ffffff",
+      `bold 26px ${FONT_BODY}`,
+      "#FFFFFF",
       "left",
     );
   }
@@ -1290,19 +1588,22 @@
     const barW = EXPORT_WIDTH - layout.padX * 2;
     const barY = layout.honorableY;
 
+    ctx.save();
+    resetTextRenderingState(ctx);
     ctx.fillStyle = "#8b0000";
     ctx.fillRect(barX, barY, barW, 34);
     ctx.strokeStyle = "#ff3030";
     ctx.lineWidth = 2;
     ctx.strokeRect(barX + 0.5, barY + 0.5, barW - 1, 33);
+    ctx.restore();
 
     drawTextItalic(
       ctx,
       "HONORABLE MENTIONS",
       EXPORT_WIDTH / 2,
       barY + 24,
-      `900 italic 20px ${FONT_DISPLAY}`,
-      "#ffffff",
+      `bold 20px ${FONT_DISPLAY}`,
+      "#FFFFFF",
       "center",
     );
 
@@ -1320,20 +1621,23 @@
   }
 
   function drawFooter(ctx, layout) {
+    ctx.save();
+    resetTextRenderingState(ctx);
     ctx.strokeStyle = "#b80000";
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(layout.padX, layout.footerY - 10);
     ctx.lineTo(EXPORT_WIDTH - layout.padX, layout.footerY - 10);
     ctx.stroke();
+    ctx.restore();
 
     drawTextItalic(
       ctx,
       "FAST DRIVERS. CLOSE RACING. BIG FUN.",
       EXPORT_WIDTH / 2,
       layout.footerY + 14,
-      `900 14px ${FONT_BODY}`,
-      "#ffffff",
+      `bold 14px ${FONT_BODY}`,
+      "#FFFFFF",
       "center",
     );
   }
@@ -1345,15 +1649,18 @@
     const layout = computeLayout(assets.mentions.length);
     const trackName = await resolveTrackName(Number(week.raceNumber), week);
 
-    const canvas = document.createElement("canvas");
-    canvas.width = EXPORT_WIDTH;
-    canvas.height = EXPORT_HEIGHT;
-    const ctx = canvas.getContext("2d", { alpha: false });
+    const master = document.createElement("canvas");
+    master.width = EXPORT_WIDTH * RENDER_SCALE;
+    master.height = EXPORT_HEIGHT * RENDER_SCALE;
+    const ctx = master.getContext("2d", { alpha: false });
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
+    ctx.scale(RENDER_SCALE, RENDER_SCALE);
+    resetTextRenderingState(ctx);
 
     drawCarbonBackground(ctx);
     drawProphetWatermark(ctx, assets.prophetLogo.img, layout);
+    resetTextRenderingState(ctx);
     drawHeader(ctx, week, assets, layout, trackName);
 
     assets.entries.forEach((entry, index) => {
@@ -1373,6 +1680,14 @@
     drawHonorableSection(ctx, week, assets, layout);
     drawFooter(ctx, layout);
 
+    const canvas = document.createElement("canvas");
+    canvas.width = EXPORT_WIDTH;
+    canvas.height = EXPORT_HEIGHT;
+    const finalCtx = canvas.getContext("2d", { alpha: false });
+    finalCtx.imageSmoothingEnabled = true;
+    finalCtx.imageSmoothingQuality = "high";
+    finalCtx.drawImage(master, 0, 0, EXPORT_WIDTH, EXPORT_HEIGHT);
+
     const blob = await new Promise((resolve, reject) => {
       canvas.toBlob(
         (result) => {
@@ -1385,12 +1700,21 @@
     });
 
     lastRenderDiagnostics = {
-      canvasInternalResolution: `${EXPORT_WIDTH}×${EXPORT_HEIGHT}`,
+      canvasMasterResolution: `${EXPORT_WIDTH * RENDER_SCALE}×${EXPORT_HEIGHT * RENDER_SCALE}`,
+      canvasInternalResolution: `${EXPORT_WIDTH * RENDER_SCALE}×${EXPORT_HEIGHT * RENDER_SCALE}`,
       outputResolution: `${EXPORT_WIDTH}×${EXPORT_HEIGHT}`,
+      renderScale: RENDER_SCALE,
+      downsample: "single high-quality drawImage (imageSmoothingQuality=high)",
       fontsUsed: fontInfo.fontsUsed,
+      fontWeightsUsed: fontInfo.fontWeightsUsed,
       fontFallbackRequired: fontInfo.fallbackRequired,
       impactLoaded: fontInfo.impactLoaded,
+      arialBlackLoaded: fontInfo.arialBlackLoaded,
       narrowLoaded: fontInfo.narrowLoaded,
+      arialLoaded: fontInfo.arialLoaded,
+      haettenschweilerLoaded: fontInfo.haettenschweilerLoaded,
+      fontWarnings: fontInfo.warnings || [],
+      minNumberContrast: MIN_NUMBER_CONTRAST,
       prophetWatermark: {
         opacity: WATERMARK_OPACITY,
         sizePx: WATERMARK_SIZE,
@@ -1414,6 +1738,8 @@
           fill: row.primaryFill,
           outline: row.innerOutline,
           keyline: row.outerKeyline,
+          contrast: row.fillOutlineContrast != null ? Number(row.fillOutlineContrast).toFixed(2) : "",
+          contrastFix: row.contrastFallback ? row.contrastReason : "",
           fallback: row.fallback ? row.reason : "",
         })),
       );
