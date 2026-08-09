@@ -1753,23 +1753,20 @@
   }
 
   /**
-   * @param {object} week
-   * @param {{ outputMode?: '4k'|'1080p' }} [options]
-   * Default outputMode is '4k' (true 3840×2160, no downsample).
-   * '1080p' downsamples the completed hi-res graphic once for A/B testing.
+   * Production Discord graphic: true 3840×2160 master canvas, no downsample.
+   * Logical layout remains 1920×1080 via ctx.scale(RENDER_SCALE).
    */
   async function renderPowerRankingsDiscordCanvas(week, options = {}) {
     validateWeek(week);
-    const outputMode = options.outputMode === "1080p" ? "1080p" : "4k";
     const fontInfo = await ensureFontsReady();
     const assets = await preloadExportAssets(week);
     const layout = computeLayout(assets.mentions.length);
     const trackName = await resolveTrackName(Number(week.raceNumber), week);
 
-    const master = document.createElement("canvas");
-    master.width = EXPORT_WIDTH * RENDER_SCALE;
-    master.height = EXPORT_HEIGHT * RENDER_SCALE;
-    const ctx = master.getContext("2d", { alpha: false });
+    const canvas = document.createElement("canvas");
+    canvas.width = EXPORT_WIDTH * RENDER_SCALE;
+    canvas.height = EXPORT_HEIGHT * RENDER_SCALE;
+    const ctx = canvas.getContext("2d", { alpha: false });
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
     ctx.scale(RENDER_SCALE, RENDER_SCALE);
@@ -1797,7 +1794,7 @@
     drawHonorableSectionMaster(ctx, week, assets, layout);
     drawFooterMaster(ctx, layout);
 
-    // All small/medium text drawn on the same hi-res canvas (logical coords via scale).
+    // All small/medium text on the same hi-res canvas (logical coords via scale).
     resetTextRenderingState(ctx);
     drawHeaderFinalText(ctx, week, layout, trackName);
     assets.entries.forEach((entry, index) => {
@@ -1810,22 +1807,6 @@
     drawHonorableSectionFinalText(ctx, assets, layout);
     drawFooterFinalText(ctx, layout);
 
-    let canvas = master;
-    let downsampled = false;
-
-    if (outputMode === "1080p") {
-      // A/B only: one downsample of the completed hi-res graphic.
-      const finalCanvas = document.createElement("canvas");
-      finalCanvas.width = EXPORT_WIDTH;
-      finalCanvas.height = EXPORT_HEIGHT;
-      const finalCtx = finalCanvas.getContext("2d", { alpha: false });
-      finalCtx.imageSmoothingEnabled = true;
-      finalCtx.imageSmoothingQuality = "high";
-      finalCtx.drawImage(master, 0, 0, EXPORT_WIDTH, EXPORT_HEIGHT);
-      canvas = finalCanvas;
-      downsampled = true;
-    }
-
     const blob = await canvasToPngBlob(canvas);
     const pngDims = await readPngDimensions(blob);
 
@@ -1834,24 +1815,16 @@
       height: pngDims.height,
       blobSize: blob.size,
       renderScale: RENDER_SCALE,
-      downsampled,
-      outputMode,
-      masterCanvas: `${master.width}×${master.height}`,
+      downsampled: false,
+      masterCanvas: `${canvas.width}×${canvas.height}`,
     };
     console.log("[pr-discord-export] PNG export", exportLog);
 
     if (
-      outputMode === "4k" &&
-      (pngDims.width !== EXPORT_WIDTH * RENDER_SCALE ||
-        pngDims.height !== EXPORT_HEIGHT * RENDER_SCALE)
+      pngDims.width !== EXPORT_WIDTH * RENDER_SCALE ||
+      pngDims.height !== EXPORT_HEIGHT * RENDER_SCALE
     ) {
-      console.warn("[pr-discord-export] Unexpected 4K PNG dimensions", pngDims);
-    }
-    if (
-      outputMode === "1080p" &&
-      (pngDims.width !== EXPORT_WIDTH || pngDims.height !== EXPORT_HEIGHT)
-    ) {
-      console.warn("[pr-discord-export] Unexpected 1080p PNG dimensions", pngDims);
+      console.warn("[pr-discord-export] Unexpected PNG dimensions", pngDims);
     }
 
     lastRenderDiagnostics = {
@@ -1859,12 +1832,8 @@
       canvasInternalResolution: `${EXPORT_WIDTH * RENDER_SCALE}×${EXPORT_HEIGHT * RENDER_SCALE}`,
       outputResolution: `${pngDims.width || canvas.width}×${pngDims.height || canvas.height}`,
       renderScale: RENDER_SCALE,
-      downsampled,
-      outputMode,
-      downsample:
-        outputMode === "4k"
-          ? "none — PNG encoded directly from 3840×2160 master"
-          : "single drawImage downsample of completed master for 1080p A/B test",
+      downsampled: false,
+      downsample: "none — PNG encoded directly from 3840×2160 master",
       smallTextStage: "master-hires-with-scale",
       pngExport: exportLog,
       fontsUsed: fontInfo.fontsUsed,
@@ -1941,25 +1910,21 @@
 
   async function downloadWeekPng(week, options = {}) {
     const result = await renderPowerRankingsDiscordCanvas(week, options);
-    const suffix = result.diagnostics?.outputMode === "1080p" ? "1080p" : "4k";
     downloadBlob(
       result.blob,
-      `blazing-pedals-power-rankings-race-${result.raceNumber}-${suffix}.png`,
+      `blazing-pedals-power-rankings-race-${result.raceNumber}.png`,
     );
     return result;
   }
 
   async function previewWeekPng(week, options = {}) {
-    const result = await renderPowerRankingsDiscordCanvas(week, {
-      outputMode: "4k",
-      ...options,
-    });
+    const result = await renderPowerRankingsDiscordCanvas(week, options);
     const objectUrl = URL.createObjectURL(result.blob);
     return { ...result, objectUrl };
   }
 
   async function exportWeek(week) {
-    return downloadWeekPng(week, { outputMode: "4k" });
+    return downloadWeekPng(week);
   }
 
   function buildWeekFromAdminForm(formData, driverOptions = [], profileById = {}) {
@@ -2078,8 +2043,8 @@
     EXPORT_WIDTH,
     EXPORT_HEIGHT,
     RENDER_SCALE,
-    OUTPUT_WIDTH_4K: EXPORT_WIDTH * RENDER_SCALE,
-    OUTPUT_HEIGHT_4K: EXPORT_HEIGHT * RENDER_SCALE,
+    OUTPUT_WIDTH: EXPORT_WIDTH * RENDER_SCALE,
+    OUTPUT_HEIGHT: EXPORT_HEIGHT * RENDER_SCALE,
     PLACEHOLDER,
     buildWeekFromAdminForm,
     renderPowerRankingsDiscordCanvas,
