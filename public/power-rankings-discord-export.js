@@ -17,10 +17,14 @@
   const RENDER_SCALE = 2;
   const MIN_NUMBER_CONTRAST = 2.5;
 
-  // Prefer real locally-available heavy faces. Avoid unloaded "Roboto Condensed"
-  // and synthetic 900/italic faces that Canvas softens.
-  const FONT_DISPLAY = 'Impact, Haettenschweiler, "Arial Black", "Arial Narrow", Arial, sans-serif';
-  const FONT_BODY = 'Impact, "Arial Black", "Arial Narrow", Arial, sans-serif';
+  // Large display type (title / rank / car numbers) — supersampled.
+  const FONT_DISPLAY = 'Impact, Haettenschweiler, "Arial Black", Arial, sans-serif';
+  // Small/medium lettering — native final-canvas pass only. No Impact.
+  const FONT_SMALL = '"Arial Narrow", Arial, sans-serif';
+
+  if (typeof window !== "undefined" && window.PR_DISCORD_TEXT_DEBUG === undefined) {
+    window.PR_DISCORD_TEXT_DEBUG = false;
+  }
 
   let scheduleTrackMapCache = null;
   const suitColorCache = new Map();
@@ -251,8 +255,8 @@
   async function ensureFontsReady() {
     if (!document.fonts?.ready) {
       return {
-        fontsUsed: [FONT_DISPLAY, FONT_BODY],
-        fontWeightsUsed: ["bold"],
+        fontsUsed: [FONT_DISPLAY, FONT_SMALL],
+        fontWeightsUsed: ["bold", "700"],
         fallbackRequired: true,
         warnings: ["document.fonts API unavailable"],
       };
@@ -262,10 +266,8 @@
 
     const requiredChecks = [
       { name: "Impact", spec: "bold 48px Impact" },
-      { name: "Arial Black", spec: 'bold 48px "Arial Black"' },
-      { name: "Arial Narrow", spec: 'bold 48px "Arial Narrow"' },
-      { name: "Arial", spec: "bold 48px Arial" },
-      { name: "Haettenschweiler", spec: "bold 48px Haettenschweiler" },
+      { name: "Arial Narrow", spec: 'bold 18px "Arial Narrow"' },
+      { name: "Arial", spec: "bold 18px Arial" },
     ];
 
     await Promise.all(
@@ -283,22 +285,16 @@
       }
     });
 
-    const impactOk = availability.Impact;
-    const blackOk = availability["Arial Black"];
-    const narrowOk = availability["Arial Narrow"];
-    const arialOk = availability.Arial;
-
     return {
-      fontsUsed: [FONT_DISPLAY, FONT_BODY],
-      fontWeightsUsed: ["bold"],
-      fallbackRequired: !impactOk && !blackOk && !narrowOk && !arialOk,
-      impactLoaded: impactOk,
-      arialBlackLoaded: blackOk,
-      narrowLoaded: narrowOk,
-      arialLoaded: arialOk,
-      haettenschweilerLoaded: availability.Haettenschweiler,
+      fontsUsed: [FONT_DISPLAY, FONT_SMALL],
+      fontWeightsUsed: ["bold", "700"],
+      fallbackRequired: !availability.Impact && !availability["Arial Narrow"] && !availability.Arial,
+      impactLoaded: availability.Impact,
+      narrowLoaded: availability["Arial Narrow"],
+      arialLoaded: availability.Arial,
       warnings,
       renderScale: RENDER_SCALE,
+      smallTextStage: "final-native",
     };
   }
 
@@ -306,17 +302,55 @@
     ctx.globalAlpha = 1;
     ctx.filter = "none";
     ctx.shadowBlur = 0;
-    ctx.shadowColor = "transparent";
+    ctx.shadowColor = "rgba(0,0,0,0)";
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
     ctx.lineWidth = 1;
   }
 
-  function applySharpTextShadow(ctx) {
-    ctx.shadowColor = "rgba(0,0,0,0.85)";
-    ctx.shadowBlur = 1.5;
-    ctx.shadowOffsetX = 1;
-    ctx.shadowOffsetY = 1;
+  function logTextDebug(category, info) {
+    if (typeof window === "undefined" || !window.PR_DISCORD_TEXT_DEBUG) return;
+    console.log(`[pr-discord-text] ${category}`, info);
+  }
+
+  /** Fill-only, no shadow, no stroke — used for native final-canvas small/medium text. */
+  function drawNativeFillText(ctx, {
+    text,
+    x,
+    y,
+    font,
+    fill,
+    align = "left",
+    category = "text",
+    stage = "final",
+  }) {
+    ctx.save();
+    resetTextRenderingState(ctx);
+    ctx.shadowColor = "rgba(0,0,0,0)";
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+    ctx.globalAlpha = 1;
+    ctx.font = font;
+    ctx.fillStyle = fill;
+    ctx.textAlign = align;
+    ctx.textBaseline = "alphabetic";
+    const tx = Math.round(x);
+    const ty = Math.round(y);
+    logTextDebug(category, {
+      font,
+      fill,
+      shadowBlur: 0,
+      shadowColor: "rgba(0,0,0,0)",
+      globalAlpha: 1,
+      strokeText: false,
+      renderStage: stage,
+      x: tx,
+      y: ty,
+      text: String(text || ""),
+    });
+    ctx.fillText(String(text || ""), tx, ty);
+    ctx.restore();
   }
 
   /**
@@ -1167,46 +1201,63 @@
     startingFontSize,
     minimumFontSize,
     fill,
+    category = "driver-name",
   ) {
     ctx.save();
     resetTextRenderingState(ctx);
     ctx.textAlign = "center";
     ctx.textBaseline = "alphabetic";
-    ctx.fillStyle = fill;
     let size = startingFontSize;
-    let font = `${fontWeightStyle} ${size}px ${FONT_BODY}`;
+    let font = `${fontWeightStyle} ${size}px ${FONT_SMALL}`;
     while (size > minimumFontSize) {
       ctx.font = font;
       if (ctx.measureText(text).width <= maxWidth) break;
       size -= 1;
-      font = `${fontWeightStyle} ${size}px ${FONT_BODY}`;
+      font = `${fontWeightStyle} ${size}px ${FONT_SMALL}`;
     }
-    ctx.font = font;
-    applySharpTextShadow(ctx);
-    ctx.fillText(text, Math.round(centerX), Math.round(y));
     ctx.restore();
+    drawNativeFillText(ctx, {
+      text,
+      x: centerX,
+      y,
+      font,
+      fill,
+      align: "center",
+      category,
+      stage: "final",
+    });
     return size;
   }
 
   function drawCenteredSubtitleLines(ctx, text, centerX, startY, maxWidth, fill) {
     ctx.save();
     resetTextRenderingState(ctx);
-    ctx.font = `bold 13px ${FONT_BODY}`;
-    ctx.fillStyle = fill;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "alphabetic";
+    ctx.font = `bold 13px ${FONT_SMALL}`;
     const lines = wrapText(ctx, text, maxWidth);
-    applySharpTextShadow(ctx);
-    lines.forEach((line, i) => {
-      ctx.fillText(line, Math.round(centerX), Math.round(startY + i * 15));
-    });
     ctx.restore();
+    lines.forEach((line, i) => {
+      drawNativeFillText(ctx, {
+        text: line,
+        x: centerX,
+        y: startY + i * 15,
+        font: `bold 13px ${FONT_SMALL}`,
+        fill,
+        align: "center",
+        category: "subtitle",
+        stage: "final",
+      });
+    });
   }
 
   function drawRankNumber(ctx, rank, x, y, tier) {
+    // Large supersampled rank numerals — fill only, no soft text glow.
     const fontSpec = `bold 52px ${FONT_DISPLAY}`;
     ctx.save();
     resetTextRenderingState(ctx);
+    ctx.shadowColor = "rgba(0,0,0,0)";
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
     ctx.font = fontSpec;
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
@@ -1222,22 +1273,24 @@
     } else {
       ctx.fillStyle = tier.rankColor;
     }
-    applySharpTextShadow(ctx);
     ctx.fillText(String(rank), px, py);
     ctx.restore();
   }
 
-  function drawTextItalic(ctx, text, x, y, font, fill, align = "left") {
+  function drawMasterTitle(ctx, text, x, y, font, fill, align = "center") {
+    // Large POWER RANKINGS title — supersampled, fill-only, no glow.
     ctx.save();
     resetTextRenderingState(ctx);
+    ctx.shadowColor = "rgba(0,0,0,0)";
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+    ctx.globalAlpha = 1;
     ctx.font = font;
     ctx.fillStyle = fill;
     ctx.textAlign = align;
     ctx.textBaseline = "alphabetic";
-    const px = Math.round(x);
-    const py = Math.round(y);
-    applySharpTextShadow(ctx);
-    ctx.fillText(text, px, py);
+    ctx.fillText(text, Math.round(x), Math.round(y));
     ctx.restore();
   }
 
@@ -1294,7 +1347,7 @@
         border: "#ffd23f",
         glow: "rgba(255,210,63,0.35)",
         rankColor: "#ffd23f",
-        subtitleColor: "#FFD21A",
+        subtitleColor: "#FFD400",
       };
     }
     if (rank === 2) {
@@ -1302,7 +1355,7 @@
         border: "#d8d8d8",
         glow: "rgba(200,200,200,0.25)",
         rankColor: "#f0f0f0",
-        subtitleColor: "#F2F2F2",
+        subtitleColor: "#FFFFFF",
       };
     }
     if (rank === 3) {
@@ -1310,7 +1363,7 @@
         border: "#cd7f32",
         glow: "rgba(205,127,50,0.3)",
         rankColor: "#e8a55a",
-        subtitleColor: "#FFD21A",
+        subtitleColor: "#FFD400",
       };
     }
     if (movementClass === "positive") {
@@ -1318,7 +1371,7 @@
         border: "#2ecc71",
         glow: "rgba(46,204,113,0.18)",
         rankColor: "#ffffff",
-        subtitleColor: "#00E85A",
+        subtitleColor: "#00FF5A",
       };
     }
     if (movementClass === "negative") {
@@ -1326,7 +1379,7 @@
         border: "#ff3030",
         glow: "rgba(255,48,48,0.2)",
         rankColor: "#ffffff",
-        subtitleColor: "#FF3038",
+        subtitleColor: "#FF2A2A",
       };
     }
     if (movementClass === "new") {
@@ -1334,35 +1387,37 @@
         border: "#ffd23f",
         glow: "rgba(255,210,63,0.22)",
         rankColor: "#ffffff",
-        subtitleColor: "#FFD21A",
+        subtitleColor: "#FFD400",
       };
     }
     return {
       border: "rgba(255,255,255,0.18)",
       glow: "rgba(255,255,255,0.05)",
       rankColor: "#ffffff",
-      subtitleColor: "#F2F2F2",
+      subtitleColor: "#FFFFFF",
     };
   }
 
-  function drawHeader(ctx, week, assets, layout, trackName) {
+  function cardTextLayout(bounds) {
+    const { x, y, w, h } = bounds;
+    const centerX = x + w / 2;
+    const maxTextWidth = w - 24;
+    const bottomPad = CARD_BOTTOM_TEXT_PAD;
+    const nameBaselineY = y + h - bottomPad - 30;
+    const subtitleStartY = y + h - bottomPad - 12;
+    const textZoneTop = nameBaselineY - 86;
+    const carNumBaseline = textZoneTop - 6;
+    return { centerX, maxTextWidth, nameBaselineY, subtitleStartY, textZoneTop, carNumBaseline };
+  }
+
+  function drawHeaderMaster(ctx, week, assets, layout) {
     const { bpLogo, prophetLogo } = assets;
     drawImageContain(ctx, bpLogo.img, layout.padX, layout.padTop, 290, 68, {
       hAlign: "left",
       vAlign: "top",
     });
 
-    drawTextItalic(
-      ctx,
-      normalizeSeasonLabel(week.seasonName),
-      layout.padX + 4,
-      92,
-      `bold 26px ${FONT_DISPLAY}`,
-      "#e50914",
-      "left",
-    );
-
-    drawTextItalic(
+    drawMasterTitle(
       ctx,
       "POWER RANKINGS",
       EXPORT_WIDTH / 2,
@@ -1377,16 +1432,6 @@
       vAlign: "top",
     });
 
-    drawTextItalic(
-      ctx,
-      "POWER RANKINGS & RACE ANALYSIS",
-      EXPORT_WIDTH - layout.padX - 4,
-      118,
-      `bold 11px ${FONT_BODY}`,
-      "#e50914",
-      "right",
-    );
-
     const barY = layout.headerBottom - 6;
     ctx.save();
     resetTextRenderingState(ctx);
@@ -1394,58 +1439,74 @@
     ctx.fillRect(layout.padX, barY, EXPORT_WIDTH - layout.padX * 2, layout.subbarH);
     ctx.fillStyle = "#6e0000";
     ctx.fillRect(layout.padX, barY, (EXPORT_WIDTH - layout.padX * 2) / 2, layout.subbarH);
-
     ctx.strokeStyle = "#b80000";
     ctx.lineWidth = 2;
     ctx.strokeRect(layout.padX + 0.5, barY + 0.5, EXPORT_WIDTH - layout.padX * 2 - 1, layout.subbarH - 1);
     ctx.restore();
-
-    const raceLabel = `RACE ${Number(week.raceNumber)} RANKINGS`;
-    const published = formatPublishedUpper(week.publishedDate);
-    const trackLabel = formatTrackLabel(trackName);
-
-    drawTextItalic(
-      ctx,
-      raceLabel,
-      layout.padX + 16,
-      barY + 26,
-      `bold 18px ${FONT_BODY}`,
-      "#FFFFFF",
-      "left",
-    );
-    if (trackLabel) {
-      drawTextItalic(
-        ctx,
-        trackLabel,
-        EXPORT_WIDTH / 2,
-        barY + 26,
-        `bold 17px ${FONT_BODY}`,
-        "#FFFFFF",
-        "center",
-      );
-    }
-    drawTextItalic(
-      ctx,
-      published,
-      EXPORT_WIDTH - layout.padX - 16,
-      barY + 26,
-      `bold 16px ${FONT_BODY}`,
-      "#FFFFFF",
-      "right",
-    );
   }
 
-  function drawRankingCard(ctx, entry, bounds, driverAsset) {
+  function drawHeaderFinalText(ctx, week, layout, trackName) {
+    const barY = layout.headerBottom - 6;
+
+    drawNativeFillText(ctx, {
+      text: normalizeSeasonLabel(week.seasonName),
+      x: layout.padX + 4,
+      y: 92,
+      font: `bold 26px ${FONT_SMALL}`,
+      fill: "#e50914",
+      align: "left",
+      category: "season-label",
+    });
+
+    drawNativeFillText(ctx, {
+      text: "POWER RANKINGS & RACE ANALYSIS",
+      x: EXPORT_WIDTH - layout.padX - 4,
+      y: 118,
+      font: `bold 11px ${FONT_SMALL}`,
+      fill: "#e50914",
+      align: "right",
+      category: "header-analysis",
+    });
+
+    drawNativeFillText(ctx, {
+      text: `RACE ${Number(week.raceNumber)} RANKINGS`,
+      x: layout.padX + 16,
+      y: barY + 26,
+      font: `bold 18px ${FONT_SMALL}`,
+      fill: "#FFFFFF",
+      align: "left",
+      category: "race-label",
+    });
+
+    const trackLabel = formatTrackLabel(trackName);
+    if (trackLabel) {
+      drawNativeFillText(ctx, {
+        text: trackLabel,
+        x: EXPORT_WIDTH / 2,
+        y: barY + 26,
+        font: `bold 17px ${FONT_SMALL}`,
+        fill: "#FFFFFF",
+        align: "center",
+        category: "track-name",
+      });
+    }
+
+    drawNativeFillText(ctx, {
+      text: formatPublishedUpper(week.publishedDate),
+      x: EXPORT_WIDTH - layout.padX - 16,
+      y: barY + 26,
+      font: `bold 16px ${FONT_SMALL}`,
+      fill: "#FFFFFF",
+      align: "right",
+      category: "published-date",
+    });
+  }
+
+  function drawRankingCardMaster(ctx, entry, bounds, driverAsset) {
     const { x, y, w, h } = bounds;
     const tier = cardTierStyle(entry.rank, entry.movementClass);
     const colors = driverAsset.colors;
-    const centerX = x + w / 2;
-    const maxTextWidth = w - 24;
-    const bottomPad = CARD_BOTTOM_TEXT_PAD;
-    const nameBaselineY = y + h - bottomPad - 30;
-    const subtitleStartY = y + h - bottomPad - 12;
-    const textZoneTop = nameBaselineY - 86;
-    const carNumBaseline = textZoneTop - 6;
+    const { textZoneTop, carNumBaseline } = cardTextLayout(bounds);
 
     ctx.save();
     resetTextRenderingState(ctx);
@@ -1467,26 +1528,9 @@
     ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
     ctx.restore();
 
-    // Explicit opaque text pass — never inherit card/watermark alpha.
     ctx.save();
     resetTextRenderingState(ctx);
-
     drawRankNumber(ctx, entry.rank, x + 12, y + 52, tier);
-
-    let moveColor = "#888888";
-    if (entry.movementClass === "positive") moveColor = "#00E85A";
-    if (entry.movementClass === "negative") moveColor = "#FF3038";
-    if (entry.movementClass === "new") moveColor = "#FFD21A";
-
-    drawTextItalic(
-      ctx,
-      entry.movementText,
-      x + w - 12,
-      y + 36,
-      `bold 20px ${FONT_BODY}`,
-      moveColor,
-      "right",
-    );
 
     const photoBox = {
       x: x + 6,
@@ -1503,8 +1547,7 @@
       });
     }
 
-    const numText = entry.carNumber || "—";
-    drawLayeredNumber(ctx, numText, x + 14, carNumBaseline, {
+    drawLayeredNumber(ctx, entry.carNumber || "—", x + 14, carNumBaseline, {
       fill: colors.fill,
       outline: colors.outline,
       keyline: colors.keyline || "#000000",
@@ -1512,11 +1555,32 @@
       outerStroke: 7,
       innerStroke: 4,
     });
+    ctx.restore();
+  }
 
-    const nameText = displayNameForEntry(entry).toUpperCase();
+  function drawRankingCardFinalText(ctx, entry, bounds) {
+    const { x, y, w } = bounds;
+    const tier = cardTierStyle(entry.rank, entry.movementClass);
+    const { centerX, maxTextWidth, nameBaselineY, subtitleStartY } = cardTextLayout(bounds);
+
+    let moveColor = "#888888";
+    if (entry.movementClass === "positive") moveColor = "#00FF5A";
+    if (entry.movementClass === "negative") moveColor = "#FF2A2A";
+    if (entry.movementClass === "new") moveColor = "#FFD400";
+
+    drawNativeFillText(ctx, {
+      text: entry.movementText,
+      x: x + w - 12,
+      y: y + 36,
+      font: `bold 20px ${FONT_SMALL}`,
+      fill: moveColor,
+      align: "right",
+      category: "movement",
+    });
+
     drawFittedCenteredText(
       ctx,
-      nameText,
+      displayNameForEntry(entry).toUpperCase(),
       centerX,
       nameBaselineY,
       maxTextWidth,
@@ -1524,6 +1588,7 @@
       19,
       13,
       "#FFFFFF",
+      "driver-name",
     );
 
     drawCenteredSubtitleLines(
@@ -1534,10 +1599,9 @@
       maxTextWidth,
       tier.subtitleColor,
     );
-    ctx.restore();
   }
 
-  function drawHonorableMention(ctx, entry, bounds, driverAsset) {
+  function drawHonorableMentionMaster(ctx, entry, bounds, driverAsset) {
     const { x, y, w, h } = bounds;
     const colors = driverAsset.colors;
 
@@ -1568,19 +1632,9 @@
         scaleMult: HONORABLE_PORTRAIT_SCALE,
       });
     }
-
-    drawTextItalic(
-      ctx,
-      displayNameForEntry(entry).toUpperCase(),
-      x + 232,
-      y + h / 2 + 10,
-      `bold 26px ${FONT_BODY}`,
-      "#FFFFFF",
-      "left",
-    );
   }
 
-  function drawHonorableSection(ctx, week, assets, layout) {
+  function drawHonorableSectionMaster(ctx, week, assets, layout) {
     const mentions = assets.mentions;
     if (!mentions.length) return;
 
@@ -1597,16 +1651,6 @@
     ctx.strokeRect(barX + 0.5, barY + 0.5, barW - 1, 33);
     ctx.restore();
 
-    drawTextItalic(
-      ctx,
-      "HONORABLE MENTIONS",
-      EXPORT_WIDTH / 2,
-      barY + 24,
-      `bold 20px ${FONT_DISPLAY}`,
-      "#FFFFFF",
-      "center",
-    );
-
     const panelY = barY + 40;
     const panelH = layout.honorableH - 44;
     const gap = 12;
@@ -1616,11 +1660,48 @@
       const x = barX + index * (panelW + gap);
       const asset = assets.driverAssets.get(entry.driverId || entry.driverName);
       if (!asset) return;
-      drawHonorableMention(ctx, entry, { x, y: panelY, w: panelW, h: panelH }, asset);
+      drawHonorableMentionMaster(ctx, entry, { x, y: panelY, w: panelW, h: panelH }, asset);
     });
   }
 
-  function drawFooter(ctx, layout) {
+  function drawHonorableSectionFinalText(ctx, assets, layout) {
+    const mentions = assets.mentions;
+    if (!mentions.length) return;
+
+    const barX = layout.padX;
+    const barW = EXPORT_WIDTH - layout.padX * 2;
+    const barY = layout.honorableY;
+
+    drawNativeFillText(ctx, {
+      text: "HONORABLE MENTIONS",
+      x: EXPORT_WIDTH / 2,
+      y: barY + 24,
+      font: `bold 20px ${FONT_SMALL}`,
+      fill: "#FFFFFF",
+      align: "center",
+      category: "honorable-heading",
+    });
+
+    const panelY = barY + 40;
+    const panelH = layout.honorableH - 44;
+    const gap = 12;
+    const panelW = (barW - gap * (mentions.length - 1)) / mentions.length;
+
+    mentions.forEach((entry, index) => {
+      const x = barX + index * (panelW + gap);
+      drawNativeFillText(ctx, {
+        text: displayNameForEntry(entry).toUpperCase(),
+        x: x + 232,
+        y: panelY + panelH / 2 + 10,
+        font: `bold 26px ${FONT_SMALL}`,
+        fill: "#FFFFFF",
+        align: "left",
+        category: "honorable-name",
+      });
+    });
+  }
+
+  function drawFooterMaster(ctx, layout) {
     ctx.save();
     resetTextRenderingState(ctx);
     ctx.strokeStyle = "#b80000";
@@ -1630,16 +1711,18 @@
     ctx.lineTo(EXPORT_WIDTH - layout.padX, layout.footerY - 10);
     ctx.stroke();
     ctx.restore();
+  }
 
-    drawTextItalic(
-      ctx,
-      "FAST DRIVERS. CLOSE RACING. BIG FUN.",
-      EXPORT_WIDTH / 2,
-      layout.footerY + 14,
-      `bold 14px ${FONT_BODY}`,
-      "#FFFFFF",
-      "center",
-    );
+  function drawFooterFinalText(ctx, layout) {
+    drawNativeFillText(ctx, {
+      text: "FAST DRIVERS. CLOSE RACING. BIG FUN.",
+      x: EXPORT_WIDTH / 2,
+      y: layout.footerY + 14,
+      font: `bold 14px ${FONT_SMALL}`,
+      fill: "#FFFFFF",
+      align: "center",
+      category: "footer",
+    });
   }
 
   async function renderPowerRankingsDiscordCanvas(week, options = {}) {
@@ -1661,7 +1744,7 @@
     drawCarbonBackground(ctx);
     drawProphetWatermark(ctx, assets.prophetLogo.img, layout);
     resetTextRenderingState(ctx);
-    drawHeader(ctx, week, assets, layout, trackName);
+    drawHeaderMaster(ctx, week, assets, layout);
 
     assets.entries.forEach((entry, index) => {
       const col = index % 5;
@@ -1669,7 +1752,7 @@
       const x = layout.padX + col * (layout.cardW + layout.colGap);
       const y = layout.gridTop + row * (layout.rowH + layout.rowGap);
       const driverAsset = assets.driverAssets.get(entry.driverId || entry.driverName);
-      drawRankingCard(
+      drawRankingCardMaster(
         ctx,
         entry,
         { x, y, w: layout.cardW, h: layout.rowH },
@@ -1677,8 +1760,8 @@
       );
     });
 
-    drawHonorableSection(ctx, week, assets, layout);
-    drawFooter(ctx, layout);
+    drawHonorableSectionMaster(ctx, week, assets, layout);
+    drawFooterMaster(ctx, layout);
 
     const canvas = document.createElement("canvas");
     canvas.width = EXPORT_WIDTH;
@@ -1687,6 +1770,19 @@
     finalCtx.imageSmoothingEnabled = true;
     finalCtx.imageSmoothingQuality = "high";
     finalCtx.drawImage(master, 0, 0, EXPORT_WIDTH, EXPORT_HEIGHT);
+
+    // Native final-resolution small/medium text — never downsampled.
+    resetTextRenderingState(finalCtx);
+    drawHeaderFinalText(finalCtx, week, layout, trackName);
+    assets.entries.forEach((entry, index) => {
+      const col = index % 5;
+      const row = Math.floor(index / 5);
+      const x = layout.padX + col * (layout.cardW + layout.colGap);
+      const y = layout.gridTop + row * (layout.rowH + layout.rowGap);
+      drawRankingCardFinalText(finalCtx, entry, { x, y, w: layout.cardW, h: layout.rowH });
+    });
+    drawHonorableSectionFinalText(finalCtx, assets, layout);
+    drawFooterFinalText(finalCtx, layout);
 
     const blob = await new Promise((resolve, reject) => {
       canvas.toBlob(
@@ -1704,15 +1800,14 @@
       canvasInternalResolution: `${EXPORT_WIDTH * RENDER_SCALE}×${EXPORT_HEIGHT * RENDER_SCALE}`,
       outputResolution: `${EXPORT_WIDTH}×${EXPORT_HEIGHT}`,
       renderScale: RENDER_SCALE,
-      downsample: "single high-quality drawImage (imageSmoothingQuality=high)",
+      downsample: "single high-quality drawImage for base graphic; small/medium text drawn native on final canvas",
+      smallTextStage: "final-native-after-downsample",
       fontsUsed: fontInfo.fontsUsed,
       fontWeightsUsed: fontInfo.fontWeightsUsed,
       fontFallbackRequired: fontInfo.fallbackRequired,
       impactLoaded: fontInfo.impactLoaded,
-      arialBlackLoaded: fontInfo.arialBlackLoaded,
       narrowLoaded: fontInfo.narrowLoaded,
       arialLoaded: fontInfo.arialLoaded,
-      haettenschweilerLoaded: fontInfo.haettenschweilerLoaded,
       fontWarnings: fontInfo.warnings || [],
       minNumberContrast: MIN_NUMBER_CONTRAST,
       prophetWatermark: {
