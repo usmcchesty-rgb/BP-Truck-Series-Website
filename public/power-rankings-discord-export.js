@@ -2077,6 +2077,9 @@
   window.BPPowerRankingsDiscordExport = {
     EXPORT_WIDTH,
     EXPORT_HEIGHT,
+    RENDER_SCALE,
+    OUTPUT_WIDTH_4K: EXPORT_WIDTH * RENDER_SCALE,
+    OUTPUT_HEIGHT_4K: EXPORT_HEIGHT * RENDER_SCALE,
     PLACEHOLDER,
     buildWeekFromAdminForm,
     renderPowerRankingsDiscordCanvas,

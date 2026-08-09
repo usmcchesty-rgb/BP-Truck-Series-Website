@@ -348,12 +348,17 @@
 
       <div class="discord-export-panel">
         <h3>Discord Export</h3>
-        <p class="sub">Generate a 1920×1080 Discord graphic from the current form (preview matches download). All 10 drivers must be selected.</p>
+        <p class="sub">Generate a true 3840×2160 Discord graphic (preview display is CSS-scaled; source PNG is 4K). All 10 drivers must be selected.</p>
         <div class="btn-row" style="margin-top:0;">
           <button id="discordPreviewBtn" class="btn btn-secondary" type="button" onclick="previewDiscordImage()">Preview Discord Image</button>
           <button id="discordDownloadBtn" class="btn btn-secondary" type="button" onclick="downloadDiscordImage()">Download Discord Image</button>
           <button id="discordCopyTextBtn" class="btn btn-secondary" type="button" onclick="copyDiscordText()">Copy Discord Text</button>
           <button id="discordDownloadTextBtn" class="btn btn-secondary" type="button" onclick="downloadDiscordText()">Download Discord Text</button>
+        </div>
+        <p class="sub" style="margin-top:10px;">Temporary A/B resolution test (same renderer, Discord upload comparison):</p>
+        <div class="btn-row" style="margin-top:0;">
+          <button id="discordDownload1080Btn" class="btn btn-secondary" type="button" onclick="downloadDiscordImage1080p()">Download 1080p Test</button>
+          <button id="discordDownload4kBtn" class="btn btn-secondary" type="button" onclick="downloadDiscordImage4k()">Download 4K Test</button>
         </div>
         <p id="discordExportStatus" class="sub" hidden></p>
       </div>
@@ -385,7 +390,7 @@
         <div class="pr-discord-preview-actions">
           <button class="btn btn-secondary" type="button" onclick="closeDiscordPreview()">Close</button>
         </div>
-        <img id="discordPreviewImg" alt="Power Rankings Discord preview (1920×1080)" />
+        <img id="discordPreviewImg" alt="Power Rankings Discord preview (3840×2160 source)" />
       </div>
     </div>
 
@@ -2138,7 +2143,14 @@
     }
 
     function setDiscordExportBusy(isBusy) {
-      ['discordPreviewBtn', 'discordDownloadBtn', 'discordCopyTextBtn', 'discordDownloadTextBtn'].forEach((id) => {
+      [
+        'discordPreviewBtn',
+        'discordDownloadBtn',
+        'discordDownload1080Btn',
+        'discordDownload4kBtn',
+        'discordCopyTextBtn',
+        'discordDownloadTextBtn',
+      ].forEach((id) => {
         const btn = document.getElementById(id);
         if (btn) btn.disabled = isBusy;
       });
@@ -2156,22 +2168,29 @@
     }
     window.closeDiscordPreview = closeDiscordPreview;
 
+    function formatDiscordExportStatus(result, actionLabel) {
+      const w = result?.width || result?.diagnostics?.pngExport?.width;
+      const h = result?.height || result?.diagnostics?.pngExport?.height;
+      const bytes = result?.blob?.size || result?.diagnostics?.pngExport?.blobSize;
+      const sizeMb = bytes ? `${(bytes / (1024 * 1024)).toFixed(2)} MB` : '';
+      const down = result?.diagnostics?.downsampled ? 'downsampled' : 'no downsample';
+      return `${actionLabel} ${w}×${h}${sizeMb ? ` (${sizeMb})` : ''} — ${down}.`;
+    }
+
     async function previewDiscordImage() {
       setDiscordExportBusy(true);
-      setDiscordExportStatus('Rendering Discord preview…');
+      setDiscordExportStatus('Rendering Discord preview (4K source)…');
 
       try {
         closeDiscordPreview();
         const week = await buildAdminExportWeek();
-        const result = await BPPowerRankingsDiscordExport.previewWeekPng(week);
+        const result = await BPPowerRankingsDiscordExport.previewWeekPng(week, { outputMode: '4k' });
         discordPreviewObjectUrl = result.objectUrl;
         const img = $('#discordPreviewImg');
         const modal = $('#discordPreviewModal');
         if (img) img.src = result.objectUrl;
         if (modal) modal.hidden = false;
-        setDiscordExportStatus(
-          `Preview ready (1920×1080). ${result.diagnostics?.fontsUsed?.join(", ") || "Fonts loaded."}`,
-        );
+        setDiscordExportStatus(formatDiscordExportStatus(result, 'Preview ready'));
       } catch (e) {
         setDiscordExportStatus(e.message || 'Preview failed.', true);
       } finally {
@@ -2180,21 +2199,36 @@
     }
     window.previewDiscordImage = previewDiscordImage;
 
-    async function downloadDiscordImage() {
+    async function downloadDiscordImageWithMode(outputMode) {
       setDiscordExportBusy(true);
-      setDiscordExportStatus('Rendering Discord PNG…');
+      const label = outputMode === '1080p' ? '1080p' : '4K';
+      setDiscordExportStatus(`Rendering Discord PNG (${label})…`);
 
       try {
         const week = await buildAdminExportWeek();
-        await BPPowerRankingsDiscordExport.downloadWeekPng(week);
-        setDiscordExportStatus('PNG download started (1920×1080).');
+        const result = await BPPowerRankingsDiscordExport.downloadWeekPng(week, { outputMode });
+        setDiscordExportStatus(formatDiscordExportStatus(result, `${label} download started`));
       } catch (e) {
         setDiscordExportStatus(e.message || 'PNG export failed.', true);
       } finally {
         setDiscordExportBusy(false);
       }
     }
+
+    async function downloadDiscordImage() {
+      return downloadDiscordImageWithMode('4k');
+    }
     window.downloadDiscordImage = downloadDiscordImage;
+
+    async function downloadDiscordImage1080p() {
+      return downloadDiscordImageWithMode('1080p');
+    }
+    window.downloadDiscordImage1080p = downloadDiscordImage1080p;
+
+    async function downloadDiscordImage4k() {
+      return downloadDiscordImageWithMode('4k');
+    }
+    window.downloadDiscordImage4k = downloadDiscordImage4k;
 
     async function copyDiscordText() {
       setDiscordExportBusy(true);
