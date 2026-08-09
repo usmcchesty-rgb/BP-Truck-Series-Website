@@ -322,7 +322,7 @@
     fill,
     align = "left",
     category = "text",
-    stage = "final",
+    stage = "master-hires",
   }) {
     ctx.save();
     resetTextRenderingState(ctx);
@@ -1224,7 +1224,7 @@
       fill,
       align: "center",
       category,
-      stage: "final",
+      stage: "master-hires",
     });
     return size;
   }
@@ -1244,7 +1244,7 @@
         fill,
         align: "center",
         category: "subtitle",
-        stage: "final",
+        stage: "master-hires",
       });
     });
   }
@@ -1725,8 +1725,42 @@
     });
   }
 
+  async function readPngDimensions(blob) {
+    const header = await blob.slice(0, 24).arrayBuffer();
+    const view = new DataView(header);
+    const isPng =
+      view.byteLength >= 24 &&
+      view.getUint32(0) === 0x89504e47 &&
+      view.getUint32(4) === 0x0d0a1a0a;
+    if (!isPng) return { width: null, height: null, validPng: false };
+    return {
+      width: view.getUint32(16),
+      height: view.getUint32(20),
+      validPng: true,
+    };
+  }
+
+  function canvasToPngBlob(canvas) {
+    return new Promise((resolve, reject) => {
+      canvas.toBlob(
+        (result) => {
+          if (result) resolve(result);
+          else reject(new Error("PNG export failed."));
+        },
+        "image/png",
+      );
+    });
+  }
+
+  /**
+   * @param {object} week
+   * @param {{ outputMode?: '4k'|'1080p' }} [options]
+   * Default outputMode is '4k' (true 3840×2160, no downsample).
+   * '1080p' downsamples the completed hi-res graphic once for A/B testing.
+   */
   async function renderPowerRankingsDiscordCanvas(week, options = {}) {
     validateWeek(week);
+    const outputMode = options.outputMode === "1080p" ? "1080p" : "4k";
     const fontInfo = await ensureFontsReady();
     const assets = await preloadExportAssets(week);
     const layout = computeLayout(assets.mentions.length);
@@ -1763,45 +1797,76 @@
     drawHonorableSectionMaster(ctx, week, assets, layout);
     drawFooterMaster(ctx, layout);
 
-    const canvas = document.createElement("canvas");
-    canvas.width = EXPORT_WIDTH;
-    canvas.height = EXPORT_HEIGHT;
-    const finalCtx = canvas.getContext("2d", { alpha: false });
-    finalCtx.imageSmoothingEnabled = true;
-    finalCtx.imageSmoothingQuality = "high";
-    finalCtx.drawImage(master, 0, 0, EXPORT_WIDTH, EXPORT_HEIGHT);
-
-    // Native final-resolution small/medium text — never downsampled.
-    resetTextRenderingState(finalCtx);
-    drawHeaderFinalText(finalCtx, week, layout, trackName);
+    // All small/medium text drawn on the same hi-res canvas (logical coords via scale).
+    resetTextRenderingState(ctx);
+    drawHeaderFinalText(ctx, week, layout, trackName);
     assets.entries.forEach((entry, index) => {
       const col = index % 5;
       const row = Math.floor(index / 5);
       const x = layout.padX + col * (layout.cardW + layout.colGap);
       const y = layout.gridTop + row * (layout.rowH + layout.rowGap);
-      drawRankingCardFinalText(finalCtx, entry, { x, y, w: layout.cardW, h: layout.rowH });
+      drawRankingCardFinalText(ctx, entry, { x, y, w: layout.cardW, h: layout.rowH });
     });
-    drawHonorableSectionFinalText(finalCtx, assets, layout);
-    drawFooterFinalText(finalCtx, layout);
+    drawHonorableSectionFinalText(ctx, assets, layout);
+    drawFooterFinalText(ctx, layout);
 
-    const blob = await new Promise((resolve, reject) => {
-      canvas.toBlob(
-        (result) => {
-          if (result) resolve(result);
-          else reject(new Error("PNG export failed."));
-        },
-        "image/png",
-        1,
-      );
-    });
+    let canvas = master;
+    let downsampled = false;
+
+    if (outputMode === "1080p") {
+      // A/B only: one downsample of the completed hi-res graphic.
+      const finalCanvas = document.createElement("canvas");
+      finalCanvas.width = EXPORT_WIDTH;
+      finalCanvas.height = EXPORT_HEIGHT;
+      const finalCtx = finalCanvas.getContext("2d", { alpha: false });
+      finalCtx.imageSmoothingEnabled = true;
+      finalCtx.imageSmoothingQuality = "high";
+      finalCtx.drawImage(master, 0, 0, EXPORT_WIDTH, EXPORT_HEIGHT);
+      canvas = finalCanvas;
+      downsampled = true;
+    }
+
+    const blob = await canvasToPngBlob(canvas);
+    const pngDims = await readPngDimensions(blob);
+
+    const exportLog = {
+      width: pngDims.width,
+      height: pngDims.height,
+      blobSize: blob.size,
+      renderScale: RENDER_SCALE,
+      downsampled,
+      outputMode,
+      masterCanvas: `${master.width}×${master.height}`,
+    };
+    console.log("[pr-discord-export] PNG export", exportLog);
+
+    if (
+      outputMode === "4k" &&
+      (pngDims.width !== EXPORT_WIDTH * RENDER_SCALE ||
+        pngDims.height !== EXPORT_HEIGHT * RENDER_SCALE)
+    ) {
+      console.warn("[pr-discord-export] Unexpected 4K PNG dimensions", pngDims);
+    }
+    if (
+      outputMode === "1080p" &&
+      (pngDims.width !== EXPORT_WIDTH || pngDims.height !== EXPORT_HEIGHT)
+    ) {
+      console.warn("[pr-discord-export] Unexpected 1080p PNG dimensions", pngDims);
+    }
 
     lastRenderDiagnostics = {
       canvasMasterResolution: `${EXPORT_WIDTH * RENDER_SCALE}×${EXPORT_HEIGHT * RENDER_SCALE}`,
       canvasInternalResolution: `${EXPORT_WIDTH * RENDER_SCALE}×${EXPORT_HEIGHT * RENDER_SCALE}`,
-      outputResolution: `${EXPORT_WIDTH}×${EXPORT_HEIGHT}`,
+      outputResolution: `${pngDims.width || canvas.width}×${pngDims.height || canvas.height}`,
       renderScale: RENDER_SCALE,
-      downsample: "single high-quality drawImage for base graphic; small/medium text drawn native on final canvas",
-      smallTextStage: "final-native-after-downsample",
+      downsampled,
+      outputMode,
+      downsample:
+        outputMode === "4k"
+          ? "none — PNG encoded directly from 3840×2160 master"
+          : "single drawImage downsample of completed master for 1080p A/B test",
+      smallTextStage: "master-hires-with-scale",
+      pngExport: exportLog,
       fontsUsed: fontInfo.fontsUsed,
       fontWeightsUsed: fontInfo.fontWeightsUsed,
       fontFallbackRequired: fontInfo.fallbackRequired,
@@ -1844,8 +1909,8 @@
       canvas,
       blob,
       raceNumber: Number(week.raceNumber),
-      width: EXPORT_WIDTH,
-      height: EXPORT_HEIGHT,
+      width: pngDims.width || canvas.width,
+      height: pngDims.height || canvas.height,
       diagnostics: lastRenderDiagnostics,
       ...options,
     };
@@ -1858,7 +1923,7 @@
     }
     canvasOrBlob.toBlob((blob) => {
       if (blob) downloadBlob(blob, filename);
-    }, "image/png", 1);
+    }, "image/png");
   }
 
   function downloadBlob(blob, filename) {
@@ -1874,23 +1939,27 @@
     return renderPowerRankingsDiscordCanvas(week, options);
   }
 
-  async function downloadWeekPng(week) {
-    const result = await renderPowerRankingsDiscordCanvas(week);
+  async function downloadWeekPng(week, options = {}) {
+    const result = await renderPowerRankingsDiscordCanvas(week, options);
+    const suffix = result.diagnostics?.outputMode === "1080p" ? "1080p" : "4k";
     downloadBlob(
       result.blob,
-      `blazing-pedals-power-rankings-race-${result.raceNumber}.png`,
+      `blazing-pedals-power-rankings-race-${result.raceNumber}-${suffix}.png`,
     );
     return result;
   }
 
-  async function previewWeekPng(week) {
-    const result = await renderPowerRankingsDiscordCanvas(week);
+  async function previewWeekPng(week, options = {}) {
+    const result = await renderPowerRankingsDiscordCanvas(week, {
+      outputMode: "4k",
+      ...options,
+    });
     const objectUrl = URL.createObjectURL(result.blob);
     return { ...result, objectUrl };
   }
 
   async function exportWeek(week) {
-    return downloadWeekPng(week);
+    return downloadWeekPng(week, { outputMode: "4k" });
   }
 
   function buildWeekFromAdminForm(formData, driverOptions = [], profileById = {}) {

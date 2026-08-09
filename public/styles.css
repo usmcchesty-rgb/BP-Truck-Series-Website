@@ -4,14 +4,33 @@
   --green:#45d65a;
   --bp-page-max-width:1500px;
   --bp-text-primary:#ffffff;
-  --bp-text-body:#d6d6d6;
-  --bp-text-secondary:#a8a8a8;
-  --bp-text-muted:#808080;
+  --bp-text-body:#d7d7d7;
+  --bp-text-secondary:#d7d7d7;
+  --bp-text-muted:#afafaf;
   --text:var(--bp-text-body);
   --muted:var(--bp-text-muted);
 }
 *{box-sizing:border-box}
-body{margin:0;background:#050505;color:var(--bp-text-body);font-family:Arial Narrow,Roboto Condensed,Impact,Arial,sans-serif;letter-spacing:.2px;overflow-x:hidden;display:flex;flex-direction:column;min-height:100vh}
+html{
+  -webkit-font-smoothing:auto;
+  -moz-osx-font-smoothing:auto;
+  text-rendering:auto;
+}
+body{
+  margin:0;
+  background:#050505;
+  color:var(--bp-text-body);
+  /* System faces only — no unloaded Roboto Condensed (avoids soft fallback synthesis). */
+  font-family:"Arial Narrow",Arial,Helvetica,sans-serif;
+  font-weight:400;
+  font-synthesis-style:none;
+  letter-spacing:.15px;
+  text-shadow:none;
+  overflow-x:hidden;
+  display:flex;
+  flex-direction:column;
+  min-height:100vh;
+}
 /* Connected to Codex */
 .bg-clean{background-color:var(--dark)}
 .bp-text-primary{color:var(--bp-text-primary)}
@@ -1997,7 +2016,7 @@ a.home-news-item:hover h4{color:#fff}
 .home-placeholder{color:#888;font-size:11px;font-style:italic}
 .home-cta-row{display:flex;flex-wrap:wrap;gap:12px;margin-top:18px}
 .muted{color:var(--muted);font-size:12px}
-.page-intro{margin:0 0 16px;color:#ccc;font-size:14px;max-width:760px;line-height:1.45}
+.page-intro{margin:0 0 16px;color:var(--bp-text-secondary);font-size:14px;max-width:760px;line-height:1.45}
 .drivers-toolbar{
   display:flex;
   flex-wrap:wrap;
@@ -3076,7 +3095,7 @@ a.home-news-item:hover h4{color:#fff}
 }
 .streamview-audio--on{
   color:var(--red);
-  text-shadow:0 0 8px rgba(229,9,20,.35);
+  text-shadow:none;
 }
 .streamview-audio--idle{
   color:#666;
@@ -3620,65 +3639,121 @@ td{
 .home-rank-move.new{color:#93c5fd}
 .results-finish,
 .driver-profile-finish{color:var(--gold)}
-.points{color:var(--gold);font-weight:900}
+.points{color:var(--gold);font-weight:700}
 .sub{color:var(--bp-text-secondary);font-size:12px;line-height:1.45}
 
-/* BP crisp text — remove glow from readable content (brand accents exempt) */
+/* =========================================================
+   Site-wide typography rendering cleanup
+   Crisp solid lettering — no redesign, no layout changes.
+   ========================================================= */
+
+body,
+p,a,span,li,td,th,label,button,input,select,textarea,
+h1,h2,h3,h4,h5,h6,nav,footer,
+.muted,.sub,.page-intro,.btn,.refresh,.card,.panel,
+.standings-table,.results-table,
+.driver-profile-bio-text,.news-article-body,
+.power-rankings-prophet-body,.power-ranking-writeup{
+  text-shadow:none;
+  -webkit-text-stroke:0;
+}
+
+/* Remap ultra-heavy UI weights → real bold (avoids soft synthesized 900). */
+nav.site-nav a,
+footer,
+.footer-slogan,
+.btn,
+button.btn,
+.standings-table th,
+.results-table th,
+.results-featured-title,
+.power-rankings-section-title,
+.power-rankings-section-head h2,
+.power-rankings-honorable h3,
+.driver-profile-section-head h2,
+.driver-profile-stat-label,
+.driver-profile-meta-label,
+.driver-profile-back,
+.page-intro,
+.muted,
+.sub,
+.refresh,
+.card h3,
+.home-rank-name,
+.home-rank-move,
+.home-rank-subtitle,
+.home-news-meta,
+.news-byline-text,
+.news-author-meta,
+.news-card-dek,
+.news-featured-dek,
+.placeholder-panel p,
+.streamview-nav-btn,
+.streamview-audio,
+.streamview-icon-btn,
+.streamview-panel-title,
+.streamer-badge,
+.driver-inactive-badge,
+label,
+.gap .leader-label,
+.gap .behind-label,
+.podium-card .stats-row span,
+.sidebar .card.stat .stat-row span,
+.card .stat span,
+.points,
+.pos,
+.results-pos,
+.power-ranking-rank,
+.power-ranking-movement{
+  font-weight:700;
+}
+
+/* Soft synthesized italic hurts small/medium UI — keep upright. */
+.muted,
+.sub,
+.page-intro,
+.home-rank-subtitle,
+.home-rank-placeholder,
+.home-rank-loading,
+.home-placeholder,
+.home-news-meta,
+.driver-profile-alias,
+.driver-profile-meta-label,
+.driver-profile-stat-label,
+.driver-profile-back,
+.news-byline-text,
+.news-author-meta,
+.news-card-dek,
+.news-featured-dek,
+.placeholder-panel p,
+.cutline td,
+.results-empty,
+.power-rankings-date,
+.pedal-prophet-tagline,
+.pedal-prophet-signature-role,
+.pedal-prophet-signature-signoff,
+.streamview-intro,
+.streamview-audio,
+th{
+  font-style:normal;
+}
+
+/* Article / long-form copy */
 .news-article-body,
 .news-article-body p,
 .power-rankings-prophet-body,
 .power-rankings-prophet-body p,
 .power-ranking-writeup,
 .power-ranking-honorable-card p,
-.driver-profile-bio-text,
-.page-intro,
-.home-spotlight-card p,
-.power-rankings-formula-fallback,
-.news-author-card-copy p,
-.home-news-item p,
-.news-featured-dek,
-.news-card-dek,
-.results-empty,
-.driver-profile-results-table tbody td,
-.results-table tbody td,
-.streamer-card-body p,
-.driver-card-body p,
-.driver-profile-info-value,
-td,
-th,
-label,
-.muted,
-.sub,
-.power-rankings-date,
-.pedal-prophet-tagline,
-.pedal-prophet-signature-role,
-.pedal-prophet-signature-signoff,
-.news-byline-text,
-.news-author-meta,
-.driver-profile-stat-label,
-.driver-profile-meta-label,
-.driver-profile-alias,
-.driver-profile-back,
-.sidebar .card.stat .stat-row span,
-.placeholder-panel p,
-.home-news-meta,
-.home-rank-subtitle,
-.card .stat span,
-.podium-card .stats-row span,
-footer,
-.refresh{
-  text-shadow:none;
-}
-
-.news-article-body,
-.news-article-body p,
-.power-rankings-prophet-body p,
-.power-ranking-writeup,
-.power-ranking-honorable-card p,
 .driver-profile-bio-text{
   font-weight:400;
+  font-style:normal;
+  color:var(--bp-text-body);
+  text-shadow:none;
+  opacity:1;
 }
 
+/* Primary headings/names — solid white, no glow */
 .title h1,
 .podium-info h2,
 .news-article-headline,
@@ -3705,6 +3780,65 @@ footer,
 .podium-card .stats-row b,
 .podium-points,
 .card .stat b,
-.last-winner b{
+.last-winner b,
+.results-driver-link span,
+.results-featured-winner strong,
+.news-byline-text span:first-child,
+.news-author-copy strong,
+.news-author-card-copy strong{
+  color:var(--bp-text-primary);
   text-shadow:none;
+  -webkit-text-stroke:0;
+}
+
+/* Secondary / muted — solid colors (not translucent white) */
+.muted,
+.home-news-item p,
+.home-spotlight-card p,
+.home-social-placeholder p,
+.placeholder-panel p,
+.news-author-card-copy p,
+.news-card-dek,
+.news-featured-dek,
+.driver-profile-alias,
+.driver-profile-meta-label,
+.driver-profile-stat-label,
+.driver-profile-back,
+.power-rankings-date,
+.pedal-prophet-tagline,
+.streamview-intro,
+.brand small{
+  color:var(--bp-text-muted);
+  opacity:1;
+}
+
+.sub,
+.page-intro,
+.driver-profile-meta-value,
+.driver-profile-info-value,
+.sidebar .card.stat .stat-row span,
+.podium-card .stats-row span,
+.card .stat span,
+.last-winner span,
+.next-race-copy,
+.next-race-time{
+  color:var(--bp-text-secondary);
+  opacity:1;
+}
+
+/* Retain intentional Impact logo / display branding */
+.bp,
+.logo-card .bp,
+.logo-card .bottom-bp,
+.bottom-bp{
+  font-family:Impact,Haettenschweiler,"Arial Black",Arial,sans-serif;
+  font-weight:900;
+  font-style:normal;
+  font-synthesis:none;
+  text-shadow:3px 0 var(--red),0 0 12px #900;
+}
+.driver-profile-number{
+  font-family:Impact,Haettenschweiler,"Arial Black",Arial,sans-serif;
+  font-weight:900;
+  font-synthesis:none;
 }
