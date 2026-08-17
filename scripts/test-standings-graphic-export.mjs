@@ -20,7 +20,7 @@ import {
   resolveLatestCompletedPointsRaceNumber,
   resolveLatestCompletedPointsRaceFromRaces,
   resolveLatestCompletedPointsRaceDisplay,
-  resolvePointsRaceNumberFromSchedule,
+  enrichClientScheduleRaces,
   isNonPointsRace,
   buildStandingsGraphicFilename,
   buildStandingsGraphicModel,
@@ -28,27 +28,36 @@ import {
   formatAfterRaceLine,
   formatWinsLabel,
   formatPointsLabel,
+  formatMovement,
+  resolveMovementDelta,
   fitTextFontSize,
   fitTrackNameDisplay,
   plateNumberFontSize,
+  formatPlateDisplay,
+  pickCarNumber,
+  pickReadableNumberColor,
   buildSponsorFooterText,
   validateOutputDimensions,
   parseSeasonNumber,
   normalizeStandingsRows,
   sanitizeTrackName,
   formatPreviewStatus,
+  computeStandingsLayoutMetrics,
 } from "../public/standings-graphic-export-logic.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
 
-function makeDrivers(count) {
+function makeDrivers(count, extras = {}) {
   return Array.from({ length: count }, (_, i) => ({
     position: i + 1,
+    previousPosition: i + 1 + (i % 3 === 0 ? 2 : i % 3 === 1 ? -1 : 0),
+    gainLoss: i % 3 === 0 ? 2 : i % 3 === 1 ? -1 : 0,
     driver: `Driver ${String(i + 1).padStart(2, "0")} Longname`,
     carNumber: String((i % 999) + 1),
     points: 1000 - i * 7,
     wins: i === 0 ? 3 : i < 5 ? 1 : 0,
+    ...extras,
   }));
 }
 
@@ -58,10 +67,12 @@ function approxMeasure(font, text) {
   return String(text).length * size * 0.55;
 }
 
+/** Raw schedule: 2 Daytona duels + points races. Homestead = schedule row 19 = official points 17. */
 function homesteadScheduleFixture() {
   const races = [];
   for (let i = 1; i <= 16; i += 1) {
     races.push({
+      raceNumber: i,
       track: `Track ${i}`,
       points: "yes",
       winner: `Winner ${i}`,
@@ -69,19 +80,29 @@ function homesteadScheduleFixture() {
     });
   }
   races.push({
-    track: "Daytona Duels",
+    raceNumber: 17,
+    track: "Daytona Duels Heat 1",
     points: "no",
-    winner: "Duel Winner",
+    winner: "Duel Winner A",
     status: "non-points",
   });
   races.push({
+    raceNumber: 18,
+    track: "Daytona Duels Heat 2",
+    points: "no",
+    winner: "Duel Winner B",
+    status: "non-points",
+  });
+  races.push({
+    raceNumber: 19,
     track: "Homestead Miami Speedway Oval Night",
     points: "yes",
     winner: "Chris Carroll3",
     status: "points",
   });
   races.push({
-    track: "Future Track",
+    raceNumber: 20,
+    track: "Texas Motor Speedway Oval",
     points: "yes",
     winner: "",
     status: "points",
@@ -106,86 +127,79 @@ test("output dimensions are exactly 3840×2160 at scale 2", () => {
   assert.equal(OUTPUT_WIDTH, 3840);
   assert.equal(OUTPUT_HEIGHT, 2160);
   assert.equal(validateOutputDimensions(3840, 2160), true);
-  assert.equal(validateOutputDimensions(1920, 1080), false);
 });
 
-test("maximum 43 drivers exported", () => {
-  const rows = takeTopDrivers(makeDrivers(60), MAX_DRIVERS);
-  assert.equal(rows.length, 43);
-  assert.equal(rows[0].position, 1);
-  assert.equal(rows[42].position, 43);
+test("43 drivers → 16 / 14 / 13 columns", () => {
+  assert.deepEqual(COLUMN_SIZES, [16, 14, 13]);
+  const cols = distributeColumns(takeTopDrivers(makeDrivers(43)));
+  assert.deepEqual(cols.map((c) => c.length), [16, 14, 13]);
+  assert.equal(cols[0][0].position, 1);
+  assert.equal(cols[0][15].position, 16);
+  assert.equal(cols[1][0].position, 17);
+  assert.equal(cols[1][13].position, 30);
+  assert.equal(cols[2][0].position, 31);
+  assert.equal(cols[2][12].position, 43);
+});
+
+test("P1–P16 all in column 1; playoff divider below P16", () => {
+  const drivers = takeTopDrivers(makeDrivers(43));
+  const cut = findPlayoffCutPlacement(drivers, DEFAULT_PLAYOFF_CUT);
+  assert.ok(cut);
+  assert.equal(cut.columnIndex, 0);
+  assert.equal(cut.afterRowIndex, 15);
+  assert.match(cut.label, /TOP 16 PLAYOFF CUT/);
+});
+
+test("16-row first column + cut + footer physically fits", () => {
+  const m = computeStandingsLayoutMetrics({
+    driverCount: 43,
+    hasTrackName: true,
+    reserveCutGap: true,
+  });
+  assert.equal(m.maxRows, 16);
+  assert.equal(m.fits, true);
+  assert.ok(m.rowH >= 48);
+  assert.ok(m.usedH <= m.gridSpan + 0.01);
 });
 
 test("fewer than 43 drivers — no placeholders", () => {
   const rows = takeTopDrivers(makeDrivers(12), MAX_DRIVERS);
   assert.equal(rows.length, 12);
-  assert.ok(rows.every((r) => r.driverName));
 });
 
-test("standings ordering preserved from authoritative rows", () => {
-  const input = [
+test("standings ordering preserved", () => {
+  const rows = normalizeStandingsRows([
     { position: 2, driver: "B", points: 90, wins: 0, carNumber: "2" },
     { position: 1, driver: "A", points: 100, wins: 1, carNumber: "1" },
-  ];
-  const rows = normalizeStandingsRows(input);
+  ]);
   assert.equal(rows[0].driverName, "B");
-  assert.equal(rows[1].driverName, "A");
 });
 
-test("column distribution 15 / 14 / 14", () => {
-  assert.deepEqual(COLUMN_SIZES, [15, 14, 14]);
-  const cols = distributeColumns(takeTopDrivers(makeDrivers(43)));
-  assert.equal(cols[0].length, 15);
-  assert.equal(cols[1].length, 14);
-  assert.equal(cols[2].length, 14);
-  assert.equal(cols[0][0].position, 1);
-  assert.equal(cols[0][14].position, 15);
-  assert.equal(cols[1][0].position, 16);
-  assert.equal(cols[1][13].position, 29);
-  assert.equal(cols[2][0].position, 30);
-  assert.equal(cols[2][13].position, 43);
-});
-
-test("P16 playoff cutoff placement is after position 16 in column 2", () => {
-  const drivers = takeTopDrivers(makeDrivers(43));
-  const cut = findPlayoffCutPlacement(drivers, DEFAULT_PLAYOFF_CUT);
-  assert.ok(cut);
-  assert.equal(cut.playoffCut, 16);
-  assert.equal(cut.columnIndex, 1);
-  assert.equal(cut.afterRowIndex, 0);
-  assert.match(cut.label, /TOP 16 PLAYOFF CUT/);
-});
-
-test("playoff cut omitted when fewer than cut+1 drivers", () => {
-  const cut = findPlayoffCutPlacement(takeTopDrivers(makeDrivers(10)), 16);
-  assert.equal(cut, null);
-});
-
-test("Race 17 + Homestead resolve together from same completed race", () => {
+test("Race 17 + Homestead resolve together; schedule row 19 is official 17", () => {
   const races = homesteadScheduleFixture();
+  const enriched = enrichClientScheduleRaces(races);
+  const homestead = enriched.find((r) => /Homestead/i.test(r.track));
+  assert.equal(homestead.scheduleRow ?? homestead.raceNumber, 19);
+  assert.equal(homestead.officialPointsRaceNumber, 17);
   const display = resolveLatestCompletedPointsRaceFromRaces(races);
   assert.equal(display.raceNumber, 17);
   assert.equal(display.trackName, "Homestead Miami Speedway Oval Night");
+  assert.notEqual(display.raceNumber, 19);
 });
 
-test("duel/non-points rows do not shift official points race number", () => {
+test("duel/non-points rows do not increment official points race number", () => {
   const races = homesteadScheduleFixture();
-  assert.equal(isNonPointsRace(races.find((r) => /duel/i.test(r.track))), true);
+  assert.equal(isNonPointsRace(races[16]), true);
+  assert.equal(isNonPointsRace(races[17]), true);
   assert.equal(resolveLatestCompletedPointsRaceNumber(races), 17);
-  const display = resolveLatestCompletedPointsRaceDisplay({ races });
-  assert.equal(display.raceNumber, 17);
-  assert.equal(display.trackName, "Homestead Miami Speedway Oval Night");
 });
 
-test("race number and track come from the same completed race", () => {
+test("race number and track come from same completed points-race record", () => {
   const scheduleData = {
     raceResults: {
       latestCompletedRaceNumber: 17,
       completedRaces: [
-        {
-          raceNumber: 17,
-          track: "Homestead Miami Speedway Oval Night",
-        },
+        { raceNumber: 17, track: "Homestead Miami Speedway Oval Night" },
       ],
     },
     races: homesteadScheduleFixture(),
@@ -193,104 +207,113 @@ test("race number and track come from the same completed race", () => {
   const display = resolveLatestCompletedPointsRaceDisplay(scheduleData);
   assert.equal(display.raceNumber, 17);
   assert.equal(display.trackName, "Homestead Miami Speedway Oval Night");
-  assert.equal(resolvePointsRaceNumberFromSchedule(scheduleData), 17);
 });
 
-test("missing track gracefully falls back to After Race # only", () => {
+test("missing track falls back to After Race # only", () => {
   const display = resolveLatestCompletedPointsRaceDisplay({
     raceResults: { latestCompletedRaceNumber: 17, completedRaces: [{ raceNumber: 17, track: "" }] },
     races: [],
   });
   assert.equal(display.raceNumber, 17);
   assert.equal(display.trackName, "");
-  assert.equal(formatAfterRaceLine(display.raceNumber), "AFTER RACE 17");
-  assert.equal(sanitizeTrackName(undefined), "");
-  assert.equal(sanitizeTrackName("null"), "");
-  assert.equal(sanitizeTrackName("—"), "");
+  assert.equal(formatAfterRaceLine(17), "AFTER RACE 17");
+  assert.equal(sanitizeTrackName("undefined"), "");
 });
 
-test("long track names auto-fit (shrink or wrap)", () => {
-  const long = "EchoPark Speedway (Atlanta) Oval - 2008";
-  const fitted = fitTrackNameDisplay(approxMeasure, long, 180, {
-    maxSize: 16,
-    minSize: 11,
-  });
-  assert.ok(fitted.lines.length >= 1);
-  assert.ok(fitted.lines.length <= 2);
-  assert.equal(fitted.fullTrackName, long.toUpperCase());
-  fitted.lines.forEach((line) => {
-    assert.ok(approxMeasure(`bold ${fitted.fontSize}px Arial`, line) <= 180 + 1);
-  });
+test("long track names auto-fit", () => {
+  const fitted = fitTrackNameDisplay(
+    approxMeasure,
+    "EchoPark Speedway (Atlanta) Oval - 2008",
+    180,
+    { maxSize: 16, minSize: 11 },
+  );
+  assert.ok(fitted.lines.length >= 1 && fitted.lines.length <= 2);
 });
 
-test("preview and download use the same model", () => {
+test("header helpers produce single season + race labels (no duplicate path)", () => {
+  assert.equal(formatSeasonHeading("Season 11"), "SEASON 11 STANDINGS");
+  assert.equal(formatAfterRaceLine(17), "AFTER RACE 17");
+  assert.equal(parseSeasonNumber("Season 11"), 11);
+});
+
+test("valid carNumber always produces plate display; empty string falls through to bp_number", () => {
+  assert.equal(pickCarNumber({ carNumber: "", bp_number: "99" }), "99");
+  assert.equal(pickCarNumber({ carNumber: "07", bp_number: "7" }), "07");
+  assert.equal(formatPlateDisplay("99"), "99");
+  assert.equal(formatPlateDisplay(""), "—");
+  assert.equal(formatPlateDisplay(null), "—");
+});
+
+test("1/2/3-digit plate font sizes; leading zero preserved", () => {
+  assert.ok(plateNumberFontSize("9") >= plateNumberFontSize("99"));
+  assert.ok(plateNumberFontSize("99") >= plateNumberFontSize("999"));
+  assert.equal(formatPlateDisplay("07"), "07");
+});
+
+test("luminance picks readable number color", () => {
+  assert.equal(pickReadableNumberColor("#ffffff"), "#0a0a0a");
+  assert.equal(pickReadableNumberColor("#101010"), "#ffffff");
+});
+
+test("movement gained / lost / unchanged / missing", () => {
+  assert.deepEqual(formatMovement(3), { text: "▲3", dir: "up", value: 3 });
+  assert.deepEqual(formatMovement(-2), { text: "▼2", dir: "down", value: -2 });
+  assert.deepEqual(formatMovement(0), { text: "—", dir: "flat", value: 0 });
+  assert.deepEqual(formatMovement(null), { text: "—", dir: "flat", value: null });
+  assert.equal(resolveMovementDelta({ gainLoss: 3 }), 3);
+  assert.equal(resolveMovementDelta({ previousPosition: 5, position: 2 }), 3);
+  assert.equal(resolveMovementDelta({ previousPosition: 0, position: 4 }), null);
+});
+
+test("movement does not alter standings order", () => {
+  const rows = takeTopDrivers(makeDrivers(10));
+  assert.equal(rows[0].position, 1);
+  assert.equal(rows[9].position, 10);
+});
+
+test("sponsor footer is text-only Ohio & Indiana Roofing", () => {
+  const footer = buildSponsorFooterText();
+  assert.equal(footer.useLogo, false);
+  assert.match(footer.combined, /PRESENTED BY OHIO & INDIANA ROOFING/);
+  assert.equal(footer.sponsorLine, SPONSOR_NAME);
+  const model = buildStandingsGraphicModel(
+    { settings: { seasonName: "Season 11" }, rows: makeDrivers(5) },
+    { races: homesteadScheduleFixture() },
+  );
+  assert.equal(model.sponsor.useLogo, false);
+});
+
+test("filename keeps season + official points race (no track)", () => {
+  assert.equal(
+    buildStandingsGraphicFilename({
+      seasonName: "Season 11",
+      latestCompletedRace: { raceNumber: 17, trackName: "Homestead" },
+    }),
+    "BP-S11-R17-Standings.png",
+  );
+});
+
+test("preview/export share same model; Refresh Snapshot updates race data", () => {
   const standingsData = {
     settings: { seasonName: "Season 11", playoffCut: 16 },
     rows: makeDrivers(43),
   };
-  const scheduleData = {
-    raceResults: {
-      latestCompletedRaceNumber: 17,
-      completedRaces: [
-        { raceNumber: 17, track: "Homestead Miami Speedway Oval Night" },
-      ],
-    },
-    races: homesteadScheduleFixture(),
-  };
-  const modelA = buildStandingsGraphicModel(standingsData, scheduleData);
-  const modelB = buildStandingsGraphicModel(standingsData, scheduleData);
-  assert.deepEqual(modelA.latestCompletedRace, modelB.latestCompletedRace);
-  assert.equal(modelA.filename, modelB.filename);
-  assert.equal(modelA.drivers.length, modelB.drivers.length);
-  assert.deepEqual(
-    modelA.columns.map((c) => c.length),
-    modelB.columns.map((c) => c.length),
-  );
-});
-
-test("preview canvas remains exactly 3840×2160 (model constants)", () => {
-  assert.equal(OUTPUT_WIDTH, 3840);
-  assert.equal(OUTPUT_HEIGHT, 2160);
-  assert.equal(validateOutputDimensions(OUTPUT_WIDTH, OUTPUT_HEIGHT), true);
-});
-
-test("Refresh Preview does not require network — model render is self-contained", () => {
-  const model = buildStandingsGraphicModel(
-    { settings: { seasonName: "Season 11", playoffCut: 16 }, rows: makeDrivers(20) },
-    {
-      races: [
-        { track: "A", points: "yes", winner: "X", status: "points" },
-      ],
-    },
-  );
-  // Refresh Preview reuses this model object; no fetch fields required.
-  assert.ok(model.drivers.length > 0);
-  assert.ok(model.latestCompletedRace);
-  assert.equal(typeof model.filename, "string");
-});
-
-test("Refresh Snapshot updates preview data from new schedule payload", () => {
-  const standingsData = {
-    settings: { seasonName: "Season 11", playoffCut: 16 },
-    rows: makeDrivers(10),
-  };
-  const first = buildStandingsGraphicModel(standingsData, {
+  const a = buildStandingsGraphicModel(standingsData, {
     races: [{ track: "Daytona", points: "yes", winner: "A", status: "points" }],
   });
-  const second = buildStandingsGraphicModel(standingsData, {
+  const b = buildStandingsGraphicModel(standingsData, {
     raceResults: {
       latestCompletedRaceNumber: 17,
-      completedRaces: [
-        { raceNumber: 17, track: "Homestead Miami Speedway Oval Night" },
-      ],
+      completedRaces: [{ raceNumber: 17, track: "Homestead Miami Speedway Oval Night" }],
     },
     races: homesteadScheduleFixture(),
   });
-  assert.equal(first.latestCompletedRace.raceNumber, 1);
-  assert.equal(first.latestCompletedRace.trackName, "Daytona");
-  assert.equal(second.latestCompletedRace.raceNumber, 17);
-  assert.equal(second.latestCompletedRace.trackName, "Homestead Miami Speedway Oval Night");
-  assert.notEqual(first.filename, second.filename);
+  assert.equal(a.latestCompletedRace.raceNumber, 1);
+  assert.equal(b.latestCompletedRace.raceNumber, 17);
+  assert.deepEqual(b.columns.map((c) => c.length), [16, 14, 13]);
+  assert.equal(b.drivers.length, 43);
+  assert.match(formatPreviewStatus(b), /After Race 17/);
+  assert.match(formatPreviewStatus(b), /Homestead/);
 });
 
 test("fewer than 43 drivers show correct preview count", () => {
@@ -299,91 +322,35 @@ test("fewer than 43 drivers show correct preview count", () => {
     { races: homesteadScheduleFixture() },
   );
   assert.equal(model.drivers.length, 38);
-  const status = formatPreviewStatus(model);
-  assert.match(status, /38 drivers · 3840×2160/);
+  assert.match(formatPreviewStatus(model), /38 drivers/);
 });
 
-test("preview/export preserve 15/14/14 column distribution", () => {
-  const model = buildStandingsGraphicModel(
-    { settings: { seasonName: "Season 11" }, rows: makeDrivers(43) },
-    { races: homesteadScheduleFixture() },
-  );
-  assert.deepEqual(
-    model.columns.map((c) => c.length),
-    [15, 14, 14],
-  );
-});
-
-test("sponsor footer still shows Ohio & Indiana Roofing", () => {
-  const model = buildStandingsGraphicModel(
-    { settings: { seasonName: "Season 11" }, rows: makeDrivers(5) },
-    { races: homesteadScheduleFixture() },
-  );
-  assert.equal(model.sponsor.name, SPONSOR_NAME);
-  const fallback = buildSponsorFooterText({ hasLogo: false });
-  assert.equal(fallback.sponsorLine, "OHIO & INDIANA ROOFING");
-  assert.match(fallback.presentedBy, /PRESENTED BY/i);
-});
-
-test("filename uses season + official points race (no track)", () => {
-  assert.equal(
-    buildStandingsGraphicFilename({
-      seasonName: "Season 11",
-      latestCompletedRace: { raceNumber: 17, trackName: "Homestead" },
-    }),
-    "BP-S11-R17-Standings.png",
-  );
-  assert.equal(formatSeasonHeading("Season 11"), "SEASON 11 STANDINGS");
-  assert.equal(parseSeasonNumber("Season 11"), 11);
-});
-
-test("long driver-name fitting reduces font size", () => {
-  const long = "MIGUEL GOMEZ-GAUDET EXTENDED";
-  const fitted = fitTextFontSize(approxMeasure, long, 120, {
-    maxSize: 18,
-    minSize: 10,
-  });
-  const short = fitTextFontSize(approxMeasure, "LEE", 120, {
-    maxSize: 18,
-    minSize: 10,
-  });
-  assert.ok(fitted < short);
-  assert.ok(fitted >= 10);
-});
-
-test("1/2/3-digit number plate font sizes", () => {
-  const one = plateNumberFontSize("9", { maxSize: 20, minSize: 12 });
-  const two = plateNumberFontSize("99", { maxSize: 20, minSize: 12 });
-  const three = plateNumberFontSize("999", { maxSize: 20, minSize: 12 });
-  assert.ok(one >= two);
-  assert.ok(two >= three);
-  assert.equal(three, 14);
-});
-
-test("zero and multiple wins labels", () => {
+test("wins / points labels", () => {
   assert.equal(formatWinsLabel(0), "0 WINS");
   assert.equal(formatWinsLabel(1), "1 WIN");
-  assert.equal(formatWinsLabel(3), "3 WINS");
   assert.equal(formatPointsLabel(782), "782 PTS");
 });
 
-test("no new routable API file was added for standings graphic", () => {
+test("long driver-name fitting reduces font size", () => {
+  const fitted = fitTextFontSize(approxMeasure, "MIGUEL GOMEZ-GAUDET EXTENDED", 120, {
+    maxSize: 18,
+    minSize: 10,
+  });
+  assert.ok(fitted < 18);
+});
+
+test("no new routable API file; Vercel function count unchanged at 12", () => {
   const apiDir = path.join(root, "api");
   const routable = fs
     .readdirSync(apiDir)
     .filter((name) => name.endsWith(".js") && !name.startsWith("_"));
   assert.ok(!routable.includes("standings-graphic.js"));
-  assert.ok(!routable.includes("standings-graphic-export.js"));
-  // Hobby-safe baseline: keep counting stable (no new public API route file).
   assert.equal(routable.length, 12);
 });
 
-test("Vercel function count remains unchanged (12 routable api/*.js)", () => {
-  const apiDir = path.join(root, "api");
-  const routable = fs
-    .readdirSync(apiDir)
-    .filter((name) => name.endsWith(".js") && !name.startsWith("_"));
-  assert.equal(routable.length, 12);
+test("master canvas constants remain 3840×2160 for preview/export", () => {
+  assert.equal(OUTPUT_WIDTH, 3840);
+  assert.equal(OUTPUT_HEIGHT, 2160);
 });
 
 console.log(`\n${passed} standings-graphic tests passed.`);

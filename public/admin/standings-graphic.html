@@ -177,7 +177,7 @@
     const SESSION_KEY = "bp_admin_pw";
     const $ = (s) => document.querySelector(s);
 
-    let cachedSnapshot = null; // { standingsData, scheduleData, model }
+    let cachedSnapshot = null;
     let lastRenderResult = null;
     let busy = false;
 
@@ -222,7 +222,7 @@
           Number.isInteger(raceNumber) && raceNumber >= 1 ? String(raceNumber) : "—";
       }
       const track = sanitizeTrackName(model.latestCompletedRace?.trackName);
-      if ($("#metaTrack")) $("#metaTrack").textContent = track || "—";
+      if ($("#metaTrack")) $("#metaTrack").textContent = track || "(unavailable)";
       if ($("#metaDrivers")) $("#metaDrivers").textContent = String(model.drivers?.length || 0);
       if ($("#metaCut")) $("#metaCut").textContent = `Top ${model.playoffCut}`;
       if ($("#metaFilename")) $("#metaFilename").textContent = model.filename || "—";
@@ -231,11 +231,11 @@
     function mountPreviewCanvas(result) {
       const host = $("#previewHost");
       if (!host || !result?.canvas) return;
-      host.innerHTML = "";
+      while (host.firstChild) host.removeChild(host.firstChild);
       const canvas = result.canvas;
       canvas.className = "standings-graphic-preview-canvas";
+      // Do NOT reset width/height attributes — that clears bitmap pixels.
       canvas.setAttribute("aria-label", "Standings graphic preview (3840×2160)");
-      // Keep intrinsic 3840×2160; CSS scales responsively.
       host.appendChild(canvas);
     }
 

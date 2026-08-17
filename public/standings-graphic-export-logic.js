@@ -12,24 +12,28 @@ export const MAX_DRIVERS = 43;
 export const DEFAULT_PLAYOFF_CUT = 16;
 export const DEFAULT_SEASON_NAME = "Season 11";
 export const SPONSOR_NAME = "OHIO & INDIANA ROOFING";
-export const SPONSOR_LOGO_CANDIDATES = [
-  "/assets/sponsors/OIRoofing_Logo_White_Transparent.png",
-  "/assets/sponsors/oi-roofing-logo.png",
-];
 export const SITE_URL = "blazingpedalsracing.com";
 export const NON_POINTS_LABEL_PATTERN = /\b(duel|duels|non-points|exhibition|clash)\b/i;
 
-/** Column sizes: P1–15 / P16–29 / P30–43 */
-export const COLUMN_SIZES = [15, 14, 14];
+/** Top 16 playoff field stays together in column 1. */
+export const COLUMN_SIZES = [16, 14, 13];
+
+export const DEFAULT_PLATE = {
+  fill: "#1a1a1e",
+  outline: "#d0d0d4",
+  keyline: "#c81010",
+  numberFill: "#ffffff",
+};
 
 export function isNonPointsRace(race) {
+  if (race?.nonPoints === true) return true;
   const points = String(race?.points ?? "").trim().toLowerCase();
   const status = String(race?.status ?? "").trim().toLowerCase();
   if (points === "no" || status === "non-points") return true;
-  return NON_POINTS_LABEL_PATTERN.test(String(race?.track ?? ""));
+  if (points && points !== "yes") return true;
+  return NON_POINTS_LABEL_PATTERN.test(String(race?.track ?? race?.trackName ?? ""));
 }
 
-/** Strip unusable track labels so the graphic never shows undefined/null/dashes. */
 export function sanitizeTrackName(value) {
   const raw = String(value ?? "").trim();
   if (!raw) return "";
@@ -38,47 +42,63 @@ export function sanitizeTrackName(value) {
 }
 
 /**
- * Single walk of schedule rows: official points ordinal + track from the same race.
- * Completed = non-empty winner (matches schedule scrape convention).
- * Non-points / duel rows are skipped and do not inflate the ordinal.
+ * Client-side enrich matching api/_schedule-points-races.js / transcript helpers.
+ * Assigns officialPointsRaceNumber; never treats scheduleRow as the official number.
  */
-export function resolveLatestCompletedPointsRaceFromRaces(races) {
-  let pointsOrdinal = 0;
-  let latest = null;
-  for (const race of races || []) {
-    if (isNonPointsRace(race)) continue;
-    pointsOrdinal += 1;
-    if (String(race?.winner || "").trim()) {
-      latest = {
-        raceNumber: pointsOrdinal,
-        trackName: sanitizeTrackName(race?.track),
+export function enrichClientScheduleRaces(rawRaces) {
+  let officialPointsRaceNumber = 0;
+  return (rawRaces || []).map((race) => {
+    const scheduleRow = Number(race?.scheduleRow ?? race?.raceNumber);
+    const nonPoints = isNonPointsRace(race);
+    if (nonPoints) {
+      return {
+        ...race,
+        scheduleRow: Number.isFinite(scheduleRow) && scheduleRow > 0 ? scheduleRow : null,
+        nonPoints: true,
+        officialPointsRaceNumber: null,
       };
     }
+    officialPointsRaceNumber += 1;
+    return {
+      ...race,
+      scheduleRow: Number.isFinite(scheduleRow) && scheduleRow > 0 ? scheduleRow : null,
+      nonPoints: false,
+      officialPointsRaceNumber,
+    };
+  });
+}
+
+export function resolveLatestCompletedPointsRaceFromRaces(races) {
+  const enriched = enrichClientScheduleRaces(races);
+  let latest = null;
+  for (const race of enriched) {
+    if (race.nonPoints || race.officialPointsRaceNumber == null) continue;
+    if (!String(race?.winner || "").trim()) continue;
+    latest = {
+      raceNumber: race.officialPointsRaceNumber,
+      trackName: sanitizeTrackName(race?.track || race?.trackName),
+      scheduleRow: race.scheduleRow,
+    };
   }
   return latest;
 }
 
-/** Look up a points-race ordinal in the same races list (same row → number + track). */
 export function findPointsRaceDisplayByNumber(races, raceNumber) {
   const target = Number(raceNumber);
   if (!Number.isInteger(target) || target < 1) return null;
-  let ordinal = 0;
-  for (const race of races || []) {
-    if (isNonPointsRace(race)) continue;
-    ordinal += 1;
-    if (ordinal === target) {
-      return {
-        raceNumber: ordinal,
-        trackName: sanitizeTrackName(race?.track),
-      };
-    }
-  }
-  return null;
+  const enriched = enrichClientScheduleRaces(races);
+  const match = enriched.find((race) => race.officialPointsRaceNumber === target);
+  if (!match) return null;
+  return {
+    raceNumber: match.officialPointsRaceNumber,
+    trackName: sanitizeTrackName(match.track || match.trackName),
+    scheduleRow: match.scheduleRow,
+  };
 }
 
 /**
- * Resolve latest completed official points race display from schedule payload.
- * Race number and track always come from the same race identity.
+ * Race number + track from the SAME completed official points race.
+ * Prefer raceResults official pairing; never display raw scheduleRow as race #.
  */
 export function resolveLatestCompletedPointsRaceDisplay(scheduleData = {}) {
   const races = scheduleData?.races || [];
@@ -95,26 +115,26 @@ export function resolveLatestCompletedPointsRaceDisplay(scheduleData = {}) {
       };
     }
     const fromRaces = findPointsRaceDisplayByNumber(races, apiNum);
-    if (fromRaces) return fromRaces;
-    return { raceNumber: apiNum, trackName: "" };
+    if (fromRaces) {
+      return { raceNumber: fromRaces.raceNumber, trackName: fromRaces.trackName };
+    }
   }
 
   const progressionNum = Number(scheduleData?.raceProgression?.effectiveCompletedPointsCount);
   if (Number.isInteger(progressionNum) && progressionNum >= 1) {
     const fromRaces = findPointsRaceDisplayByNumber(races, progressionNum);
-    if (fromRaces) return fromRaces;
-    return { raceNumber: progressionNum, trackName: "" };
+    if (fromRaces) {
+      return { raceNumber: fromRaces.raceNumber, trackName: fromRaces.trackName };
+    }
   }
 
-  return (
-    resolveLatestCompletedPointsRaceFromRaces(races) || {
-      raceNumber: null,
-      trackName: "",
-    }
-  );
+  const walked = resolveLatestCompletedPointsRaceFromRaces(races);
+  if (walked) {
+    return { raceNumber: walked.raceNumber, trackName: walked.trackName };
+  }
+  return { raceNumber: null, trackName: "" };
 }
 
-/** Number-only helper built on the paired race+track walk. */
 export function resolveLatestCompletedPointsRaceNumber(races) {
   return resolveLatestCompletedPointsRaceFromRaces(races)?.raceNumber ?? null;
 }
@@ -131,27 +151,13 @@ export function parseSeasonNumber(seasonName) {
 }
 
 export function formatSeasonHeading(seasonName) {
-  const n = parseSeasonNumber(seasonName);
-  return `SEASON ${n} STANDINGS`;
+  return `SEASON ${parseSeasonNumber(seasonName)} STANDINGS`;
 }
 
 export function formatAfterRaceLine(pointsRaceNumber) {
   const n = Number(pointsRaceNumber);
   if (!Number.isInteger(n) || n < 1) return "CURRENT STANDINGS";
   return `AFTER RACE ${n}`;
-}
-
-/**
- * Header race lines. Track is optional; never invent placeholders.
- */
-export function formatHeaderRaceBlock(latestCompletedRace = {}) {
-  const raceNumber = latestCompletedRace?.raceNumber;
-  const trackName = sanitizeTrackName(latestCompletedRace?.trackName);
-  return {
-    afterRaceLine: formatAfterRaceLine(raceNumber),
-    trackLines: trackName ? [trackName.toUpperCase()] : [],
-    fullTrackName: trackName,
-  };
 }
 
 function ellipsisToWidth(measureFn, font, text, maxWidth) {
@@ -174,10 +180,6 @@ function ellipsisToWidth(measureFn, font, text, maxWidth) {
   return out;
 }
 
-/**
- * Fit a long track name into one or two right-aligned lines.
- * Prefer font shrink, then wrap; ellipsis only as last resort.
- */
 export function fitTrackNameDisplay(measureFn, trackName, maxWidth, {
   fontFamily = "Arial, sans-serif",
   fontWeight = "bold",
@@ -254,24 +256,67 @@ export function buildStandingsGraphicFilename({ seasonName, pointsRaceNumber, la
   return `BP-S${season}-${racePart}-Standings.png`;
 }
 
+/** Prefer first non-empty car number field (empty string must not block bp_number). */
+export function pickCarNumber(row = {}) {
+  for (const key of ["carNumber", "bp_number", "standingsCarNumber"]) {
+    if (row[key] == null) continue;
+    const s = String(row[key]).trim();
+    if (s !== "") return s;
+  }
+  return "";
+}
+
 /**
- * Normalize API / client standings rows into a stable export shape.
- * Preserves incoming order (authoritative standings order).
+ * Authoritative standings movement from /api/standings.
+ * gainLoss > 0 = gained positions (matches public standings ▲).
  */
+export function resolveMovementDelta(row = {}) {
+  if (row.gainLoss != null && row.gainLoss !== "" && Number.isFinite(Number(row.gainLoss))) {
+    return Number(row.gainLoss);
+  }
+  if (row.change != null && row.change !== "" && Number.isFinite(Number(row.change))) {
+    return Number(row.change);
+  }
+  const cur = Number(row.position ?? row.place);
+  const prev = Number(row.previousPosition);
+  if (!Number.isFinite(cur) || !Number.isFinite(prev) || prev <= 0) return null;
+  return prev - cur;
+}
+
+export function formatMovement(delta) {
+  if (delta == null || !Number.isFinite(Number(delta))) {
+    return { text: "—", dir: "flat", value: null };
+  }
+  const n = Number(delta);
+  if (n === 0) return { text: "—", dir: "flat", value: 0 };
+  if (n > 0) return { text: `▲${n}`, dir: "up", value: n };
+  return { text: `▼${Math.abs(n)}`, dir: "down", value: n };
+}
+
 export function normalizeStandingsRows(rows = []) {
   return (Array.isArray(rows) ? rows : []).map((row, index) => {
     const position = Number(row.position ?? row.place ?? index + 1);
     const points = Number(row.points ?? 0);
     const wins = Number(row.wins ?? 0);
-    const carNumber = String(row.carNumber ?? row.bp_number ?? row.standingsCarNumber ?? "").trim();
+    const carNumber = pickCarNumber(row);
     const driverName = String(row.driver ?? row.driverName ?? "").trim() || "Unknown Driver";
+    const movementDelta = resolveMovementDelta(row);
+    const movement = formatMovement(movementDelta);
     return {
       position: Number.isFinite(position) && position > 0 ? position : index + 1,
       driverName,
       carNumber,
+      carNumberMissing: !carNumber,
       points: Number.isFinite(points) ? points : 0,
       wins: Number.isFinite(wins) ? wins : 0,
       driverId: row.driverId != null ? String(row.driverId) : "",
+      photoUrl: String(row.photoUrl || "").trim(),
+      movementDelta,
+      movement,
+      previousPosition:
+        row.previousPosition != null && Number.isFinite(Number(row.previousPosition))
+          ? Number(row.previousPosition)
+          : null,
     };
   });
 }
@@ -281,16 +326,12 @@ export function takeTopDrivers(rows, max = MAX_DRIVERS) {
   return normalizeStandingsRows(rows).slice(0, limit);
 }
 
-/**
- * Split drivers into three columns using COLUMN_SIZES.
- */
 export function distributeColumns(drivers, sizes = COLUMN_SIZES) {
   const list = Array.isArray(drivers) ? drivers : [];
   const columns = [];
   let cursor = 0;
   for (const size of sizes) {
-    const slice = list.slice(cursor, cursor + size);
-    columns.push(slice);
+    columns.push(list.slice(cursor, cursor + size));
     cursor += size;
     if (cursor >= list.length) break;
   }
@@ -298,9 +339,7 @@ export function distributeColumns(drivers, sizes = COLUMN_SIZES) {
   return columns.slice(0, sizes.length);
 }
 
-/**
- * Playoff cut is drawn AFTER position `playoffCut` (default 16).
- */
+/** Playoff divider immediately below P16 — expected in column 1 with 16/14/13. */
 export function findPlayoffCutPlacement(drivers, playoffCut = DEFAULT_PLAYOFF_CUT) {
   const cut = Number(playoffCut) || DEFAULT_PLAYOFF_CUT;
   const list = Array.isArray(drivers) ? drivers : [];
@@ -333,8 +372,7 @@ export function formatWinsLabel(wins) {
 }
 
 export function formatPointsLabel(points) {
-  const n = Number(points) || 0;
-  return `${n} PTS`;
+  return `${Number(points) || 0} PTS`;
 }
 
 export function fitTextFontSize(measureFn, text, maxWidth, {
@@ -353,11 +391,31 @@ export function fitTextFontSize(measureFn, text, maxWidth, {
   return minSize;
 }
 
-export function plateNumberFontSize(carNumber, { maxSize = 20, minSize = 12 } = {}) {
-  const digits = String(carNumber || "").replace(/\D/g, "").length || 1;
+export function plateNumberFontSize(carNumber, { maxSize = 22, minSize = 12 } = {}) {
+  const raw = String(carNumber ?? "").trim();
+  const digits = raw.replace(/\D/g, "").length || (raw ? raw.length : 1);
   if (digits <= 1) return maxSize;
   if (digits === 2) return Math.max(minSize, maxSize - 2);
-  return Math.max(minSize, maxSize - 6);
+  return Math.max(minSize, maxSize - 7);
+}
+
+export function formatPlateDisplay(carNumber) {
+  const raw = String(carNumber ?? "").trim();
+  return raw || "—";
+}
+
+export function relativeLuminanceHex(hex) {
+  const raw = String(hex || "").replace("#", "");
+  if (raw.length < 6) return 0;
+  const r = parseInt(raw.slice(0, 2), 16) / 255;
+  const g = parseInt(raw.slice(2, 4), 16) / 255;
+  const b = parseInt(raw.slice(4, 6), 16) / 255;
+  const lin = (c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+}
+
+export function pickReadableNumberColor(fillHex) {
+  return relativeLuminanceHex(fillHex) > 0.45 ? "#0a0a0a" : "#ffffff";
 }
 
 export function resolvePlayoffCut(settings = {}) {
@@ -365,18 +423,12 @@ export function resolvePlayoffCut(settings = {}) {
   return Number.isInteger(n) && n > 0 ? n : DEFAULT_PLAYOFF_CUT;
 }
 
-export function buildSponsorFooterText({ hasLogo } = {}) {
-  if (hasLogo) {
-    return {
-      presentedBy: "PRESENTED BY",
-      sponsorLine: null,
-      siteUrl: SITE_URL,
-      useLogo: true,
-    };
-  }
+/** Text-only sponsor footer for this graphic (no logo). */
+export function buildSponsorFooterText() {
   return {
     presentedBy: "PRESENTED BY",
     sponsorLine: SPONSOR_NAME,
+    combined: `PRESENTED BY ${SPONSOR_NAME}`,
     siteUrl: SITE_URL,
     useLogo: false,
   };
@@ -387,8 +439,57 @@ export function validateOutputDimensions(width, height) {
 }
 
 /**
- * Central standings graphic model consumed by preview and download.
+ * Layout metrics for the 43-driver / 16-row first column case.
+ * Ensures header + 16 rows + cut + footer fit in 1080 logical px.
  */
+export function computeStandingsLayoutMetrics({
+  driverCount = MAX_DRIVERS,
+  hasTrackName = true,
+  reserveCutGap = true,
+} = {}) {
+  const padX = 24;
+  const headerH = hasTrackName ? 86 : 72;
+  const footerH = 54;
+  const topGap = 2;
+  const bottomGap = 2;
+  const gridTop = headerH + topGap;
+  const gridBottom = LOGICAL_HEIGHT - footerH - bottomGap;
+  const gridSpan = gridBottom - gridTop;
+  const colGap = 16;
+  const colCount = 3;
+  const colW = (LOGICAL_WIDTH - padX * 2 - colGap * (colCount - 1)) / colCount;
+  const columns = distributeColumns(new Array(Math.min(driverCount, MAX_DRIVERS)).fill(null));
+  const maxRows = Math.max(1, ...columns.map((c) => c.length || 1));
+  const cutGap = reserveCutGap ? 12 : 0;
+  const rowGap = 2;
+  const rowStackBudget = Math.max(0, gridSpan - cutGap);
+  const rowH = Math.min(58, (rowStackBudget - rowGap * (maxRows - 1)) / maxRows);
+  const rowsUsed = maxRows * rowH + Math.max(0, maxRows - 1) * rowGap;
+  const usedH = rowsUsed + cutGap;
+  const fits = usedH <= gridSpan + 0.01;
+
+  return {
+    padX,
+    headerH,
+    footerH,
+    gridTop,
+    gridBottom,
+    colGap,
+    colW,
+    colCount,
+    rowH,
+    rowGap,
+    cutGap,
+    maxRows,
+    gridSpan,
+    rowsUsed,
+    usedH,
+    fits,
+    plateW: 52,
+    plateH: Math.min(34, Math.max(26, rowH - 8)),
+  };
+}
+
 export function buildStandingsGraphicModel(standingsData, scheduleData, options = {}) {
   const seasonName =
     options.seasonName ||
@@ -425,9 +526,11 @@ export function buildStandingsGraphicModel(standingsData, scheduleData, options 
   const drivers = takeTopDrivers(standingsData?.rows || [], MAX_DRIVERS);
   const columns = distributeColumns(drivers);
   const cutPlacement = findPlayoffCutPlacement(drivers, playoffCut);
-  const filename = buildStandingsGraphicFilename({
-    seasonName,
-    latestCompletedRace,
+  const filename = buildStandingsGraphicFilename({ seasonName, latestCompletedRace });
+  const layoutHints = computeStandingsLayoutMetrics({
+    driverCount: drivers.length,
+    hasTrackName: Boolean(latestCompletedRace.trackName),
+    reserveCutGap: Boolean(cutPlacement),
   });
 
   return {
@@ -440,14 +543,14 @@ export function buildStandingsGraphicModel(standingsData, scheduleData, options 
     columns,
     cutPlacement,
     filename,
+    layoutHints,
     sponsor: {
       name: SPONSOR_NAME,
-      logoCandidates: [...SPONSOR_LOGO_CANDIDATES],
+      useLogo: false,
     },
   };
 }
 
-/** Back-compat alias */
 export function buildExportPayload(standingsData, scheduleData, options = {}) {
   return buildStandingsGraphicModel(standingsData, scheduleData, options);
 }
@@ -460,11 +563,13 @@ export function formatPreviewStatus(model, dims = { width: OUTPUT_WIDTH, height:
     Number.isInteger(raceNumber) && raceNumber >= 1
       ? `After Race ${raceNumber}`
       : "Current standings";
-  const trackPart = track ? ` · ${track}` : "";
   const count = Array.isArray(model?.drivers) ? model.drivers.length : 0;
+  const cut = model?.playoffCut || DEFAULT_PLAYOFF_CUT;
   return [
     "Preview ready",
-    `${season} · ${after}${trackPart}`,
-    `${count} drivers · ${dims.width}×${dims.height}`,
+    season,
+    after,
+    track || "(track unavailable)",
+    `${count} drivers · Top ${cut} · ${dims.width}×${dims.height}`,
   ].join("\n");
 }
