@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Standings Graphic — BP Admin</title>
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/admin/admin-layout.css">
+  <style>
+    .sub { color: var(--bp-text-secondary); font-size: 12px; margin-bottom: 16px; line-height: 1.45; }
+    .panel { padding: 14px; margin-bottom: 14px; }
+    .panel h2 { margin: 0 0 8px; font-size: 18px; color: #ff3030; }
+    .btn-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+    #standingsGraphicStatus { margin-top: 12px; font-size: 12px; color: #ccc; white-space: pre-wrap; }
+    #standingsGraphicStatus.error { color: #ff6060; }
+    #loginMsg { margin-top: 10px; font-size: 12px; color: #ccc; white-space: pre-wrap; }
+    #loginMsg.error { color: #ff6060; }
+    .pw-row { max-width: 320px; margin-bottom: 14px; }
+    .input { width: 100%; padding: 8px; background: #090909; color: #fff; border: 1px solid #555; border-radius: 4px; font-size: 12px; }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .meta-card {
+      border: 1px solid #333;
+      background: #0a0a0a;
+      padding: 10px 12px;
+    }
+    .meta-card .label {
+      display: block;
+      font-size: 10px;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      margin-bottom: 4px;
+    }
+    .meta-card .value { font-size: 14px; color: #fff; font-weight: 700; }
+  </style>
+  <script src="/admin/admin-embed.js"></script>
+</head>
+<body>
+  <div id="admin-nav-root"></div>
+  <script src="/admin/admin-nav.js"></script>
+
+  <main id="loginView" class="wrap" hidden>
+    <h1>Standings Graphic</h1>
+    <p class="sub">Enter the admin password to unlock standings graphic export.</p>
+    <div class="pw-row">
+      <input id="loginPw" class="input" type="password" placeholder="Admin password" autocomplete="current-password">
+      <button class="btn" type="button" onclick="login()">Unlock</button>
+      <pre id="loginMsg"></pre>
+    </div>
+  </main>
+
+  <main id="adminView" class="wrap" hidden>
+    <h1 class="admin-embed-hide">Standings Graphic</h1>
+    <p class="sub">Download a broadcast-style 3840×2160 PNG of the current championship standings (Top 43). Values match the public standings page.</p>
+
+    <div class="panel">
+      <h2>Export</h2>
+      <p class="sub" style="margin-bottom:8px;">
+        Uses live <code>/api/standings</code> ordering/values and the latest completed official points race from <code>/api/schedule</code>
+        (non-points / duel events do not inflate the race number).
+      </p>
+      <div class="meta-grid" id="standingsGraphicMeta" hidden>
+        <div class="meta-card"><span class="label">Season</span><span class="value" id="metaSeason">—</span></div>
+        <div class="meta-card"><span class="label">After race</span><span class="value" id="metaRace">—</span></div>
+        <div class="meta-card"><span class="label">Drivers</span><span class="value" id="metaDrivers">—</span></div>
+        <div class="meta-card"><span class="label">Playoff cut</span><span class="value" id="metaCut">—</span></div>
+        <div class="meta-card"><span class="label">Filename</span><span class="value" id="metaFilename" style="font-size:12px;word-break:break-all;">—</span></div>
+      </div>
+      <div class="btn-row">
+        <button id="refreshStandingsGraphicMetaBtn" class="btn btn-secondary" type="button">Refresh Snapshot</button>
+        <button id="downloadStandingsGraphicBtn" class="btn" type="button">Download Standings Graphic</button>
+      </div>
+      <pre id="standingsGraphicStatus" hidden></pre>
+    </div>
+  </main>
+
+  <script type="module">
+    import * as StandingsGraphic from "/standings-graphic-export.js";
+
+    const SESSION_KEY = "bp_admin_pw";
+    const $ = (s) => document.querySelector(s);
+
+    let cachedPayload = null;
+    let busy = false;
+
+    function getPw() {
+      return sessionStorage.getItem(SESSION_KEY) || "";
+    }
+
+    function setStatus(text, isError = false) {
+      const el = $("#standingsGraphicStatus");
+      if (!el) return;
+      el.hidden = !text;
+      el.textContent = text || "";
+      el.classList.toggle("error", Boolean(isError));
+    }
+
+    function setBusy(next) {
+      busy = Boolean(next);
+      ["downloadStandingsGraphicBtn", "refreshStandingsGraphicMetaBtn"].forEach((id) => {
+        const btn = document.getElementById(id);
+        if (btn) btn.disabled = busy;
+      });
+    }
+
+    function showMeta(payload) {
+      const wrap = $("#standingsGraphicMeta");
+      if (wrap) wrap.hidden = false;
+      if ($("#metaSeason")) $("#metaSeason").textContent = payload.seasonName || "—";
+      if ($("#metaRace")) {
+        $("#metaRace").textContent =
+          Number.isInteger(payload.pointsRaceNumber) && payload.pointsRaceNumber >= 1
+            ? String(payload.pointsRaceNumber)
+            : "—";
+      }
+      if ($("#metaDrivers")) $("#metaDrivers").textContent = String(payload.drivers?.length || 0);
+      if ($("#metaCut")) $("#metaCut").textContent = `Top ${payload.playoffCut}`;
+      if ($("#metaFilename")) $("#metaFilename").textContent = payload.filename || "—";
+    }
+
+    async function refreshSnapshot({ manageBusy = true } = {}) {
+      if (manageBusy) setBusy(true);
+      setStatus("Loading standings + schedule…");
+      try {
+        const { standingsData, scheduleData } = await StandingsGraphic.fetchStandingsGraphicSources();
+        cachedPayload = {
+          standingsData,
+          scheduleData,
+          payload: StandingsGraphic.buildExportPayload(standingsData, scheduleData),
+        };
+        showMeta(cachedPayload.payload);
+        setStatus(
+          `Snapshot ready — ${cachedPayload.payload.drivers.length} drivers, ` +
+            `${StandingsGraphic.OUTPUT_WIDTH}×${StandingsGraphic.OUTPUT_HEIGHT} export.`,
+        );
+      } catch (e) {
+        cachedPayload = null;
+        setStatus(e.message || "Failed to load snapshot.", true);
+        throw e;
+      } finally {
+        if (manageBusy) setBusy(false);
+      }
+    }
+
+    async function downloadGraphic() {
+      setBusy(true);
+      setStatus("Rendering 3840×2160 standings graphic…");
+      try {
+        if (!cachedPayload) {
+          await refreshSnapshot({ manageBusy: false });
+        }
+        if (!cachedPayload) throw new Error("Standings snapshot unavailable.");
+
+        const result = await StandingsGraphic.downloadStandingsGraphic({
+          standingsData: cachedPayload.standingsData,
+          scheduleData: cachedPayload.scheduleData,
+        });
+        const w = result.width;
+        const h = result.height;
+        const mb = result.blob?.size
+          ? `${(result.blob.size / (1024 * 1024)).toFixed(2)} MB`
+          : "";
+        setStatus(
+          `Download started: ${result.filename} (${w}×${h}${mb ? `, ${mb}` : ""}) — no downsample.`,
+        );
+      } catch (e) {
+        setStatus(e.message || "Export failed.", true);
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function verifyPassword(pw) {
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: pw, verifyOnly: true }),
+      });
+      return res.ok;
+    }
+
+    async function login() {
+      const pw = $("#loginPw")?.value || "";
+      const msg = $("#loginMsg");
+      if (!pw) {
+        if (msg) {
+          msg.textContent = "Enter the admin password.";
+          msg.classList.add("error");
+        }
+        return;
+      }
+      try {
+        if (msg) {
+          msg.textContent = "Checking…";
+          msg.classList.remove("error");
+        }
+        const ok = await verifyPassword(pw);
+        if (!ok) throw new Error("Bad password");
+        sessionStorage.setItem(SESSION_KEY, pw);
+        if ($("#loginPw")) $("#loginPw").value = "";
+        if (msg) msg.textContent = "";
+        $("#loginView").hidden = true;
+        $("#adminView").hidden = false;
+        if (window.AdminNav) AdminNav.setLoggedIn(true);
+        await refreshSnapshot();
+      } catch (e) {
+        if (msg) {
+          msg.textContent = e.message || "Login failed";
+          msg.classList.add("error");
+        }
+      }
+    }
+
+    function initSession() {
+      if (getPw()) {
+        $("#loginView").hidden = true;
+        $("#adminView").hidden = false;
+        if (window.AdminNav) AdminNav.setLoggedIn(true);
+        refreshSnapshot();
+      } else {
+        $("#loginView").hidden = false;
+        $("#adminView").hidden = true;
+      }
+    }
+
+    window.login = login;
+    $("#downloadStandingsGraphicBtn")?.addEventListener("click", downloadGraphic);
+    $("#refreshStandingsGraphicMetaBtn")?.addEventListener("click", refreshSnapshot);
+    $("#loginPw")?.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") login();
+    });
+
+    initSession();
+  </script>
+</body>
+</html>

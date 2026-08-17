@@ -13,6 +13,8 @@
     "/admin/driver-photos": "/admin/content#driver-photos",
     "/admin/power-rankings.html": "/admin/competition#power-rankings",
     "/admin/power-rankings": "/admin/competition#power-rankings",
+    "/admin/standings-graphic.html": "/admin/competition#standings-graphic",
+    "/admin/standings-graphic": "/admin/competition#standings-graphic",
     "/admin/fantasy.html": "/admin/competition#fantasy",
     "/admin/provisionals.html": "/admin/competition#provisionals",
     "/admin/provisionals": "/admin/competition#provisionals",
