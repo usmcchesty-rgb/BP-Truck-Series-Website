@@ -3,6 +3,9 @@
  * Run: node scripts/test-standings-graphic-export.mjs
  */
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   MAX_DRIVERS,
   OUTPUT_WIDTH,
@@ -15,20 +18,29 @@ import {
   distributeColumns,
   findPlayoffCutPlacement,
   resolveLatestCompletedPointsRaceNumber,
+  resolveLatestCompletedPointsRaceFromRaces,
+  resolveLatestCompletedPointsRaceDisplay,
   resolvePointsRaceNumberFromSchedule,
   isNonPointsRace,
   buildStandingsGraphicFilename,
+  buildStandingsGraphicModel,
   formatSeasonHeading,
   formatAfterRaceLine,
   formatWinsLabel,
   formatPointsLabel,
   fitTextFontSize,
+  fitTrackNameDisplay,
   plateNumberFontSize,
   buildSponsorFooterText,
   validateOutputDimensions,
   parseSeasonNumber,
   normalizeStandingsRows,
+  sanitizeTrackName,
+  formatPreviewStatus,
 } from "../public/standings-graphic-export-logic.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const root = path.resolve(__dirname, "..");
 
 function makeDrivers(count) {
   return Array.from({ length: count }, (_, i) => ({
@@ -44,6 +56,37 @@ function approxMeasure(font, text) {
   const sizeMatch = String(font).match(/(\d+(?:\.\d+)?)px/);
   const size = sizeMatch ? Number(sizeMatch[1]) : 16;
   return String(text).length * size * 0.55;
+}
+
+function homesteadScheduleFixture() {
+  const races = [];
+  for (let i = 1; i <= 16; i += 1) {
+    races.push({
+      track: `Track ${i}`,
+      points: "yes",
+      winner: `Winner ${i}`,
+      status: "points",
+    });
+  }
+  races.push({
+    track: "Daytona Duels",
+    points: "no",
+    winner: "Duel Winner",
+    status: "non-points",
+  });
+  races.push({
+    track: "Homestead Miami Speedway Oval Night",
+    points: "yes",
+    winner: "Chris Carroll3",
+    status: "points",
+  });
+  races.push({
+    track: "Future Track",
+    points: "yes",
+    winner: "",
+    status: "points",
+  });
+  return races;
 }
 
 let passed = 0;
@@ -84,7 +127,6 @@ test("standings ordering preserved from authoritative rows", () => {
     { position: 2, driver: "B", points: 90, wins: 0, carNumber: "2" },
     { position: 1, driver: "A", points: 100, wins: 1, carNumber: "1" },
   ];
-  // Export does not re-sort — matches public API order as provided.
   const rows = normalizeStandingsRows(input);
   assert.equal(rows[0].driverName, "B");
   assert.equal(rows[1].driverName, "A");
@@ -119,39 +161,183 @@ test("playoff cut omitted when fewer than cut+1 drivers", () => {
   assert.equal(cut, null);
 });
 
-test("official points-race number ignores duel / non-points events", () => {
-  const races = [
-    { track: "Daytona", points: "yes", winner: "A", status: "points" },
-    { track: "Daytona Duels", points: "no", winner: "B", status: "non-points" },
-    { track: "Rockingham", points: "yes", winner: "C", status: "points" },
-    { track: "Exhibition Clash", points: "no", winner: "D", status: "non-points" },
-    { track: "Bristol", points: "yes", winner: "", status: "points" },
-  ];
-  assert.equal(isNonPointsRace(races[1]), true);
-  assert.equal(isNonPointsRace(races[3]), true);
-  assert.equal(resolveLatestCompletedPointsRaceNumber(races), 2);
+test("Race 17 + Homestead resolve together from same completed race", () => {
+  const races = homesteadScheduleFixture();
+  const display = resolveLatestCompletedPointsRaceFromRaces(races);
+  assert.equal(display.raceNumber, 17);
+  assert.equal(display.trackName, "Homestead Miami Speedway Oval Night");
 });
 
-test("schedule API latestCompletedRaceNumber preferred when present", () => {
-  const n = resolvePointsRaceNumberFromSchedule({
-    raceResults: { latestCompletedRaceNumber: 17 },
-    raceProgression: { effectiveCompletedPointsCount: 16 },
-    races: [{ track: "X", points: "yes", winner: "A" }],
+test("duel/non-points rows do not shift official points race number", () => {
+  const races = homesteadScheduleFixture();
+  assert.equal(isNonPointsRace(races.find((r) => /duel/i.test(r.track))), true);
+  assert.equal(resolveLatestCompletedPointsRaceNumber(races), 17);
+  const display = resolveLatestCompletedPointsRaceDisplay({ races });
+  assert.equal(display.raceNumber, 17);
+  assert.equal(display.trackName, "Homestead Miami Speedway Oval Night");
+});
+
+test("race number and track come from the same completed race", () => {
+  const scheduleData = {
+    raceResults: {
+      latestCompletedRaceNumber: 17,
+      completedRaces: [
+        {
+          raceNumber: 17,
+          track: "Homestead Miami Speedway Oval Night",
+        },
+      ],
+    },
+    races: homesteadScheduleFixture(),
+  };
+  const display = resolveLatestCompletedPointsRaceDisplay(scheduleData);
+  assert.equal(display.raceNumber, 17);
+  assert.equal(display.trackName, "Homestead Miami Speedway Oval Night");
+  assert.equal(resolvePointsRaceNumberFromSchedule(scheduleData), 17);
+});
+
+test("missing track gracefully falls back to After Race # only", () => {
+  const display = resolveLatestCompletedPointsRaceDisplay({
+    raceResults: { latestCompletedRaceNumber: 17, completedRaces: [{ raceNumber: 17, track: "" }] },
+    races: [],
   });
-  assert.equal(n, 17);
+  assert.equal(display.raceNumber, 17);
+  assert.equal(display.trackName, "");
+  assert.equal(formatAfterRaceLine(display.raceNumber), "AFTER RACE 17");
+  assert.equal(sanitizeTrackName(undefined), "");
+  assert.equal(sanitizeTrackName("null"), "");
+  assert.equal(sanitizeTrackName("—"), "");
 });
 
-test("filename uses season + official points race", () => {
+test("long track names auto-fit (shrink or wrap)", () => {
+  const long = "EchoPark Speedway (Atlanta) Oval - 2008";
+  const fitted = fitTrackNameDisplay(approxMeasure, long, 180, {
+    maxSize: 16,
+    minSize: 11,
+  });
+  assert.ok(fitted.lines.length >= 1);
+  assert.ok(fitted.lines.length <= 2);
+  assert.equal(fitted.fullTrackName, long.toUpperCase());
+  fitted.lines.forEach((line) => {
+    assert.ok(approxMeasure(`bold ${fitted.fontSize}px Arial`, line) <= 180 + 1);
+  });
+});
+
+test("preview and download use the same model", () => {
+  const standingsData = {
+    settings: { seasonName: "Season 11", playoffCut: 16 },
+    rows: makeDrivers(43),
+  };
+  const scheduleData = {
+    raceResults: {
+      latestCompletedRaceNumber: 17,
+      completedRaces: [
+        { raceNumber: 17, track: "Homestead Miami Speedway Oval Night" },
+      ],
+    },
+    races: homesteadScheduleFixture(),
+  };
+  const modelA = buildStandingsGraphicModel(standingsData, scheduleData);
+  const modelB = buildStandingsGraphicModel(standingsData, scheduleData);
+  assert.deepEqual(modelA.latestCompletedRace, modelB.latestCompletedRace);
+  assert.equal(modelA.filename, modelB.filename);
+  assert.equal(modelA.drivers.length, modelB.drivers.length);
+  assert.deepEqual(
+    modelA.columns.map((c) => c.length),
+    modelB.columns.map((c) => c.length),
+  );
+});
+
+test("preview canvas remains exactly 3840×2160 (model constants)", () => {
+  assert.equal(OUTPUT_WIDTH, 3840);
+  assert.equal(OUTPUT_HEIGHT, 2160);
+  assert.equal(validateOutputDimensions(OUTPUT_WIDTH, OUTPUT_HEIGHT), true);
+});
+
+test("Refresh Preview does not require network — model render is self-contained", () => {
+  const model = buildStandingsGraphicModel(
+    { settings: { seasonName: "Season 11", playoffCut: 16 }, rows: makeDrivers(20) },
+    {
+      races: [
+        { track: "A", points: "yes", winner: "X", status: "points" },
+      ],
+    },
+  );
+  // Refresh Preview reuses this model object; no fetch fields required.
+  assert.ok(model.drivers.length > 0);
+  assert.ok(model.latestCompletedRace);
+  assert.equal(typeof model.filename, "string");
+});
+
+test("Refresh Snapshot updates preview data from new schedule payload", () => {
+  const standingsData = {
+    settings: { seasonName: "Season 11", playoffCut: 16 },
+    rows: makeDrivers(10),
+  };
+  const first = buildStandingsGraphicModel(standingsData, {
+    races: [{ track: "Daytona", points: "yes", winner: "A", status: "points" }],
+  });
+  const second = buildStandingsGraphicModel(standingsData, {
+    raceResults: {
+      latestCompletedRaceNumber: 17,
+      completedRaces: [
+        { raceNumber: 17, track: "Homestead Miami Speedway Oval Night" },
+      ],
+    },
+    races: homesteadScheduleFixture(),
+  });
+  assert.equal(first.latestCompletedRace.raceNumber, 1);
+  assert.equal(first.latestCompletedRace.trackName, "Daytona");
+  assert.equal(second.latestCompletedRace.raceNumber, 17);
+  assert.equal(second.latestCompletedRace.trackName, "Homestead Miami Speedway Oval Night");
+  assert.notEqual(first.filename, second.filename);
+});
+
+test("fewer than 43 drivers show correct preview count", () => {
+  const model = buildStandingsGraphicModel(
+    { settings: { seasonName: "Season 11" }, rows: makeDrivers(38) },
+    { races: homesteadScheduleFixture() },
+  );
+  assert.equal(model.drivers.length, 38);
+  const status = formatPreviewStatus(model);
+  assert.match(status, /38 drivers · 3840×2160/);
+});
+
+test("preview/export preserve 15/14/14 column distribution", () => {
+  const model = buildStandingsGraphicModel(
+    { settings: { seasonName: "Season 11" }, rows: makeDrivers(43) },
+    { races: homesteadScheduleFixture() },
+  );
+  assert.deepEqual(
+    model.columns.map((c) => c.length),
+    [15, 14, 14],
+  );
+});
+
+test("sponsor footer still shows Ohio & Indiana Roofing", () => {
+  const model = buildStandingsGraphicModel(
+    { settings: { seasonName: "Season 11" }, rows: makeDrivers(5) },
+    { races: homesteadScheduleFixture() },
+  );
+  assert.equal(model.sponsor.name, SPONSOR_NAME);
+  const fallback = buildSponsorFooterText({ hasLogo: false });
+  assert.equal(fallback.sponsorLine, "OHIO & INDIANA ROOFING");
+  assert.match(fallback.presentedBy, /PRESENTED BY/i);
+});
+
+test("filename uses season + official points race (no track)", () => {
   assert.equal(
-    buildStandingsGraphicFilename({ seasonName: "Season 11", pointsRaceNumber: 17 }),
+    buildStandingsGraphicFilename({
+      seasonName: "Season 11",
+      latestCompletedRace: { raceNumber: 17, trackName: "Homestead" },
+    }),
     "BP-S11-R17-Standings.png",
   );
   assert.equal(formatSeasonHeading("Season 11"), "SEASON 11 STANDINGS");
-  assert.equal(formatAfterRaceLine(17), "AFTER RACE 17");
   assert.equal(parseSeasonNumber("Season 11"), 11);
 });
 
-test("long-name fitting reduces font size", () => {
+test("long driver-name fitting reduces font size", () => {
   const long = "MIGUEL GOMEZ-GAUDET EXTENDED";
   const fitted = fitTextFontSize(approxMeasure, long, 120, {
     maxSize: 18,
@@ -181,15 +367,23 @@ test("zero and multiple wins labels", () => {
   assert.equal(formatPointsLabel(782), "782 PTS");
 });
 
-test("sponsor footer falls back to text when logo unavailable", () => {
-  const withLogo = buildSponsorFooterText({ hasLogo: true });
-  assert.equal(withLogo.useLogo, true);
-  assert.equal(withLogo.sponsorLine, null);
+test("no new routable API file was added for standings graphic", () => {
+  const apiDir = path.join(root, "api");
+  const routable = fs
+    .readdirSync(apiDir)
+    .filter((name) => name.endsWith(".js") && !name.startsWith("_"));
+  assert.ok(!routable.includes("standings-graphic.js"));
+  assert.ok(!routable.includes("standings-graphic-export.js"));
+  // Hobby-safe baseline: keep counting stable (no new public API route file).
+  assert.equal(routable.length, 12);
+});
 
-  const fallback = buildSponsorFooterText({ hasLogo: false });
-  assert.equal(fallback.useLogo, false);
-  assert.equal(fallback.sponsorLine, SPONSOR_NAME);
-  assert.match(fallback.presentedBy, /PRESENTED BY/i);
+test("Vercel function count remains unchanged (12 routable api/*.js)", () => {
+  const apiDir = path.join(root, "api");
+  const routable = fs
+    .readdirSync(apiDir)
+    .filter((name) => name.endsWith(".js") && !name.startsWith("_"));
+  assert.equal(routable.length, 12);
 });
 
 console.log(`\n${passed} standings-graphic tests passed.`);

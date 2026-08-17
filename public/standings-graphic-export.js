@@ -10,24 +10,21 @@ import {
   OUTPUT_HEIGHT,
   MAX_DRIVERS,
   DEFAULT_PLAYOFF_CUT,
-  DEFAULT_SEASON_NAME,
   SPONSOR_NAME,
   SPONSOR_LOGO_CANDIDATES,
   SITE_URL,
-  takeTopDrivers,
   distributeColumns,
-  findPlayoffCutPlacement,
   formatWinsLabel,
   formatPointsLabel,
   formatSeasonHeading,
   formatAfterRaceLine,
-  buildStandingsGraphicFilename,
-  resolvePointsRaceNumberFromSchedule,
-  resolvePlayoffCut,
   fitTextFontSize,
+  fitTrackNameDisplay,
   plateNumberFontSize,
   buildSponsorFooterText,
   validateOutputDimensions,
+  buildStandingsGraphicModel,
+  sanitizeTrackName,
 } from "./standings-graphic-export-logic.js";
 
 const BP_LOGO = "/assets/logos/New%20Clean%20Logo.png";
@@ -115,9 +112,9 @@ function drawCarbonBackground(ctx) {
   ctx.restore();
 }
 
-function computeLayout(driverCount, { reserveCutGap = false } = {}) {
+function computeLayout(driverCount, { reserveCutGap = false, hasTrackName = false } = {}) {
   const padX = 28;
-  const headerH = 108;
+  const headerH = hasTrackName ? 128 : 108;
   const footerH = 86;
   const gridTop = headerH + 8;
   const gridBottom = LOGICAL_HEIGHT - footerH - 8;
@@ -146,11 +143,18 @@ function computeLayout(driverCount, { reserveCutGap = false } = {}) {
     rowGap,
     cutGap,
     maxRows,
+    /** Right-side header text area (avoids BP logo / left branding). */
+    headerTextMaxWidth: 760,
+    headerTextRight: LOGICAL_WIDTH - 28,
+    headerTextLeftLimit: 520,
   };
 }
 
-function drawHeader(ctx, meta, logoImg) {
-  const { seasonName, pointsRaceNumber } = meta;
+function drawHeader(ctx, model, logoImg) {
+  const seasonName = model.seasonName;
+  const raceNumber = model.latestCompletedRace?.raceNumber ?? model.pointsRaceNumber;
+  const trackName = sanitizeTrackName(model.latestCompletedRace?.trackName);
+  const hasTrack = Boolean(trackName);
 
   if (logoImg) {
     const logoH = 70;
@@ -178,34 +182,69 @@ function drawHeader(ctx, meta, logoImg) {
     baseline: "middle",
   });
 
+  const rightX = LOGICAL_WIDTH - 28;
   drawFillText(ctx, {
     text: formatSeasonHeading(seasonName),
-    x: LOGICAL_WIDTH - 28,
-    y: 40,
-    font: `bold 36px ${FONT_DISPLAY}`,
+    x: rightX,
+    y: hasTrack ? 28 : 40,
+    font: `bold 34px ${FONT_DISPLAY}`,
     fill: "#ffffff",
     align: "right",
     baseline: "middle",
   });
+
   drawFillText(ctx, {
-    text: formatAfterRaceLine(pointsRaceNumber),
-    x: LOGICAL_WIDTH - 28,
-    y: 76,
-    font: `bold 20px ${FONT_BODY}`,
+    text: formatAfterRaceLine(raceNumber),
+    x: rightX,
+    y: hasTrack ? 58 : 76,
+    font: `bold 18px ${FONT_BODY}`,
     fill: "#c8c8c8",
     align: "right",
     baseline: "middle",
   });
 
+  let trackFit = { lines: [], fontSize: 14, truncated: false, fullTrackName: "" };
+  if (hasTrack) {
+    const maxWidth = 760;
+    const measure = (font, text) => {
+      ctx.save();
+      ctx.font = font;
+      const width = ctx.measureText(text).width;
+      ctx.restore();
+      return width;
+    };
+    trackFit = fitTrackNameDisplay(measure, trackName, maxWidth, {
+      fontFamily: FONT_BODY,
+      fontWeight: "bold",
+      maxSize: 15,
+      minSize: 11,
+    });
+    const lineStartY = trackFit.lines.length > 1 ? 78 : 84;
+    trackFit.lines.forEach((line, index) => {
+      drawFillText(ctx, {
+        text: line,
+        x: rightX,
+        y: lineStartY + index * (trackFit.fontSize + 3),
+        font: `bold ${trackFit.fontSize}px ${FONT_BODY}`,
+        fill: "#b0b0b0",
+        align: "right",
+        baseline: "middle",
+      });
+    });
+  }
+
+  const ruleY = hasTrack ? 120 : 104;
   ctx.save();
   resetTextRenderingState(ctx);
   ctx.strokeStyle = "rgba(255,48,48,0.85)";
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(28, 104);
-  ctx.lineTo(LOGICAL_WIDTH - 28, 104);
+  ctx.moveTo(28, ruleY);
+  ctx.lineTo(LOGICAL_WIDTH - 28, ruleY);
   ctx.stroke();
   ctx.restore();
+
+  return trackFit;
 }
 
 function drawNumberPlate(ctx, carNumber, x, y, w, h) {
@@ -522,37 +561,14 @@ function downloadBlob(blob, filename) {
 }
 
 /**
- * Build export payload from authoritative /api/standings + /api/schedule responses.
+ * Build export model from authoritative /api/standings + /api/schedule responses.
+ * Preview and download must consume this same model.
  */
 export function buildExportPayload(standingsData, scheduleData, options = {}) {
-  const seasonName =
-    options.seasonName ||
-    standingsData?.settings?.seasonName ||
-    DEFAULT_SEASON_NAME;
-  const playoffCut = resolvePlayoffCut(
-    options.playoffCut != null
-      ? { playoffCut: options.playoffCut }
-      : standingsData?.settings || {},
-  );
-  const pointsRaceNumber =
-    options.pointsRaceNumber != null
-      ? Number(options.pointsRaceNumber)
-      : resolvePointsRaceNumberFromSchedule(scheduleData || {});
-
-  const drivers = takeTopDrivers(standingsData?.rows || [], MAX_DRIVERS);
-  const columns = distributeColumns(drivers);
-  const cutPlacement = findPlayoffCutPlacement(drivers, playoffCut);
-
-  return {
-    seasonName,
-    playoffCut,
-    pointsRaceNumber,
-    drivers,
-    columns,
-    cutPlacement,
-    filename: buildStandingsGraphicFilename({ seasonName, pointsRaceNumber }),
-  };
+  return buildStandingsGraphicModel(standingsData, scheduleData, options);
 }
+
+export { buildStandingsGraphicModel };
 
 export async function fetchStandingsGraphicSources() {
   const [standingsRes, scheduleRes] = await Promise.all([
@@ -570,21 +586,33 @@ export async function fetchStandingsGraphicSources() {
   return { standingsData, scheduleData };
 }
 
-export async function renderStandingsGraphicCanvas(payload, options = {}) {
-  const drivers = payload.drivers || [];
+/**
+ * Render the full 3840×2160 graphic from a prebuilt model.
+ * Does not fetch network data.
+ */
+export async function renderStandingsGraphicCanvas(model, options = {}) {
+  const drivers = model.drivers || [];
   if (!drivers.length) throw new Error("No standings drivers available to export.");
 
   const fontInfo = await ensureFontsReady();
+  const sponsorCandidates =
+    options.sponsorLogoUrls ||
+    model.sponsor?.logoCandidates ||
+    SPONSOR_LOGO_CANDIDATES;
   const [logoImg, sponsorAsset] = await Promise.all([
     loadImage(options.logoUrl || BP_LOGO),
     options.forceTextSponsor
       ? Promise.resolve({ img: null, url: null })
-      : loadFirstAvailableImage(options.sponsorLogoUrls || SPONSOR_LOGO_CANDIDATES),
+      : loadFirstAvailableImage(sponsorCandidates),
   ]);
 
-  const columns = payload.columns || distributeColumns(drivers);
-  const cutPlacement = payload.cutPlacement || null;
-  const layout = computeLayout(drivers.length, { reserveCutGap: Boolean(cutPlacement) });
+  const columns = model.columns || distributeColumns(drivers);
+  const cutPlacement = model.cutPlacement || null;
+  const hasTrackName = Boolean(sanitizeTrackName(model.latestCompletedRace?.trackName));
+  const layout = computeLayout(drivers.length, {
+    reserveCutGap: Boolean(cutPlacement),
+    hasTrackName,
+  });
 
   const canvas = document.createElement("canvas");
   canvas.width = OUTPUT_WIDTH;
@@ -596,14 +624,7 @@ export async function renderStandingsGraphicCanvas(payload, options = {}) {
   resetTextRenderingState(ctx);
 
   drawCarbonBackground(ctx);
-  drawHeader(
-    ctx,
-    {
-      seasonName: payload.seasonName,
-      pointsRaceNumber: payload.pointsRaceNumber,
-    },
-    logoImg,
-  );
+  const trackFit = drawHeader(ctx, model, logoImg);
 
   for (let col = 0; col < columns.length; col += 1) {
     const colX = layout.padX + col * (layout.colW + layout.colGap);
@@ -642,8 +663,11 @@ export async function renderStandingsGraphicCanvas(payload, options = {}) {
     renderScale: RENDER_SCALE,
     downsampled: false,
     driverCount: drivers.length,
-    pointsRaceNumber: payload.pointsRaceNumber,
-    seasonName: payload.seasonName,
+    pointsRaceNumber: model.latestCompletedRace?.raceNumber ?? model.pointsRaceNumber,
+    trackName: model.latestCompletedRace?.trackName || "",
+    trackTruncated: Boolean(trackFit?.truncated),
+    fullTrackName: trackFit?.fullTrackName || model.latestCompletedRace?.trackName || "",
+    seasonName: model.seasonName,
     sponsorLogo: sponsorAsset?.url || null,
     sponsorFallbackText: !sponsorAsset?.img,
   };
@@ -658,9 +682,10 @@ export async function renderStandingsGraphicCanvas(payload, options = {}) {
     canvasMasterResolution: `${OUTPUT_WIDTH}×${OUTPUT_HEIGHT}`,
     downsample: "none — PNG encoded directly from 3840×2160 master",
     fonts: fontInfo,
-    playoffCut: payload.playoffCut ?? DEFAULT_PLAYOFF_CUT,
+    playoffCut: model.playoffCut ?? DEFAULT_PLAYOFF_CUT,
     cutPlacement,
-    filename: payload.filename,
+    filename: model.filename,
+    model,
   };
 
   return {
@@ -668,19 +693,34 @@ export async function renderStandingsGraphicCanvas(payload, options = {}) {
     blob,
     width: pngDims.width || OUTPUT_WIDTH,
     height: pngDims.height || OUTPUT_HEIGHT,
-    filename: payload.filename,
+    filename: model.filename,
+    model,
     diagnostics: lastRenderDiagnostics,
   };
 }
 
-export async function downloadStandingsGraphic(options = {}) {
-  const { standingsData, scheduleData } =
-    options.standingsData && options.scheduleData
-      ? { standingsData: options.standingsData, scheduleData: options.scheduleData }
-      : await fetchStandingsGraphicSources();
+/** Download a previously rendered result (same canvas/blob as preview). */
+export function downloadRenderResult(result) {
+  if (!result?.blob) throw new Error("Nothing rendered to download.");
+  downloadBlob(result.blob, result.filename || "BP-Standings.png");
+  return result;
+}
 
-  const payload = buildExportPayload(standingsData, scheduleData, options);
-  const result = await renderStandingsGraphicCanvas(payload, options);
+export async function downloadStandingsGraphic(options = {}) {
+  if (options.renderResult?.blob) {
+    return downloadRenderResult(options.renderResult);
+  }
+
+  let model = options.model || null;
+  if (!model) {
+    const { standingsData, scheduleData } =
+      options.standingsData && options.scheduleData
+        ? { standingsData: options.standingsData, scheduleData: options.scheduleData }
+        : await fetchStandingsGraphicSources();
+    model = buildStandingsGraphicModel(standingsData, scheduleData, options);
+  }
+
+  const result = await renderStandingsGraphicCanvas(model, options);
   downloadBlob(result.blob, result.filename);
   return result;
 }
@@ -710,9 +750,11 @@ const api = {
   SPONSOR_LOGO_CANDIDATES,
   SITE_URL,
   buildExportPayload,
+  buildStandingsGraphicModel,
   fetchStandingsGraphicSources,
   renderStandingsGraphicCanvas,
   downloadStandingsGraphic,
+  downloadRenderResult,
   getLastDiagnostics: () => lastRenderDiagnostics,
 };
 

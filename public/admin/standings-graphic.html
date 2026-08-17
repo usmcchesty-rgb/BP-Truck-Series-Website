@@ -10,13 +10,32 @@
     .sub { color: var(--bp-text-secondary); font-size: 12px; margin-bottom: 16px; line-height: 1.45; }
     .panel { padding: 14px; margin-bottom: 14px; }
     .panel h2 { margin: 0 0 8px; font-size: 18px; color: #ff3030; }
-    .btn-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
-    #standingsGraphicStatus { margin-top: 12px; font-size: 12px; color: #ccc; white-space: pre-wrap; }
+    .btn-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 12px;
+    }
+    #standingsGraphicStatus {
+      margin-top: 12px;
+      font-size: 12px;
+      color: #ccc;
+      white-space: pre-wrap;
+      line-height: 1.5;
+    }
     #standingsGraphicStatus.error { color: #ff6060; }
     #loginMsg { margin-top: 10px; font-size: 12px; color: #ccc; white-space: pre-wrap; }
     #loginMsg.error { color: #ff6060; }
     .pw-row { max-width: 320px; margin-bottom: 14px; }
-    .input { width: 100%; padding: 8px; background: #090909; color: #fff; border: 1px solid #555; border-radius: 4px; font-size: 12px; }
+    .input {
+      width: 100%;
+      padding: 8px;
+      background: #090909;
+      color: #fff;
+      border: 1px solid #555;
+      border-radius: 4px;
+      font-size: 12px;
+    }
     .meta-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -37,6 +56,67 @@
       margin-bottom: 4px;
     }
     .meta-card .value { font-size: 14px; color: #fff; font-weight: 700; }
+
+    .standings-graphic-preview-frame {
+      margin-top: 12px;
+      max-width: 1100px;
+      width: 100%;
+      border: 1px solid #333;
+      background: #080808;
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+    }
+    .standings-graphic-preview-aspect {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      background:
+        linear-gradient(180deg, rgba(30,30,30,.55), rgba(8,8,8,.9)),
+        repeating-linear-gradient(
+          -32deg,
+          rgba(255,255,255,.03) 0,
+          rgba(255,255,255,.03) 1px,
+          transparent 1px,
+          transparent 10px
+        );
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .standings-graphic-preview-host {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .standings-graphic-preview-host canvas,
+    .standings-graphic-preview-host img {
+      display: block;
+      width: 100%;
+      height: auto;
+      max-width: 100%;
+    }
+    .standings-graphic-preview-loading {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,.55);
+      color: #ddd;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      pointer-events: none;
+    }
+    .standings-graphic-preview-loading[hidden] { display: none !important; }
+
+    @media (max-width: 720px) {
+      .btn-row { flex-direction: column; align-items: stretch; }
+      .btn-row .btn { width: 100%; }
+    }
   </style>
   <script src="/admin/admin-embed.js"></script>
 </head>
@@ -56,23 +136,34 @@
 
   <main id="adminView" class="wrap" hidden>
     <h1 class="admin-embed-hide">Standings Graphic</h1>
-    <p class="sub">Download a broadcast-style 3840×2160 PNG of the current championship standings (Top 43). Values match the public standings page.</p>
+    <p class="sub">Preview and download a broadcast-style 3840×2160 PNG of the current championship standings (Top 43). Preview and download use the exact same render.</p>
 
     <div class="panel">
-      <h2>Export</h2>
+      <h2>Standings Graphic Preview</h2>
       <p class="sub" style="margin-bottom:8px;">
-        Uses live <code>/api/standings</code> ordering/values and the latest completed official points race from <code>/api/schedule</code>
+        Uses live <code>/api/standings</code> ordering/values and the latest completed official points race + track from <code>/api/schedule</code>
         (non-points / duel events do not inflate the race number).
       </p>
+
+      <div class="standings-graphic-preview-frame" id="previewFrame">
+        <div class="standings-graphic-preview-aspect">
+          <div class="standings-graphic-preview-host" id="previewHost" aria-label="Standings graphic preview"></div>
+        </div>
+        <div class="standings-graphic-preview-loading" id="previewLoading" hidden>Rendering preview…</div>
+      </div>
+
       <div class="meta-grid" id="standingsGraphicMeta" hidden>
         <div class="meta-card"><span class="label">Season</span><span class="value" id="metaSeason">—</span></div>
         <div class="meta-card"><span class="label">After race</span><span class="value" id="metaRace">—</span></div>
+        <div class="meta-card"><span class="label">Track</span><span class="value" id="metaTrack" style="font-size:12px;">—</span></div>
         <div class="meta-card"><span class="label">Drivers</span><span class="value" id="metaDrivers">—</span></div>
         <div class="meta-card"><span class="label">Playoff cut</span><span class="value" id="metaCut">—</span></div>
         <div class="meta-card"><span class="label">Filename</span><span class="value" id="metaFilename" style="font-size:12px;word-break:break-all;">—</span></div>
       </div>
+
       <div class="btn-row">
         <button id="refreshStandingsGraphicMetaBtn" class="btn btn-secondary" type="button">Refresh Snapshot</button>
+        <button id="refreshStandingsGraphicPreviewBtn" class="btn btn-secondary" type="button">Refresh Preview</button>
         <button id="downloadStandingsGraphicBtn" class="btn" type="button">Download Standings Graphic</button>
       </div>
       <pre id="standingsGraphicStatus" hidden></pre>
@@ -81,11 +172,13 @@
 
   <script type="module">
     import * as StandingsGraphic from "/standings-graphic-export.js";
+    import { formatPreviewStatus, sanitizeTrackName } from "/standings-graphic-export-logic.js";
 
     const SESSION_KEY = "bp_admin_pw";
     const $ = (s) => document.querySelector(s);
 
-    let cachedPayload = null;
+    let cachedSnapshot = null; // { standingsData, scheduleData, model }
+    let lastRenderResult = null;
     let busy = false;
 
     function getPw() {
@@ -100,77 +193,150 @@
       el.classList.toggle("error", Boolean(isError));
     }
 
+    function setLoading(visible, label = "Rendering preview…") {
+      const el = $("#previewLoading");
+      if (!el) return;
+      el.hidden = !visible;
+      if (visible) el.textContent = label;
+    }
+
     function setBusy(next) {
       busy = Boolean(next);
-      ["downloadStandingsGraphicBtn", "refreshStandingsGraphicMetaBtn"].forEach((id) => {
+      [
+        "downloadStandingsGraphicBtn",
+        "refreshStandingsGraphicMetaBtn",
+        "refreshStandingsGraphicPreviewBtn",
+      ].forEach((id) => {
         const btn = document.getElementById(id);
         if (btn) btn.disabled = busy;
       });
     }
 
-    function showMeta(payload) {
+    function showMeta(model) {
       const wrap = $("#standingsGraphicMeta");
       if (wrap) wrap.hidden = false;
-      if ($("#metaSeason")) $("#metaSeason").textContent = payload.seasonName || "—";
+      if ($("#metaSeason")) $("#metaSeason").textContent = model.seasonName || "—";
+      const raceNumber = model.latestCompletedRace?.raceNumber;
       if ($("#metaRace")) {
         $("#metaRace").textContent =
-          Number.isInteger(payload.pointsRaceNumber) && payload.pointsRaceNumber >= 1
-            ? String(payload.pointsRaceNumber)
-            : "—";
+          Number.isInteger(raceNumber) && raceNumber >= 1 ? String(raceNumber) : "—";
       }
-      if ($("#metaDrivers")) $("#metaDrivers").textContent = String(payload.drivers?.length || 0);
-      if ($("#metaCut")) $("#metaCut").textContent = `Top ${payload.playoffCut}`;
-      if ($("#metaFilename")) $("#metaFilename").textContent = payload.filename || "—";
+      const track = sanitizeTrackName(model.latestCompletedRace?.trackName);
+      if ($("#metaTrack")) $("#metaTrack").textContent = track || "—";
+      if ($("#metaDrivers")) $("#metaDrivers").textContent = String(model.drivers?.length || 0);
+      if ($("#metaCut")) $("#metaCut").textContent = `Top ${model.playoffCut}`;
+      if ($("#metaFilename")) $("#metaFilename").textContent = model.filename || "—";
+    }
+
+    function mountPreviewCanvas(result) {
+      const host = $("#previewHost");
+      if (!host || !result?.canvas) return;
+      host.innerHTML = "";
+      const canvas = result.canvas;
+      canvas.className = "standings-graphic-preview-canvas";
+      canvas.setAttribute("aria-label", "Standings graphic preview (3840×2160)");
+      // Keep intrinsic 3840×2160; CSS scales responsively.
+      host.appendChild(canvas);
+    }
+
+    async function renderPreviewFromModel({ manageBusy = true } = {}) {
+      if (!cachedSnapshot?.model) throw new Error("Standings snapshot unavailable.");
+      if (manageBusy) setBusy(true);
+      setLoading(true, "Rendering preview…");
+      try {
+        const result = await StandingsGraphic.renderStandingsGraphicCanvas(cachedSnapshot.model);
+        lastRenderResult = result;
+        mountPreviewCanvas(result);
+        const status = formatPreviewStatus(cachedSnapshot.model, {
+          width: result.width,
+          height: result.height,
+        });
+        const truncated = result.diagnostics?.trackTruncated
+          ? `\nFull track: ${result.diagnostics.fullTrackName || cachedSnapshot.model.latestCompletedRace?.trackName || ""}`
+          : "";
+        setStatus(`${status}${truncated}`);
+        return result;
+      } catch (e) {
+        lastRenderResult = null;
+        const host = $("#previewHost");
+        if (host) host.innerHTML = "";
+        setStatus(`Preview failed: ${e.message || "Unknown error"}`, true);
+        throw e;
+      } finally {
+        setLoading(false);
+        if (manageBusy) setBusy(false);
+      }
     }
 
     async function refreshSnapshot({ manageBusy = true } = {}) {
       if (manageBusy) setBusy(true);
+      setLoading(true, "Loading standings…");
       setStatus("Loading standings + schedule…");
       try {
-        const { standingsData, scheduleData } = await StandingsGraphic.fetchStandingsGraphicSources();
-        cachedPayload = {
-          standingsData,
-          scheduleData,
-          payload: StandingsGraphic.buildExportPayload(standingsData, scheduleData),
-        };
-        showMeta(cachedPayload.payload);
-        setStatus(
-          `Snapshot ready — ${cachedPayload.payload.drivers.length} drivers, ` +
-            `${StandingsGraphic.OUTPUT_WIDTH}×${StandingsGraphic.OUTPUT_HEIGHT} export.`,
-        );
+        const { standingsData, scheduleData } =
+          await StandingsGraphic.fetchStandingsGraphicSources();
+        const model = StandingsGraphic.buildStandingsGraphicModel(standingsData, scheduleData);
+        cachedSnapshot = { standingsData, scheduleData, model };
+        lastRenderResult = null;
+        showMeta(model);
+        await renderPreviewFromModel({ manageBusy: false });
       } catch (e) {
-        cachedPayload = null;
+        cachedSnapshot = null;
+        lastRenderResult = null;
         setStatus(e.message || "Failed to load snapshot.", true);
         throw e;
       } finally {
+        setLoading(false);
         if (manageBusy) setBusy(false);
+      }
+    }
+
+    async function refreshPreviewOnly() {
+      // Re-render from current snapshot — no network requests.
+      setBusy(true);
+      try {
+        if (!cachedSnapshot?.model) {
+          await refreshSnapshot({ manageBusy: false });
+          return;
+        }
+        await renderPreviewFromModel({ manageBusy: false });
+      } catch {
+        /* status already set */
+      } finally {
+        setBusy(false);
       }
     }
 
     async function downloadGraphic() {
       setBusy(true);
-      setStatus("Rendering 3840×2160 standings graphic…");
+      setLoading(true, "Preparing download…");
       try {
-        if (!cachedPayload) {
+        if (!cachedSnapshot?.model) {
           await refreshSnapshot({ manageBusy: false });
         }
-        if (!cachedPayload) throw new Error("Standings snapshot unavailable.");
+        if (!lastRenderResult) {
+          await renderPreviewFromModel({ manageBusy: false });
+        }
+        if (!lastRenderResult) throw new Error("Render unavailable for download.");
 
-        const result = await StandingsGraphic.downloadStandingsGraphic({
-          standingsData: cachedPayload.standingsData,
-          scheduleData: cachedPayload.scheduleData,
-        });
-        const w = result.width;
-        const h = result.height;
-        const mb = result.blob?.size
-          ? `${(result.blob.size / (1024 * 1024)).toFixed(2)} MB`
+        StandingsGraphic.downloadRenderResult(lastRenderResult);
+        const w = lastRenderResult.width;
+        const h = lastRenderResult.height;
+        const mb = lastRenderResult.blob?.size
+          ? `${(lastRenderResult.blob.size / (1024 * 1024)).toFixed(2)} MB`
           : "";
+        const track = sanitizeTrackName(
+          lastRenderResult.model?.latestCompletedRace?.trackName ||
+            cachedSnapshot?.model?.latestCompletedRace?.trackName,
+        );
         setStatus(
-          `Download started: ${result.filename} (${w}×${h}${mb ? `, ${mb}` : ""}) — no downsample.`,
+          `Download started: ${lastRenderResult.filename} (${w}×${h}${mb ? `, ${mb}` : ""})` +
+            `${track ? `\nTrack: ${track}` : ""}\nSame canvas as preview — no downsample.`,
         );
       } catch (e) {
         setStatus(e.message || "Export failed.", true);
       } finally {
+        setLoading(false);
         setBusy(false);
       }
     }
@@ -230,7 +396,8 @@
 
     window.login = login;
     $("#downloadStandingsGraphicBtn")?.addEventListener("click", downloadGraphic);
-    $("#refreshStandingsGraphicMetaBtn")?.addEventListener("click", refreshSnapshot);
+    $("#refreshStandingsGraphicMetaBtn")?.addEventListener("click", () => refreshSnapshot());
+    $("#refreshStandingsGraphicPreviewBtn")?.addEventListener("click", refreshPreviewOnly);
     $("#loginPw")?.addEventListener("keydown", (e) => {
       if (e.key === "Enter") login();
     });
