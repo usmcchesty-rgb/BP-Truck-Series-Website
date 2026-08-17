@@ -15,8 +15,9 @@ import {
   DEFAULT_PLATE,
   TYPOGRAPHY,
   distributeColumns,
-  formatWinsLabel,
-  formatPointsLabel,
+  formatChampionshipStatDisplays,
+  buildDriverChampionshipStat,
+  computeStandingsStatGeometry,
   formatSeasonHeading,
   formatAfterRaceLine,
   fitTextFontSize,
@@ -593,30 +594,72 @@ function drawDriverRow(ctx, driver, box, plateColors, layout, numberImg = null) 
     tracking: fitted.tracking,
   });
 
-  const statsRight = x + w - pad;
-  const winsLabel = formatWinsLabel(driver.wins);
-  const pointsLabel = formatPointsLabel(driver.points);
-  const winsW = measureCtxText(ctx, bodyFont(T.wins), winsLabel);
+  drawChampionshipStats(ctx, driver, x, cy, layout, T);
+}
+
+function championshipStatFills(display) {
+  const label = "#b8b8b8";
+  if (display.tone === "positive") return { value: "#8fd4a4", label };
+  if (display.tone === "negative") return { value: "#e88989", label };
+  if (display.tone === "cut") return { value: "#ffffff", label };
+  return { value: "#ffffff", label };
+}
+
+function drawStatRegion(ctx, display, region, cy, T) {
+  const fills = championshipStatFills(display);
+  if (display.special || !display.labelText) {
+    drawFillText(ctx, {
+      text: display.valueText,
+      x: region.colRight,
+      y: cy,
+      font: bodyFont(T.statSpecial || T.statValue || T.points, "bold"),
+      fill: fills.value,
+      align: "right",
+      baseline: "middle",
+    });
+    return;
+  }
 
   drawFillText(ctx, {
-    text: winsLabel,
-    x: statsRight,
+    text: display.valueText,
+    x: region.valueRight,
     y: cy,
-    font: bodyFont(T.wins),
-    fill: "#e0e0e0",
+    font: bodyFont(T.statValue || T.points, "bold"),
+    fill: fills.value,
     align: "right",
     baseline: "middle",
   });
-
   drawFillText(ctx, {
-    text: pointsLabel,
-    x: statsRight - winsW - layout.gapPtsWins,
+    text: display.labelText,
+    x: region.valueRight + region.labelGap,
     y: cy,
-    font: bodyFont(T.points),
-    fill: "#ffffff",
-    align: "right",
+    font: bodyFont(T.statLabel || 11, "bold"),
+    fill: fills.label,
+    align: "left",
     baseline: "middle",
   });
+}
+
+function drawChampionshipStats(ctx, driver, rowX, cy, layout, T) {
+  const geo = computeStandingsStatGeometry(layout);
+  const stat = driver.championshipStat || buildDriverChampionshipStat(driver);
+  const displays = formatChampionshipStatDisplays(stat);
+
+  drawStatRegion(ctx, displays.points, {
+    ...geo.points,
+    valueRight: rowX + geo.points.valueRight,
+    colRight: rowX + geo.points.colRight,
+  }, cy, T);
+  drawStatRegion(ctx, displays.lead, {
+    ...geo.lead,
+    valueRight: rowX + geo.lead.valueRight,
+    colRight: rowX + geo.lead.colRight,
+  }, cy, T);
+  drawStatRegion(ctx, displays.cut, {
+    ...geo.cut,
+    valueRight: rowX + geo.cut.valueRight,
+    colRight: rowX + geo.cut.colRight,
+  }, cy, T);
 }
 
 function drawMovementIndicator(ctx, movement, slotX, cy, slotW, T) {

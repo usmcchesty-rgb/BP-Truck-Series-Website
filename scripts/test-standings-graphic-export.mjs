@@ -30,6 +30,13 @@ import {
   formatAfterRaceLine,
   formatWinsLabel,
   formatPointsLabel,
+  formatChampionshipStatDisplays,
+  parseStandingsPoints,
+  resolveLeaderPoints,
+  resolveCutPoints,
+  buildDriverChampionshipStat,
+  attachChampionshipStats,
+  computeStandingsStatGeometry,
   formatMovement,
   resolveMovementDelta,
   fitTextFontSize,
@@ -370,10 +377,247 @@ test("fewer than 42 drivers show correct preview count", () => {
   assert.match(formatPreviewStatus(model), /38 drivers/);
 });
 
-test("wins / points labels", () => {
+test("wins helper remains available; graphic uses PTS/LEAD/CUT instead", () => {
   assert.equal(formatWinsLabel(0), "0 WINS");
   assert.equal(formatWinsLabel(1), "1 WIN");
   assert.equal(formatPointsLabel(782), "782 PTS");
+  const src = fs.readFileSync(path.join(root, "public", "standings-graphic-export.js"), "utf8");
+  assert.doesNotMatch(src, /formatWinsLabel/);
+  assert.doesNotMatch(src, /WINS/);
+  assert.match(src, /drawChampionshipStats/);
+});
+
+test("championship gap calculations use live points: leader 890 / cut 450", () => {
+  const rows = [
+    { position: 1, points: 890 },
+    { position: 2, points: 888 },
+    { position: 7, points: 654 },
+    { position: 15, points: 501 },
+    { position: 16, points: 450 },
+    { position: 17, points: 414 },
+    { position: 19, points: 385 },
+  ];
+  const leaderPoints = resolveLeaderPoints(rows);
+  const cutPoints = resolveCutPoints(rows, 16);
+  assert.equal(leaderPoints, 890);
+  assert.equal(cutPoints, 450);
+
+  const byPos = Object.fromEntries(
+    rows.map((row) => [
+      row.position,
+      buildDriverChampionshipStat(row, { leaderPoints, cutPoints, playoffCut: 16 }),
+    ]),
+  );
+
+  assert.equal(byPos[1].gapToLeader, 0);
+  assert.equal(byPos[1].isLeader, true);
+  assert.equal(byPos[1].gapToCut, 440);
+  assert.equal(byPos[2].gapToLeader, -2);
+  assert.equal(byPos[2].gapToCut, 438);
+  assert.equal(byPos[7].gapToLeader, -236);
+  assert.equal(byPos[7].gapToCut, 204);
+  assert.equal(byPos[15].gapToLeader, -389);
+  assert.equal(byPos[15].gapToCut, 51);
+  assert.equal(byPos[16].gapToLeader, -440);
+  assert.equal(byPos[16].gapToCut, 0);
+  assert.equal(byPos[16].isCut, true);
+  assert.equal(byPos[17].gapToLeader, -476);
+  assert.equal(byPos[17].gapToCut, -36);
+  assert.equal(byPos[19].gapToLeader, -505);
+  assert.equal(byPos[19].gapToCut, -65);
+});
+
+test("championship gap formatting: LEADER / CUT / signed gaps / unavailable", () => {
+  const leader = formatChampionshipStatDisplays({
+    points: 890,
+    gapToLeader: 0,
+    gapToCut: 440,
+    isLeader: true,
+    isCut: false,
+    cutAvailable: true,
+  });
+  assert.equal(leader.points.valueText, "890");
+  assert.equal(leader.points.labelText, "PTS");
+  assert.equal(leader.lead.valueText, "LEADER");
+  assert.equal(leader.lead.labelText, "");
+  assert.equal(leader.cut.valueText, "+440");
+  assert.equal(leader.cut.labelText, "CUT");
+
+  const mid = formatChampionshipStatDisplays({
+    points: 501,
+    gapToLeader: -389,
+    gapToCut: 51,
+    isLeader: false,
+    isCut: false,
+    cutAvailable: true,
+  });
+  assert.equal(mid.lead.valueText, "-389");
+  assert.equal(mid.lead.labelText, "LEAD");
+  assert.equal(mid.cut.valueText, "+51");
+
+  const below = formatChampionshipStatDisplays({
+    points: 414,
+    gapToLeader: -476,
+    gapToCut: -36,
+    isLeader: false,
+    isCut: false,
+    cutAvailable: true,
+  });
+  assert.equal(below.lead.valueText, "-476");
+  assert.equal(below.cut.valueText, "-36");
+  assert.equal(below.cut.labelText, "CUT");
+
+  const cutRow = formatChampionshipStatDisplays({
+    points: 450,
+    gapToLeader: -440,
+    gapToCut: 0,
+    isLeader: false,
+    isCut: true,
+    cutAvailable: true,
+  });
+  assert.equal(cutRow.cut.valueText, "CUT");
+  assert.equal(cutRow.cut.labelText, "");
+  assert.equal(cutRow.lead.valueText, "-440");
+
+  const tiny = formatChampionshipStatDisplays({
+    points: 888,
+    gapToLeader: -2,
+    gapToCut: 438,
+    isLeader: false,
+    isCut: false,
+    cutAvailable: true,
+  });
+  assert.equal(tiny.lead.valueText, "-2");
+  assert.equal(tiny.lead.labelText, "LEAD");
+
+  const noCut = formatChampionshipStatDisplays({
+    points: 100,
+    gapToLeader: -10,
+    gapToCut: null,
+    isLeader: false,
+    isCut: false,
+    cutAvailable: false,
+  });
+  assert.equal(noCut.cut.valueText, "—");
+  assert.equal(noCut.cut.special, true);
+
+  const missing = formatChampionshipStatDisplays({
+    points: null,
+    gapToLeader: null,
+    gapToCut: null,
+    isLeader: false,
+    isCut: false,
+    cutAvailable: false,
+  });
+  assert.equal(missing.points.valueText, "—");
+  assert.equal(missing.lead.valueText, "—");
+  assert.equal(missing.cut.valueText, "—");
+});
+
+test("tied leader points show LEADER with zero gap; no fabricated negatives", () => {
+  const rows = [
+    { position: 1, points: 500 },
+    { position: 2, points: 500 },
+    { position: 3, points: 480 },
+  ];
+  const attached = attachChampionshipStats(rows, 16);
+  assert.equal(attached[0].championshipStat.isLeader, true);
+  assert.equal(attached[1].championshipStat.isLeader, true);
+  assert.equal(attached[0].championshipStat.gapToLeader, 0);
+  assert.equal(attached[1].championshipStat.gapToLeader, 0);
+  assert.equal(attached[2].championshipStat.gapToLeader, -20);
+  assert.equal(attached[0].championshipStat.cutAvailable, false);
+  assert.equal(
+    formatChampionshipStatDisplays(attached[0].championshipStat).lead.valueText,
+    "LEADER",
+  );
+  assert.equal(
+    formatChampionshipStatDisplays(attached[0].championshipStat).cut.valueText,
+    "—",
+  );
+});
+
+test("fewer than 16 drivers: cut unavailable, leader gaps still work", () => {
+  const rows = makeDrivers(12);
+  assert.equal(resolveCutPoints(rows, 16), null);
+  const attached = attachChampionshipStats(rows, 16);
+  assert.equal(attached[0].championshipStat.isLeader, true);
+  assert.equal(attached[0].championshipStat.cutAvailable, false);
+  assert.equal(attached[5].championshipStat.gapToCut, null);
+  assert.equal(
+    formatChampionshipStatDisplays(attached[5].championshipStat).cut.valueText,
+    "—",
+  );
+});
+
+test("missing/non-numeric points do not produce NaN", () => {
+  assert.equal(parseStandingsPoints(undefined), null);
+  assert.equal(parseStandingsPoints("abc"), null);
+  const stat = buildDriverChampionshipStat(
+    { position: 3, points: "nope" },
+    { leaderPoints: 100, cutPoints: 50, playoffCut: 16 },
+  );
+  assert.equal(stat.points, null);
+  assert.equal(stat.gapToLeader, null);
+  assert.equal(stat.gapToCut, null);
+  const disp = formatChampionshipStatDisplays(stat);
+  assert.equal(disp.points.valueText, "—");
+  assert.ok(!Number.isNaN(Number(disp.points.valueText)) || disp.points.valueText === "—");
+});
+
+test("fixed PTS/LEAD/CUT value right edges are identical in all three columns", () => {
+  const layout = computeStandingsLayoutMetrics({ driverCount: 42, hasTrackName: true });
+  const geo = computeStandingsStatGeometry(layout);
+  assert.equal(geo.pointsValueRight, 476);
+  assert.equal(geo.leadValueRight, 528);
+  assert.equal(geo.cutValueRight, 588);
+  assert.equal(geo.points.valueRight, geo.pointsValueRight);
+  assert.equal(geo.lead.valueRight, geo.leadValueRight);
+  assert.equal(geo.cut.valueRight, geo.cutValueRight);
+
+  const a = computeStandingsStatGeometry(layout);
+  const b = computeStandingsStatGeometry(layout);
+  assert.deepEqual(
+    [a.pointsValueRight, a.leadValueRight, a.cutValueRight],
+    [b.pointsValueRight, b.leadValueRight, b.cutValueRight],
+  );
+
+  const slots = computeRowSlotGeometry(layout);
+  assert.ok(geo.points.colLeft >= slots.stats.x);
+  assert.ok(geo.cut.colRight <= layout.colW - layout.rowPad);
+});
+
+test("stat value X does not depend on digit count or driver-name length", () => {
+  const layout = computeStandingsLayoutMetrics({ driverCount: 42, hasTrackName: true });
+  const geoShort = computeStandingsStatGeometry(layout);
+  const geoLong = computeStandingsStatGeometry(layout);
+  assert.equal(geoShort.pointsValueRight, geoLong.pointsValueRight);
+  assert.equal(geoShort.leadValueRight, geoLong.leadValueRight);
+  assert.equal(geoShort.cutValueRight, geoLong.cutValueRight);
+
+  const rows = attachChampionshipStats([
+    { position: 1, driver: "LEE", points: 890, wins: 9 },
+    { position: 2, driver: "TAYLOR BUTCHER-BENJAMIN", points: 888, wins: 0 },
+    { position: 16, driver: "X", points: 450, wins: 1 },
+  ], 16);
+  assert.equal(rows[0].wins, 9);
+  assert.equal(rows[0].championshipStat.gapToLeader, 0);
+  const d2 = formatChampionshipStatDisplays(rows[1].championshipStat);
+  const d16 = formatChampionshipStatDisplays(rows[2].championshipStat);
+  assert.equal(d2.lead.valueText, "-2");
+  assert.equal(d16.cut.valueText, "CUT");
+});
+
+test("model attaches championshipStat; wins remain on data but unused by graphic", () => {
+  const model = buildStandingsGraphicModel(
+    { settings: { seasonName: "Season 11", playoffCut: 16 }, rows: makeDrivers(42) },
+    { races: homesteadScheduleFixture() },
+  );
+  assert.equal(model.drivers[0].championshipStat.isLeader, true);
+  assert.equal(model.drivers[15].championshipStat.isCut, true);
+  assert.ok(Object.prototype.hasOwnProperty.call(model.drivers[0], "wins"));
+  assert.equal(typeof model.drivers[3].wins, "number");
+  assert.equal(model.drivers[1].championshipStat.gapToLeader, model.drivers[1].points - model.drivers[0].points);
 });
 
 test("long driver-name fitting reduces font size", () => {
@@ -405,8 +649,10 @@ test("typography defaults are larger than previous compressed sizes", () => {
   assert.ok(TYPOGRAPHY.positionTop10 >= 28);
   assert.ok(TYPOGRAPHY.movement >= 22);
   assert.ok(TYPOGRAPHY.movementArrow >= 26);
-  assert.ok(TYPOGRAPHY.points >= 18);
-  assert.ok(TYPOGRAPHY.wins >= 15);
+  assert.ok(TYPOGRAPHY.points >= 16 && TYPOGRAPHY.points <= 18);
+  assert.ok(TYPOGRAPHY.statValue >= 16 && TYPOGRAPHY.statValue <= 18);
+  assert.ok(TYPOGRAPHY.statLabel >= 11 && TYPOGRAPHY.statLabel <= 13);
+  assert.ok(TYPOGRAPHY.statSpecial >= 12 && TYPOGRAPHY.statSpecial <= 14);
   assert.ok(TYPOGRAPHY.seasonMax >= 42);
   assert.ok(TYPOGRAPHY.afterRace >= 20);
   assert.ok(TYPOGRAPHY.footerSponsor >= 30);
@@ -917,6 +1163,8 @@ test("standings export renderer has no leftover glow/stroke on typography", () =
   assert.doesNotMatch(src, /Arial Narrow/);
   assert.doesNotMatch(src, /TOP 16 PLAYOFF CUT/);
   assert.doesNotMatch(src, /pos >= 2 && pos <= 10/);
+  assert.doesNotMatch(src, /formatWinsLabel/);
+  assert.match(src, /drawChampionshipStats/);
   assert.match(src, /drawPlayoffCutLine/);
   assert.match(src, /drawPlayoffBattleBox/);
 });

@@ -139,8 +139,11 @@ export const TYPOGRAPHY = {
   positionRest: 24,
   movement: 22,
   movementArrow: 26,
-  points: 18,
-  wins: 15,
+  /** Right-side championship stats (PTS | LEAD | CUT). */
+  points: 16,
+  statValue: 16,
+  statLabel: 11,
+  statSpecial: 13,
   playoffCut: 18,
   footerPresentedBy: 13,
   footerSponsor: 30,
@@ -538,6 +541,212 @@ export function formatWinsLabel(wins) {
 
 export function formatPointsLabel(points) {
   return `${Number(points) || 0} PTS`;
+}
+
+/** Parse authoritative standings points; null when missing/non-numeric. */
+export function parseStandingsPoints(value) {
+  if (value == null || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Championship-leader points reference from the same ordered rows used to render.
+ * Uses the maximum finite points total so tied leaders share a zero gap.
+ */
+export function resolveLeaderPoints(rows = []) {
+  let leader = null;
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const points = parseStandingsPoints(row?.points);
+    if (points == null) continue;
+    if (leader == null || points > leader) leader = points;
+  }
+  return leader;
+}
+
+/**
+ * Playoff-cut points = current P16 (or configured cut) from the same ordered rows.
+ * Returns null when that cut position is not present (no fabricated cut).
+ */
+export function resolveCutPoints(rows = [], playoffCut = DEFAULT_PLAYOFF_CUT) {
+  const cut = Number(playoffCut) || DEFAULT_PLAYOFF_CUT;
+  const list = Array.isArray(rows) ? rows : [];
+  const cutRow =
+    list.find((row) => Number(row?.position) === cut) ||
+    (list.length >= cut ? list[cut - 1] : null);
+  if (!cutRow) return null;
+  return parseStandingsPoints(cutRow.points);
+}
+
+/**
+ * Presentation-only championship gaps for one driver.
+ * gapToLeader = driverPoints - leaderPoints (negative below leader)
+ * gapToCut = driverPoints - cutPoints (+ above cut, − below)
+ */
+export function buildDriverChampionshipStat(row, {
+  leaderPoints = null,
+  cutPoints = null,
+  playoffCut = DEFAULT_PLAYOFF_CUT,
+} = {}) {
+  const points = parseStandingsPoints(row?.points);
+  const position = Number(row?.position);
+  const cutPos = Number(playoffCut) || DEFAULT_PLAYOFF_CUT;
+  const cutAvailable = cutPoints != null && Number.isFinite(Number(cutPoints));
+
+  let gapToLeader = null;
+  let isLeader = false;
+  if (points != null && leaderPoints != null && Number.isFinite(Number(leaderPoints))) {
+    gapToLeader = points - Number(leaderPoints);
+    isLeader = gapToLeader === 0;
+  }
+
+  let gapToCut = null;
+  let isCut = false;
+  if (points != null && cutAvailable) {
+    gapToCut = points - Number(cutPoints);
+    isCut = Number.isFinite(position) && position === cutPos;
+    if (gapToCut === 0) isCut = true;
+  }
+
+  return {
+    points,
+    gapToLeader,
+    gapToCut,
+    isLeader,
+    isCut,
+    cutAvailable,
+    leaderPoints: leaderPoints != null && Number.isFinite(Number(leaderPoints))
+      ? Number(leaderPoints)
+      : null,
+    cutPoints: cutAvailable ? Number(cutPoints) : null,
+  };
+}
+
+/** Attach championshipStat to each ordered standings row (presentation only). */
+export function attachChampionshipStats(rows = [], playoffCut = DEFAULT_PLAYOFF_CUT) {
+  const list = Array.isArray(rows) ? rows : [];
+  const leaderPoints = resolveLeaderPoints(list);
+  const cutPoints = resolveCutPoints(list, playoffCut);
+  return list.map((row) => ({
+    ...row,
+    championshipStat: buildDriverChampionshipStat(row, {
+      leaderPoints,
+      cutPoints,
+      playoffCut,
+    }),
+  }));
+}
+
+/**
+ * Format helpers for fixed-column drawing (value + label kept separate).
+ * Never emits +0 / -0 / 0 for LEAD or CUT.
+ */
+export function formatChampionshipStatDisplays(stat = {}) {
+  const unavailable = { valueText: "—", labelText: "", special: true, tone: "neutral" };
+
+  const points =
+    stat.points == null
+      ? { ...unavailable }
+      : {
+          valueText: String(stat.points),
+          labelText: "PTS",
+          special: false,
+          tone: "neutral",
+        };
+
+  let lead;
+  if (stat.gapToLeader == null && !stat.isLeader) {
+    lead = { ...unavailable };
+  } else if (stat.isLeader || stat.gapToLeader === 0) {
+    lead = { valueText: "LEADER", labelText: "", special: true, tone: "neutral" };
+  } else {
+    lead = {
+      valueText: String(stat.gapToLeader),
+      labelText: "LEAD",
+      special: false,
+      tone: "neutral",
+    };
+  }
+
+  let cut;
+  if (!stat.cutAvailable) {
+    cut = { ...unavailable };
+  } else if (stat.gapToCut == null && !stat.isCut) {
+    cut = { ...unavailable };
+  } else if (stat.isCut || stat.gapToCut === 0) {
+    cut = { valueText: "CUT", labelText: "", special: true, tone: "cut" };
+  } else {
+    const n = Number(stat.gapToCut);
+    cut = {
+      valueText: n > 0 ? `+${n}` : String(n),
+      labelText: "CUT",
+      special: false,
+      tone: n > 0 ? "positive" : "negative",
+    };
+  }
+
+  return { points, lead, cut };
+}
+
+/**
+ * Fixed local X geometry for PTS | LEAD | CUT inside every standings row.
+ * Values are right-aligned to valueRight; labels sit in a fixed slot to the right.
+ * Special states (LEADER / CUT / —) right-align to colRight so columns never shift.
+ */
+export function computeStandingsStatGeometry(layout = computeStandingsLayoutMetrics()) {
+  const pad = layout.rowPad ?? 6;
+  const statsRight = layout.colW - pad;
+  const labelGap = layout.statLabelGap ?? 2;
+  const colGap = layout.statColGap ?? 4;
+  const valueW = layout.statValueW ?? 30;
+  const pointsLabelW = layout.statPointsLabelW ?? 16;
+  const leadLabelW = layout.statLeadLabelW ?? 24;
+  const cutLabelW = layout.statCutLabelW ?? 16;
+
+  const cutValueRight = statsRight - cutLabelW - labelGap;
+  const cut = {
+    colRight: statsRight,
+    colLeft: cutValueRight - valueW,
+    valueRight: cutValueRight,
+    labelW: cutLabelW,
+    labelGap,
+    valueW,
+  };
+
+  const leadColRight = cut.colLeft - colGap;
+  const leadValueRight = leadColRight - leadLabelW - labelGap;
+  const lead = {
+    colRight: leadColRight,
+    colLeft: leadValueRight - valueW,
+    valueRight: leadValueRight,
+    labelW: leadLabelW,
+    labelGap,
+    valueW,
+  };
+
+  const pointsColRight = lead.colLeft - colGap;
+  const pointsValueRight = pointsColRight - pointsLabelW - labelGap;
+  const points = {
+    colRight: pointsColRight,
+    colLeft: pointsValueRight - valueW,
+    valueRight: pointsValueRight,
+    labelW: pointsLabelW,
+    labelGap,
+    valueW,
+  };
+
+  return {
+    points,
+    lead,
+    cut,
+    statsRight,
+    pointsValueRight: points.valueRight,
+    leadValueRight: lead.valueRight,
+    cutValueRight: cut.valueRight,
+    pointsColRight: points.colRight,
+    leadColRight: lead.colRight,
+    cutColRight: cut.colRight,
+  };
 }
 
 export function fitTextFontSize(measureFn, text, maxWidth, {
@@ -1110,12 +1319,18 @@ export function computeStandingsLayoutMetrics({
     plateH,
     posW: 44,
     moveW: 68,
-    statsW: 160,
+    statsW: 172,
     gapPosMove: 6,
     gapMovePlate: 8,
     gapPlateName: 8,
-    gapNameStats: 8,
-    gapPtsWins: 12,
+    gapNameStats: 6,
+    /** Fixed PTS | LEAD | CUT column metrics (logical px). */
+    statValueW: 30,
+    statLabelGap: 2,
+    statColGap: 4,
+    statPointsLabelW: 16,
+    statLeadLabelW: 24,
+    statCutLabelW: 16,
     rowPad: 6,
   };
 }
@@ -1226,7 +1441,10 @@ export function buildStandingsGraphicModel(standingsData, scheduleData, options 
     trackName: sanitizeTrackName(latestCompletedRace?.trackName),
   };
 
-  const drivers = takeTopDrivers(standingsData?.rows || [], MAX_DRIVERS);
+  const drivers = attachChampionshipStats(
+    takeTopDrivers(standingsData?.rows || [], MAX_DRIVERS),
+    playoffCut,
+  );
   const columns = distributeColumns(drivers);
   const cutPlacement = findPlayoffCutPlacement(drivers, playoffCut);
   const filename = buildStandingsGraphicFilename({ seasonName, latestCompletedRace });
