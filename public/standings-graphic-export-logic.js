@@ -697,19 +697,35 @@ export const STAT_COLUMN_HEADERS = {
 };
 
 /**
+ * Fixed visual widths of the right-aligned value columns (logical px).
+ * Headers center over these columns: headerCenterX = valueRight - width / 2.
+ */
+export const STAT_VALUE_COLUMNS = {
+  points: { valueRight: 476, width: 34 },
+  lead: { valueRight: 528, width: 42 },
+  cut: { valueRight: 588, width: 42 },
+};
+
+function headerCenterFromValueColumn({ valueRight, width }) {
+  return valueRight - width / 2;
+}
+
+/**
  * Fixed local X geometry for PTS | LEAD | CUT inside every standings row.
- * Three contiguous regions share the stats band. Values stay right-aligned;
- * headers center on each region's center X: (left + right) / 2.
+ * Values stay right-aligned. Headers center over the actual value columns,
+ * not the larger enclosing stat regions.
  */
 export function computeStandingsStatGeometry(layout = computeStandingsLayoutMetrics()) {
   const pad = layout.rowPad ?? 6;
   const statsRight = layout.colW - pad;
   const statsLeft = layout.colW - pad - (layout.statsW ?? 172);
 
-  /** Stable value right edges (local to each standings column). */
-  const pointsValueRight = layout.statPointsValueRight ?? 476;
-  const leadValueRight = layout.statLeadValueRight ?? 528;
-  const cutValueRight = layout.statCutValueRight ?? 588;
+  const pointsValueRight = layout.statPointsValueRight ?? STAT_VALUE_COLUMNS.points.valueRight;
+  const leadValueRight = layout.statLeadValueRight ?? STAT_VALUE_COLUMNS.lead.valueRight;
+  const cutValueRight = layout.statCutValueRight ?? STAT_VALUE_COLUMNS.cut.valueRight;
+  const pointsColumnWidth = layout.statPointsColumnWidth ?? STAT_VALUE_COLUMNS.points.width;
+  const leadColumnWidth = layout.statLeadColumnWidth ?? STAT_VALUE_COLUMNS.lead.width;
+  const cutColumnWidth = layout.statCutColumnWidth ?? STAT_VALUE_COLUMNS.cut.width;
 
   const boundaryLead = Math.round((pointsValueRight + leadValueRight) / 2);
   const boundaryCut = Math.round((leadValueRight + cutValueRight) / 2);
@@ -721,6 +737,12 @@ export function computeStandingsStatGeometry(layout = computeStandingsLayoutMetr
     colRight: boundaryLead,
     center: (statsLeft + boundaryLead) / 2,
     valueRight: pointsValueRight,
+    valueRightX: pointsValueRight,
+    valueColumnWidth: pointsColumnWidth,
+    headerCenterX: headerCenterFromValueColumn({
+      valueRight: pointsValueRight,
+      width: pointsColumnWidth,
+    }),
     valueW: pointsValueRight - statsLeft,
   };
   const lead = {
@@ -730,6 +752,12 @@ export function computeStandingsStatGeometry(layout = computeStandingsLayoutMetr
     colRight: boundaryCut,
     center: (boundaryLead + boundaryCut) / 2,
     valueRight: leadValueRight,
+    valueRightX: leadValueRight,
+    valueColumnWidth: leadColumnWidth,
+    headerCenterX: headerCenterFromValueColumn({
+      valueRight: leadValueRight,
+      width: leadColumnWidth,
+    }),
     valueW: leadValueRight - boundaryLead,
   };
   const cut = {
@@ -739,6 +767,12 @@ export function computeStandingsStatGeometry(layout = computeStandingsLayoutMetr
     colRight: statsRight,
     center: (boundaryCut + statsRight) / 2,
     valueRight: cutValueRight,
+    valueRightX: cutValueRight,
+    valueColumnWidth: cutColumnWidth,
+    headerCenterX: headerCenterFromValueColumn({
+      valueRight: cutValueRight,
+      width: cutColumnWidth,
+    }),
     valueW: cutValueRight - boundaryCut,
   };
 
@@ -751,6 +785,9 @@ export function computeStandingsStatGeometry(layout = computeStandingsLayoutMetr
     pointsValueRight: points.valueRight,
     leadValueRight: lead.valueRight,
     cutValueRight: cut.valueRight,
+    pointsHeaderCenterX: points.headerCenterX,
+    leadHeaderCenterX: lead.headerCenterX,
+    cutHeaderCenterX: cut.headerCenterX,
     pointsColRight: points.colRight,
     leadColRight: lead.colRight,
     cutColRight: cut.colRight,
@@ -759,7 +796,7 @@ export function computeStandingsStatGeometry(layout = computeStandingsLayoutMetr
 
 /**
  * Per-column PTS / LEAD / CUT header strip.
- * Header X uses explicit region centers from the same row stat geometry.
+ * Header X is the value-column center, identical in all three standings columns.
  */
 export function computeStatColumnHeaderGeometry(layout = computeStandingsLayoutMetrics()) {
   const stats = computeStandingsStatGeometry(layout);
@@ -770,29 +807,38 @@ export function computeStatColumnHeaderGeometry(layout = computeStandingsLayoutM
   const points = {
     key: "points",
     text: STAT_COLUMN_HEADERS.points,
-    x: stats.points.center,
+    x: stats.points.headerCenterX,
     left: stats.points.left,
     right: stats.points.right,
-    center: stats.points.center,
+    center: stats.points.headerCenterX,
+    headerCenterX: stats.points.headerCenterX,
     valueRight: stats.pointsValueRight,
+    valueRightX: stats.points.valueRightX,
+    valueColumnWidth: stats.points.valueColumnWidth,
   };
   const lead = {
     key: "lead",
     text: STAT_COLUMN_HEADERS.lead,
-    x: stats.lead.center,
+    x: stats.lead.headerCenterX,
     left: stats.lead.left,
     right: stats.lead.right,
-    center: stats.lead.center,
+    center: stats.lead.headerCenterX,
+    headerCenterX: stats.lead.headerCenterX,
     valueRight: stats.leadValueRight,
+    valueRightX: stats.lead.valueRightX,
+    valueColumnWidth: stats.lead.valueColumnWidth,
   };
   const cut = {
     key: "cut",
     text: STAT_COLUMN_HEADERS.cut,
-    x: stats.cut.center,
+    x: stats.cut.headerCenterX,
     left: stats.cut.left,
     right: stats.cut.right,
-    center: stats.cut.center,
+    center: stats.cut.headerCenterX,
+    headerCenterX: stats.cut.headerCenterX,
     valueRight: stats.cutValueRight,
+    valueRightX: stats.cut.valueRightX,
+    valueColumnWidth: stats.cut.valueColumnWidth,
   };
   return {
     y,

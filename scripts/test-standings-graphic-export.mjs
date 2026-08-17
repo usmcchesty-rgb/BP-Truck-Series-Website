@@ -39,6 +39,7 @@ import {
   computeStandingsStatGeometry,
   computeStatColumnHeaderGeometry,
   STAT_COLUMN_HEADERS,
+  STAT_VALUE_COLUMNS,
   formatMovement,
   resolveMovementDelta,
   fitTextFontSize,
@@ -1004,12 +1005,30 @@ test("each column has a PTS / LEAD / CUT header above unchanged row stats", () =
   assert.equal(STAT_COLUMN_HEADERS.cut, "CUT");
   assert.equal(headers.labels.length, 3);
   assert.deepEqual(headers.labels.map((l) => l.text), ["PTS", "LEAD", "CUT"]);
-  assert.equal(headers.points.center, (stats.points.left + stats.points.right) / 2);
-  assert.equal(headers.lead.center, (stats.lead.left + stats.lead.right) / 2);
-  assert.equal(headers.cut.center, (stats.cut.left + stats.cut.right) / 2);
-  assert.equal(headers.points.x, stats.points.center);
-  assert.equal(headers.lead.x, stats.lead.center);
-  assert.equal(headers.cut.x, stats.cut.center);
+  assert.equal(STAT_VALUE_COLUMNS.points.width, 34);
+  assert.equal(STAT_VALUE_COLUMNS.lead.width, 42);
+  assert.equal(STAT_VALUE_COLUMNS.cut.width, 42);
+  assert.equal(stats.points.valueRightX, 476);
+  assert.equal(stats.lead.valueRightX, 528);
+  assert.equal(stats.cut.valueRightX, 588);
+  assert.equal(stats.points.valueColumnWidth, 34);
+  assert.equal(stats.lead.valueColumnWidth, 42);
+  assert.equal(stats.cut.valueColumnWidth, 42);
+  assert.equal(stats.points.headerCenterX, 459);
+  assert.equal(stats.lead.headerCenterX, 507);
+  assert.equal(stats.cut.headerCenterX, 567);
+  assert.equal(headers.points.headerCenterX, stats.points.headerCenterX);
+  assert.equal(headers.lead.headerCenterX, stats.lead.headerCenterX);
+  assert.equal(headers.cut.headerCenterX, stats.cut.headerCenterX);
+  assert.equal(headers.points.x, 459);
+  assert.equal(headers.lead.x, 507);
+  assert.equal(headers.cut.x, 567);
+  assert.ok(headers.points.headerCenterX < stats.points.center);
+  assert.ok(headers.lead.headerCenterX < stats.lead.center);
+  assert.ok(headers.cut.headerCenterX < stats.cut.center);
+  assert.equal(headers.points.headerCenterX, stats.points.valueRightX - stats.points.valueColumnWidth / 2);
+  assert.equal(headers.lead.headerCenterX, stats.lead.valueRightX - stats.lead.valueColumnWidth / 2);
+  assert.equal(headers.cut.headerCenterX, stats.cut.valueRightX - stats.cut.valueColumnWidth / 2);
   assert.equal(stats.points.left, 434);
   assert.equal(stats.points.right, 502);
   assert.equal(stats.points.center, 468);
@@ -1025,7 +1044,10 @@ test("each column has a PTS / LEAD / CUT header above unchanged row stats", () =
 
   const a = computeStatColumnHeaderGeometry(layout);
   const b = computeStatColumnHeaderGeometry(layout);
-  assert.deepEqual(a.labels.map((l) => [l.text, l.center]), b.labels.map((l) => [l.text, l.center]));
+  assert.deepEqual(
+    a.labels.map((l) => [l.text, l.headerCenterX]),
+    b.labels.map((l) => [l.text, l.headerCenterX]),
+  );
 
   const formatted = formatChampionshipStatDisplays({
     points: 888,

@@ -630,7 +630,7 @@ function drawStatColumnHeader(ctx, colX, layout) {
   geo.labels.forEach((item) => {
     drawFillText(ctx, {
       text: item.text,
-      x: colX + item.center,
+      x: colX + item.headerCenterX,
       y: geo.y,
       font: bodyFont(T.statHeader || 16, "bold"),
       fill: "#d8d8d8",
