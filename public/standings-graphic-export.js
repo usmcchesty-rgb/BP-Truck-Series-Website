@@ -24,9 +24,9 @@ import {
   plateNumberFontSize,
   formatPlateDisplay,
   pickReadableNumberColor,
-  packagePlateColors,
-  pickDeterministicPlateColors,
+  resolveStandingsPlateColors,
   isNearWhiteHex,
+  isUsablePlateFill,
   buildSponsorFooterText,
   validateOutputDimensions,
   buildStandingsGraphicModel,
@@ -235,6 +235,11 @@ function sampleSuitColorsFromPortrait(img) {
   };
 }
 
+/**
+ * Resolve plate fill without stopping on the first unusable color.
+ * Priority: cache primary → cache secondary → portrait primary → portrait secondary
+ * → driver profile/truck/accent fields → deterministic fallback.
+ */
 async function resolvePlateColors(driver) {
   const photoUrl = stripUrlQuery(driver.photoUrl);
   const cacheKey = photoUrl
@@ -243,45 +248,56 @@ async function resolvePlateColors(driver) {
       ? `suit:driver:${driver.driverId}`
       : "";
 
-  if (cacheKey && suitColorCache.has(cacheKey)) {
-    const cached = suitColorCache.get(cacheKey);
-    return packagePlateColors({
-      fill: cached.fill,
-      outline: cached.outline,
-      keyline: cached.keyline,
-      source: "suit_cache",
-      driver,
-    });
+  const cached = cacheKey && suitColorCache.has(cacheKey) ? suitColorCache.get(cacheKey) : null;
+  const candidates = [];
+  let rawPrimary = "";
+  let rawSecondary = "";
+  let rawSource = "none";
+
+  if (cached) {
+    rawPrimary = cached.fill || "";
+    rawSecondary = cached.outline || "";
+    rawSource = "suit_cache";
+    candidates.push({ color: rawPrimary, role: "primary", source: "suit_cache" });
+    candidates.push({ color: rawSecondary, role: "secondary", source: "suit_cache" });
   }
 
-  if (photoUrl) {
+  const cacheHasUsable = candidates.some((c) => isUsablePlateFill(c.color).ok);
+
+  // Portrait only when cache did not already provide a usable plate fill.
+  if (!cacheHasUsable && photoUrl) {
     const img = await loadImage(photoUrl);
     if (img) {
       const sampled = sampleSuitColorsFromPortrait(img);
       if (!sampled.error) {
-        const pack = packagePlateColors({
-          fill: sampled.fill,
-          outline: sampled.outline,
-          keyline: sampled.keyline,
-          source: "portrait_sample",
-          driver,
-        });
-        if (cacheKey) {
-          suitColorCache.set(cacheKey, {
-            fill: pack.fill,
-            outline: pack.outline,
-            keyline: pack.keyline,
-          });
+        if (!cached) {
+          rawPrimary = sampled.fill || "";
+          rawSecondary = sampled.outline || "";
+          rawSource = "portrait_sample";
         }
-        return pack;
+        candidates.push({ color: sampled.fill, role: "primary", source: "portrait_sample" });
+        candidates.push({ color: sampled.outline, role: "secondary", source: "portrait_sample" });
       }
     }
   }
 
-  return packagePlateColors({
-    ...pickDeterministicPlateColors(driver),
-    source: "deterministic_fallback",
+  for (const [field, source] of [
+    ["truckColor", "truck_color"],
+    ["profileColor", "profile_color"],
+    ["accentColor", "profile_color"],
+    ["primaryColor", "profile_color"],
+    ["carColor", "truck_color"],
+  ]) {
+    const value = driver?.[field];
+    if (value) candidates.push({ color: value, role: "accent", source });
+  }
+
+  return resolveStandingsPlateColors({
     driver,
+    rawPrimary,
+    rawSecondary,
+    rawSource,
+    candidates,
   });
 }
 
@@ -789,15 +805,77 @@ export async function renderStandingsGraphicCanvas(model, options = {}) {
   const plateDiagnostics = drivers.map((driver, index) => {
     const colors = plateColorsList[index] || DEFAULT_PLATE;
     return {
+      Driver: driver.driverName,
+      "Car #": driver.carNumber || "",
+      "Raw Source": colors.rawColorSource || colors.colorSource || "unknown",
+      "Raw Primary": colors.rawPrimary || "",
+      "Raw Secondary": colors.rawSecondary || "",
+      "Final Source": colors.finalColorSource || colors.colorSource || colors.source || "unknown",
+      "Final Primary": colors.finalPrimary || colors.platePrimary || colors.fill,
+      "Final Secondary": colors.finalSecondary || colors.plateSecondary || colors.outline,
+      "Text Color": colors.finalTextColor || colors.plateTextColor || colors.numberFill,
+      "Rejected Reason(s)": colors.rejectedReasonText || "",
+      // Keep snake keys for programmatic audit / filters
       driverName: driver.driverName,
       driverId: driver.driverId,
       carNumber: driver.carNumber || "",
+      rawPrimary: colors.rawPrimary || "",
+      rawSecondary: colors.rawSecondary || "",
+      rawColorSource: colors.rawColorSource || "",
+      finalPrimary: colors.finalPrimary || colors.platePrimary || colors.fill,
+      finalSecondary: colors.finalSecondary || colors.plateSecondary || colors.outline,
+      finalTextColor: colors.finalTextColor || colors.plateTextColor || colors.numberFill,
+      finalColorSource: colors.finalColorSource || colors.colorSource || colors.source,
       platePrimary: colors.platePrimary || colors.fill,
       plateSecondary: colors.plateSecondary || colors.outline,
       plateTextColor: colors.plateTextColor || colors.numberFill,
       colorSource: colors.colorSource || colors.source || "unknown",
+      rejectedReasons: colors.rejectedReasons || [],
+      rejectedReasonText: colors.rejectedReasonText || "",
     };
   });
+
+  const unintendedWhitePlates = plateDiagnostics.filter((d) => {
+    const check = isUsablePlateFill(d.finalPrimary || d.platePrimary);
+    return !check.ok && String(check.reason || "").includes("white");
+  });
+  if (unintendedWhitePlates.length) {
+    console.warn(
+      "[Standings Plate Colors] unintended white/near-white fills remaining",
+      unintendedWhitePlates.map((d) => ({
+        driverName: d.driverName,
+        driverId: d.driverId,
+        carNumber: d.carNumber,
+        rawPrimary: d.rawPrimary,
+        rawSecondary: d.rawSecondary,
+        rawColorSource: d.rawColorSource,
+        finalPrimary: d.finalPrimary,
+        finalSecondary: d.finalSecondary,
+        finalTextColor: d.finalTextColor,
+        finalColorSource: d.finalColorSource,
+        rejectedReasonText: d.rejectedReasonText,
+      })),
+    );
+  }
+  console.log("[Standings Plate Colors]");
+  if (typeof console.table === "function") {
+    console.table(
+      plateDiagnostics.map((d) => ({
+        Driver: d.Driver,
+        "Car #": d["Car #"],
+        "Raw Source": d["Raw Source"],
+        "Raw Primary": d["Raw Primary"],
+        "Raw Secondary": d["Raw Secondary"],
+        "Final Source": d["Final Source"],
+        "Final Primary": d["Final Primary"],
+        "Final Secondary": d["Final Secondary"],
+        "Text Color": d["Text Color"],
+        "Rejected Reason(s)": d["Rejected Reason(s)"],
+      })),
+    );
+  } else {
+    console.log(plateDiagnostics);
+  }
 
   const columns = model.columns || distributeColumns(drivers);
   const cutPlacement = model.cutPlacement || null;
@@ -860,7 +938,10 @@ export async function renderStandingsGraphicCanvas(model, options = {}) {
   const blob = await canvasToPngBlob(canvas);
   const pngDims = await readPngDimensions(blob);
   const missingPlates = drivers.filter((d) => d.carNumberMissing).length;
-  const whitePlates = plateDiagnostics.filter((d) => isNearWhiteHex(d.platePrimary)).length;
+  const whitePlates = plateDiagnostics.filter((d) => {
+    const fill = d.finalPrimary || d.platePrimary;
+    return !isUsablePlateFill(fill).ok && isNearWhiteHex(fill);
+  }).length;
   const exportLog = {
     width: pngDims.width,
     height: pngDims.height,
@@ -885,7 +966,9 @@ export async function renderStandingsGraphicCanvas(model, options = {}) {
     typography: TYPOGRAPHY,
   };
   console.log("[standings-graphic-export] PNG export", exportLog);
-  console.log("[standings-graphic-export] plate color diagnostics", plateDiagnostics);
+  if (unintendedWhitePlates.length === 0) {
+    console.log("[Standings Plate Colors] no unintended plain-white plate fills");
+  }
 
   if (!validateOutputDimensions(pngDims.width, pngDims.height)) {
     console.warn("[standings-graphic-export] Unexpected PNG dimensions", pngDims);

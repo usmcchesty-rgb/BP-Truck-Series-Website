@@ -476,52 +476,205 @@ export function formatPlateDisplay(carNumber) {
   return raw || "—";
 }
 
-export function normalizeHexColor(value) {
-  const raw = String(value || "").trim();
-  if (/^hsl/i.test(raw)) return "";
-  const hex = raw.startsWith("#") ? raw : `#${raw}`;
-  if (/^#[0-9a-fA-F]{6}$/.test(hex)) return hex.toLowerCase();
-  if (/^#[0-9a-fA-F]{3}$/.test(hex)) {
-    const r = hex[1];
-    const g = hex[2];
-    const b = hex[3];
-    return `#${r}${r}${g}${g}${b}${b}`.toLowerCase();
+function clampByte(n) {
+  return Math.max(0, Math.min(255, Math.round(Number(n) || 0)));
+}
+
+function rgbToHex(r, g, b) {
+  return `#${[r, g, b].map((n) => clampByte(n).toString(16).padStart(2, "0")).join("")}`;
+}
+
+function hslToRgb(h, s, l) {
+  const hh = ((Number(h) % 360) + 360) % 360;
+  const ss = Math.max(0, Math.min(1, Number(s)));
+  const ll = Math.max(0, Math.min(1, Number(l)));
+  const c = (1 - Math.abs(2 * ll - 1)) * ss;
+  const x = c * (1 - Math.abs(((hh / 60) % 2) - 1));
+  const m = ll - c / 2;
+  let rp = 0;
+  let gp = 0;
+  let bp = 0;
+  if (hh < 60) [rp, gp, bp] = [c, x, 0];
+  else if (hh < 120) [rp, gp, bp] = [x, c, 0];
+  else if (hh < 180) [rp, gp, bp] = [0, c, x];
+  else if (hh < 240) [rp, gp, bp] = [0, x, c];
+  else if (hh < 300) [rp, gp, bp] = [x, 0, c];
+  else [rp, gp, bp] = [c, 0, x];
+  return {
+    r: clampByte((rp + m) * 255),
+    g: clampByte((gp + m) * 255),
+    b: clampByte((bp + m) * 255),
+  };
+}
+
+/**
+ * Canonicalize any color candidate to #rrggbb before luminance/usability checks.
+ * Supports hex, rgb/rgba, hsl/hsla, and basic named colors.
+ */
+export function normalizeColorToHex(value) {
+  if (value == null) return "";
+  const raw = String(value).trim();
+  if (!raw) return "";
+  const lower = raw.toLowerCase();
+  if (lower === "white") return "#ffffff";
+  if (lower === "black") return "#000000";
+  if (lower === "transparent" || lower === "none") return "";
+
+  const hexMatch = lower.match(/^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i);
+  if (hexMatch) {
+    const body = hexMatch[1];
+    if (body.length === 3) {
+      return `#${body[0]}${body[0]}${body[1]}${body[1]}${body[2]}${body[2]}`.toLowerCase();
+    }
+    return `#${body.slice(0, 6)}`.toLowerCase();
   }
+
+  const rgbMatch = lower.match(
+    /^rgba?\(\s*([.\d]+)\s*,\s*([.\d]+)\s*,\s*([.\d]+)(?:\s*,\s*([.\d]+))?\s*\)$/,
+  );
+  if (rgbMatch) {
+    const alpha = rgbMatch[4] == null ? 1 : Number(rgbMatch[4]);
+    if (!(alpha > 0.2)) return "";
+    return rgbToHex(rgbMatch[1], rgbMatch[2], rgbMatch[3]);
+  }
+
+  const hslMatch = lower.match(
+    /^hsla?\(\s*([.\d]+)\s*,\s*([.\d]+)%\s*,\s*([.\d]+)%(?:\s*,\s*([.\d]+))?\s*\)$/,
+  );
+  if (hslMatch) {
+    const alpha = hslMatch[4] == null ? 1 : Number(hslMatch[4]);
+    if (!(alpha > 0.2)) return "";
+    const rgb = hslToRgb(hslMatch[1], Number(hslMatch[2]) / 100, Number(hslMatch[3]) / 100);
+    return rgbToHex(rgb.r, rgb.g, rgb.b);
+  }
+
+  // Bare 6-digit hex without #
+  if (/^[0-9a-f]{6}$/i.test(lower)) return `#${lower}`;
   return "";
 }
 
-export function relativeLuminanceHex(hex) {
-  const normalized = normalizeHexColor(hex);
-  if (!normalized) return 0;
-  const raw = normalized.slice(1);
-  const r = parseInt(raw.slice(0, 2), 16) / 255;
-  const g = parseInt(raw.slice(2, 4), 16) / 255;
-  const b = parseInt(raw.slice(4, 6), 16) / 255;
-  const lin = (c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
-  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+/** @deprecated Prefer normalizeColorToHex — kept for callers. */
+export function normalizeHexColor(value) {
+  return normalizeColorToHex(value);
 }
 
-export function isNearWhiteHex(hex, threshold = 0.78) {
-  const n = normalizeHexColor(hex);
+export function getRgbChannels(hex) {
+  const n = normalizeColorToHex(hex);
+  if (!n) return null;
+  return {
+    r: parseInt(n.slice(1, 3), 16),
+    g: parseInt(n.slice(3, 5), 16),
+    b: parseInt(n.slice(5, 7), 16),
+  };
+}
+
+export function getSaturationLightness(hex) {
+  const rgb = getRgbChannels(hex);
+  if (!rgb) return { s: 0, l: 0 };
+  const r = rgb.r / 255;
+  const g = rgb.g / 255;
+  const b = rgb.b / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  const d = max - min;
+  const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+  return { s, l };
+}
+
+export function relativeLuminanceHex(hex) {
+  const rgb = getRgbChannels(hex);
+  if (!rgb) return 0;
+  const lin = (c) => {
+    const v = c / 255;
+    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * lin(rgb.r) + 0.7152 * lin(rgb.g) + 0.0722 * lin(rgb.b);
+}
+
+/**
+ * Strict usable-fill gate for number-plate bodies.
+ * White/near-white/washed-out candidates are rejected — they may still be used as keylines.
+ */
+export function isUsablePlateFill(color) {
+  const hex = normalizeColorToHex(color);
+  if (!hex) return { ok: false, reason: "invalid_or_transparent", hex: "" };
+
+  const rgb = getRgbChannels(hex);
+  const lum = relativeLuminanceHex(hex);
+  const { s, l } = getSaturationLightness(hex);
+
+  if (rgb.r >= 235 && rgb.g >= 235 && rgb.b >= 235) {
+    return { ok: false, reason: "rgb_near_white", hex };
+  }
+  if (lum >= 0.9 && s < 0.15) {
+    return { ok: false, reason: "high_luminance_low_saturation", hex };
+  }
+  if (lum >= 0.85 && s < 0.08) {
+    return { ok: false, reason: "washed_out_near_white", hex };
+  }
+  if (l >= 0.92 && s < 0.2) {
+    return { ok: false, reason: "hsl_near_white", hex };
+  }
+  // Extremely light gray that still reads as a white plate on dark rows.
+  if (lum >= 0.82 && s < 0.05) {
+    return { ok: false, reason: "near_white_grayscale", hex };
+  }
+  // Pure / near-black only — charcoal/steel palette fills must remain usable.
+  if (rgb.r <= 22 && rgb.g <= 22 && rgb.b <= 22) {
+    return { ok: false, reason: "rgb_near_black", hex };
+  }
+  if (lum <= 0.03 && s < 0.08) {
+    return { ok: false, reason: "near_black_background_collapse", hex };
+  }
+  return { ok: true, reason: null, hex };
+}
+
+export function isNearWhiteHex(hex, threshold = 0.82) {
+  const n = normalizeColorToHex(hex);
   if (!n) return false;
-  return relativeLuminanceHex(n) >= threshold;
+  const usable = isUsablePlateFill(n);
+  if (
+    !usable.ok &&
+    [
+      "rgb_near_white",
+      "high_luminance_low_saturation",
+      "washed_out_near_white",
+      "hsl_near_white",
+      "near_white_grayscale",
+    ].includes(usable.reason)
+  ) {
+    return true;
+  }
+  return relativeLuminanceHex(n) >= threshold && getSaturationLightness(n).s < 0.2;
 }
 
 export function isNearBlackHex(hex, threshold = 0.08) {
-  const n = normalizeHexColor(hex);
+  const n = normalizeColorToHex(hex);
   if (!n) return true;
   return relativeLuminanceHex(n) <= threshold;
 }
 
 export function darkenHex(hex, factor = 0.42) {
-  const n = normalizeHexColor(hex) || "#ffffff";
-  const raw = n.slice(1);
+  const n = normalizeColorToHex(hex) || "#ffffff";
+  const rgb = getRgbChannels(n);
   const scale = Math.min(1, Math.max(0.15, Number(factor) || 0.42));
-  const channels = [0, 2, 4].map((i) => {
-    const v = Math.round(parseInt(raw.slice(i, i + 2), 16) * scale);
-    return Math.max(0, Math.min(255, v)).toString(16).padStart(2, "0");
-  });
-  return `#${channels.join("")}`;
+  // Preserve hue: scale channels, then bump saturation slightly for identity.
+  let r = rgb.r * scale;
+  let g = rgb.g * scale;
+  let b = rgb.b * scale;
+  const max = Math.max(r, g, b) || 1;
+  const min = Math.min(r, g, b);
+  if (max - min < 12) {
+    // Was nearly gray/white — do not pretend this is a brand color.
+    return rgbToHex(r, g, b);
+  }
+  const boost = 1.15;
+  const avg = (r + g + b) / 3;
+  r = avg + (r - avg) * boost;
+  g = avg + (g - avg) * boost;
+  b = avg + (b - avg) * boost;
+  return rgbToHex(r, g, b);
 }
 
 export function pickReadableNumberColor(fillHex) {
@@ -552,13 +705,154 @@ export function pickDeterministicPlateColors(driver = {}) {
     keyline: pick.keyline,
     numberFill: pickReadableNumberColor(pick.fill),
     source: "deterministic_fallback",
+    colorSource: "deterministic_fallback",
   };
 }
 
 /**
- * Package plate colors so plain white fills never become the generic result.
- * PR suit cache often stores white fill + colored outline for light suits —
- * for plates, prefer the colored secondary as the fill.
+ * Walk ordered color candidates until a usable plate fill is found.
+ * Does not treat cached white as proof of a white car/suit.
+ */
+export function resolvePlateFillFromCandidates(candidates = [], driver = {}) {
+  const rejected = [];
+  for (const candidate of candidates) {
+    const check = isUsablePlateFill(candidate?.color);
+    if (check.ok) {
+      return {
+        fill: check.hex,
+        from: candidate,
+        rejected,
+        usedFallback: false,
+      };
+    }
+    rejected.push({
+      color: candidate?.color ?? "",
+      normalized: check.hex || "",
+      role: candidate?.role || "",
+      source: candidate?.source || "",
+      reason: check.reason || "rejected",
+    });
+  }
+
+  const fallback = pickDeterministicPlateColors(driver);
+  return {
+    fill: fallback.fill,
+    from: {
+      color: fallback.fill,
+      role: "fallback",
+      source: "deterministic_fallback",
+    },
+    rejected,
+    usedFallback: true,
+    fallback,
+  };
+}
+
+function pickKeylineForFill(fillHex, secondaryHex) {
+  const secondary = normalizeColorToHex(secondaryHex);
+  if (secondary && isUsablePlateFill(secondary).ok === false && isNearWhiteHex(secondary)) {
+    return secondary;
+  }
+  if (secondary && normalizeColorToHex(secondary) !== normalizeColorToHex(fillHex)) {
+    if (!isNearBlackHex(secondary, 0.03) || relativeLuminanceHex(fillHex) > 0.35) {
+      // Prefer a contrasting accent when available.
+    }
+  }
+  if (relativeLuminanceHex(fillHex) > 0.35) return "#0a0a0a";
+  return "#c81010";
+}
+
+function pickOutlineForFill(fillHex, secondaryHex) {
+  const secondary = normalizeColorToHex(secondaryHex);
+  if (secondary && secondary !== normalizeColorToHex(fillHex)) {
+    if (isNearWhiteHex(secondary) || isNearBlackHex(secondary) || isUsablePlateFill(secondary).ok) {
+      return secondary;
+    }
+  }
+  return pickReadableNumberColor(fillHex) === "#ffffff" ? "#f2f2f2" : "#101010";
+}
+
+/**
+ * Resolve final plate colors from ordered candidates.
+ * White/near-white primaries never remain as final fill — walk the list,
+ * then use deterministic fallback (never plain white).
+ */
+export function resolveStandingsPlateColors({
+  driver = {},
+  rawPrimary = "",
+  rawSecondary = "",
+  rawSource = "unknown",
+  candidates: explicitCandidates = null,
+  extraCandidates = [],
+} = {}) {
+  const candidates = (Array.isArray(explicitCandidates) && explicitCandidates.length
+    ? explicitCandidates
+    : [
+        { color: rawPrimary, role: "primary", source: rawSource },
+        { color: rawSecondary, role: "secondary", source: rawSource },
+        ...extraCandidates,
+      ]
+  ).filter((c) => c && c.color != null && String(c.color).trim() !== "");
+
+  const resolved = resolvePlateFillFromCandidates(candidates, driver);
+  const fill = resolved.fill;
+
+  const secondaryCandidate =
+    candidates.find(
+      (c) =>
+        c !== resolved.from &&
+        normalizeColorToHex(c.color) &&
+        normalizeColorToHex(c.color) !== normalizeColorToHex(fill),
+    ) || null;
+  const pairedSecondary =
+    normalizeColorToHex(secondaryCandidate?.color) ||
+    normalizeColorToHex(rawSecondary) ||
+    (isNearWhiteHex(rawPrimary) ? normalizeColorToHex(rawPrimary) : "");
+
+  const outline = pickOutlineForFill(fill, pairedSecondary);
+  const keyline = pickKeylineForFill(fill, outline);
+  const numberFill = pickReadableNumberColor(fill);
+
+  // Safety: never emit an unusable final fill.
+  const finalCheck = isUsablePlateFill(fill);
+  const safe = finalCheck.ok
+    ? { fill, outline, keyline, numberFill, source: resolved.from?.source || rawSource }
+    : pickDeterministicPlateColors(driver);
+
+  const colorSource =
+    String(safe.source || "").includes("deterministic") || resolved.usedFallback
+      ? "deterministic_fallback"
+      : String(resolved.from?.source || safe.source || "unknown");
+
+  const rejectedReasonText = (resolved.rejected || [])
+    .map((r) => `${r.source}:${r.role}:${r.reason}`)
+    .join("; ");
+
+  return {
+    fill: safe.fill,
+    outline: safe.outline || outline,
+    keyline: safe.keyline || keyline,
+    numberFill: safe.numberFill || pickReadableNumberColor(safe.fill),
+    source: colorSource,
+    colorSource,
+    platePrimary: safe.fill,
+    plateSecondary: safe.outline || outline,
+    plateTextColor: safe.numberFill || pickReadableNumberColor(safe.fill),
+    rawPrimary: rawPrimary || candidates.find((c) => c.role === "primary")?.color || "",
+    rawSecondary: rawSecondary || candidates.find((c) => c.role === "secondary")?.color || "",
+    rawColorSource: rawSource || candidates[0]?.source || "unknown",
+    finalPrimary: safe.fill,
+    finalSecondary: safe.outline || outline,
+    finalTextColor: safe.numberFill || pickReadableNumberColor(safe.fill),
+    finalColorSource: colorSource,
+    rejectedReasons: resolved.rejected,
+    rejectedReasonText,
+    usedFallback: Boolean(resolved.usedFallback || !finalCheck.ok),
+  };
+}
+
+/**
+ * Back-compat wrapper used by older tests/call sites.
  */
 export function packagePlateColors({
   fill,
@@ -566,80 +860,16 @@ export function packagePlateColors({
   keyline,
   source = "unknown",
   driver = {},
+  extraCandidates = [],
 } = {}) {
-  let primary = normalizeHexColor(fill);
-  let secondary = normalizeHexColor(outline);
-  let border = normalizeHexColor(keyline);
-  let resolvedSource = source;
-
-  if (!primary) {
-    const fallback = pickDeterministicPlateColors(driver);
-    return {
-      fill: fallback.fill,
-      outline: fallback.outline,
-      keyline: fallback.keyline,
-      numberFill: fallback.numberFill,
-      source: "deterministic_fallback",
-      platePrimary: fallback.fill,
-      plateSecondary: fallback.outline,
-      plateTextColor: fallback.numberFill,
-      colorSource: "deterministic_fallback",
-    };
-  }
-
-  if (isNearWhiteHex(primary)) {
-    if (secondary && !isNearWhiteHex(secondary) && !isNearBlackHex(secondary, 0.04)) {
-      const swapped = primary;
-      primary = secondary;
-      secondary = swapped;
-      resolvedSource = `${source}_white_primary_swapped`;
-    } else {
-      primary = darkenHex(primary, 0.38);
-      if (isNearWhiteHex(primary, 0.7)) {
-        const fallback = pickDeterministicPlateColors(driver);
-        return {
-          fill: fallback.fill,
-          outline: fallback.outline,
-          keyline: fallback.keyline,
-          numberFill: fallback.numberFill,
-          source: "deterministic_fallback",
-          platePrimary: fallback.fill,
-          plateSecondary: fallback.outline,
-          plateTextColor: fallback.numberFill,
-          colorSource: "deterministic_fallback",
-        };
-      }
-      resolvedSource = `${source}_white_primary_darkened`;
-    }
-  }
-
-  if (!secondary) secondary = pickReadableNumberColor(primary) === "#ffffff" ? "#f2f2f2" : "#101010";
-  if (!border) {
-    border = relativeLuminanceHex(primary) > 0.35 ? "#0a0a0a" : "#c81010";
-  }
-
-  const numberFill = pickReadableNumberColor(primary);
-  let colorSource = "unknown";
-  if (String(source).includes("suit_cache") || source === "cache") colorSource = "suit_cache";
-  else if (String(source).includes("portrait") || source === "sampled") colorSource = "portrait_sample";
-  else if (String(source).includes("profile")) colorSource = "profile_color";
-  else if (String(source).includes("truck")) colorSource = "truck_color";
-  else if (String(source).includes("deterministic")) colorSource = "deterministic_fallback";
-  else if (String(resolvedSource).includes("white_primary_swapped")) colorSource = "suit_cache";
-  else if (String(resolvedSource).includes("white_primary_darkened")) colorSource = "portrait_sample";
-  else colorSource = source || resolvedSource;
-
-  return {
-    fill: primary,
-    outline: secondary,
-    keyline: border,
-    numberFill,
-    source: resolvedSource,
-    platePrimary: primary,
-    plateSecondary: secondary,
-    plateTextColor: numberFill,
-    colorSource,
-  };
+  const result = resolveStandingsPlateColors({
+    driver,
+    rawPrimary: fill,
+    rawSecondary: outline || keyline,
+    rawSource: source,
+    extraCandidates,
+  });
+  return result;
 }
 
 export function resolvePlayoffCut(settings = {}) {

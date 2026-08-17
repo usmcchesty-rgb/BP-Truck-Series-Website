@@ -39,8 +39,12 @@ import {
   pickCarNumber,
   pickReadableNumberColor,
   packagePlateColors,
+  resolveStandingsPlateColors,
+  resolvePlateFillFromCandidates,
   pickDeterministicPlateColors,
   isNearWhiteHex,
+  isUsablePlateFill,
+  normalizeColorToHex,
   estimateTrackedWidth,
   buildSponsorFooterText,
   validateOutputDimensions,
@@ -406,36 +410,211 @@ test("normal names keep larger default; long names shrink", () => {
   assert.ok(long < TYPOGRAPHY.driverNameRest);
 });
 
-test("white primary + colored secondary becomes colored plate fill", () => {
+test("raw white primary + red secondary → red final fill", () => {
   const pack = packagePlateColors({
     fill: "#ffffff",
     outline: "#c81010",
     source: "suit_cache",
     driver: { driverName: "White Suit", driverId: "1" },
   });
+  assert.equal(isUsablePlateFill(pack.fill).ok, true);
   assert.equal(isNearWhiteHex(pack.fill), false);
   assert.equal(pack.fill, "#c81010");
   assert.equal(pack.colorSource, "suit_cache");
 });
 
-test("near-white without secondary darkens instead of plain white plate", () => {
-  const pack = packagePlateColors({
-    fill: "#f5f5f5",
-    outline: "#eeeeee",
-    source: "portrait_sample",
-    driver: { driverName: "Ghost", driverId: "2" },
+test("raw near-white primary + blue secondary → blue final fill", () => {
+  const pack = resolveStandingsPlateColors({
+    rawPrimary: "#f7f7f7",
+    rawSecondary: "#143a6e",
+    rawSource: "suit_cache",
+    driver: { driverName: "Near White", driverId: "nw1" },
   });
-  assert.equal(isNearWhiteHex(pack.fill), false);
-  assert.notEqual(pack.fill.toLowerCase(), "#ffffff");
-  assert.notEqual(pack.fill.toLowerCase(), "#f5f5f5");
+  assert.equal(pack.finalPrimary, "#143a6e");
+  assert.equal(pack.finalColorSource, "suit_cache");
+  assert.equal(isNearWhiteHex(pack.finalPrimary), false);
 });
 
-test("deterministic fallback is stable and never pure white", () => {
+test("raw white primary + white secondary → deterministic fallback", () => {
+  const pack = packagePlateColors({
+    fill: "#ffffff",
+    outline: "#f5f5f5",
+    source: "suit_cache",
+    driver: { driverName: "Ghost", driverId: "2", carNumber: "88" },
+  });
+  assert.equal(pack.colorSource, "deterministic_fallback");
+  assert.equal(isNearWhiteHex(pack.fill), false);
+  assert.equal(isUsablePlateFill(pack.fill).ok, true);
+  assert.notEqual(pack.fill.toLowerCase(), "#ffffff");
+});
+
+test("portrait near-white primary + valid secondary → secondary", () => {
+  const pack = resolveStandingsPlateColors({
+    rawPrimary: "#fafafa",
+    rawSecondary: "#b84a10",
+    rawSource: "portrait_sample",
+    driver: { driverName: "Portrait", driverId: "p1" },
+  });
+  assert.equal(pack.finalPrimary, "#b84a10");
+  assert.equal(pack.finalColorSource, "portrait_sample");
+});
+
+test("cached white + black outline does not become white or black plate", () => {
+  const pack = packagePlateColors({
+    fill: "#ffffff",
+    outline: "#000000",
+    source: "suit_cache",
+    driver: { driverName: "WB", driverId: "wb1", carNumber: "5" },
+  });
+  assert.equal(isNearWhiteHex(pack.fill), false);
+  assert.equal(isUsablePlateFill(pack.fill).ok, true);
+  assert.notEqual(pack.fill.toLowerCase(), "#ffffff");
+  assert.notEqual(pack.fill.toLowerCase(), "#000000");
+  assert.equal(pack.colorSource, "deterministic_fallback");
+});
+
+test("cached white alone does not become final white plate", () => {
+  const pack = packagePlateColors({
+    fill: "#ffffff",
+    outline: "",
+    source: "suit_cache",
+    driver: { driverName: "Cache White", driverId: "cw1", carNumber: "7" },
+  });
+  assert.notEqual(pack.fill.toLowerCase(), "#ffffff");
+  assert.equal(isUsablePlateFill(pack.fill).ok, true);
+  assert.equal(isNearWhiteHex(pack.fill), false);
+});
+
+test("HSL white normalizes and gets rejected", () => {
+  const hex = normalizeColorToHex("hsl(0, 0%, 100%)");
+  assert.equal(hex, "#ffffff");
+  assert.equal(isUsablePlateFill("hsl(0, 0%, 100%)").ok, false);
+  const pack = packagePlateColors({
+    fill: "hsl(0, 0%, 100%)",
+    outline: "hsl(0, 80%, 40%)",
+    source: "suit_cache",
+    driver: { driverName: "HSL", driverId: "h1" },
+  });
+  assert.equal(isNearWhiteHex(pack.fill), false);
+  assert.equal(isUsablePlateFill(pack.fill).ok, true);
+});
+
+test("HSL dark color normalizes and is accepted", () => {
+  const hex = normalizeColorToHex("hsl(210, 70%, 25%)");
+  assert.ok(hex.startsWith("#"));
+  assert.equal(isUsablePlateFill(hex).ok, true);
+  const pack = packagePlateColors({
+    fill: "hsl(210, 70%, 25%)",
+    outline: "#ffffff",
+    source: "portrait_sample",
+    driver: { driverName: "HSL Dark", driverId: "h2" },
+  });
+  assert.equal(pack.fill, hex);
+  assert.equal(isUsablePlateFill(pack.fill).ok, true);
+});
+
+test("RGB white normalizes and gets rejected", () => {
+  assert.equal(normalizeColorToHex("rgb(255, 255, 255)"), "#ffffff");
+  assert.equal(isUsablePlateFill("rgb(255,255,255)").ok, false);
+  const pack = packagePlateColors({
+    fill: "rgb(255, 255, 255)",
+    outline: "rgb(200, 16, 16)",
+    source: "suit_cache",
+    driver: { driverName: "RGB", driverId: "r1" },
+  });
+  assert.equal(pack.fill, "#c81010");
+});
+
+test("invalid/transparent color rejected", () => {
+  assert.equal(isUsablePlateFill("").ok, false);
+  assert.equal(isUsablePlateFill("transparent").ok, false);
+  assert.equal(isUsablePlateFill("rgba(255,255,255,0)").ok, false);
+  assert.equal(isUsablePlateFill("not-a-color").ok, false);
+});
+
+test("deterministic fallback is never near-white and stable per driver", () => {
   const a = pickDeterministicPlateColors({ driverName: "Chris", driverId: "10", carNumber: "99" });
   const b = pickDeterministicPlateColors({ driverName: "Chris", driverId: "10", carNumber: "99" });
   assert.deepEqual(a, b);
   assert.equal(isNearWhiteHex(a.fill), false);
+  assert.equal(isUsablePlateFill(a.fill).ok, true);
   assert.ok(DETERMINISTIC_PLATE_PALETTE.every((p) => !isNearWhiteHex(p.fill)));
+  assert.ok(DETERMINISTIC_PLATE_PALETTE.every((p) => isUsablePlateFill(p.fill).ok));
+});
+
+test("same driver gets same fallback every resolve", () => {
+  const driver = { driverName: "Stable", driverId: "st1", carNumber: "42" };
+  const a = resolveStandingsPlateColors({
+    driver,
+    rawPrimary: "#ffffff",
+    rawSecondary: "#ffffff",
+    rawSource: "suit_cache",
+  });
+  const b = resolveStandingsPlateColors({
+    driver,
+    rawPrimary: "#ffffff",
+    rawSecondary: "#fafafa",
+    rawSource: "suit_cache",
+  });
+  assert.equal(a.finalPrimary, b.finalPrimary);
+  assert.equal(a.finalColorSource, "deterministic_fallback");
+});
+
+test("final number text remains readable by luminance", () => {
+  const dark = packagePlateColors({
+    fill: "#c81010",
+    outline: "#ffffff",
+    source: "suit_cache",
+    driver: { driverName: "Red", driverId: "rd" },
+  });
+  assert.equal(dark.numberFill, "#ffffff");
+  const lightish = packagePlateColors({
+    fill: "#b84a10",
+    outline: "#101010",
+    source: "suit_cache",
+    driver: { driverName: "Orange", driverId: "or" },
+  });
+  assert.ok(["#ffffff", "#0a0a0a"].includes(lightish.numberFill));
+  assert.equal(pickReadableNumberColor("#ffffff"), "#0a0a0a");
+  assert.equal(pickReadableNumberColor("#101010"), "#ffffff");
+});
+
+test("candidate walk continues past unusable cache white to portrait secondary", () => {
+  const resolved = resolvePlateFillFromCandidates(
+    [
+      { color: "#ffffff", role: "primary", source: "suit_cache" },
+      { color: "#f0f0f0", role: "secondary", source: "suit_cache" },
+      { color: "#fafafa", role: "primary", source: "portrait_sample" },
+      { color: "#0f4a38", role: "secondary", source: "portrait_sample" },
+    ],
+    { driverName: "Walk", driverId: "w1" },
+  );
+  assert.equal(resolved.fill, "#0f4a38");
+  assert.equal(resolved.from.source, "portrait_sample");
+  assert.equal(resolved.usedFallback, false);
+});
+
+test("no valid car number loses its plate display", () => {
+  assert.equal(formatPlateDisplay("18"), "18");
+  assert.equal(formatPlateDisplay("07"), "07");
+  assert.equal(formatPlateDisplay(""), "—");
+  const rows = normalizeStandingsRows([
+    { position: 1, driver: "A", carNumber: "18", points: 1 },
+    { position: 2, driver: "B", bp_number: "07", points: 1 },
+  ]);
+  assert.equal(rows[0].carNumber, "18");
+  assert.equal(rows[1].carNumber, "07");
+  assert.equal(rows.every((r) => formatPlateDisplay(r.carNumber) !== ""), true);
+});
+
+test("existing plate dimensions unchanged", () => {
+  const m = computeStandingsLayoutMetrics({
+    driverCount: 43,
+    hasTrackName: true,
+    reserveCutGap: true,
+  });
+  assert.equal(m.plateW, 54);
+  assert.ok(m.plateH >= 28 && m.plateH <= 36);
 });
 
 test("image/CORS failure path uses deterministic fallback via packagePlateColors", () => {
