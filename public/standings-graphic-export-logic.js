@@ -23,6 +23,34 @@ export const NON_POINTS_LABEL_PATTERN = /\b(duel|duels|non-points|exhibition|cla
 /** Graphic presentation only: P1–P14 / P15–P28 / P29–P42. */
 export const COLUMN_SIZES = [14, 14, 14];
 
+/** Solid BP-red cutoff drawn inside the existing P16/P17 row gap. Adds no layout height. */
+export const PLAYOFF_CUT_LINE = {
+  color: "#e50914",
+  thickness: 4,
+  inset: 4,
+};
+
+/** Subtle row-background tints for the four drivers around the cutoff. */
+export const PLAYOFF_BUBBLE = {
+  inside: {
+    positions: [15, 16],
+    bg: "rgba(148, 22, 22, 0.40)",
+    border: "rgba(196, 48, 48, 0.55)",
+  },
+  outside: {
+    positions: [17, 18],
+    bg: "rgba(58, 8, 14, 0.52)",
+    border: "rgba(110, 22, 30, 0.62)",
+  },
+};
+
+export function playoffBubbleKind(position) {
+  const pos = Number(position);
+  if (PLAYOFF_BUBBLE.inside.positions.includes(pos)) return "inside";
+  if (PLAYOFF_BUBBLE.outside.positions.includes(pos)) return "outside";
+  return null;
+}
+
 export const DEFAULT_PLATE = {
   fill: "#1a1a1e",
   outline: "#d0d0d4",
@@ -407,7 +435,7 @@ export function distributeColumns(drivers, sizes = COLUMN_SIZES) {
   return columns.slice(0, sizes.length);
 }
 
-/** Playoff divider immediately below P16 — column 2 with 14/14/14. */
+/** Playoff cutoff is P16; with 14/14/14 the line sits in column 2 between P16 and P17. */
 export function findPlayoffCutPlacement(drivers, playoffCut = DEFAULT_PLAYOFF_CUT) {
   const cut = Number(playoffCut) || DEFAULT_PLAYOFF_CUT;
   const list = Array.isArray(drivers) ? drivers : [];
@@ -913,12 +941,11 @@ export function validateOutputDimensions(width, height) {
 
 /**
  * Layout metrics for the 42-driver / 14 / 14 / 14 board.
- * Column 2 reserves dedicated vertical space for the Top 16 playoff divider.
+ * Playoff cutoff is a line inside the normal P16/P17 gap — no extra column height.
  */
 export function computeStandingsLayoutMetrics({
   driverCount = MAX_DRIVERS,
   hasTrackName = true,
-  reserveCutGap = true,
 } = {}) {
   const padX = 24;
   const headerH = hasTrackName ? 98 : 82;
@@ -933,14 +960,11 @@ export function computeStandingsLayoutMetrics({
   const colW = Math.floor((LOGICAL_WIDTH - padX * 2 - colGap * (colCount - 1)) / colCount);
   const columns = distributeColumns(new Array(Math.min(driverCount, MAX_DRIVERS)).fill(null));
   const maxRows = Math.max(1, ...columns.map((c) => c.length || 1));
-  const cutGap = reserveCutGap ? 44 : 0;
   const rowGap = 4;
-  const rowStackBudget = Math.max(0, gridSpan - cutGap);
-  const rawRowH = (rowStackBudget - rowGap * (maxRows - 1)) / maxRows;
-  const rowH = Math.max(36, Math.min(58, Math.floor(rawRowH)));
+  const rawRowH = (gridSpan - rowGap * (maxRows - 1)) / maxRows;
+  const rowH = Math.max(36, Math.min(56, Math.floor(rawRowH)));
   const rowsUsed = maxRows * rowH + Math.max(0, maxRows - 1) * rowGap;
-  const usedH = rowsUsed + cutGap;
-  const fits = usedH <= gridSpan + 0.01;
+  const fits = rowsUsed <= gridSpan + 0.01;
   const plateH = Math.max(36, Math.min(46, rowH - 12));
   const plateW = plateH * 2;
 
@@ -955,12 +979,12 @@ export function computeStandingsLayoutMetrics({
     colCount,
     rowH,
     rowGap,
-    cutGap,
-    cutBarH: 4,
+    cutGap: 0,
+    cutLineThickness: PLAYOFF_CUT_LINE.thickness,
     maxRows,
     gridSpan,
     rowsUsed,
-    usedH,
+    usedH: rowsUsed,
     fits,
     plateW,
     plateH,
@@ -994,16 +1018,32 @@ export function computeRowSlotGeometry(layout = computeStandingsLayoutMetrics())
   };
 }
 
-export function computePlayoffCutBand(layout, afterRowIndex) {
-  const cutRowBottom =
-    layout.gridTop + (afterRowIndex + 1) * (layout.rowH + layout.rowGap) - layout.rowGap;
-  const bandTop = Math.round(cutRowBottom + 5);
-  const bandH = Math.max(28, (layout.cutGap || 44) - 10);
+export function standingsRowY(layout, rowIndex) {
+  return layout.gridTop + Number(rowIndex) * (layout.rowH + layout.rowGap);
+}
+
+/** Horizontal cutoff line sitting inside the existing P16/P17 gap. Zero extra layout height. */
+export function computePlayoffCutLine(layout, placement) {
+  if (!placement) return null;
+  const thickness = PLAYOFF_CUT_LINE.thickness;
+  const inset = PLAYOFF_CUT_LINE.inset;
+  const p16Bottom = standingsRowY(layout, placement.afterRowIndex) + layout.rowH;
+  const p17Top = standingsRowY(layout, placement.afterRowIndex + 1);
+  const gap = p17Top - p16Bottom;
+  const y = p16Bottom + (gap - thickness) / 2;
   return {
-    bandTop,
-    bandH,
-    barH: layout.cutBarH || 4,
-    textY: Math.round(bandTop + bandH / 2),
+    columnIndex: placement.columnIndex,
+    afterRowIndex: placement.afterRowIndex,
+    y,
+    thickness,
+    width: layout.colW - inset * 2,
+    inset,
+    color: PLAYOFF_CUT_LINE.color,
+    consumesLayoutHeight: false,
+    extraLayoutHeight: 0,
+    p16Bottom,
+    p17Top,
+    gap,
   };
 }
 
@@ -1047,7 +1087,6 @@ export function buildStandingsGraphicModel(standingsData, scheduleData, options 
   const layoutHints = computeStandingsLayoutMetrics({
     driverCount: drivers.length,
     hasTrackName: Boolean(latestCompletedRace.trackName),
-    reserveCutGap: Boolean(cutPlacement),
   });
 
   return {

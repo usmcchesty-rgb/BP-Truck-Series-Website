@@ -54,7 +54,11 @@ import {
   formatPreviewStatus,
   computeStandingsLayoutMetrics,
   computeRowSlotGeometry,
-  computePlayoffCutBand,
+  computePlayoffCutLine,
+  standingsRowY,
+  playoffBubbleKind,
+  PLAYOFF_BUBBLE,
+  PLAYOFF_CUT_LINE,
 } from "../public/standings-graphic-export-logic.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -161,26 +165,25 @@ test("42 drivers → 14 / 14 / 14 columns; P43 omitted from graphic", () => {
   assert.equal(cols[2][13].position, 42);
 });
 
-test("P16 playoff divider sits in column 2 after P16", () => {
+test("P16 playoff cutoff is in column 2 between P16 and P17", () => {
   const drivers = takeTopDrivers(makeDrivers(43));
   const cut = findPlayoffCutPlacement(drivers, DEFAULT_PLAYOFF_CUT);
   assert.ok(cut);
   assert.equal(cut.playoffCut, 16);
   assert.equal(cut.columnIndex, 1);
   assert.equal(cut.afterRowIndex, 1);
-  assert.match(cut.label, /TOP 16 PLAYOFF CUT/);
 });
 
-test("14-row columns + playoff divider + footer physically fit", () => {
+test("14-row columns + footer physically fit with no extra playoff height", () => {
   const m = computeStandingsLayoutMetrics({
     driverCount: 42,
     hasTrackName: true,
-    reserveCutGap: true,
   });
   assert.equal(m.maxRows, 14);
   assert.equal(m.fits, true);
-  assert.ok(m.rowH >= 48);
-  assert.ok(m.cutGap >= 40);
+  assert.equal(m.cutGap, 0);
+  assert.equal(m.rowH, 56);
+  assert.equal(m.rowGap, 4);
   assert.ok(m.usedH <= m.gridSpan + 0.01);
   assert.ok(m.gridTop + m.usedH <= m.gridBottom + 0.01);
   assert.ok(m.headerH + m.gridSpan + m.footerH <= 1080);
@@ -660,7 +663,6 @@ test("number display box is 2:1 contain-fit and does not collide with larger mov
   const m = computeStandingsLayoutMetrics({
     driverCount: 42,
     hasTrackName: true,
-    reserveCutGap: true,
   });
   assert.equal(m.plateW / m.plateH, 2);
   assert.ok(m.plateH >= 36 && m.plateH <= 46);
@@ -699,28 +701,71 @@ test("footer height increased for presenting-sponsor strip", () => {
   const m = computeStandingsLayoutMetrics({
     driverCount: 42,
     hasTrackName: true,
-    reserveCutGap: true,
   });
   assert.ok(m.footerH >= 78);
   assert.equal(m.fits, true);
 });
 
-test("playoff divider occupies dedicated column-2 space after P16", () => {
+test("playoff cutoff is a zero-height red line between P16 and P17 in column 2", () => {
+  const source = makeDrivers(43);
   const model = buildStandingsGraphicModel(
-    { settings: { seasonName: "Season 11", playoffCut: 16 }, rows: makeDrivers(43) },
+    { settings: { seasonName: "Season 11", playoffCut: 16 }, rows: source },
     { races: homesteadScheduleFixture() },
   );
   const layout = model.layoutHints;
   const cut = model.cutPlacement;
+  assert.equal(source.length, 43);
+  assert.equal(model.drivers.length, 42);
+  assert.equal(model.drivers.some((d) => d.position === 43), false);
+  assert.deepEqual(model.columns.map((c) => c.length), [14, 14, 14]);
   assert.equal(cut.columnIndex, 1);
   assert.equal(cut.afterRowIndex, 1);
-  const band = computePlayoffCutBand(layout, cut.afterRowIndex);
-  const p16Bottom = layout.gridTop + 2 * (layout.rowH + layout.rowGap) - layout.rowGap;
-  const p17Top = p16Bottom + layout.cutGap;
-  assert.ok(band.bandTop >= p16Bottom);
-  assert.ok(band.bandTop + band.bandH <= p17Top);
-  assert.ok(band.bandH >= 28);
-  assert.ok(layout.cutGap >= 40);
+  assert.equal(cut.playoffCut, 16);
+  assert.equal(layout.cutGap, 0);
+  assert.equal(layout.moveW, 68);
+
+  const line = computePlayoffCutLine(layout, cut);
+  const p16Y = standingsRowY(layout, 1);
+  const p17Y = standingsRowY(layout, 2);
+  assert.equal(line.consumesLayoutHeight, false);
+  assert.equal(line.extraLayoutHeight, 0);
+  assert.equal(line.thickness, 4);
+  assert.equal(line.color, "#e50914");
+  assert.equal(line.width, layout.colW - 8);
+  assert.ok(line.y >= p16Y + layout.rowH);
+  assert.ok(line.y + line.thickness <= p17Y);
+  assert.equal(p17Y - (p16Y + layout.rowH), layout.rowGap);
+});
+
+test("all three columns share the same row Y for every index", () => {
+  const layout = computeStandingsLayoutMetrics({ driverCount: 42, hasTrackName: true });
+  for (let row = 0; row < 14; row += 1) {
+    const y = standingsRowY(layout, row);
+    assert.equal(y, layout.gridTop + row * (layout.rowH + layout.rowGap));
+  }
+  const p1 = standingsRowY(layout, 0);
+  const p15 = standingsRowY(layout, 0);
+  const p29 = standingsRowY(layout, 0);
+  assert.equal(p1, p15);
+  assert.equal(p15, p29);
+  assert.equal(standingsRowY(layout, 1), standingsRowY(layout, 1));
+  assert.equal(standingsRowY(layout, 2), layout.gridTop + 2 * (layout.rowH + layout.rowGap));
+});
+
+test("P15–P18 are the only playoff-bubble rows, inside vs outside", () => {
+  assert.equal(playoffBubbleKind(14), null);
+  assert.equal(playoffBubbleKind(15), "inside");
+  assert.equal(playoffBubbleKind(16), "inside");
+  assert.equal(playoffBubbleKind(17), "outside");
+  assert.equal(playoffBubbleKind(18), "outside");
+  assert.equal(playoffBubbleKind(19), null);
+  assert.equal(playoffBubbleKind(1), null);
+  assert.deepEqual(PLAYOFF_BUBBLE.inside.positions, [15, 16]);
+  assert.deepEqual(PLAYOFF_BUBBLE.outside.positions, [17, 18]);
+  assert.equal(PLAYOFF_BUBBLE.inside.bg, "rgba(148, 22, 22, 0.40)");
+  assert.equal(PLAYOFF_BUBBLE.outside.bg, "rgba(58, 8, 14, 0.52)");
+  assert.equal(PLAYOFF_CUT_LINE.color, "#e50914");
+  assert.equal(PLAYOFF_CUT_LINE.thickness, 4);
 });
 
 test("custom number artwork still beats SDK, SDK beats legacy", () => {
@@ -773,6 +818,8 @@ test("standings export renderer has no leftover glow/stroke on typography", () =
   assert.doesNotMatch(src, /strokeText\(/);
   assert.doesNotMatch(src, /bold \$\{T\.seasonMax\}px/);
   assert.doesNotMatch(src, /Arial Narrow/);
+  assert.doesNotMatch(src, /TOP 16 PLAYOFF CUT/);
+  assert.match(src, /drawPlayoffCutLine/);
 });
 
 test("luminance still picks readable number colors", () => {

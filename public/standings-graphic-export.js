@@ -32,7 +32,10 @@ import {
   buildStandingsGraphicModel,
   computeStandingsLayoutMetrics,
   computeRowSlotGeometry,
-  computePlayoffCutBand,
+  computePlayoffCutLine,
+  standingsRowY,
+  playoffBubbleKind,
+  PLAYOFF_BUBBLE,
   sanitizeTrackName,
   measureTrackedTextWidth,
 } from "./standings-graphic-export-logic.js";
@@ -531,6 +534,25 @@ function rowStyle(position) {
       nameWeight: "bold",
     };
   }
+  const bubble = playoffBubbleKind(pos);
+  if (bubble === "inside") {
+    return {
+      bg: PLAYOFF_BUBBLE.inside.bg,
+      border: PLAYOFF_BUBBLE.inside.border,
+      posFill: "#d0d0d0",
+      nameFill: "#f0f0f0",
+      nameWeight: "bold",
+    };
+  }
+  if (bubble === "outside") {
+    return {
+      bg: PLAYOFF_BUBBLE.outside.bg,
+      border: PLAYOFF_BUBBLE.outside.border,
+      posFill: "#d0d0d0",
+      nameFill: "#f0f0f0",
+      nameWeight: "bold",
+    };
+  }
   return {
     bg: "rgba(22,22,22,0.5)",
     border: "rgba(70,70,70,0.55)",
@@ -677,36 +699,19 @@ function drawMovementIndicator(ctx, movement, slotX, cy, slotW, T) {
   });
 }
 
-function drawPlayoffCut(ctx, layout, placement, colX) {
-  if (!placement) return;
-  const { afterRowIndex, label } = placement;
-  const T = TYPOGRAPHY;
-  const band = computePlayoffCutBand(layout, afterRowIndex);
-  const x = Math.round(colX);
-  const w = Math.round(layout.colW);
-  const y = band.bandTop;
-  const h = band.bandH;
-  const barH = band.barH;
+function drawPlayoffCutLine(ctx, layout, placement, colX) {
+  const line = computePlayoffCutLine(layout, placement);
+  if (!line) return;
+  const x = Math.round(colX + line.inset);
+  const y = Math.round(line.y);
+  const w = Math.round(line.width);
+  const h = line.thickness;
 
   ctx.save();
   resetTextRenderingState(ctx);
-  ctx.fillStyle = "#6a0000";
+  ctx.fillStyle = line.color;
   ctx.fillRect(x, y, w, h);
-  ctx.fillStyle = "#e50914";
-  ctx.fillRect(x, y, w, barH);
-  ctx.fillRect(x, y + h - barH, w, barH);
   ctx.restore();
-
-  drawFillText(ctx, {
-    text: label,
-    x: x + w / 2,
-    y: band.textY,
-    font: displayFont(T.playoffCut),
-    fill: "#ffffff",
-    align: "center",
-    baseline: "middle",
-    tracking: T.tracking.playoffCut,
-  });
 }
 
 function drawFooter(ctx, layout) {
@@ -958,7 +963,6 @@ export async function renderStandingsGraphicCanvas(model, options = {}) {
   const layout = computeStandingsLayoutMetrics({
     driverCount: drivers.length,
     hasTrackName,
-    reserveCutGap: Boolean(cutPlacement),
   });
   layout.footerY = LOGICAL_HEIGHT - layout.footerH;
 
@@ -984,15 +988,7 @@ export async function renderStandingsGraphicCanvas(model, options = {}) {
     const colDrivers = columns[col] || [];
 
     colDrivers.forEach((driver, rowIndex) => {
-      let y = layout.gridTop + rowIndex * (layout.rowH + layout.rowGap);
-      if (
-        cutPlacement &&
-        cutPlacement.columnIndex === col &&
-        rowIndex > cutPlacement.afterRowIndex
-      ) {
-        y += layout.cutGap || 44;
-      }
-      y = Math.round(y);
+      const y = Math.round(standingsRowY(layout, rowIndex));
       const plateColors = plateColorsList[driverColorIndex] || DEFAULT_PLATE;
       const numberImg = numberImages[driverColorIndex] || null;
       driverColorIndex += 1;
@@ -1005,10 +1001,11 @@ export async function renderStandingsGraphicCanvas(model, options = {}) {
         numberImg,
       );
     });
+  }
 
-    if (cutPlacement && cutPlacement.columnIndex === col) {
-      drawPlayoffCut(ctx, layout, cutPlacement, colX);
-    }
+  if (cutPlacement) {
+    const cutColX = layout.padX + cutPlacement.columnIndex * (layout.colW + layout.colGap);
+    drawPlayoffCutLine(ctx, layout, cutPlacement, cutColX);
   }
 
   drawFooter(ctx, layout);
