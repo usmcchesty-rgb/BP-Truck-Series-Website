@@ -3,6 +3,12 @@
  * Shared by the browser export and Node regression tests.
  */
 
+import {
+  STANDINGS_NUMBER_BOX,
+  hasUsableNumberArtwork,
+  resolveNumberArtwork,
+} from "./number-artwork-logic.js";
+
 export const LOGICAL_WIDTH = 1920;
 export const LOGICAL_HEIGHT = 1080;
 export const RENDER_SCALE = 2;
@@ -351,6 +357,13 @@ export function normalizeStandingsRows(rows = []) {
     const driverName = String(row.driver ?? row.driverName ?? "").trim() || "Unknown Driver";
     const movementDelta = resolveMovementDelta(row);
     const movement = formatMovement(movementDelta);
+    const numberArtwork = row.numberArtwork || resolveNumberArtwork({
+      ...row,
+      driverName,
+      carNumber,
+      iracingCustomerId: row.iracingCustomerId || row.iracing_customer_id,
+      numberImage: row.numberImage || row.iracingDesign?.numberImage,
+    });
     return {
       position: Number.isFinite(position) && position > 0 ? position : index + 1,
       driverName,
@@ -359,7 +372,10 @@ export function normalizeStandingsRows(rows = []) {
       points: Number.isFinite(points) ? points : 0,
       wins: Number.isFinite(wins) ? wins : 0,
       driverId: row.driverId != null ? String(row.driverId) : "",
+      iracingCustomerId: String(row.iracingCustomerId || row.iracing_customer_id || numberArtwork.customerId || ""),
       photoUrl: String(row.photoUrl || "").trim(),
+      numberArtwork,
+      hasNumberArtwork: hasUsableNumberArtwork(numberArtwork),
       movementDelta,
       movement,
       previousPosition:
@@ -939,8 +955,8 @@ export function computeStandingsLayoutMetrics({
     rowsUsed,
     usedH,
     fits,
-    plateW: 54,
-    plateH: Math.min(36, Math.max(28, rowH - 6)),
+    plateW: STANDINGS_NUMBER_BOX.width,
+    plateH: Math.min(STANDINGS_NUMBER_BOX.height, Math.max(32, rowH - 8)),
     // Horizontal row slots (more breathing room)
     posW: 40,
     moveW: 46,

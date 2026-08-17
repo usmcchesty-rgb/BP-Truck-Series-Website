@@ -607,14 +607,42 @@ test("no valid car number loses its plate display", () => {
   assert.equal(rows.every((r) => formatPlateDisplay(r.carNumber) !== ""), true);
 });
 
-test("existing plate dimensions unchanged", () => {
+test("standings rows keep shared numberArtwork and fall back without inventing a path", () => {
+  const rows = normalizeStandingsRows([
+    {
+      position: 1,
+      driver: "Mark Arthur",
+      carNumber: "12",
+      points: 10,
+      numberArtwork: {
+        source: "sdk",
+        imagePath: "/assets/images/numbers/91227.png",
+        authoritative: true,
+      },
+    },
+    {
+      position: 2,
+      driver: "Unknown Driver",
+      carNumber: "99",
+      points: 8,
+      iracingCustomerId: "1",
+    },
+  ]);
+  assert.equal(rows[0].numberArtwork.imagePath, "/assets/images/numbers/91227.png");
+  assert.equal(rows[0].hasNumberArtwork, true);
+  assert.equal(rows[1].numberArtwork.source, "fallback");
+  assert.equal(rows[1].numberArtwork.imagePath, "");
+  assert.equal(rows[1].hasNumberArtwork, false);
+});
+
+test("number display box uses the shared 640×320 contain box", () => {
   const m = computeStandingsLayoutMetrics({
     driverCount: 43,
     hasTrackName: true,
     reserveCutGap: true,
   });
-  assert.equal(m.plateW, 54);
-  assert.ok(m.plateH >= 28 && m.plateH <= 36);
+  assert.equal(m.plateW, 80);
+  assert.ok(m.plateH >= 32 && m.plateH <= 40);
 });
 
 test("image/CORS failure path uses deterministic fallback via packagePlateColors", () => {

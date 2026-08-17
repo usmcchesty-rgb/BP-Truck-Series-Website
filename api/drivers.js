@@ -31,6 +31,9 @@ import {
   resolveExistingProfileForDriverWrite,
   sanitizeIncomingCustomerId,
 } from './_drivers-write-identity.js';
+import {
+  enrichDriversWithNumberArtwork,
+} from './_number-artwork-catalog.js';
 
 export { stripPrivateDriverProfileFields } from './_driver-profile-privacy.js';
 
@@ -831,13 +834,16 @@ export default async function handler(req, res) {
     const rows = await getDriverProfiles();
     const sb = supabase();
     const bpContext = await loadBpNumberContext(sb);
-    const normalized = rows
-      .map((row) => {
-        const profile = normalizeProfile(row);
-        if (!profile) return null;
-        return attachBpNumber(profile, row, bpContext);
-      })
-      .filter(Boolean)
+    const withNumbers = await enrichDriversWithNumberArtwork(
+      rows
+        .map((row) => {
+          const profile = normalizeProfile(row);
+          if (!profile) return null;
+          return attachBpNumber(profile, row, bpContext);
+        })
+        .filter(Boolean),
+    );
+    const normalized = withNumbers
       .filter((row) => includePrivateFields || row.active !== false)
       .sort((a, b) => a.iracing_name.localeCompare(b.iracing_name));
 

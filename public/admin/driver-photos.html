@@ -68,6 +68,21 @@
       #msg.success {
         color: #45d65a;
       }
+      #standingMsg,
+      #numberMsg {
+        margin-top: 12px;
+        font-size: 12px;
+        color: #ccc;
+        white-space: pre-wrap;
+      }
+      #standingMsg.error,
+      #numberMsg.error {
+        color: #ff6060;
+      }
+      #standingMsg.success,
+      #numberMsg.success {
+        color: #45d65a;
+      }
       #msg .setup-sql {
         display: block;
         margin-top: 10px;
@@ -207,6 +222,36 @@
       .photo-mode-panel[hidden] {
         display: none !important;
       }
+      .number-preview-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 16px;
+      }
+      .number-preview-card h3 {
+        margin: 0 0 8px;
+        font-size: 13px;
+        color: #ff3030;
+      }
+      .number-stage {
+        width: 320px;
+        height: 160px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .number-stage img,
+      .number-stage canvas {
+        max-width: 320px;
+        max-height: 160px;
+        display: block;
+      }
+      .number-meta {
+        font-size: 11px;
+        color: #aaa;
+        line-height: 1.5;
+        margin-top: 8px;
+        white-space: pre-wrap;
+      }
       .btn-danger {
         border-color: #7a1010 !important;
         background: linear-gradient(#3a0a0a, #180000) !important;
@@ -331,10 +376,9 @@
       <h1>Driver Photos</h1>
       <p id="loginStatus">Logged in: checking...</p>
       <p class="sub">
-        Manage regular card cutout photos and optional full-body standing profile
-        hero images. Regular photos are cropped in the canvas editor and saved as
-        PNG cutouts. Standing photos keep the original PNG and use zoom/position
-        controls on the public profile page.
+        Manage regular card cutout photos, optional standing profile photos, and
+        custom car-number artwork. Number artwork is normalized to the same
+        640×320 transparent canvas used by iRacing SDK number captures.
       </p>
 
       <div class="photo-mode-tabs" role="tablist" aria-label="Photo type">
@@ -355,6 +399,15 @@
           aria-selected="false"
         >
           Standing Driver Photo
+        </button>
+        <button
+          type="button"
+          class="photo-mode-tab"
+          data-photo-tab="numbers"
+          role="tab"
+          aria-selected="false"
+        >
+          Number Artwork
         </button>
       </div>
 
@@ -580,11 +633,86 @@
           <div id="standingMsg"></div>
         </div>
       </div>
+
+      <div id="tab-numbers" class="photo-mode-panel" role="tabpanel" hidden>
+        <div class="panel">
+          <h2>Current Number Artwork</h2>
+          <p class="hint">
+            Preferred source is custom upload, then the saved iRacing SDK
+            <code>pk_number</code> PNG, then the graphic fallback plate.
+            Custom uploads are normalized to a transparent 640×320 canvas with
+            20px padding — the same standard as SDK captures.
+          </p>
+          <div class="number-preview-grid">
+            <div class="number-preview-card">
+              <h3>Preferred</h3>
+              <div class="stage-box number-stage">
+                <img id="numberPreferredImg" alt="Preferred number artwork" hidden />
+              </div>
+              <div class="number-meta" id="numberPreferredMeta">Select a driver...</div>
+            </div>
+            <div class="number-preview-card">
+              <h3>SDK capture</h3>
+              <div class="stage-box number-stage">
+                <img id="numberSdkImg" alt="SDK number artwork" hidden />
+              </div>
+              <div class="number-meta" id="numberSdkMeta">—</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Upload Custom Number</h2>
+          <input id="numberFile" class="input" type="file" accept="image/png,image/jpeg,image/webp,image/*" />
+          <label class="field" for="numberBgMode">Background</label>
+          <select id="numberBgMode" class="input">
+            <option value="auto">Auto (edge-connected simple background)</option>
+            <option value="transparent">Already transparent</option>
+            <option value="white">White background</option>
+            <option value="black">Black background</option>
+            <option value="solid">Solid color (from corners)</option>
+          </select>
+          <div class="hint">
+            Background removal is edge-connected only. White or black interiors
+            of the number are kept. Huge blank margins are cropped using visible
+            alpha pixels, not the original canvas size.
+          </div>
+          <button id="numberProcessBtn" class="btn" type="button" disabled>Preview Processed Number</button>
+          <button id="numberClearBtn" class="btn btn-secondary" type="button" disabled>Clear Preview</button>
+          <div class="number-preview-grid" style="margin-top:14px">
+            <div class="number-preview-card">
+              <h3>Original</h3>
+              <div class="stage-box number-stage">
+                <canvas id="numberOriginalCanvas" width="320" height="160"></canvas>
+              </div>
+              <div class="number-meta" id="numberOriginalMeta">No file loaded.</div>
+            </div>
+            <div class="number-preview-card">
+              <h3>Processed / Normalized</h3>
+              <div class="stage-box number-stage">
+                <canvas id="numberProcessedCanvas" width="320" height="160"></canvas>
+              </div>
+              <div class="number-meta" id="numberProcessedMeta">Process a file to preview.</div>
+            </div>
+          </div>
+          <button id="numberSaveBtn" class="btn" type="button" disabled>Save Custom Number</button>
+          <button id="numberRevertBtn" class="btn btn-danger" type="button" disabled>Remove Custom / Revert to SDK</button>
+          <div id="numberMsg"></div>
+        </div>
+      </div>
     </main>
 
     <script src="/driver-standing-photo.js"></script>
     <script src="/admin/admin-driver-roster.js"></script>
     <script type="module">
+      import {
+        NUMBER_ARTWORK_CANVAS_HEIGHT,
+        NUMBER_ARTWORK_CANVAS_WIDTH,
+        hasUsableNumberArtwork,
+        normalizeNumberArtworkPixels,
+        resolveNumberArtwork,
+      } from "/number-artwork-logic.js";
+
       const $ = (s) => document.querySelector(s);
 
       const fileInput = $("#file");
@@ -616,6 +744,22 @@
       const photoModeTabs = document.querySelectorAll("[data-photo-tab]");
       const tabRegular = $("#tab-regular");
       const tabStanding = $("#tab-standing");
+      const tabNumbers = $("#tab-numbers");
+      const numberFile = $("#numberFile");
+      const numberBgMode = $("#numberBgMode");
+      const numberProcessBtn = $("#numberProcessBtn");
+      const numberClearBtn = $("#numberClearBtn");
+      const numberSaveBtn = $("#numberSaveBtn");
+      const numberRevertBtn = $("#numberRevertBtn");
+      const numberMsg = $("#numberMsg");
+      const numberPreferredImg = $("#numberPreferredImg");
+      const numberSdkImg = $("#numberSdkImg");
+      const numberPreferredMeta = $("#numberPreferredMeta");
+      const numberSdkMeta = $("#numberSdkMeta");
+      const numberOriginalCanvas = $("#numberOriginalCanvas");
+      const numberProcessedCanvas = $("#numberProcessedCanvas");
+      const numberOriginalMeta = $("#numberOriginalMeta");
+      const numberProcessedMeta = $("#numberProcessedMeta");
       const standingFile = $("#standingFile");
       const standingRemoveBgBtn = $("#standingRemoveBgBtn");
       const standingSkipBgBtn = $("#standingSkipBgBtn");
@@ -1307,7 +1451,283 @@
 
       let drivers = [];
       let pendingStandingDataUrl = "";
+      let pendingNumberPngDataUrl = "";
+      let pendingNumberMeta = null;
       let activePhotoTab = "regular";
+      function setNumberMsg(text, type = "") {
+        if (!numberMsg) return;
+        numberMsg.textContent = text || "";
+        numberMsg.className = type;
+      }
+
+      function setNumberPreviewImage(imgEl, url) {
+        if (!imgEl) return;
+        if (url) {
+          imgEl.src = url;
+          imgEl.hidden = false;
+        } else {
+          imgEl.removeAttribute("src");
+          imgEl.hidden = true;
+        }
+      }
+
+      function drawPreviewCanvas(canvas, source, metaTextEl, metaText) {
+        if (!canvas) return;
+        const ctx2 = canvas.getContext("2d");
+        ctx2.clearRect(0, 0, canvas.width, canvas.height);
+        if (source) {
+          const sw = source.width || source.naturalWidth || 1;
+          const sh = source.height || source.naturalHeight || 1;
+          const scale = Math.min(canvas.width / sw, canvas.height / sh);
+          const dw = sw * scale;
+          const dh = sh * scale;
+          ctx2.drawImage(
+            source,
+            (canvas.width - dw) / 2,
+            (canvas.height - dh) / 2,
+            dw,
+            dh,
+          );
+        }
+        if (metaTextEl) metaTextEl.textContent = metaText || "";
+      }
+
+      function updateNumberArtworkState() {
+        const driver = selectedDriver();
+        const artwork = driver?.numberArtwork || resolveNumberArtwork(driver || {});
+        const sdkPath = artwork.sdkPath || driver?.iracingDesign?.numberImage?.sdkPath || "";
+        const preferredPath = hasUsableNumberArtwork(artwork)
+          ? artwork.imageUrl || artwork.imagePath
+          : "";
+
+        setNumberPreviewImage(numberPreferredImg, preferredPath);
+        setNumberPreviewImage(numberSdkImg, sdkPath);
+
+        if (!driver) {
+          numberPreferredMeta.textContent = "Select a driver...";
+          numberSdkMeta.textContent = "—";
+        } else {
+          numberPreferredMeta.textContent =
+            `Source: ${artwork.source || "fallback"}\n` +
+            `Car #: ${artwork.carNumber || driver.bp_number || driver.car_number || "—"}\n` +
+            `iRacing ID: ${artwork.customerId || driver.iracing_customer_id || "—"}\n` +
+            `Path: ${preferredPath || "(legacy plate fallback)"}`;
+          numberSdkMeta.textContent = sdkPath
+            ? `SDK PNG: ${sdkPath}`
+            : "No SDK number capture is stored for this driver yet.";
+        }
+
+        const customerId = String(driver?.iracing_customer_id || driver?.iracingCustomerId || artwork.customerId || "").replace(/\D/g, "");
+        numberRevertBtn.disabled = !driver || artwork.source !== "custom";
+        numberSaveBtn.disabled = !driver || !pendingNumberPngDataUrl || !customerId;
+        numberProcessBtn.disabled = !numberFile?.files?.[0];
+        numberClearBtn.disabled = !pendingNumberPngDataUrl && !numberFile?.files?.[0];
+      }
+
+      async function fileToImage(file) {
+        const url = URL.createObjectURL(file);
+        try {
+          const img = new Image();
+          img.src = url;
+          await img.decode();
+          return img;
+        } finally {
+          URL.revokeObjectURL(url);
+        }
+      }
+
+      async function processCustomNumberFile() {
+        const file = numberFile?.files?.[0];
+        const driver = selectedDriver();
+        if (!file) {
+          setNumberMsg("Choose an image first.", "error");
+          return;
+        }
+        if (!driver) {
+          setNumberMsg("Select a driver first.", "error");
+          return;
+        }
+
+        setNumberMsg("Processing number artwork...");
+        try {
+          const img = await fileToImage(file);
+          const srcCanvas = document.createElement("canvas");
+          srcCanvas.width = img.naturalWidth || img.width;
+          srcCanvas.height = img.naturalHeight || img.height;
+          const srcCtx = srcCanvas.getContext("2d", { willReadFrequently: true });
+          srcCtx.drawImage(img, 0, 0);
+          drawPreviewCanvas(
+            numberOriginalCanvas,
+            img,
+            numberOriginalMeta,
+            `Original ${srcCanvas.width}×${srcCanvas.height}`,
+          );
+
+          const imageData = srcCtx.getImageData(0, 0, srcCanvas.width, srcCanvas.height);
+          const mode = numberBgMode?.value || "auto";
+          const result = normalizeNumberArtworkPixels(
+            imageData.data,
+            srcCanvas.width,
+            srcCanvas.height,
+            { mode: mode === "solid" ? "auto" : mode },
+          );
+
+          const outCanvas = document.createElement("canvas");
+          outCanvas.width = NUMBER_ARTWORK_CANVAS_WIDTH;
+          outCanvas.height = NUMBER_ARTWORK_CANVAS_HEIGHT;
+          const outCtx = outCanvas.getContext("2d");
+          outCtx.putImageData(
+            new ImageData(result.data, NUMBER_ARTWORK_CANVAS_WIDTH, NUMBER_ARTWORK_CANVAS_HEIGHT),
+            0,
+            0,
+          );
+          pendingNumberPngDataUrl = outCanvas.toDataURL("image/png");
+          pendingNumberMeta = result;
+          drawPreviewCanvas(
+            numberProcessedCanvas,
+            outCanvas,
+            numberProcessedMeta,
+            `Detected visible bounds: ${result.detectedBounds.width}×${result.detectedBounds.height} at (${result.detectedBounds.x},${result.detectedBounds.y})\n` +
+              `Result visible: ${result.resultBounds?.width || 0}×${result.resultBounds?.height || 0}\n` +
+              `Output canvas: ${NUMBER_ARTWORK_CANVAS_WIDTH}×${NUMBER_ARTWORK_CANVAS_HEIGHT}\n` +
+              `Background mode: ${mode}` +
+              (result.background ? ` rgb(${result.background.r},${result.background.g},${result.background.b})` : ""),
+          );
+          updateNumberArtworkState();
+          setNumberMsg("Preview ready. Save to use this custom number in both graphics.", "success");
+        } catch (e) {
+          pendingNumberPngDataUrl = "";
+          pendingNumberMeta = null;
+          setNumberMsg(e.message || "Could not process number artwork.", "error");
+        }
+      }
+
+      function clearNumberPreview() {
+        pendingNumberPngDataUrl = "";
+        pendingNumberMeta = null;
+        if (numberFile) numberFile.value = "";
+        drawPreviewCanvas(numberOriginalCanvas, null, numberOriginalMeta, "No file loaded.");
+        drawPreviewCanvas(numberProcessedCanvas, null, numberProcessedMeta, "Process a file to preview.");
+        updateNumberArtworkState();
+      }
+
+      async function saveCustomNumber() {
+        const driver = selectedDriver();
+        const pw = getSessionPw();
+        if (!driver || !pw) {
+          setNumberMsg("Log in on the Admin page first.", "error");
+          return;
+        }
+        if (!pendingNumberPngDataUrl) {
+          setNumberMsg("Preview the processed number before saving.", "error");
+          return;
+        }
+        const customerId = String(
+          driver.iracing_customer_id || driver.iracingCustomerId || driver.numberArtwork?.customerId || "",
+        ).replace(/\D/g, "");
+        if (!customerId) {
+          setNumberMsg("This driver needs an iRacing customer ID before custom number artwork can be saved.", "error");
+          return;
+        }
+
+        setNumberMsg("Saving custom number...");
+        numberSaveBtn.disabled = true;
+        try {
+          const res = await fetch("/api/uploads", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "driver-number-artwork",
+              password: pw,
+              driver_id: driver.driver_id,
+              iracingCustomerId: customerId,
+              carNumber: driver.bp_number || driver.car_number || "",
+              imageBase64: pendingNumberPngDataUrl,
+              alreadyNormalized: true,
+              backgroundMode: numberBgMode?.value || "auto",
+            }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            setNumberMsg(data.error || "Save failed.", "error");
+            return;
+          }
+          driver.numberArtwork = {
+            ...(driver.numberArtwork || {}),
+            source: "custom",
+            imagePath: data.customPath,
+            imageUrl: data.publicUrl,
+            customPath: data.customPath,
+            preferredSource: "custom",
+            authoritative: true,
+            customerId,
+            carNumber: driver.bp_number || driver.car_number || "",
+          };
+          pendingNumberPngDataUrl = "";
+          pendingNumberMeta = null;
+          if (numberFile) numberFile.value = "";
+          updateNumberArtworkState();
+          setNumberMsg(`Custom number saved${data.savedTo ? ` to ${data.savedTo}` : ""}.`, "success");
+        } catch (e) {
+          setNumberMsg(e.message || "Save failed.", "error");
+        } finally {
+          updateNumberArtworkState();
+        }
+      }
+
+      async function revertCustomNumber() {
+        const driver = selectedDriver();
+        const pw = getSessionPw();
+        if (!driver || !pw) {
+          setNumberMsg("Log in on the Admin page first.", "error");
+          return;
+        }
+        const customerId = String(
+          driver.iracing_customer_id || driver.iracingCustomerId || driver.numberArtwork?.customerId || "",
+        ).replace(/\D/g, "");
+        if (!customerId) {
+          setNumberMsg("No iRacing customer ID is available to revert.", "error");
+          return;
+        }
+        if (!window.confirm("Remove the custom number override and revert to the saved SDK artwork?")) {
+          return;
+        }
+        setNumberMsg("Removing custom number...");
+        try {
+          const res = await fetch("/api/uploads", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "remove-driver-number-artwork",
+              password: pw,
+              driver_id: driver.driver_id,
+              iracingCustomerId: customerId,
+            }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            setNumberMsg(data.error || "Could not remove custom number.", "error");
+            return;
+          }
+          driver.numberArtwork = resolveNumberArtwork({
+            ...driver,
+            numberArtwork: {
+              ...(driver.numberArtwork || {}),
+              customPath: null,
+              preferredSource: "sdk",
+            },
+            numberImage: {
+              sdkPath: driver.numberArtwork?.sdkPath || "",
+              customPath: null,
+              preferredSource: "sdk",
+            },
+          });
+          updateNumberArtworkState();
+          setNumberMsg("Custom number removed. Graphics will use the SDK capture when available.", "success");
+        } catch (e) {
+          setNumberMsg(e.message || "Could not remove custom number.", "error");
+        }
+      }
 
       function setStandingMsg(text, type = "") {
         standingMsg.textContent = text;
@@ -1435,7 +1855,7 @@
       }
 
       function switchPhotoTab(tab) {
-        activePhotoTab = tab === "standing" ? "standing" : "regular";
+        activePhotoTab = tab === "standing" ? "standing" : tab === "numbers" ? "numbers" : "regular";
         photoModeTabs.forEach((btn) => {
           const isActive = btn.dataset.photoTab === activePhotoTab;
           btn.classList.toggle("is-active", isActive);
@@ -1443,8 +1863,12 @@
         });
         tabRegular.hidden = activePhotoTab !== "regular";
         tabStanding.hidden = activePhotoTab !== "standing";
+        if (tabNumbers) tabNumbers.hidden = activePhotoTab !== "numbers";
         if (activePhotoTab === "standing") {
           updateStandingState();
+        }
+        if (activePhotoTab === "numbers") {
+          updateNumberArtworkState();
         }
       }
 
@@ -1751,11 +2175,13 @@
         saveBtn.disabled = !cutout || !filename;
         removeRegularBtn.disabled = !d?.photo_url;
         updateStandingState();
+        updateNumberArtworkState();
       }
 
       driverSelect.addEventListener("change", () => {
         savedPreviewWrap.hidden = true;
         clearStandingUpload();
+        clearNumberPreview();
         cutout = null;
         fileInput.value = "";
         removeBgBtn.disabled = true;
@@ -1850,6 +2276,20 @@
       standingSaveSettingsBtn.addEventListener("click", saveStandingCropSettings);
       standingSaveUploadBtn.addEventListener("click", uploadStandingPhoto);
       standingRemoveBtn.addEventListener("click", removeStandingPhoto);
+      numberFile.addEventListener("change", () => {
+        pendingNumberPngDataUrl = "";
+        pendingNumberMeta = null;
+        updateNumberArtworkState();
+      });
+      numberBgMode.addEventListener("change", () => {
+        if (numberFile?.files?.[0]) {
+          setNumberMsg("Background mode changed. Preview again before saving.");
+        }
+      });
+      numberProcessBtn.addEventListener("click", processCustomNumberFile);
+      numberClearBtn.addEventListener("click", clearNumberPreview);
+      numberSaveBtn.addEventListener("click", saveCustomNumber);
+      numberRevertBtn.addEventListener("click", revertCustomNumber);
       standingEnabled.addEventListener("change", saveStandingEnabled);
 
       standingFile.addEventListener("change", () => {
@@ -1919,6 +2359,8 @@
 
       if (location.hash === "#standing") {
         switchPhotoTab("standing");
+      } else if (location.hash === "#numbers") {
+        switchPhotoTab("numbers");
       }
 
       draw();

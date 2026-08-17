@@ -7,6 +7,11 @@ import {
   extractStandingsCarNumber,
   loadBpNumberContext,
 } from './_bp-driver-number.js';
+import {
+  attachNumberArtwork,
+  loadNumberArtworkCatalog,
+  loadNumberArtworkOverrides,
+} from './_number-artwork-catalog.js';
 import * as cheerio from "cheerio";
 
 
@@ -103,6 +108,8 @@ export default async function handler(req, res) {
     const profiles = await getDriverProfiles();
     const byDriverId = Object.fromEntries(profiles.map(p => [String(p.driver_id), p]));
     const bpContext = await loadBpNumberContext(supabase());
+    const numberCatalog = loadNumberArtworkCatalog();
+    const numberOverrides = await loadNumberArtworkOverrides();
 
     const scheduleRaces = scheduleHtml
       ? enrichScheduleRaces(parseScheduleRacesFromHtml(scheduleHtml))
@@ -185,6 +192,19 @@ const avgFinish =
             : `/assets/drivers/${slug}.png`,
           active: profile?.active ?? true,
           recentActivity: activityMap.getForDriverId(r.drid),
+          iracingCustomerId: profile?.iracing_customer_id || '',
+          numberArtwork: attachNumberArtwork(
+            {
+              driverId: r.drid,
+              driverName: displayName,
+              iracing_customer_id: profile?.iracing_customer_id,
+              iracing_name: profile?.iracing_name,
+              display_name: displayName,
+              carNumber: bp_number,
+            },
+            numberCatalog,
+            numberOverrides,
+          ),
         };
       })
       .filter(r => r.position >= 1)

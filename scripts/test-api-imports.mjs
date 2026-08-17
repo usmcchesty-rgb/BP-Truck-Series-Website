@@ -18,6 +18,16 @@ const REQUIRED_EXPORTS = {
   '../api/_race-research-package.js': ['buildRaceIntelligencePackage', 'refreshRacePackageDiagnostics'],
   '../api/_race-research-handlers.js': ['handleResearchStatus', 'handleResearchDbCheckAction', 'handleRebuildPackage'],
   '../api/_race-research-admin-api.js': ['getResearchConfigStatus', 'assertResearchDatabaseReady'],
+  '../api/_number-artwork-catalog.js': [
+    'attachNumberArtwork',
+    'enrichDriversWithNumberArtwork',
+    'loadNumberArtworkCatalog',
+  ],
+  '../api/_upload-driver-number-artwork.js': [
+    'uploadDriverNumberArtwork',
+    'removeDriverNumberArtwork',
+    'previewDriverNumberArtwork',
+  ],
 };
 
 async function assertModuleExports(modulePath, exportNames) {

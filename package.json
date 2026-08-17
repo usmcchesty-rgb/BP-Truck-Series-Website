@@ -50,6 +50,7 @@
     "test:admin-auth": "node scripts/test-admin-auth.mjs",
     "test:transcript-schedule": "node scripts/test-transcript-schedule-regression.mjs",
     "test:standings-graphic": "node scripts/test-standings-graphic-export.mjs",
+    "test:number-artwork": "node scripts/test-number-artwork.mjs",
     "track-tool": "node server/track-processor.mjs"
   },
   "dependencies": {

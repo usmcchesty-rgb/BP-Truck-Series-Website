@@ -34,6 +34,12 @@ import {
   sanitizeTrackName,
   measureTrackedTextWidth,
 } from "./standings-graphic-export-logic.js";
+import {
+  computeContainDest,
+  hasUsableNumberArtwork,
+  NUMBER_ARTWORK_CANVAS_HEIGHT,
+  NUMBER_ARTWORK_CANVAS_WIDTH,
+} from "./number-artwork-logic.js";
 
 const BP_LOGO = "/assets/logos/New%20Clean%20Logo.png";
 const FONT_DISPLAY = 'Impact, Haettenschweiler, "Arial Black", Arial, sans-serif';
@@ -447,6 +453,25 @@ function drawHeader(ctx, model, logoImg, layout) {
   return trackFit;
 }
 
+function drawNumberArtwork(ctx, img, x, y, w, h) {
+  if (!img) return false;
+  const dest = computeContainDest(
+    img.naturalWidth || NUMBER_ARTWORK_CANVAS_WIDTH,
+    img.naturalHeight || NUMBER_ARTWORK_CANVAS_HEIGHT,
+    x,
+    y,
+    w,
+    h,
+  );
+  ctx.save();
+  resetTextRenderingState(ctx);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(img, dest.x, dest.y, dest.width, dest.height);
+  ctx.restore();
+  return true;
+}
+
 function drawNumberPlate(ctx, carNumber, colors, x, y, w, h) {
   const display = formatPlateDisplay(carNumber);
   const fill = colors?.fill || DEFAULT_PLATE.fill;
@@ -512,7 +537,7 @@ function rowStyle(position) {
   };
 }
 
-function drawDriverRow(ctx, driver, box, plateColors, layout) {
+function drawDriverRow(ctx, driver, box, plateColors, layout, numberImg = null) {
   const { x, y, w, h } = box;
   const style = rowStyle(driver.position);
   const pad = 6;
@@ -564,7 +589,12 @@ function drawDriverRow(ctx, driver, box, plateColors, layout) {
 
   const plateX = x + pad + posW + layout.gapPosMove + moveW + layout.gapMovePlate;
   const plateY = y + (h - plateH) / 2;
-  drawNumberPlate(ctx, driver.carNumber, plateColors, plateX, plateY, plateW, plateH);
+  const usedArtwork = hasUsableNumberArtwork(driver.numberArtwork) && numberImg
+    ? drawNumberArtwork(ctx, numberImg, plateX, plateY, plateW, plateH)
+    : false;
+  if (!usedArtwork) {
+    drawNumberPlate(ctx, driver.carNumber, plateColors, plateX, plateY, plateW, plateH);
+  }
 
   const nameX = plateX + plateW + layout.gapPlateName;
   const nameMaxW = w - (nameX - x) - statsW - pad;
@@ -800,8 +830,28 @@ export async function renderStandingsGraphicCanvas(model, options = {}) {
   const fontInfo = await ensureFontsReady();
   const logoImg = await loadImage(options.logoUrl || BP_LOGO);
 
-  // Batch plate colors from PR cache / standings photo URLs (no per-driver API).
-  const plateColorsList = await Promise.all(drivers.map((d) => resolvePlateColors(d)));
+  // Authoritative number PNGs when available; plate colors only for fallback rows.
+  const numberImages = await Promise.all(
+    drivers.map(async (driver) => {
+      if (!hasUsableNumberArtwork(driver.numberArtwork)) return null;
+      const url = driver.numberArtwork.imageUrl || driver.numberArtwork.imagePath;
+      const img = await loadImage(url);
+      return img || null;
+    }),
+  );
+  const plateColorsList = await Promise.all(
+    drivers.map((driver, index) => {
+      if (numberImages[index]) {
+        return Promise.resolve({
+          ...DEFAULT_PLATE,
+          source: "number_artwork",
+          colorSource: driver.numberArtwork?.source || "sdk",
+          skipped: true,
+        });
+      }
+      return resolvePlateColors(driver);
+    }),
+  );
   const plateDiagnostics = drivers.map((driver, index) => {
     const colors = plateColorsList[index] || DEFAULT_PLATE;
     return {
@@ -819,6 +869,8 @@ export async function renderStandingsGraphicCanvas(model, options = {}) {
       driverName: driver.driverName,
       driverId: driver.driverId,
       carNumber: driver.carNumber || "",
+      numberArtworkSource: driver.numberArtwork?.source || "fallback",
+      numberArtworkPath: driver.numberArtwork?.imagePath || "",
       rawPrimary: colors.rawPrimary || "",
       rawSecondary: colors.rawSecondary || "",
       rawColorSource: colors.rawColorSource || "",
@@ -918,6 +970,7 @@ export async function renderStandingsGraphicCanvas(model, options = {}) {
         y += layout.cutGap || 16;
       }
       const plateColors = plateColorsList[driverColorIndex] || DEFAULT_PLATE;
+      const numberImg = numberImages[driverColorIndex] || null;
       driverColorIndex += 1;
       drawDriverRow(
         ctx,
@@ -925,6 +978,7 @@ export async function renderStandingsGraphicCanvas(model, options = {}) {
         { x: colX, y, w: layout.colW, h: layout.rowH },
         plateColors,
         layout,
+        numberImg,
       );
     });
 
@@ -958,6 +1012,8 @@ export async function renderStandingsGraphicCanvas(model, options = {}) {
     cutColumn: cutPlacement?.columnIndex ?? null,
     missingPlates,
     nearWhitePlates: whitePlates,
+    numberArtworkUsed: numberImages.filter(Boolean).length,
+    numberArtworkFallback: drivers.length - numberImages.filter(Boolean).length,
     sponsorLogo: false,
     sponsorText: SPONSOR_NAME,
     layoutFits: layout.fits,

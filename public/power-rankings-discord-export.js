@@ -199,6 +199,8 @@
       carNumber: String(entry.carNumber || "").trim(),
       carImageUrl: entry.carImageUrl || "",
       photoUrl: entry.photoUrl || PLACEHOLDER,
+      iracingCustomerId: String(entry.iracingCustomerId || entry.iracing_customer_id || ""),
+      numberArtwork: entry.numberArtwork || null,
       movementText: entry.movementText || movement.text,
       movementClass: entry.movementClass || movement.class,
       subtitle: entry.subtitle || "",
@@ -1039,6 +1041,7 @@
       throw new Error("Pedal Prophet logo failed to load. Export aborted.");
     }
 
+    const numberApi = await getNumberArtworkApi();
     const driverAssets = new Map();
     const allPeople = [...entries, ...mentions];
     lastSuitColorReport = [];
@@ -1057,10 +1060,27 @@
           keyline: diag.outerKeyline,
           diagnostic: diag,
         };
+        const resolved =
+          entry.numberArtwork ||
+          numberApi.resolveNumberArtwork({
+            ...entry,
+            iracingCustomerId: entry.iracingCustomerId,
+          });
+        let numberImg = null;
+        if (numberApi.hasUsableNumberArtwork(resolved)) {
+          const loaded = await loadImageAsset(resolved.imageUrl || resolved.imagePath, {
+            type: "number-artwork",
+            driverName: entry.driverName,
+            required: true,
+          });
+          numberImg = loaded?.ok ? loaded.img : null;
+        }
         driverAssets.set(entry.driverId || entry.driverName, {
           entry,
           photo,
           colors,
+          numberArtwork: resolved,
+          numberImg,
         });
       }),
     );
@@ -1294,7 +1314,34 @@
     ctx.restore();
   }
 
-  function drawLayeredNumber(ctx, text, x, y, style) {
+  let numberArtworkApiPromise = null;
+  function getNumberArtworkApi() {
+    if (!numberArtworkApiPromise) {
+      numberArtworkApiPromise = import("/number-artwork-logic.js");
+    }
+    return numberArtworkApiPromise;
+  }
+
+  function drawContainedNumberArtwork(ctx, img, boxX, boxY, boxW, boxH, api) {
+    if (!img) return false;
+    const dest = api.computeContainDest(
+      img.naturalWidth || api.NUMBER_ARTWORK_CANVAS_WIDTH,
+      img.naturalHeight || api.NUMBER_ARTWORK_CANVAS_HEIGHT,
+      boxX,
+      boxY,
+      boxW,
+      boxH,
+    );
+    ctx.save();
+    resetTextRenderingState(ctx);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(img, dest.x, dest.y, dest.width, dest.height);
+    ctx.restore();
+    return true;
+  }
+
+  function drawLayeredNumber(ctx, text, x, y, style = {}) {
     const {
       fill,
       outline,
@@ -1547,14 +1594,33 @@
       });
     }
 
-    drawLayeredNumber(ctx, entry.carNumber || "—", x + 14, carNumBaseline, {
-      fill: colors.fill,
-      outline: colors.outline,
-      keyline: colors.keyline || "#000000",
-      font: `bold 86px ${FONT_DISPLAY}`,
-      outerStroke: 7,
-      innerStroke: 4,
-    });
+    const numberApi = window.BPNumberArtwork;
+    const numberBox = numberApi?.POWER_RANKINGS_CARD_NUMBER_BOX || { width: 176, height: 88 };
+    const numberY = carNumBaseline - numberBox.height + 12;
+    if (
+      driverAsset.numberImg &&
+      numberApi &&
+      drawContainedNumberArtwork(
+        ctx,
+        driverAsset.numberImg,
+        x + 10,
+        numberY,
+        numberBox.width,
+        numberBox.height,
+        numberApi,
+      )
+    ) {
+      /* authoritative number artwork */
+    } else {
+      drawLayeredNumber(ctx, entry.carNumber || "—", x + 14, carNumBaseline, {
+        fill: colors.fill,
+        outline: colors.outline,
+        keyline: colors.keyline || "#000000",
+        font: `bold 86px ${FONT_DISPLAY}`,
+        outerStroke: 7,
+        innerStroke: 4,
+      });
+    }
     ctx.restore();
   }
 
@@ -1614,15 +1680,33 @@
     ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
     ctx.restore();
 
-    drawLayeredNumber(ctx, entry.carNumber || "—", x + 18, y + h - 28, {
-      fill: colors.fill,
-      outline: colors.outline,
-      keyline: colors.keyline || "#000000",
-      font: `bold 64px ${FONT_DISPLAY}`,
-      shadow: true,
-      outerStroke: 6,
-      innerStroke: 3.5,
-    });
+    const numberApi = window.BPNumberArtwork;
+    const numberBox = numberApi?.POWER_RANKINGS_HONORABLE_NUMBER_BOX || { width: 80, height: 40 };
+    if (
+      !(
+        driverAsset.numberImg &&
+        numberApi &&
+        drawContainedNumberArtwork(
+          ctx,
+          driverAsset.numberImg,
+          x + 4,
+          y + h - numberBox.height - 8,
+          numberBox.width,
+          numberBox.height,
+          numberApi,
+        )
+      )
+    ) {
+      drawLayeredNumber(ctx, entry.carNumber || "—", x + 18, y + h - 28, {
+        fill: colors.fill,
+        outline: colors.outline,
+        keyline: colors.keyline || "#000000",
+        font: `bold 64px ${FONT_DISPLAY}`,
+        shadow: true,
+        outerStroke: 6,
+        innerStroke: 3.5,
+      });
+    }
 
     const photoImg = driverAsset.photo?.img;
     if (photoImg) {
@@ -1961,6 +2045,8 @@
         carNumber: driver.car_number || profile?.car_number || "",
         carImageUrl,
         photoUrl: driverPhotoUrl(profile, name),
+        iracingCustomerId: profile?.iracing_customer_id || driver.iracing_customer_id || driver.iracingCustomerId || "",
+        numberArtwork: driver.numberArtwork || profile?.numberArtwork || null,
         movement: movementParsed?.movement ?? 0,
         movementType: movementParsed?.movementType,
         movementText: movement.text,

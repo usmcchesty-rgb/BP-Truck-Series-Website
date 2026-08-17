@@ -13,6 +13,11 @@ import {
   parseMovementInput,
 } from './_power-rankings-movement.js';
 import {
+  attachNumberArtwork,
+  loadNumberArtworkCatalog,
+  loadNumberArtworkOverrides,
+} from './_number-artwork-catalog.js';
+import {
   adminAuthFailurePayload,
   parseRequestBody,
   validateAdminPassword,
@@ -58,13 +63,28 @@ function driverPhoto(profile, name) {
   return slug ? `/assets/drivers/${slug}.png` : '/assets/drivers/placeholder.png';
 }
 
-function enrichDriver(profile, driverId, fallbackName = '') {
+function enrichDriver(profile, driverId, fallbackName = '', artworkCtx = null) {
   const name = profile?.display_name || profile?.iracing_name || fallbackName || 'Unknown Driver';
+  const numberArtwork = attachNumberArtwork(
+    {
+      driverId,
+      driverName: name,
+      iracing_customer_id: profile?.iracing_customer_id,
+      iracingCustomerId: profile?.iracing_customer_id,
+      iracing_name: profile?.iracing_name,
+      display_name: name,
+      carNumber: profile?.car_number || '',
+    },
+    artworkCtx?.catalog,
+    artworkCtx?.overrides || {},
+  );
   return {
     driverId: String(driverId),
     driverName: name,
     carNumber: profile?.car_number || '',
     photoUrl: driverPhoto(profile, name),
+    iracingCustomerId: profile?.iracing_customer_id || numberArtwork.customerId || '',
+    numberArtwork,
   };
 }
 
@@ -72,9 +92,9 @@ function formatMovement(movement, movementType = null) {
   return formatMovementDisplay(movement, movementType);
 }
 
-function normalizeEntry(row, profiles) {
+function normalizeEntry(row, profiles, artworkCtx = null) {
   const profile = profiles[String(row.driver_id)] || null;
-  const driver = enrichDriver(profile, row.driver_id);
+  const driver = enrichDriver(profile, row.driver_id, '', artworkCtx);
   const movementType = movementTypeFromStored(row.movement);
   const movement = formatMovement(row.movement, movementType);
   const storedMovement = Number(row.movement);
@@ -85,6 +105,8 @@ function normalizeEntry(row, profiles) {
     driverName: driver.driverName,
     carNumber: driver.carNumber,
     photoUrl: driver.photoUrl,
+    iracingCustomerId: driver.iracingCustomerId || '',
+    numberArtwork: driver.numberArtwork,
     movement:
       storedMovement === MOVEMENT_NEW_SENTINEL
         ? null
@@ -99,15 +121,17 @@ function normalizeEntry(row, profiles) {
   };
 }
 
-function normalizeHonorable(row, profiles) {
+function normalizeHonorable(row, profiles, artworkCtx = null) {
   const profile = profiles[String(row.driver_id)] || null;
-  const driver = enrichDriver(profile, row.driver_id);
+  const driver = enrichDriver(profile, row.driver_id, '', artworkCtx);
   return {
     sortOrder: row.sort_order,
     driverId: driver.driverId,
     driverName: driver.driverName,
     carNumber: driver.carNumber,
     photoUrl: driver.photoUrl,
+    iracingCustomerId: driver.iracingCustomerId || '',
+    numberArtwork: driver.numberArtwork,
     writeup: row.writeup || '',
   };
 }
@@ -126,7 +150,7 @@ function parseEntryMovement(entry, rank) {
   return { parsed };
 }
 
-function normalizeWeek(week, entries, honorable, profiles) {
+function normalizeWeek(week, entries, honorable, profiles, artworkCtx = null) {
   const byId = profileMap(profiles);
   return {
     id: week.id,
@@ -139,11 +163,11 @@ function normalizeWeek(week, entries, honorable, profiles) {
     entries: (entries || [])
       .filter((e) => e.week_id === week.id)
       .sort((a, b) => a.rank - b.rank)
-      .map((e) => normalizeEntry(e, byId)),
+      .map((e) => normalizeEntry(e, byId, artworkCtx)),
     honorableMentions: (honorable || [])
       .filter((h) => h.week_id === week.id)
       .sort((a, b) => a.sort_order - b.sort_order)
-      .map((h) => normalizeHonorable(h, byId)),
+      .map((h) => normalizeHonorable(h, byId, artworkCtx)),
   };
 }
 
@@ -165,7 +189,11 @@ async function loadWeekBundle(weekId) {
   ]);
 
   const profiles = await loadDriverProfiles();
-  return normalizeWeek(week, entries || [], honorable || [], profiles);
+  const artworkCtx = {
+    catalog: loadNumberArtworkCatalog(),
+    overrides: await loadNumberArtworkOverrides(),
+  };
+  return normalizeWeek(week, entries || [], honorable || [], profiles, artworkCtx);
 }
 
 async function loadPublishedWeeks(includeUnpublished = false) {
@@ -348,6 +376,10 @@ export default async function handler(req, res) {
     const weekId = req.query?.weekId ? Number(req.query.weekId) : null;
     const includeUnpublished = req.query?.admin === '1';
     const profiles = await loadDriverProfiles();
+    const artworkCtx = {
+      catalog: loadNumberArtworkCatalog(),
+      overrides: await loadNumberArtworkOverrides(),
+    };
 
     if (weekId) {
       const week = await loadWeekBundle(weekId);
@@ -372,7 +404,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ configured: true, current: null, archive: [], ...formulaMeta });
     }
 
-    const normalizedWeeks = weeks.map((week) => normalizeWeek(week, entries, honorable, profiles));
+    const normalizedWeeks = weeks.map((week) => normalizeWeek(week, entries, honorable, profiles, artworkCtx));
     const publishedWeeks = normalizedWeeks.filter((w) => w.published);
     const current = publishedWeeks[0] || null;
     const archive = publishedWeeks.map((w) => ({
