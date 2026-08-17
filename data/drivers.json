@@ -36,7 +36,14 @@
           "color2": "#951313",
           "color3": "#dee401"
         },
-        "numberStyleAuthoritative": true
+        "numberStyleAuthoritative": true,
+        "numberImage": {
+          "sdkPath": "/assets/images/numbers/91227.png",
+          "customPath": null,
+          "preferredSource": "sdk",
+          "source": "iracing_sdk_number",
+          "authoritative": true
+        }
       }
     },
     {
@@ -75,7 +82,14 @@
           "color2": "#f50000",
           "color3": "#cc5c00"
         },
-        "numberStyleAuthoritative": true
+        "numberStyleAuthoritative": true,
+        "numberImage": {
+          "sdkPath": "/assets/images/numbers/142361.png",
+          "customPath": null,
+          "preferredSource": "sdk",
+          "source": "iracing_sdk_number",
+          "authoritative": true
+        }
       }
     },
     {
@@ -122,7 +136,14 @@
           "color2": "#000000",
           "color3": "#6e0790"
         },
-        "numberStyleAuthoritative": true
+        "numberStyleAuthoritative": true,
+        "numberImage": {
+          "sdkPath": "/assets/images/numbers/307155.png",
+          "customPath": null,
+          "preferredSource": "sdk",
+          "source": "iracing_sdk_number",
+          "authoritative": true
+        }
       }
     },
     {
@@ -161,7 +182,14 @@
           "color2": "#ffffff",
           "color3": "#000000"
         },
-        "numberStyleAuthoritative": false
+        "numberStyleAuthoritative": false,
+        "numberImage": {
+          "sdkPath": "/assets/images/numbers/303892.png",
+          "customPath": null,
+          "preferredSource": "none",
+          "source": "iracing_sdk_number",
+          "authoritative": false
+        }
       }
     },
     {
@@ -200,7 +228,14 @@
           "color2": "#000000",
           "color3": "#ed2129"
         },
-        "numberStyleAuthoritative": false
+        "numberStyleAuthoritative": false,
+        "numberImage": {
+          "sdkPath": "/assets/images/numbers/317726.png",
+          "customPath": null,
+          "preferredSource": "none",
+          "source": "iracing_sdk_number",
+          "authoritative": false
+        }
       }
     },
     {
@@ -239,7 +274,14 @@
           "color2": "#6d6e71",
           "color3": "#a8000f"
         },
-        "numberStyleAuthoritative": false
+        "numberStyleAuthoritative": false,
+        "numberImage": {
+          "sdkPath": "/assets/images/numbers/327558.png",
+          "customPath": null,
+          "preferredSource": "none",
+          "source": "iracing_sdk_number",
+          "authoritative": false
+        }
       }
     },
     {
@@ -286,7 +328,14 @@
           "color2": "#ffffff",
           "color3": "#ff0000"
         },
-        "numberStyleAuthoritative": true
+        "numberStyleAuthoritative": true,
+        "numberImage": {
+          "sdkPath": "/assets/images/numbers/307392.png",
+          "customPath": null,
+          "preferredSource": "sdk",
+          "source": "iracing_sdk_number",
+          "authoritative": true
+        }
       }
     },
     {
@@ -323,7 +372,14 @@
           "color2": "#184252",
           "color3": "#111111"
         },
-        "numberStyleAuthoritative": true
+        "numberStyleAuthoritative": true,
+        "numberImage": {
+          "sdkPath": "/assets/images/numbers/297522.png",
+          "customPath": null,
+          "preferredSource": "sdk",
+          "source": "iracing_sdk_number",
+          "authoritative": true
+        }
       }
     },
     {
@@ -362,7 +418,14 @@
           "color2": "#ea79fc",
           "color3": "#000000"
         },
-        "numberStyleAuthoritative": true
+        "numberStyleAuthoritative": true,
+        "numberImage": {
+          "sdkPath": "/assets/images/numbers/437976.png",
+          "customPath": null,
+          "preferredSource": "sdk",
+          "source": "iracing_sdk_number",
+          "authoritative": true
+        }
       }
     },
     {
@@ -401,7 +464,14 @@
           "color2": "#000000",
           "color3": "#000000"
         },
-        "numberStyleAuthoritative": false
+        "numberStyleAuthoritative": false,
+        "numberImage": {
+          "sdkPath": "/assets/images/numbers/257995.png",
+          "customPath": null,
+          "preferredSource": "none",
+          "source": "iracing_sdk_number",
+          "authoritative": false
+        }
       }
     },
     {
@@ -440,7 +510,14 @@
           "color2": "#000000",
           "color3": "#ffffff"
         },
-        "numberStyleAuthoritative": false
+        "numberStyleAuthoritative": false,
+        "numberImage": {
+          "sdkPath": "/assets/images/numbers/330842.png",
+          "customPath": null,
+          "preferredSource": "none",
+          "source": "iracing_sdk_number",
+          "authoritative": false
+        }
       }
     },
     {
@@ -479,7 +556,14 @@
           "color2": "#0e01fd",
           "color3": "#f9f5f5"
         },
-        "numberStyleAuthoritative": false
+        "numberStyleAuthoritative": false,
+        "numberImage": {
+          "sdkPath": "/assets/images/numbers/616089.png",
+          "customPath": null,
+          "preferredSource": "none",
+          "source": "iracing_sdk_number",
+          "authoritative": false
+        }
       }
     },
     {
@@ -526,7 +610,14 @@
           "color2": "#f3fcf2",
           "color3": "#000000"
         },
-        "numberStyleAuthoritative": true
+        "numberStyleAuthoritative": true,
+        "numberImage": {
+          "sdkPath": "/assets/images/numbers/497305.png",
+          "customPath": null,
+          "preferredSource": "sdk",
+          "source": "iracing_sdk_number",
+          "authoritative": true
+        }
       }
     },
     {
@@ -565,7 +656,14 @@
           "color2": "#ff0000",
           "color3": "#ffffff"
         },
-        "numberStyleAuthoritative": false
+        "numberStyleAuthoritative": false,
+        "numberImage": {
+          "sdkPath": "/assets/images/numbers/162152.png",
+          "customPath": null,
+          "preferredSource": "none",
+          "source": "iracing_sdk_number",
+          "authoritative": false
+        }
       }
     },
     {
@@ -610,7 +708,14 @@
           "color2": "#000000",
           "color3": "#ffffff"
         },
-        "numberStyleAuthoritative": false
+        "numberStyleAuthoritative": false,
+        "numberImage": {
+          "sdkPath": "/assets/images/numbers/269720.png",
+          "customPath": null,
+          "preferredSource": "none",
+          "source": "iracing_sdk_number",
+          "authoritative": false
+        }
       }
     },
     {
@@ -657,7 +762,14 @@
           "color2": "#ff2929",
           "color3": "#ff8514"
         },
-        "numberStyleAuthoritative": false
+        "numberStyleAuthoritative": false,
+        "numberImage": {
+          "sdkPath": "/assets/images/numbers/173350.png",
+          "customPath": null,
+          "preferredSource": "none",
+          "source": "iracing_sdk_number",
+          "authoritative": false
+        }
       }
     },
     {
@@ -878,7 +990,14 @@
           "color2": "#e51836",
           "color3": "#ffffff"
         },
-        "numberStyleAuthoritative": false
+        "numberStyleAuthoritative": false,
+        "numberImage": {
+          "sdkPath": "/assets/images/numbers/244220.png",
+          "customPath": null,
+          "preferredSource": "none",
+          "source": "iracing_sdk_number",
+          "authoritative": false
+        }
       }
     },
     {
@@ -915,7 +1034,14 @@
           "color2": "#deac3b",
           "color3": "#deac3b"
         },
-        "numberStyleAuthoritative": true
+        "numberStyleAuthoritative": true,
+        "numberImage": {
+          "sdkPath": "/assets/images/numbers/1478479.png",
+          "customPath": null,
+          "preferredSource": "sdk",
+          "source": "iracing_sdk_number",
+          "authoritative": true
+        }
       }
     },
     {
@@ -954,7 +1080,14 @@
           "color2": "#ed2129",
           "color3": "#040461"
         },
-        "numberStyleAuthoritative": true
+        "numberStyleAuthoritative": true,
+        "numberImage": {
+          "sdkPath": "/assets/images/numbers/15836.png",
+          "customPath": null,
+          "preferredSource": "sdk",
+          "source": "iracing_sdk_number",
+          "authoritative": true
+        }
       }
     },
     {
@@ -993,7 +1126,14 @@
           "color2": "#ffffff",
           "color3": "#2a3795"
         },
-        "numberStyleAuthoritative": false
+        "numberStyleAuthoritative": false,
+        "numberImage": {
+          "sdkPath": "/assets/images/numbers/175138.png",
+          "customPath": null,
+          "preferredSource": "none",
+          "source": "iracing_sdk_number",
+          "authoritative": false
+        }
       }
     },
     {
@@ -1040,7 +1180,14 @@
           "color2": "#ffee47",
           "color3": "#0300c2"
         },
-        "numberStyleAuthoritative": false
+        "numberStyleAuthoritative": false,
+        "numberImage": {
+          "sdkPath": "/assets/images/numbers/202913.png",
+          "customPath": null,
+          "preferredSource": "none",
+          "source": "iracing_sdk_number",
+          "authoritative": false
+        }
       }
     },
     {
@@ -1077,7 +1224,14 @@
           "color2": "#6d6e71",
           "color3": "#000000"
         },
-        "numberStyleAuthoritative": true
+        "numberStyleAuthoritative": true,
+        "numberImage": {
+          "sdkPath": "/assets/images/numbers/17343.png",
+          "customPath": null,
+          "preferredSource": "sdk",
+          "source": "iracing_sdk_number",
+          "authoritative": true
+        }
       }
     },
     {
@@ -1122,7 +1276,14 @@
           "color2": "#ffffff",
           "color3": "#ffffff"
         },
-        "numberStyleAuthoritative": true
+        "numberStyleAuthoritative": true,
+        "numberImage": {
+          "sdkPath": "/assets/images/numbers/108615.png",
+          "customPath": null,
+          "preferredSource": "sdk",
+          "source": "iracing_sdk_number",
+          "authoritative": true
+        }
       }
     },
     {
@@ -1167,7 +1328,14 @@
           "color2": "#d5861d",
           "color3": "#ffffff"
         },
-        "numberStyleAuthoritative": false
+        "numberStyleAuthoritative": false,
+        "numberImage": {
+          "sdkPath": "/assets/images/numbers/1207664.png",
+          "customPath": null,
+          "preferredSource": "none",
+          "source": "iracing_sdk_number",
+          "authoritative": false
+        }
       }
     },
     {
@@ -1214,7 +1382,14 @@
           "color2": "#f50a0a",
           "color3": "#000000"
         },
-        "numberStyleAuthoritative": true
+        "numberStyleAuthoritative": true,
+        "numberImage": {
+          "sdkPath": "/assets/images/numbers/44045.png",
+          "customPath": null,
+          "preferredSource": "sdk",
+          "source": "iracing_sdk_number",
+          "authoritative": true
+        }
       }
     },
     {
