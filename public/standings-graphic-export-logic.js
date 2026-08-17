@@ -139,9 +139,9 @@ export const TYPOGRAPHY = {
   positionRest: 24,
   movement: 18,
   movementArrow: 22,
-  /** Right-side championship stats (PTS | TO LEAD | TO CUT). */
-  points: 19,
-  statValue: 19,
+  /** Right-side championship stats (PTS | LEAD | CUT). */
+  points: 17,
+  statValue: 17,
   statSpecial: 17,
   statHeader: 16,
   statLabel: 16,
@@ -641,7 +641,7 @@ export function attachChampionshipStats(rows = [], playoffCut = DEFAULT_PLAYOFF_
 
 /**
  * Format helpers for fixed-column drawing.
- * Row values are numbers/specials only — PTS / TO LEAD / TO CUT live in the column header.
+ * Row values are numbers/specials only — PTS / LEAD / CUT live in the column header.
  */
 export function formatChampionshipStatDisplays(stat = {}) {
   const unavailable = { valueText: "—", labelText: "", special: true, tone: "neutral" };
@@ -692,14 +692,14 @@ export function formatChampionshipStatDisplays(stat = {}) {
 
 export const STAT_COLUMN_HEADERS = {
   points: "PTS",
-  lead: "TO LEAD",
-  cut: "TO CUT",
+  lead: "LEAD",
+  cut: "CUT",
 };
 
 /**
- * Fixed local X geometry for PTS | TO LEAD | TO CUT inside every standings row.
+ * Fixed local X geometry for PTS | LEAD | CUT inside every standings row.
  * Three contiguous regions share the stats band. Values stay right-aligned;
- * headers center on each region's center X.
+ * headers center on each region's center X: (left + right) / 2.
  */
 export function computeStandingsStatGeometry(layout = computeStandingsLayoutMetrics()) {
   const pad = layout.rowPad ?? 6;
@@ -758,14 +758,14 @@ export function computeStandingsStatGeometry(layout = computeStandingsLayoutMetr
 }
 
 /**
- * Per-column PTS / TO LEAD / TO CUT header strip.
+ * Per-column PTS / LEAD / CUT header strip.
  * Header X uses explicit region centers from the same row stat geometry.
  */
 export function computeStatColumnHeaderGeometry(layout = computeStandingsLayoutMetrics()) {
   const stats = computeStandingsStatGeometry(layout);
   const height = layout.statHeaderH ?? 32;
   const ruleY = layout.ruleY ?? layout.headerH - 8;
-  const postRuleGap = layout.postRuleGap ?? 10;
+  const postRuleGap = layout.postRuleGap ?? 14;
   const y = ruleY + postRuleGap + height / 2;
   const points = {
     key: "points",
@@ -1339,12 +1339,12 @@ export function computeStandingsLayoutMetrics({
   hasTrackName = true,
 } = {}) {
   const padX = 24;
-  const headerH = hasTrackName ? 108 : 86;
-  const ruleY = hasTrackName ? 100 : 78;
-  const postRuleGap = 10;
+  const headerH = hasTrackName ? 114 : 90;
+  const ruleY = hasTrackName ? 106 : 82;
+  const postRuleGap = 14;
   const statHeaderH = 32;
-  const preGridGap = 8;
-  const footerH = 64;
+  const preGridGap = 11;
+  const footerH = 52;
   const bottomGap = 8;
   const gridTop = ruleY + postRuleGap + statHeaderH + preGridGap;
   const gridBottom = LOGICAL_HEIGHT - footerH - bottomGap;
@@ -1394,7 +1394,7 @@ export function computeStandingsLayoutMetrics({
     gapMovePlate: 8,
     gapPlateName: 8,
     gapNameStats: 6,
-    /** Fixed PTS | TO LEAD | TO CUT value right edges (local px). */
+    /** Fixed PTS | LEAD | CUT value right edges (local px). */
     statPointsValueRight: 476,
     statLeadValueRight: 528,
     statCutValueRight: 588,

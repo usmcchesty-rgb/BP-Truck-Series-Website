@@ -655,9 +655,9 @@ test("typography defaults are larger than previous compressed sizes", () => {
   assert.ok(TYPOGRAPHY.positionTop10 >= 28);
   assert.ok(TYPOGRAPHY.movement >= 18 && TYPOGRAPHY.movement <= 19);
   assert.ok(TYPOGRAPHY.movementArrow >= 21 && TYPOGRAPHY.movementArrow <= 22);
-  assert.ok(TYPOGRAPHY.points >= 18 && TYPOGRAPHY.points <= 20);
-  assert.ok(TYPOGRAPHY.statValue >= 18 && TYPOGRAPHY.statValue <= 20);
-  assert.ok(TYPOGRAPHY.statSpecial >= 16 && TYPOGRAPHY.statSpecial <= 19);
+  assert.ok(TYPOGRAPHY.points >= 16 && TYPOGRAPHY.points <= 17);
+  assert.ok(TYPOGRAPHY.statValue >= 16 && TYPOGRAPHY.statValue <= 17);
+  assert.ok(TYPOGRAPHY.statSpecial >= 16 && TYPOGRAPHY.statSpecial <= 17);
   assert.ok(TYPOGRAPHY.statHeader >= 15 && TYPOGRAPHY.statHeader <= 17);
   assert.ok(TYPOGRAPHY.statLabel >= 15 && TYPOGRAPHY.statLabel <= 17);
   assert.ok(TYPOGRAPHY.seasonMax >= 42);
@@ -980,30 +980,33 @@ test("reduced movement recovers name width without moving PTS/LEAD/CUT", () => {
   );
 });
 
-test("each column has a PTS / TO LEAD / TO CUT header above unchanged row stats", () => {
+test("each column has a PTS / LEAD / CUT header above unchanged row stats", () => {
   const layout = computeStandingsLayoutMetrics({ driverCount: 42, hasTrackName: true });
   const stats = computeStandingsStatGeometry(layout);
   const headers = computeStatColumnHeaderGeometry(layout);
   const slots = computeRowSlotGeometry(layout);
 
-  assert.equal(layout.ruleY, 100);
+  assert.equal(layout.ruleY, 106);
   assert.equal(layout.statHeaderH, 32);
-  assert.equal(layout.gridTop, 150);
-  assert.equal(standingsRowY(layout, 0), 150);
+  assert.equal(layout.postRuleGap, 14);
+  assert.equal(layout.preGridGap, 11);
+  assert.equal(layout.gridTop, 163);
+  assert.equal(standingsRowY(layout, 0), 163);
   assert.equal(headers.y, layout.ruleY + layout.postRuleGap + layout.statHeaderH / 2);
   assert.ok(headers.ruleY < headers.y);
   assert.ok(headers.y + layout.statHeaderH / 2 <= layout.gridTop);
   assert.equal(headers.firstRowY, layout.gridTop);
-  assert.ok(layout.headerH > layout.ruleY - 20);
+  assert.ok(layout.headerH >= 114);
+  assert.ok(layout.ruleY - 22 > 70, "track text sits above red divider with breathing room");
 
   assert.equal(STAT_COLUMN_HEADERS.points, "PTS");
-  assert.equal(STAT_COLUMN_HEADERS.lead, "TO LEAD");
-  assert.equal(STAT_COLUMN_HEADERS.cut, "TO CUT");
+  assert.equal(STAT_COLUMN_HEADERS.lead, "LEAD");
+  assert.equal(STAT_COLUMN_HEADERS.cut, "CUT");
   assert.equal(headers.labels.length, 3);
-  assert.deepEqual(headers.labels.map((l) => l.text), ["PTS", "TO LEAD", "TO CUT"]);
-  assert.equal(headers.points.center, stats.points.center);
-  assert.equal(headers.lead.center, stats.lead.center);
-  assert.equal(headers.cut.center, stats.cut.center);
+  assert.deepEqual(headers.labels.map((l) => l.text), ["PTS", "LEAD", "CUT"]);
+  assert.equal(headers.points.center, (stats.points.left + stats.points.right) / 2);
+  assert.equal(headers.lead.center, (stats.lead.left + stats.lead.right) / 2);
+  assert.equal(headers.cut.center, (stats.cut.left + stats.cut.right) / 2);
   assert.equal(headers.points.x, stats.points.center);
   assert.equal(headers.lead.x, stats.lead.center);
   assert.equal(headers.cut.x, stats.cut.center);
@@ -1047,6 +1050,15 @@ test("each column has a PTS / TO LEAD / TO CUT header above unchanged row stats"
   assert.equal(slots.name.w, 216);
   assert.equal(layout.colCount, 3);
   assert.equal(TYPOGRAPHY.statHeader, 16);
+  assert.equal(TYPOGRAPHY.statValue, 17);
+  assert.equal(layout.rowH, 56);
+
+  const srcLogic = fs.readFileSync(path.join(root, "public", "standings-graphic-export-logic.js"), "utf8");
+  const srcRender = fs.readFileSync(path.join(root, "public", "standings-graphic-export.js"), "utf8");
+  assert.doesNotMatch(srcLogic, /TO LEAD/);
+  assert.doesNotMatch(srcLogic, /TO CUT/);
+  assert.doesNotMatch(srcRender, /TO LEAD/);
+  assert.doesNotMatch(srcRender, /TO CUT/);
 });
 
 test("image/CORS failure path uses deterministic fallback via packagePlateColors", () => {
@@ -1077,7 +1089,7 @@ test("footer height increased for presenting-sponsor strip", () => {
     driverCount: 42,
     hasTrackName: true,
   });
-  assert.ok(m.footerH >= 60);
+  assert.ok(m.footerH >= 50);
   assert.equal(m.fits, true);
 });
 

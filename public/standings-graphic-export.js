@@ -405,7 +405,7 @@ function drawHeader(ctx, model, logoImg, layout) {
   drawFillText(ctx, {
     text: formatSeasonHeading(seasonName),
     x: rightX,
-    y: hasTrack ? ruleY - 66 : ruleY - 44,
+    y: hasTrack ? ruleY - 70 : ruleY - 46,
     font: displayFont(T.seasonMax),
     fill: "#ffffff",
     align: "right",
@@ -416,7 +416,7 @@ function drawHeader(ctx, model, logoImg, layout) {
   drawFillText(ctx, {
     text: formatAfterRaceLine(raceNumber),
     x: rightX,
-    y: hasTrack ? ruleY - 40 : ruleY - 18,
+    y: hasTrack ? ruleY - 44 : ruleY - 20,
     font: bodyFont(T.afterRace),
     fill: "#f2f2f2",
     align: "right",
@@ -435,7 +435,7 @@ function drawHeader(ctx, model, logoImg, layout) {
       minSize: T.trackMin,
       tracking: T.tracking.track,
     });
-    const lineStartY = trackFit.lines.length > 1 ? ruleY - 36 : ruleY - 18;
+    const lineStartY = trackFit.lines.length > 1 ? ruleY - 40 : ruleY - 22;
     trackFit.lines.forEach((line, index) => {
       drawFillText(ctx, {
         text: line,
@@ -611,7 +611,7 @@ function drawStatRegion(ctx, display, region, cy, T) {
   const fills = championshipStatFills(display);
   const size = display.special
     ? (T.statSpecial || 17)
-    : (T.statValue || T.points || 19);
+    : (T.statValue || T.points || 17);
   drawFillText(ctx, {
     text: display.valueText,
     x: region.valueRight,
