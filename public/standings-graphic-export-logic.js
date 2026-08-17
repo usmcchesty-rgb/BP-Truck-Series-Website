@@ -43,12 +43,12 @@ export const STANDINGS_NORMAL_ROW = {
 export const PLAYOFF_BUBBLE = {
   inside: {
     positions: [15, 16],
-    bg: "rgba(145, 38, 45, 0.55)",
+    bg: "rgba(145, 38, 45, 0.35)",
     border: STANDINGS_NORMAL_ROW.border,
   },
   outside: {
     positions: [17, 18],
-    bg: "rgba(100, 27, 35, 0.55)",
+    bg: "rgba(100, 27, 35, 0.32)",
     border: STANDINGS_NORMAL_ROW.border,
   },
 };
