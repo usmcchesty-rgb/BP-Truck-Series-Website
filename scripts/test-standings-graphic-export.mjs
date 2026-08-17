@@ -771,8 +771,10 @@ test("P15–P18 are the only playoff-bubble rows, inside vs outside", () => {
   assert.equal(playoffBubbleKind(1), null);
   assert.deepEqual(PLAYOFF_BUBBLE.inside.positions, [15, 16]);
   assert.deepEqual(PLAYOFF_BUBBLE.outside.positions, [17, 18]);
-  assert.equal(PLAYOFF_BUBBLE.inside.bg, "rgba(132, 28, 28, 0.18)");
-  assert.equal(PLAYOFF_BUBBLE.outside.bg, "rgba(40, 14, 18, 0.22)");
+  assert.equal(PLAYOFF_BUBBLE.inside.bg, "rgba(170, 35, 45, 0.30)");
+  assert.equal(PLAYOFF_BUBBLE.inside.border, "rgba(190, 55, 65, 0.38)");
+  assert.equal(PLAYOFF_BUBBLE.outside.bg, "rgba(105, 25, 38, 0.30)");
+  assert.equal(PLAYOFF_BUBBLE.outside.border, "rgba(125, 35, 48, 0.38)");
   assert.equal(PLAYOFF_CUT_LINE.color, "#e50914");
   assert.equal(PLAYOFF_CUT_LINE.thickness, 4);
 });

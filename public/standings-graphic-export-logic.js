@@ -34,13 +34,13 @@ export const PLAYOFF_CUT_LINE = {
 export const PLAYOFF_BUBBLE = {
   inside: {
     positions: [15, 16],
-    bg: "rgba(132, 28, 28, 0.18)",
-    border: "rgba(176, 48, 48, 0.28)",
+    bg: "rgba(170, 35, 45, 0.30)",
+    border: "rgba(190, 55, 65, 0.38)",
   },
   outside: {
     positions: [17, 18],
-    bg: "rgba(40, 14, 18, 0.22)",
-    border: "rgba(88, 24, 30, 0.28)",
+    bg: "rgba(105, 25, 38, 0.30)",
+    border: "rgba(125, 35, 48, 0.38)",
   },
 };
 
