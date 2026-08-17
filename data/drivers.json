@@ -98,7 +98,43 @@
       "carNumber": "42",
       "iracingCustomerId": 314610,
       "slug": "kyle-wellman",
-      "carImage": "/assets/images/cars/Kyle Wellman.png"
+      "carImage": "/assets/images/cars/Kyle Wellman.png",
+      "iracingDesign": {
+        "source": "iracing_sdk",
+        "capturedAt": "2026-08-17T07:52:25.642Z",
+        "userId": "314610",
+        "carNumber": "42",
+        "number": {
+          "raw": "9,4,ffffff,ffce85,000000",
+          "font": 9,
+          "slant": 4,
+          "color1": "#ffffff",
+          "color2": "#ffce85",
+          "color3": "#000000"
+        },
+        "car": {
+          "raw": "1,383838,000000,f7251d",
+          "pattern": "1",
+          "color1": "#383838",
+          "color2": "#000000",
+          "color3": "#f7251d"
+        },
+        "suit": {
+          "raw": "10,5c5d5b,e80502,030303",
+          "pattern": "10",
+          "color1": "#5c5d5b",
+          "color2": "#e80502",
+          "color3": "#030303"
+        },
+        "numberStyleAuthoritative": true,
+        "numberImage": {
+          "sdkPath": "/assets/images/numbers/314610.png",
+          "customPath": null,
+          "preferredSource": "sdk",
+          "source": "iracing_sdk_number",
+          "authoritative": true
+        }
+      }
     },
     {
       "name": "Larry Bell",
@@ -572,7 +608,45 @@
       "carNumber": "16",
       "iracingCustomerId": 230095,
       "slug": "trevor-harmon2",
-      "carImage": "/assets/images/cars/Trevor Harmon2.png"
+      "carImage": "/assets/images/cars/Trevor Harmon2.png",
+      "iracingDesign": {
+        "source": "iracing_sdk",
+        "capturedAt": "2026-08-17T07:52:25.642Z",
+        "userId": "230095",
+        "carNumber": "16",
+        "number": {
+          "raw": "48,2,f3f4f7,b9bfc5,000000",
+          "font": 48,
+          "slant": 2,
+          "color1": "#f3f4f7",
+          "color2": "#b9bfc5",
+          "color3": "#000000"
+        },
+        "car": {
+          "raw": "4,ffffff,1f2892,7de54c,000504",
+          "pattern": "4",
+          "color1": "#ffffff",
+          "color2": "#1f2892",
+          "color3": "#7de54c",
+          "wheelType": 0,
+          "wheelColor": "#000504"
+        },
+        "suit": {
+          "raw": "22,2a3795,050505,ffffff",
+          "pattern": "22",
+          "color1": "#2a3795",
+          "color2": "#050505",
+          "color3": "#ffffff"
+        },
+        "numberStyleAuthoritative": false,
+        "numberImage": {
+          "sdkPath": "/assets/images/numbers/230095.png",
+          "customPath": null,
+          "preferredSource": "none",
+          "source": "iracing_sdk_number",
+          "authoritative": false
+        }
+      }
     },
     {
       "name": "Scotty Stevens",
@@ -672,7 +746,45 @@
       "carNumber": "76",
       "iracingCustomerId": 856628,
       "slug": "logan-m-wilson",
-      "carImage": "/assets/images/cars/Logan M Wilson.png"
+      "carImage": "/assets/images/cars/Logan M Wilson.png",
+      "iracingDesign": {
+        "source": "iracing_sdk",
+        "capturedAt": "2026-08-17T07:52:25.642Z",
+        "userId": "856628",
+        "carNumber": "76",
+        "number": {
+          "raw": "14,2,000000,000000,ffffff",
+          "font": 14,
+          "slant": 2,
+          "color1": "#000000",
+          "color2": "#000000",
+          "color3": "#ffffff"
+        },
+        "car": {
+          "raw": "3,0effff,000000,ffffff.000000",
+          "pattern": "3",
+          "color1": "#0effff",
+          "color2": "#000000",
+          "color3": "#ffffff",
+          "wheelType": 2,
+          "wheelColor": "#000000"
+        },
+        "suit": {
+          "raw": "32,000000,00d1ed,ffffff",
+          "pattern": "32",
+          "color1": "#000000",
+          "color2": "#00d1ed",
+          "color3": "#ffffff"
+        },
+        "numberStyleAuthoritative": true,
+        "numberImage": {
+          "sdkPath": "/assets/images/numbers/856628.png",
+          "customPath": null,
+          "preferredSource": "sdk",
+          "source": "iracing_sdk_number",
+          "authoritative": true
+        }
+      }
     },
     {
       "name": "Matthew Kleinschmidt2",
@@ -906,7 +1018,45 @@
       "carNumber": "97",
       "iracingCustomerId": 573653,
       "slug": "eddie-hagigh",
-      "carImage": "/assets/images/cars/Eddie Hagigh.png"
+      "carImage": "/assets/images/cars/Eddie Hagigh.png",
+      "iracingDesign": {
+        "source": "iracing_sdk",
+        "capturedAt": "2026-08-17T07:52:25.642Z",
+        "userId": "573653",
+        "carNumber": "97",
+        "number": {
+          "raw": "24,3,09bb00,000000,ffffff",
+          "font": 24,
+          "slant": 3,
+          "color1": "#09bb00",
+          "color2": "#000000",
+          "color3": "#ffffff"
+        },
+        "car": {
+          "raw": "23,021b4f,00cbff,006efc,000000",
+          "pattern": "23",
+          "color1": "#021b4f",
+          "color2": "#00cbff",
+          "color3": "#006efc",
+          "wheelType": 0,
+          "wheelColor": "#000000"
+        },
+        "suit": {
+          "raw": "1,0076f9,ff0404,ffffff",
+          "pattern": "1",
+          "color1": "#0076f9",
+          "color2": "#ff0404",
+          "color3": "#ffffff"
+        },
+        "numberStyleAuthoritative": false,
+        "numberImage": {
+          "sdkPath": "/assets/images/numbers/573653.png",
+          "customPath": null,
+          "preferredSource": "none",
+          "source": "iracing_sdk_number",
+          "authoritative": false
+        }
+      }
     },
     {
       "name": "Juan Cobbs Jr",
@@ -1009,7 +1159,7 @@
       "carImage": "/assets/images/cars/Miguel Gomez-Gaudet.png",
       "iracingDesign": {
         "source": "iracing_sdk",
-        "capturedAt": "2026-08-17T07:00:12.703Z",
+        "capturedAt": "2026-08-17T07:52:25.642Z",
         "userId": "1478479",
         "carNumber": "89",
         "number": {
@@ -1028,20 +1178,20 @@
           "color3": "#2e358f"
         },
         "suit": {
-          "raw": "1,ffffff,deac3b,deac3b",
+          "raw": "1,ec232d,ffffff,2e358f",
           "pattern": "1",
-          "color1": "#ffffff",
-          "color2": "#deac3b",
-          "color3": "#deac3b"
+          "color1": "#ec232d",
+          "color2": "#ffffff",
+          "color3": "#2e358f"
         },
-        "numberStyleAuthoritative": true,
         "numberImage": {
           "sdkPath": "/assets/images/numbers/1478479.png",
           "customPath": null,
           "preferredSource": "sdk",
           "source": "iracing_sdk_number",
           "authoritative": true
-        }
+        },
+        "numberStyleAuthoritative": true
       }
     },
     {
@@ -1142,7 +1292,43 @@
       "carNumber": "47",
       "iracingCustomerId": 778311,
       "slug": "michael-kelly",
-      "carImage": "/assets/images/cars/Michael Kelly.png"
+      "carImage": "/assets/images/cars/Michael Kelly.png",
+      "iracingDesign": {
+        "source": "iracing_sdk",
+        "capturedAt": "2026-08-17T07:52:25.642Z",
+        "userId": "778311",
+        "carNumber": "47",
+        "number": {
+          "raw": "0,0,ffffff,777777,000000",
+          "font": 0,
+          "slant": 0,
+          "color1": "#ffffff",
+          "color2": "#777777",
+          "color3": "#000000"
+        },
+        "car": {
+          "raw": "18,fffc00,002d79,fffb25",
+          "pattern": "18",
+          "color1": "#fffc00",
+          "color2": "#002d79",
+          "color3": "#fffb25"
+        },
+        "suit": {
+          "raw": "22,e68a00,ffde00,000000",
+          "pattern": "22",
+          "color1": "#e68a00",
+          "color2": "#ffde00",
+          "color3": "#000000"
+        },
+        "numberStyleAuthoritative": false,
+        "numberImage": {
+          "sdkPath": "/assets/images/numbers/778311.png",
+          "customPath": null,
+          "preferredSource": "none",
+          "source": "iracing_sdk_number",
+          "authoritative": false
+        }
+      }
     },
     {
       "name": "Noah S. VanHoute",
@@ -1406,7 +1592,45 @@
       "carNumber": "53",
       "iracingCustomerId": 316539,
       "slug": "samuel-baumgarten",
-      "carImage": "/assets/images/cars/Samuel Baumgarten.png"
+      "carImage": "/assets/images/cars/Samuel Baumgarten.png",
+      "iracingDesign": {
+        "source": "iracing_sdk",
+        "capturedAt": "2026-08-17T07:52:25.642Z",
+        "userId": "316539",
+        "carNumber": "53",
+        "number": {
+          "raw": "48,4,f7f7f7,000000,20a3d8",
+          "font": 48,
+          "slant": 4,
+          "color1": "#f7f7f7",
+          "color2": "#000000",
+          "color3": "#20a3d8"
+        },
+        "car": {
+          "raw": "1,000000,ffffff,20a3d8;fafafa",
+          "pattern": "1",
+          "color1": "#000000",
+          "color2": "#ffffff",
+          "color3": "#20a3d8",
+          "wheelType": 1,
+          "wheelColor": "#fafafa"
+        },
+        "suit": {
+          "raw": "8,000000,ffffff,44f500",
+          "pattern": "8",
+          "color1": "#000000",
+          "color2": "#ffffff",
+          "color3": "#44f500"
+        },
+        "numberStyleAuthoritative": false,
+        "numberImage": {
+          "sdkPath": "/assets/images/numbers/316539.png",
+          "customPath": null,
+          "preferredSource": "none",
+          "source": "iracing_sdk_number",
+          "authoritative": false
+        }
+      }
     }
   ]
 }
