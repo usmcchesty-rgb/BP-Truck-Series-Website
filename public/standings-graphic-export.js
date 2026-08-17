@@ -13,6 +13,7 @@ import {
   SPONSOR_NAME,
   SITE_URL,
   DEFAULT_PLATE,
+  TYPOGRAPHY,
   distributeColumns,
   formatWinsLabel,
   formatPointsLabel,
@@ -23,11 +24,15 @@ import {
   plateNumberFontSize,
   formatPlateDisplay,
   pickReadableNumberColor,
+  packagePlateColors,
+  pickDeterministicPlateColors,
+  isNearWhiteHex,
   buildSponsorFooterText,
   validateOutputDimensions,
   buildStandingsGraphicModel,
   computeStandingsLayoutMetrics,
   sanitizeTrackName,
+  measureTrackedTextWidth,
 } from "./standings-graphic-export-logic.js";
 
 const BP_LOGO = "/assets/logos/New%20Clean%20Logo.png";
@@ -39,17 +44,16 @@ const imageAssetCache = new Map();
 const suitColorCache = new Map();
 let lastRenderDiagnostics = null;
 
-  // Guard: module may load in non-browser test environments.
-  if (typeof localStorage !== "undefined") {
-    try {
-      const stored = JSON.parse(localStorage.getItem(PR_SUIT_CACHE_KEY) || "{}");
-      Object.entries(stored).forEach(([key, value]) => {
-        if (value?.fill && value?.outline) suitColorCache.set(key, value);
-      });
-    } catch {
-      /* ignore */
-    }
+if (typeof localStorage !== "undefined") {
+  try {
+    const stored = JSON.parse(localStorage.getItem(PR_SUIT_CACHE_KEY) || "{}");
+    Object.entries(stored).forEach(([key, value]) => {
+      if (value?.fill && value?.outline) suitColorCache.set(key, value);
+    });
+  } catch {
+    /* ignore */
   }
+}
 
 function resetTextRenderingState(ctx) {
   ctx.globalAlpha = 1;
@@ -61,7 +65,65 @@ function resetTextRenderingState(ctx) {
   ctx.lineWidth = 1;
 }
 
-function drawFillText(ctx, { text, x, y, font, fill, align = "left", baseline = "middle" }) {
+function measureCtxChar(ctx, font, ch) {
+  ctx.save();
+  ctx.font = font;
+  const w = ctx.measureText(ch).width;
+  ctx.restore();
+  return w;
+}
+
+function measureCtxText(ctx, font, text) {
+  ctx.save();
+  ctx.font = font;
+  const w = ctx.measureText(String(text || "")).width;
+  ctx.restore();
+  return w;
+}
+
+/**
+ * Tracked Canvas text with correct left/center/right alignment.
+ * Tracking is included in total measured width.
+ */
+function drawTextWithTracking(ctx, text, x, y, tracking, {
+  font,
+  fill,
+  align = "left",
+  baseline = "middle",
+} = {}) {
+  const value = String(text || "");
+  const chars = Array.from(value);
+  ctx.save();
+  resetTextRenderingState(ctx);
+  ctx.font = font;
+  ctx.fillStyle = fill;
+  ctx.textAlign = "left";
+  ctx.textBaseline = baseline;
+
+  const total = measureTrackedTextWidth(
+    (f, ch) => measureCtxChar(ctx, f, ch),
+    font,
+    value,
+    tracking,
+  );
+
+  let cursor = x;
+  if (align === "center") cursor = x - total / 2;
+  else if (align === "right") cursor = x - total;
+
+  chars.forEach((ch, index) => {
+    ctx.fillText(ch, Math.round(cursor), Math.round(y));
+    cursor += measureCtxChar(ctx, font, ch);
+    if (index < chars.length - 1) cursor += tracking;
+  });
+  ctx.restore();
+  return total;
+}
+
+function drawFillText(ctx, { text, x, y, font, fill, align = "left", baseline = "middle", tracking = 0 }) {
+  if (tracking) {
+    return drawTextWithTracking(ctx, text, x, y, tracking, { font, fill, align, baseline });
+  }
   ctx.save();
   resetTextRenderingState(ctx);
   ctx.font = font;
@@ -96,21 +158,11 @@ function stripUrlQuery(url) {
     .split("#")[0];
 }
 
-function hashFallbackSuitColors(name) {
-  const raw = String(name || "driver");
-  let hash = 0;
-  for (let i = 0; i < raw.length; i += 1) hash = (hash * 31 + raw.charCodeAt(i)) >>> 0;
-  const hues = [0, 14, 28, 200, 220, 260, 300];
-  const hue = hues[hash % hues.length];
-  const fill = `hsl(${hue} 70% 38%)`;
-  return { fill, outline: "#f2f2f2", keyline: "#0a0a0a", fallback: true };
-}
-
 function sampleSuitColorsFromPortrait(img) {
   const iw = img.naturalWidth || 1;
   const ih = img.naturalHeight || 1;
-  const sampleW = 96;
-  const sampleH = Math.max(56, Math.round(sampleW * (ih / iw)));
+  const sampleW = 110;
+  const sampleH = Math.max(64, Math.round(sampleW * (ih / iw)));
   const canvas = document.createElement("canvas");
   canvas.width = sampleW;
   canvas.height = sampleH;
@@ -125,29 +177,52 @@ function sampleSuitColorsFromPortrait(img) {
     return { error: "tainted" };
   }
 
-  const buckets = new Map();
-  for (let y = Math.floor(sampleH * 0.35); y < sampleH; y += 2) {
-    for (let x = Math.floor(sampleW * 0.2); x < sampleW * 0.8; x += 2) {
+  const satBuckets = new Map();
+  let lightWeight = 0;
+  let darkWeight = 0;
+
+  for (let y = Math.floor(sampleH * 0.38); y < sampleH; y += 2) {
+    for (let x = Math.floor(sampleW * 0.18); x < sampleW * 0.82; x += 2) {
       const i = (y * sampleW + x) * 4;
       const r = data[i];
       const g = data[i + 1];
       const b = data[i + 2];
       const a = data[i + 3];
-      if (a < 140) continue;
+      if (a < 130) continue;
+
+      // Skip skin-ish tones (face/hands dominating suits).
+      if (r > 95 && g > 55 && b > 40 && r > g && g > b && r - b > 35 && r - g < 70) continue;
+
       const max = Math.max(r, g, b);
       const min = Math.min(r, g, b);
-      if (max < 40) continue;
-      if (max - min < 28 && max > 200) continue;
-      const key = `${Math.round(r / 20) * 20},${Math.round(g / 20) * 20},${Math.round(b / 20) * 20}`;
-      buckets.set(key, (buckets.get(key) || 0) + 1);
+      const sat = max === 0 ? 0 : (max - min) / max;
+
+      if (max > 210 && sat < 0.12) {
+        lightWeight += 1;
+        continue;
+      }
+      if (max < 38) {
+        darkWeight += 1;
+        continue;
+      }
+      if (sat < 0.14) continue;
+
+      const key = `${Math.round(r / 18) * 18},${Math.round(g / 18) * 18},${Math.round(b / 18) * 18}`;
+      satBuckets.set(key, (satBuckets.get(key) || 0) + 1 + sat);
     }
   }
 
-  const sorted = [...buckets.entries()].sort((a, b) => b[1] - a[1]);
-  if (!sorted.length) return { error: "no_colors" };
+  const sorted = [...satBuckets.entries()].sort((a, b) => b[1] - a[1]);
+  if (!sorted.length) {
+    if (lightWeight > darkWeight && lightWeight > 0) {
+      return { fill: "#ffffff", outline: "#c81010", keyline: "#1a1a1a", lightDominant: true };
+    }
+    return { error: "no_colors" };
+  }
+
   const [fr, fg, fb] = sorted[0][0].split(",").map(Number);
   const fill = `#${[fr, fg, fb].map((n) => n.toString(16).padStart(2, "0")).join("")}`;
-  let outline = "#ffffff";
+  let outline = lightWeight > 0 ? "#ffffff" : "#101010";
   if (sorted[1]) {
     const [or, og, ob] = sorted[1][0].split(",").map(Number);
     outline = `#${[or, og, ob].map((n) => n.toString(16).padStart(2, "0")).join("")}`;
@@ -156,7 +231,7 @@ function sampleSuitColorsFromPortrait(img) {
     fill,
     outline,
     keyline: pickReadableNumberColor(fill) === "#ffffff" ? "#0a0a0a" : "#f5f5f5",
-    fallback: false,
+    lightDominant: isNearWhiteHex(fill),
   };
 }
 
@@ -170,13 +245,13 @@ async function resolvePlateColors(driver) {
 
   if (cacheKey && suitColorCache.has(cacheKey)) {
     const cached = suitColorCache.get(cacheKey);
-    return {
-      fill: cached.fill || DEFAULT_PLATE.fill,
-      outline: cached.outline || DEFAULT_PLATE.outline,
-      keyline: cached.keyline || DEFAULT_PLATE.keyline,
-      numberFill: pickReadableNumberColor(cached.fill || DEFAULT_PLATE.fill),
-      source: "cache",
-    };
+    return packagePlateColors({
+      fill: cached.fill,
+      outline: cached.outline,
+      keyline: cached.keyline,
+      source: "suit_cache",
+      driver,
+    });
   }
 
   if (photoUrl) {
@@ -184,29 +259,30 @@ async function resolvePlateColors(driver) {
     if (img) {
       const sampled = sampleSuitColorsFromPortrait(img);
       if (!sampled.error) {
-        const pack = {
+        const pack = packagePlateColors({
           fill: sampled.fill,
           outline: sampled.outline,
           keyline: sampled.keyline,
-        };
-        if (cacheKey) suitColorCache.set(cacheKey, pack);
-        return {
-          ...pack,
-          numberFill: pickReadableNumberColor(pack.fill),
-          source: "sampled",
-        };
+          source: "portrait_sample",
+          driver,
+        });
+        if (cacheKey) {
+          suitColorCache.set(cacheKey, {
+            fill: pack.fill,
+            outline: pack.outline,
+            keyline: pack.keyline,
+          });
+        }
+        return pack;
       }
     }
   }
 
-  const hashed = hashFallbackSuitColors(driver.driverName);
-  return {
-    fill: hashed.fill,
-    outline: hashed.outline,
-    keyline: hashed.keyline,
-    numberFill: pickReadableNumberColor(hashed.fill),
-    source: "fallback",
-  };
+  return packagePlateColors({
+    ...pickDeterministicPlateColors(driver),
+    source: "deterministic_fallback",
+    driver,
+  });
 }
 
 function drawCarbonBackground(ctx) {
@@ -253,88 +329,90 @@ function drawHeader(ctx, model, logoImg, layout) {
   const trackName = sanitizeTrackName(model.latestCompletedRace?.trackName);
   const hasTrack = Boolean(trackName);
   const rightX = LOGICAL_WIDTH - layout.padX;
+  const T = TYPOGRAPHY;
 
   if (logoImg) {
-    const logoH = 52;
+    const logoH = 56;
     const scale = logoH / (logoImg.naturalHeight || 1);
-    const logoW = Math.min(150, (logoImg.naturalWidth || 1) * scale);
+    const logoW = Math.min(160, (logoImg.naturalWidth || 1) * scale);
     ctx.drawImage(logoImg, layout.padX, 10, logoW, logoH);
     drawFillText(ctx, {
       text: "TRUCK SERIES",
       x: layout.padX + logoW + 12,
-      y: 36,
-      font: `bold 20px ${FONT_DISPLAY}`,
+      y: 38,
+      font: `bold 22px ${FONT_DISPLAY}`,
       fill: "#ffffff",
       align: "left",
       baseline: "middle",
+      tracking: 0.6,
     });
   } else {
     drawFillText(ctx, {
       text: "BLAZING PEDALS",
       x: layout.padX,
-      y: 24,
-      font: `bold 15px ${FONT_BODY}`,
+      y: 26,
+      font: `bold 16px ${FONT_BODY}`,
       fill: "#ff3a3a",
       align: "left",
       baseline: "middle",
+      tracking: 0.8,
     });
     drawFillText(ctx, {
       text: "TRUCK SERIES",
       x: layout.padX,
-      y: 46,
-      font: `bold 22px ${FONT_DISPLAY}`,
+      y: 50,
+      font: `bold 24px ${FONT_DISPLAY}`,
       fill: "#ffffff",
       align: "left",
       baseline: "middle",
+      tracking: 0.6,
     });
   }
 
   drawFillText(ctx, {
     text: formatSeasonHeading(seasonName),
     x: rightX,
-    y: hasTrack ? 18 : 28,
-    font: `bold 28px ${FONT_DISPLAY}`,
+    y: hasTrack ? 20 : 32,
+    font: `bold ${T.seasonMax}px ${FONT_DISPLAY}`,
     fill: "#ffffff",
     align: "right",
     baseline: "middle",
+    tracking: T.tracking.season,
   });
 
   drawFillText(ctx, {
     text: formatAfterRaceLine(raceNumber),
     x: rightX,
-    y: hasTrack ? 42 : 54,
-    font: `bold 15px ${FONT_BODY}`,
-    fill: "#c8c8c8",
+    y: hasTrack ? 48 : 60,
+    font: `bold ${T.afterRace}px ${FONT_BODY}`,
+    fill: "#d0d0d0",
     align: "right",
     baseline: "middle",
+    tracking: T.tracking.afterRace,
   });
 
-  let trackFit = { lines: [], fontSize: 12, truncated: false, fullTrackName: "" };
+  let trackFit = { lines: [], fontSize: T.trackMax, truncated: false, fullTrackName: "" };
   if (hasTrack) {
-    const maxWidth = 700;
-    const measure = (font, text) => {
-      ctx.save();
-      ctx.font = font;
-      const width = ctx.measureText(text).width;
-      ctx.restore();
-      return width;
-    };
+    const maxWidth = 720;
+    const measure = (font, text) => measureCtxText(ctx, font, text);
     trackFit = fitTrackNameDisplay(measure, trackName, maxWidth, {
       fontFamily: FONT_BODY,
       fontWeight: "bold",
-      maxSize: 13,
-      minSize: 10,
+      maxSize: T.trackMax,
+      minSize: T.trackMin,
+      tracking: T.tracking.track,
     });
-    const lineStartY = trackFit.lines.length > 1 ? 60 : 64;
+    const lineStartY = trackFit.lines.length > 1 ? 68 : 74;
     trackFit.lines.forEach((line, index) => {
       drawFillText(ctx, {
         text: line,
         x: rightX,
-        y: lineStartY + index * (trackFit.fontSize + 2),
+        y: lineStartY + index * (trackFit.fontSize + 3),
         font: `bold ${trackFit.fontSize}px ${FONT_BODY}`,
-        fill: "#b0b0b0",
+        fill: "#b8b8b8",
         align: "right",
         baseline: "middle",
+        tracking: T.tracking.track,
       });
     });
   }
@@ -363,10 +441,7 @@ function drawNumberPlate(ctx, carNumber, colors, x, y, w, h) {
   ctx.save();
   resetTextRenderingState(ctx);
 
-  const plateGrad = ctx.createLinearGradient(x, y, x, y + h);
-  plateGrad.addColorStop(0, fill);
-  plateGrad.addColorStop(1, fill);
-  ctx.fillStyle = plateGrad;
+  ctx.fillStyle = fill;
   roundRect(ctx, x, y, w, h, 4);
   ctx.fill();
 
@@ -376,13 +451,13 @@ function drawNumberPlate(ctx, carNumber, colors, x, y, w, h) {
   ctx.stroke();
 
   ctx.strokeStyle = outline;
-  ctx.lineWidth = 1.25;
+  ctx.lineWidth = 1.35;
   roundRect(ctx, x + 3, y + 3, w - 6, h - 6, 2.5);
   ctx.stroke();
 
   const fontSize = plateNumberFontSize(display, {
-    maxSize: Math.floor(h * 0.72),
-    minSize: 11,
+    maxSize: Math.floor(h * 0.74),
+    minSize: 12,
   });
   ctx.font = `bold ${fontSize}px ${FONT_DISPLAY}`;
   ctx.fillStyle = numberFill;
@@ -424,12 +499,13 @@ function rowStyle(position) {
 function drawDriverRow(ctx, driver, box, plateColors, layout) {
   const { x, y, w, h } = box;
   const style = rowStyle(driver.position);
-  const pad = 5;
+  const pad = 6;
+  const T = TYPOGRAPHY;
   const plateW = layout.plateW;
   const plateH = layout.plateH;
-  const posW = 34;
-  const moveW = 40;
-  const statsW = 150;
+  const posW = layout.posW;
+  const moveW = layout.moveW;
+  const statsW = layout.statsW;
 
   ctx.save();
   resetTextRenderingState(ctx);
@@ -443,7 +519,8 @@ function drawDriverRow(ctx, driver, box, plateColors, layout) {
   ctx.restore();
 
   const cy = y + h / 2;
-  const posSize = Number(driver.position) <= 10 ? 22 : 18;
+  const posSize =
+    Number(driver.position) <= 10 ? T.positionTop10 : T.positionRest;
 
   drawFillText(ctx, {
     text: String(driver.position),
@@ -458,34 +535,33 @@ function drawDriverRow(ctx, driver, box, plateColors, layout) {
   const movement = driver.movement || { text: "—", dir: "flat" };
   const moveColor =
     movement.dir === "up" ? "#3dce6a" : movement.dir === "down" ? "#ff5a5a" : "#888888";
+  const moveX = x + pad + posW + layout.gapPosMove + moveW / 2;
   drawFillText(ctx, {
     text: movement.text,
-    x: x + pad + posW + moveW / 2,
+    x: moveX,
     y: cy,
-    font: `bold 13px ${FONT_BODY}`,
+    font: `bold ${T.movement}px ${FONT_BODY}`,
     fill: moveColor,
     align: "center",
     baseline: "middle",
   });
 
-  const plateX = x + pad + posW + moveW + 2;
+  const plateX = x + pad + posW + layout.gapPosMove + moveW + layout.gapMovePlate;
   const plateY = y + (h - plateH) / 2;
   drawNumberPlate(ctx, driver.carNumber, plateColors, plateX, plateY, plateW, plateH);
 
-  const nameX = plateX + plateW + 8;
+  const nameX = plateX + plateW + layout.gapPlateName;
   const nameMaxW = w - (nameX - x) - statsW - pad;
-  const measure = (font, text) => {
-    ctx.save();
-    ctx.font = font;
-    const width = ctx.measureText(text).width;
-    ctx.restore();
-    return width;
-  };
+  const tracking = T.tracking.driverName;
+  const nameMax =
+    Number(driver.position) <= 10 ? T.driverNameTop10 : T.driverNameRest;
+  const measure = (font, text) => measureCtxText(ctx, font, text);
   const nameSize = fitTextFontSize(measure, driver.driverName.toUpperCase(), nameMaxW, {
     fontFamily: FONT_BODY,
     fontWeight: style.nameWeight,
-    maxSize: Number(driver.position) <= 10 ? 17 : 15,
-    minSize: 10,
+    maxSize: nameMax,
+    minSize: T.driverNameMin,
+    tracking,
   });
 
   drawFillText(ctx, {
@@ -496,29 +572,29 @@ function drawDriverRow(ctx, driver, box, plateColors, layout) {
     fill: style.nameFill,
     align: "left",
     baseline: "middle",
+    tracking,
   });
 
   const statsRight = x + w - pad;
+  const winsLabel = formatWinsLabel(driver.wins);
+  const pointsLabel = formatPointsLabel(driver.points);
+  const winsW = measureCtxText(ctx, `bold ${T.wins}px ${FONT_BODY}`, winsLabel);
+
   drawFillText(ctx, {
-    text: formatWinsLabel(driver.wins),
+    text: winsLabel,
     x: statsRight,
     y: cy,
-    font: `bold 12px ${FONT_BODY}`,
-    fill: "#b8b8b8",
+    font: `bold ${T.wins}px ${FONT_BODY}`,
+    fill: "#c0c0c0",
     align: "right",
     baseline: "middle",
   });
 
-  ctx.save();
-  ctx.font = `bold 12px ${FONT_BODY}`;
-  const winsW = ctx.measureText(formatWinsLabel(driver.wins)).width;
-  ctx.restore();
-
   drawFillText(ctx, {
-    text: formatPointsLabel(driver.points),
-    x: statsRight - winsW - 12,
+    text: pointsLabel,
+    x: statsRight - winsW - layout.gapPtsWins,
     y: cy,
-    font: `bold 14px ${FONT_BODY}`,
+    font: `bold ${T.points}px ${FONT_BODY}`,
     fill: "#ffffff",
     align: "right",
     baseline: "middle",
@@ -528,42 +604,47 @@ function drawDriverRow(ctx, driver, box, plateColors, layout) {
 function drawPlayoffCut(ctx, layout, placement, colX) {
   if (!placement) return;
   const { afterRowIndex, label } = placement;
+  const T = TYPOGRAPHY;
   const cutRowBottom =
     layout.gridTop + (afterRowIndex + 1) * (layout.rowH + layout.rowGap) - layout.rowGap;
-  const y = cutRowBottom + (layout.cutGap || 14) / 2;
+  const y = cutRowBottom + (layout.cutGap || 16) / 2;
 
   ctx.save();
   resetTextRenderingState(ctx);
   ctx.strokeStyle = "#e01010";
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 2.5;
   ctx.beginPath();
   ctx.moveTo(colX, y);
   ctx.lineTo(colX + layout.colW, y);
   ctx.stroke();
 
   const mid = colX + layout.colW / 2;
-  const labelW = Math.min(layout.colW - 16, 200);
+  const labelW = Math.min(layout.colW - 12, 260);
+  const labelH = 22;
   ctx.fillStyle = "#140404";
-  ctx.fillRect(mid - labelW / 2, y - 8, labelW, 16);
+  ctx.fillRect(mid - labelW / 2, y - labelH / 2, labelW, labelH);
   ctx.strokeStyle = "#e01010";
-  ctx.lineWidth = 1;
-  ctx.strokeRect(mid - labelW / 2, y - 8, labelW, 16);
+  ctx.lineWidth = 1.25;
+  ctx.strokeRect(mid - labelW / 2, y - labelH / 2, labelW, labelH);
   ctx.restore();
 
   drawFillText(ctx, {
     text: label,
     x: mid,
     y,
-    font: `bold 10px ${FONT_BODY}`,
+    font: `bold ${T.playoffCut}px ${FONT_BODY}`,
     fill: "#ff6a6a",
     align: "center",
     baseline: "middle",
+    tracking: T.tracking.playoffCut,
   });
 }
 
 function drawFooter(ctx, layout) {
   const y0 = layout.footerY;
   const footer = buildSponsorFooterText();
+  const T = TYPOGRAPHY;
+  const midY = y0 + layout.footerH / 2;
 
   ctx.save();
   resetTextRenderingState(ctx);
@@ -575,34 +656,50 @@ function drawFooter(ctx, layout) {
   ctx.stroke();
   ctx.restore();
 
-  drawFillText(ctx, {
-    text: footer.combined,
-    x: LOGICAL_WIDTH / 2,
-    y: y0 + 26,
-    font: `bold 18px ${FONT_DISPLAY}`,
-    fill: "#ffffff",
-    align: "center",
-    baseline: "middle",
-  });
-
-  drawFillText(ctx, {
-    text: SITE_URL,
-    x: LOGICAL_WIDTH - layout.padX,
-    y: y0 + 44,
-    font: `bold 12px ${FONT_BODY}`,
-    fill: "#888888",
-    align: "right",
-    baseline: "middle",
-  });
-
+  // LEFT — series
   drawFillText(ctx, {
     text: "BLAZING PEDALS TRUCK SERIES",
     x: layout.padX,
-    y: y0 + 44,
-    font: `bold 11px ${FONT_BODY}`,
-    fill: "#666666",
+    y: midY,
+    font: `bold ${T.footerSeries}px ${FONT_BODY}`,
+    fill: "#c8c8c8",
     align: "left",
     baseline: "middle",
+    tracking: T.tracking.series,
+  });
+
+  // CENTER — presenting sponsor (two-line hierarchy)
+  drawFillText(ctx, {
+    text: footer.presentedBy,
+    x: LOGICAL_WIDTH / 2,
+    y: midY - 14,
+    font: `bold ${T.footerPresentedBy}px ${FONT_BODY}`,
+    fill: "#aaaaaa",
+    align: "center",
+    baseline: "middle",
+    tracking: T.tracking.presentedBy,
+  });
+  drawFillText(ctx, {
+    text: footer.sponsorLine,
+    x: LOGICAL_WIDTH / 2,
+    y: midY + 12,
+    font: `bold ${T.footerSponsor}px ${FONT_DISPLAY}`,
+    fill: "#ffffff",
+    align: "center",
+    baseline: "middle",
+    tracking: T.tracking.sponsor,
+  });
+
+  // RIGHT — website
+  drawFillText(ctx, {
+    text: SITE_URL,
+    x: LOGICAL_WIDTH - layout.padX,
+    y: midY,
+    font: `bold ${T.footerSite}px ${FONT_BODY}`,
+    fill: "#d0d0d0",
+    align: "right",
+    baseline: "middle",
+    tracking: T.tracking.site,
   });
 }
 
@@ -687,8 +784,20 @@ export async function renderStandingsGraphicCanvas(model, options = {}) {
   const fontInfo = await ensureFontsReady();
   const logoImg = await loadImage(options.logoUrl || BP_LOGO);
 
-  // Batch plate colors from PR cache / already-known photo URLs (no per-driver API).
+  // Batch plate colors from PR cache / standings photo URLs (no per-driver API).
   const plateColorsList = await Promise.all(drivers.map((d) => resolvePlateColors(d)));
+  const plateDiagnostics = drivers.map((driver, index) => {
+    const colors = plateColorsList[index] || DEFAULT_PLATE;
+    return {
+      driverName: driver.driverName,
+      driverId: driver.driverId,
+      carNumber: driver.carNumber || "",
+      platePrimary: colors.platePrimary || colors.fill,
+      plateSecondary: colors.plateSecondary || colors.outline,
+      plateTextColor: colors.plateTextColor || colors.numberFill,
+      colorSource: colors.colorSource || colors.source || "unknown",
+    };
+  });
 
   const columns = model.columns || distributeColumns(drivers);
   const cutPlacement = model.cutPlacement || null;
@@ -728,7 +837,7 @@ export async function renderStandingsGraphicCanvas(model, options = {}) {
         cutPlacement.columnIndex === col &&
         rowIndex > cutPlacement.afterRowIndex
       ) {
-        y += layout.cutGap || 14;
+        y += layout.cutGap || 16;
       }
       const plateColors = plateColorsList[driverColorIndex] || DEFAULT_PLATE;
       driverColorIndex += 1;
@@ -751,6 +860,7 @@ export async function renderStandingsGraphicCanvas(model, options = {}) {
   const blob = await canvasToPngBlob(canvas);
   const pngDims = await readPngDimensions(blob);
   const missingPlates = drivers.filter((d) => d.carNumberMissing).length;
+  const whitePlates = plateDiagnostics.filter((d) => isNearWhiteHex(d.platePrimary)).length;
   const exportLog = {
     width: pngDims.width,
     height: pngDims.height,
@@ -766,12 +876,16 @@ export async function renderStandingsGraphicCanvas(model, options = {}) {
     columnSizes: columns.map((c) => c.length),
     cutColumn: cutPlacement?.columnIndex ?? null,
     missingPlates,
+    nearWhitePlates: whitePlates,
     sponsorLogo: false,
     sponsorText: SPONSOR_NAME,
     layoutFits: layout.fits,
     rowH: layout.rowH,
+    footerH: layout.footerH,
+    typography: TYPOGRAPHY,
   };
   console.log("[standings-graphic-export] PNG export", exportLog);
+  console.log("[standings-graphic-export] plate color diagnostics", plateDiagnostics);
 
   if (!validateOutputDimensions(pngDims.width, pngDims.height)) {
     console.warn("[standings-graphic-export] Unexpected PNG dimensions", pngDims);
@@ -785,6 +899,7 @@ export async function renderStandingsGraphicCanvas(model, options = {}) {
     playoffCut: model.playoffCut ?? DEFAULT_PLAYOFF_CUT,
     cutPlacement,
     filename: model.filename,
+    plateDiagnostics,
     model,
   };
 
@@ -796,6 +911,7 @@ export async function renderStandingsGraphicCanvas(model, options = {}) {
     filename: model.filename,
     model,
     diagnostics: lastRenderDiagnostics,
+    plateDiagnostics,
   };
 }
 

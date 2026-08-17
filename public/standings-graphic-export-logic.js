@@ -25,6 +25,50 @@ export const DEFAULT_PLATE = {
   numberFill: "#ffffff",
 };
 
+/** Typography targets (logical px) — larger for Discord/Facebook scale-down. */
+export const TYPOGRAPHY = {
+  seasonMax: 36,
+  afterRace: 18,
+  trackMax: 16,
+  trackMin: 11,
+  driverNameTop10: 21,
+  driverNameRest: 19,
+  driverNameMin: 11,
+  positionTop10: 26,
+  positionRest: 22,
+  movement: 16,
+  points: 17,
+  wins: 14,
+  playoffCut: 14,
+  footerPresentedBy: 13,
+  footerSponsor: 26,
+  footerSeries: 15,
+  footerSite: 16,
+  tracking: {
+    driverName: 0.85,
+    season: 1.35,
+    afterRace: 0.7,
+    track: 0.55,
+    playoffCut: 1.1,
+    presentedBy: 1.6,
+    sponsor: 1.9,
+    series: 1.0,
+    site: 0.35,
+  },
+};
+
+/** BP-safe motorsports fallback fills (never pure white). */
+export const DETERMINISTIC_PLATE_PALETTE = [
+  { fill: "#b01010", outline: "#f2f2f2", keyline: "#3a0505" },
+  { fill: "#6e0c0c", outline: "#e8e8e8", keyline: "#220000" },
+  { fill: "#2a2a32", outline: "#d8d8dc", keyline: "#c81010" },
+  { fill: "#3a4550", outline: "#f0f0f0", keyline: "#101820" },
+  { fill: "#143a6e", outline: "#eef2ff", keyline: "#071830" },
+  { fill: "#3a1a5c", outline: "#f3eaff", keyline: "#160828" },
+  { fill: "#0f4a38", outline: "#e8fff6", keyline: "#062018" },
+  { fill: "#b84a10", outline: "#fff4ec", keyline: "#3a1800" },
+];
+
 export function isNonPointsRace(race) {
   if (race?.nonPoints === true) return true;
   const points = String(race?.points ?? "").trim().toLowerCase();
@@ -160,9 +204,10 @@ export function formatAfterRaceLine(pointsRaceNumber) {
   return `AFTER RACE ${n}`;
 }
 
-function ellipsisToWidth(measureFn, font, text, maxWidth) {
+function ellipsisToWidth(measureFn, font, text, maxWidth, tracking = 0) {
   const value = String(text || "");
-  if (measureFn(font, value) <= maxWidth) return value;
+  const widthOf = (t) => estimateTrackedWidth(measureFn(font, t), t, tracking);
+  if (widthOf(value) <= maxWidth) return value;
   const ellipsis = "…";
   let lo = 0;
   let hi = value.length;
@@ -170,7 +215,7 @@ function ellipsisToWidth(measureFn, font, text, maxWidth) {
   while (lo <= hi) {
     const mid = Math.floor((lo + hi) / 2);
     const candidate = `${value.slice(0, mid).trimEnd()}${ellipsis}`;
-    if (measureFn(font, candidate) <= maxWidth) {
+    if (widthOf(candidate) <= maxWidth) {
       out = candidate;
       lo = mid + 1;
     } else {
@@ -185,16 +230,20 @@ export function fitTrackNameDisplay(measureFn, trackName, maxWidth, {
   fontWeight = "bold",
   maxSize = 16,
   minSize = 11,
+  tracking = 0,
 } = {}) {
   const full = sanitizeTrackName(trackName).toUpperCase();
   if (!full) {
     return { lines: [], fontSize: maxSize, truncated: false, fullTrackName: "" };
   }
 
+  const widthOf = (font, text) =>
+    estimateTrackedWidth(measureFn(font, text), text, tracking);
+
   let size = maxSize;
   while (size >= minSize) {
     const font = `${fontWeight} ${size}px ${fontFamily}`;
-    if (measureFn(font, full) <= maxWidth) {
+    if (widthOf(font, full) <= maxWidth) {
       return { lines: [full], fontSize: size, truncated: false, fullTrackName: full };
     }
     size -= 1;
@@ -204,7 +253,7 @@ export function fitTrackNameDisplay(measureFn, trackName, maxWidth, {
   const words = full.split(/\s+/).filter(Boolean);
   if (words.length <= 1) {
     return {
-      lines: [ellipsisToWidth(measureFn, font, full, maxWidth)],
+      lines: [ellipsisToWidth(measureFn, font, full, maxWidth, tracking)],
       fontSize: minSize,
       truncated: true,
       fullTrackName: full,
@@ -215,8 +264,8 @@ export function fitTrackNameDisplay(measureFn, trackName, maxWidth, {
   for (let split = 1; split < words.length; split += 1) {
     const line1 = words.slice(0, split).join(" ");
     const line2 = words.slice(split).join(" ");
-    const w1 = measureFn(font, line1);
-    const w2 = measureFn(font, line2);
+    const w1 = widthOf(font, line1);
+    const w2 = widthOf(font, line2);
     if (w1 <= maxWidth && w2 <= maxWidth) {
       return { lines: [line1, line2], fontSize: minSize, truncated: false, fullTrackName: full };
     }
@@ -224,8 +273,8 @@ export function fitTrackNameDisplay(measureFn, trackName, maxWidth, {
     if (!best || score < best._score) {
       best = {
         lines: [
-          w1 <= maxWidth ? line1 : ellipsisToWidth(measureFn, font, line1, maxWidth),
-          w2 <= maxWidth ? line2 : ellipsisToWidth(measureFn, font, line2, maxWidth),
+          w1 <= maxWidth ? line1 : ellipsisToWidth(measureFn, font, line1, maxWidth, tracking),
+          w2 <= maxWidth ? line2 : ellipsisToWidth(measureFn, font, line2, maxWidth, tracking),
         ],
         fontSize: minSize,
         truncated: w1 > maxWidth || w2 > maxWidth,
@@ -237,7 +286,7 @@ export function fitTrackNameDisplay(measureFn, trackName, maxWidth, {
 
   if (!best) {
     return {
-      lines: [ellipsisToWidth(measureFn, font, full, maxWidth)],
+      lines: [ellipsisToWidth(measureFn, font, full, maxWidth, tracking)],
       fontSize: minSize,
       truncated: true,
       fullTrackName: full,
@@ -380,18 +429,41 @@ export function fitTextFontSize(measureFn, text, maxWidth, {
   fontWeight = "bold",
   maxSize = 22,
   minSize = 11,
+  tracking = 0,
 } = {}) {
   const value = String(text || "");
   let size = maxSize;
   while (size > minSize) {
     const font = `${fontWeight} ${size}px ${fontFamily}`;
-    if (measureFn(font, value) <= maxWidth) return size;
+    const width = estimateTrackedWidth(measureFn(font, value), value, tracking);
+    if (width <= maxWidth) return size;
     size -= 1;
   }
   return minSize;
 }
 
-export function plateNumberFontSize(carNumber, { maxSize = 22, minSize = 12 } = {}) {
+/** Extra width from letter-spacing: (charCount - 1) * tracking. */
+export function estimateTrackedWidth(baseWidth, text, tracking = 0) {
+  const n = Array.from(String(text || "")).length;
+  return Number(baseWidth || 0) + Math.max(0, n - 1) * Number(tracking || 0);
+}
+
+/**
+ * measureCharFn(font, char) => width of one glyph.
+ * Returns total tracked width.
+ */
+export function measureTrackedTextWidth(measureCharFn, font, text, tracking = 0) {
+  const chars = Array.from(String(text || ""));
+  if (!chars.length) return 0;
+  let width = 0;
+  chars.forEach((ch, index) => {
+    width += Number(measureCharFn(font, ch) || 0);
+    if (index < chars.length - 1) width += Number(tracking || 0);
+  });
+  return width;
+}
+
+export function plateNumberFontSize(carNumber, { maxSize = 24, minSize = 12 } = {}) {
   const raw = String(carNumber ?? "").trim();
   const digits = raw.replace(/\D/g, "").length || (raw ? raw.length : 1);
   if (digits <= 1) return maxSize;
@@ -404,9 +476,24 @@ export function formatPlateDisplay(carNumber) {
   return raw || "—";
 }
 
+export function normalizeHexColor(value) {
+  const raw = String(value || "").trim();
+  if (/^hsl/i.test(raw)) return "";
+  const hex = raw.startsWith("#") ? raw : `#${raw}`;
+  if (/^#[0-9a-fA-F]{6}$/.test(hex)) return hex.toLowerCase();
+  if (/^#[0-9a-fA-F]{3}$/.test(hex)) {
+    const r = hex[1];
+    const g = hex[2];
+    const b = hex[3];
+    return `#${r}${r}${g}${g}${b}${b}`.toLowerCase();
+  }
+  return "";
+}
+
 export function relativeLuminanceHex(hex) {
-  const raw = String(hex || "").replace("#", "");
-  if (raw.length < 6) return 0;
+  const normalized = normalizeHexColor(hex);
+  if (!normalized) return 0;
+  const raw = normalized.slice(1);
   const r = parseInt(raw.slice(0, 2), 16) / 255;
   const g = parseInt(raw.slice(2, 4), 16) / 255;
   const b = parseInt(raw.slice(4, 6), 16) / 255;
@@ -414,8 +501,145 @@ export function relativeLuminanceHex(hex) {
   return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
 }
 
+export function isNearWhiteHex(hex, threshold = 0.78) {
+  const n = normalizeHexColor(hex);
+  if (!n) return false;
+  return relativeLuminanceHex(n) >= threshold;
+}
+
+export function isNearBlackHex(hex, threshold = 0.08) {
+  const n = normalizeHexColor(hex);
+  if (!n) return true;
+  return relativeLuminanceHex(n) <= threshold;
+}
+
+export function darkenHex(hex, factor = 0.42) {
+  const n = normalizeHexColor(hex) || "#ffffff";
+  const raw = n.slice(1);
+  const scale = Math.min(1, Math.max(0.15, Number(factor) || 0.42));
+  const channels = [0, 2, 4].map((i) => {
+    const v = Math.round(parseInt(raw.slice(i, i + 2), 16) * scale);
+    return Math.max(0, Math.min(255, v)).toString(16).padStart(2, "0");
+  });
+  return `#${channels.join("")}`;
+}
+
 export function pickReadableNumberColor(fillHex) {
   return relativeLuminanceHex(fillHex) > 0.45 ? "#0a0a0a" : "#ffffff";
+}
+
+export function hashStringStable(value) {
+  const raw = String(value || "");
+  let hash = 2166136261;
+  for (let i = 0; i < raw.length; i += 1) {
+    hash ^= raw.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+export function pickDeterministicPlateColors(driver = {}) {
+  const key = [
+    driver.driverId || "",
+    driver.driverName || driver.driver || "",
+    driver.carNumber || "",
+  ].join("|");
+  const idx = hashStringStable(key) % DETERMINISTIC_PLATE_PALETTE.length;
+  const pick = DETERMINISTIC_PLATE_PALETTE[idx];
+  return {
+    fill: pick.fill,
+    outline: pick.outline,
+    keyline: pick.keyline,
+    numberFill: pickReadableNumberColor(pick.fill),
+    source: "deterministic_fallback",
+  };
+}
+
+/**
+ * Package plate colors so plain white fills never become the generic result.
+ * PR suit cache often stores white fill + colored outline for light suits —
+ * for plates, prefer the colored secondary as the fill.
+ */
+export function packagePlateColors({
+  fill,
+  outline,
+  keyline,
+  source = "unknown",
+  driver = {},
+} = {}) {
+  let primary = normalizeHexColor(fill);
+  let secondary = normalizeHexColor(outline);
+  let border = normalizeHexColor(keyline);
+  let resolvedSource = source;
+
+  if (!primary) {
+    const fallback = pickDeterministicPlateColors(driver);
+    return {
+      fill: fallback.fill,
+      outline: fallback.outline,
+      keyline: fallback.keyline,
+      numberFill: fallback.numberFill,
+      source: "deterministic_fallback",
+      platePrimary: fallback.fill,
+      plateSecondary: fallback.outline,
+      plateTextColor: fallback.numberFill,
+      colorSource: "deterministic_fallback",
+    };
+  }
+
+  if (isNearWhiteHex(primary)) {
+    if (secondary && !isNearWhiteHex(secondary) && !isNearBlackHex(secondary, 0.04)) {
+      const swapped = primary;
+      primary = secondary;
+      secondary = swapped;
+      resolvedSource = `${source}_white_primary_swapped`;
+    } else {
+      primary = darkenHex(primary, 0.38);
+      if (isNearWhiteHex(primary, 0.7)) {
+        const fallback = pickDeterministicPlateColors(driver);
+        return {
+          fill: fallback.fill,
+          outline: fallback.outline,
+          keyline: fallback.keyline,
+          numberFill: fallback.numberFill,
+          source: "deterministic_fallback",
+          platePrimary: fallback.fill,
+          plateSecondary: fallback.outline,
+          plateTextColor: fallback.numberFill,
+          colorSource: "deterministic_fallback",
+        };
+      }
+      resolvedSource = `${source}_white_primary_darkened`;
+    }
+  }
+
+  if (!secondary) secondary = pickReadableNumberColor(primary) === "#ffffff" ? "#f2f2f2" : "#101010";
+  if (!border) {
+    border = relativeLuminanceHex(primary) > 0.35 ? "#0a0a0a" : "#c81010";
+  }
+
+  const numberFill = pickReadableNumberColor(primary);
+  let colorSource = "unknown";
+  if (String(source).includes("suit_cache") || source === "cache") colorSource = "suit_cache";
+  else if (String(source).includes("portrait") || source === "sampled") colorSource = "portrait_sample";
+  else if (String(source).includes("profile")) colorSource = "profile_color";
+  else if (String(source).includes("truck")) colorSource = "truck_color";
+  else if (String(source).includes("deterministic")) colorSource = "deterministic_fallback";
+  else if (String(resolvedSource).includes("white_primary_swapped")) colorSource = "suit_cache";
+  else if (String(resolvedSource).includes("white_primary_darkened")) colorSource = "portrait_sample";
+  else colorSource = source || resolvedSource;
+
+  return {
+    fill: primary,
+    outline: secondary,
+    keyline: border,
+    numberFill,
+    source: resolvedSource,
+    platePrimary: primary,
+    plateSecondary: secondary,
+    plateTextColor: numberFill,
+    colorSource,
+  };
 }
 
 export function resolvePlayoffCut(settings = {}) {
@@ -447,23 +671,23 @@ export function computeStandingsLayoutMetrics({
   hasTrackName = true,
   reserveCutGap = true,
 } = {}) {
-  const padX = 24;
-  const headerH = hasTrackName ? 86 : 72;
-  const footerH = 54;
+  const padX = 22;
+  const headerH = hasTrackName ? 94 : 78;
+  const footerH = 78;
   const topGap = 2;
   const bottomGap = 2;
   const gridTop = headerH + topGap;
   const gridBottom = LOGICAL_HEIGHT - footerH - bottomGap;
   const gridSpan = gridBottom - gridTop;
-  const colGap = 16;
+  const colGap = 14;
   const colCount = 3;
   const colW = (LOGICAL_WIDTH - padX * 2 - colGap * (colCount - 1)) / colCount;
   const columns = distributeColumns(new Array(Math.min(driverCount, MAX_DRIVERS)).fill(null));
   const maxRows = Math.max(1, ...columns.map((c) => c.length || 1));
-  const cutGap = reserveCutGap ? 12 : 0;
+  const cutGap = reserveCutGap ? 16 : 0;
   const rowGap = 2;
   const rowStackBudget = Math.max(0, gridSpan - cutGap);
-  const rowH = Math.min(58, (rowStackBudget - rowGap * (maxRows - 1)) / maxRows);
+  const rowH = Math.min(56, (rowStackBudget - rowGap * (maxRows - 1)) / maxRows);
   const rowsUsed = maxRows * rowH + Math.max(0, maxRows - 1) * rowGap;
   const usedH = rowsUsed + cutGap;
   const fits = usedH <= gridSpan + 0.01;
@@ -485,8 +709,17 @@ export function computeStandingsLayoutMetrics({
     rowsUsed,
     usedH,
     fits,
-    plateW: 52,
-    plateH: Math.min(34, Math.max(26, rowH - 8)),
+    plateW: 54,
+    plateH: Math.min(36, Math.max(28, rowH - 6)),
+    // Horizontal row slots (more breathing room)
+    posW: 40,
+    moveW: 46,
+    statsW: 168,
+    gapPosMove: 4,
+    gapMovePlate: 8,
+    gapPlateName: 12,
+    gapNameStats: 14,
+    gapPtsWins: 16,
   };
 }
 

@@ -14,6 +14,8 @@ import {
   COLUMN_SIZES,
   DEFAULT_PLAYOFF_CUT,
   SPONSOR_NAME,
+  TYPOGRAPHY,
+  DETERMINISTIC_PLATE_PALETTE,
   takeTopDrivers,
   distributeColumns,
   findPlayoffCutPlacement,
@@ -36,6 +38,10 @@ import {
   formatPlateDisplay,
   pickCarNumber,
   pickReadableNumberColor,
+  packagePlateColors,
+  pickDeterministicPlateColors,
+  isNearWhiteHex,
+  estimateTrackedWidth,
   buildSponsorFooterText,
   validateOutputDimensions,
   parseSeasonNumber,
@@ -351,6 +357,124 @@ test("no new routable API file; Vercel function count unchanged at 12", () => {
 test("master canvas constants remain 3840×2160 for preview/export", () => {
   assert.equal(OUTPUT_WIDTH, 3840);
   assert.equal(OUTPUT_HEIGHT, 2160);
+});
+
+test("typography defaults are larger than previous compressed sizes", () => {
+  assert.ok(TYPOGRAPHY.driverNameRest >= 19);
+  assert.ok(TYPOGRAPHY.positionTop10 >= 26);
+  assert.ok(TYPOGRAPHY.movement >= 16);
+  assert.ok(TYPOGRAPHY.points >= 17);
+  assert.ok(TYPOGRAPHY.wins >= 14);
+  assert.ok(TYPOGRAPHY.seasonMax >= 36);
+  assert.ok(TYPOGRAPHY.afterRace >= 18);
+  assert.ok(TYPOGRAPHY.footerSponsor >= 26);
+  assert.ok(TYPOGRAPHY.footerSeries >= 15);
+  assert.ok(TYPOGRAPHY.footerSite >= 16);
+  assert.ok(TYPOGRAPHY.playoffCut >= 14);
+});
+
+test("tracked width is included in name fitting", () => {
+  const text = "MARK ARTHUR";
+  const tracking = TYPOGRAPHY.tracking.driverName;
+  const shortMax = 90;
+  const withTracking = fitTextFontSize(approxMeasure, text, shortMax, {
+    maxSize: 21,
+    minSize: 11,
+    tracking,
+  });
+  const without = fitTextFontSize(approxMeasure, text, shortMax, {
+    maxSize: 21,
+    minSize: 11,
+    tracking: 0,
+  });
+  assert.ok(withTracking <= without);
+  assert.ok(estimateTrackedWidth(100, text, tracking) > 100);
+});
+
+test("normal names keep larger default; long names shrink", () => {
+  const short = fitTextFontSize(approxMeasure, "LEE", 400, {
+    maxSize: TYPOGRAPHY.driverNameRest,
+    minSize: TYPOGRAPHY.driverNameMin,
+    tracking: TYPOGRAPHY.tracking.driverName,
+  });
+  const long = fitTextFontSize(approxMeasure, "MIGUEL GOMEZ-GAUDET EXTENDED NAME", 160, {
+    maxSize: TYPOGRAPHY.driverNameRest,
+    minSize: TYPOGRAPHY.driverNameMin,
+    tracking: TYPOGRAPHY.tracking.driverName,
+  });
+  assert.equal(short, TYPOGRAPHY.driverNameRest);
+  assert.ok(long < TYPOGRAPHY.driverNameRest);
+});
+
+test("white primary + colored secondary becomes colored plate fill", () => {
+  const pack = packagePlateColors({
+    fill: "#ffffff",
+    outline: "#c81010",
+    source: "suit_cache",
+    driver: { driverName: "White Suit", driverId: "1" },
+  });
+  assert.equal(isNearWhiteHex(pack.fill), false);
+  assert.equal(pack.fill, "#c81010");
+  assert.equal(pack.colorSource, "suit_cache");
+});
+
+test("near-white without secondary darkens instead of plain white plate", () => {
+  const pack = packagePlateColors({
+    fill: "#f5f5f5",
+    outline: "#eeeeee",
+    source: "portrait_sample",
+    driver: { driverName: "Ghost", driverId: "2" },
+  });
+  assert.equal(isNearWhiteHex(pack.fill), false);
+  assert.notEqual(pack.fill.toLowerCase(), "#ffffff");
+  assert.notEqual(pack.fill.toLowerCase(), "#f5f5f5");
+});
+
+test("deterministic fallback is stable and never pure white", () => {
+  const a = pickDeterministicPlateColors({ driverName: "Chris", driverId: "10", carNumber: "99" });
+  const b = pickDeterministicPlateColors({ driverName: "Chris", driverId: "10", carNumber: "99" });
+  assert.deepEqual(a, b);
+  assert.equal(isNearWhiteHex(a.fill), false);
+  assert.ok(DETERMINISTIC_PLATE_PALETTE.every((p) => !isNearWhiteHex(p.fill)));
+});
+
+test("image/CORS failure path uses deterministic fallback via packagePlateColors", () => {
+  const pack = packagePlateColors({
+    fill: "",
+    outline: "",
+    source: "portrait_sample",
+    driver: { driverName: "CORS Fail", driverId: "77", carNumber: "12" },
+  });
+  assert.equal(pack.colorSource, "deterministic_fallback");
+  assert.equal(isNearWhiteHex(pack.fill), false);
+});
+
+test("footer is text-only with sponsor larger than presented-by", () => {
+  const footer = buildSponsorFooterText();
+  assert.equal(footer.useLogo, false);
+  assert.equal(footer.sponsorLine, SPONSOR_NAME);
+  assert.ok(TYPOGRAPHY.footerSponsor > TYPOGRAPHY.footerPresentedBy);
+  const model = buildStandingsGraphicModel(
+    { settings: { seasonName: "Season 11" }, rows: makeDrivers(5) },
+    { races: homesteadScheduleFixture() },
+  );
+  assert.equal(model.sponsor.useLogo, false);
+});
+
+test("footer height increased for presenting-sponsor strip", () => {
+  const m = computeStandingsLayoutMetrics({
+    driverCount: 43,
+    hasTrackName: true,
+    reserveCutGap: true,
+  });
+  assert.ok(m.footerH >= 78);
+  assert.equal(m.fits, true);
+});
+
+test("luminance still picks readable number colors", () => {
+  assert.equal(pickReadableNumberColor("#ffffff"), "#0a0a0a");
+  assert.equal(pickReadableNumberColor("#101010"), "#ffffff");
+  assert.equal(pickReadableNumberColor("#c81010"), "#ffffff");
 });
 
 console.log(`\n${passed} standings-graphic tests passed.`);
