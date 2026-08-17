@@ -6,7 +6,38 @@
       "carNumber": "12",
       "iracingCustomerId": 91227,
       "slug": "mark-arthur",
-      "carImage": "/assets/images/cars/Mark Arthur.png"
+      "carImage": "/assets/images/cars/Mark Arthur.png",
+      "iracingDesign": {
+        "source": "iracing_sdk",
+        "capturedAt": "2026-08-17T07:00:12.703Z",
+        "userId": "91227",
+        "carNumber": "12",
+        "number": {
+          "raw": "48,4,ffffff,000000,fb79ca",
+          "font": 48,
+          "slant": 4,
+          "color1": "#ffffff",
+          "color2": "#000000",
+          "color3": "#fb79ca"
+        },
+        "car": {
+          "raw": "0,ff00a8,ffffff,000000,ffffff",
+          "pattern": "0",
+          "color1": "#ff00a8",
+          "color2": "#ffffff",
+          "color3": "#000000",
+          "wheelType": 0,
+          "wheelColor": "#ffffff"
+        },
+        "suit": {
+          "raw": "29,f4f215,951313,dee401",
+          "pattern": "29",
+          "color1": "#f4f215",
+          "color2": "#951313",
+          "color3": "#dee401"
+        },
+        "numberStyleAuthoritative": true
+      }
     },
     {
       "name": "Cody Gibson",
@@ -14,7 +45,38 @@
       "carNumber": "7",
       "iracingCustomerId": 142361,
       "slug": "cody-gibson",
-      "carImage": "/assets/images/cars/Cody Gibson.png"
+      "carImage": "/assets/images/cars/Cody Gibson.png",
+      "iracingDesign": {
+        "source": "iracing_sdk",
+        "capturedAt": "2026-08-17T07:00:12.703Z",
+        "userId": "142361",
+        "carNumber": "7",
+        "number": {
+          "raw": "35,2,db3737,ffffff,000000",
+          "font": 35,
+          "slant": 2,
+          "color1": "#db3737",
+          "color2": "#ffffff",
+          "color3": "#000000"
+        },
+        "car": {
+          "raw": "19,fbdd01,cccccc,666666.000000",
+          "pattern": "19",
+          "color1": "#fbdd01",
+          "color2": "#cccccc",
+          "color3": "#666666",
+          "wheelType": 2,
+          "wheelColor": "#000000"
+        },
+        "suit": {
+          "raw": "21,b2fb3c,f50000,cc5c00",
+          "pattern": "21",
+          "color1": "#b2fb3c",
+          "color2": "#f50000",
+          "color3": "#cc5c00"
+        },
+        "numberStyleAuthoritative": true
+      }
     },
     {
       "name": "Kyle Wellman",
@@ -30,7 +92,38 @@
       "carNumber": "43",
       "iracingCustomerId": 307155,
       "slug": "larry-bell",
-      "carImage": "/assets/images/cars/Larry Bell.png"
+      "carImage": "/assets/images/cars/Larry Bell.png",
+      "iracingDesign": {
+        "source": "iracing_sdk",
+        "capturedAt": "2026-08-17T07:00:12.703Z",
+        "userId": "307155",
+        "carNumber": "43",
+        "number": {
+          "raw": "35,4,f9f8f8,ff01dd,080807",
+          "font": 35,
+          "slant": 4,
+          "color1": "#f9f8f8",
+          "color2": "#ff01dd",
+          "color3": "#080807"
+        },
+        "car": {
+          "raw": "0,ffffff,cccccc,666666;ff00e6",
+          "pattern": "0",
+          "color1": "#ffffff",
+          "color2": "#cccccc",
+          "color3": "#666666",
+          "wheelType": 1,
+          "wheelColor": "#ff00e6"
+        },
+        "suit": {
+          "raw": "16,ffffff,000000,6e0790",
+          "pattern": "16",
+          "color1": "#ffffff",
+          "color2": "#000000",
+          "color3": "#6e0790"
+        },
+        "numberStyleAuthoritative": true
+      }
     },
     {
       "name": "Mike Massengill",
@@ -38,7 +131,38 @@
       "carNumber": "20",
       "iracingCustomerId": 303892,
       "slug": "mike-massengill",
-      "carImage": "/assets/images/cars/Mike Massengill.png"
+      "carImage": "/assets/images/cars/Mike Massengill.png",
+      "iracingDesign": {
+        "source": "iracing_sdk",
+        "capturedAt": "2026-08-17T07:00:12.703Z",
+        "userId": "303892",
+        "carNumber": "20",
+        "number": {
+          "raw": "7,3,ffffff,777777,ffffff",
+          "font": 7,
+          "slant": 3,
+          "color1": "#ffffff",
+          "color2": "#777777",
+          "color3": "#ffffff"
+        },
+        "car": {
+          "raw": "0,000000,000000,000000;ff0000",
+          "pattern": "0",
+          "color1": "#000000",
+          "color2": "#000000",
+          "color3": "#000000",
+          "wheelType": 1,
+          "wheelColor": "#ff0000"
+        },
+        "suit": {
+          "raw": "26,ffffff,ffffff,000000",
+          "pattern": "26",
+          "color1": "#ffffff",
+          "color2": "#ffffff",
+          "color3": "#000000"
+        },
+        "numberStyleAuthoritative": false
+      }
     },
     {
       "name": "Dalton Kilroe",
@@ -46,7 +170,38 @@
       "carNumber": "41",
       "iracingCustomerId": 317726,
       "slug": "dalton-kilroe",
-      "carImage": "/assets/images/cars/Dalton Kilroe.png"
+      "carImage": "/assets/images/cars/Dalton Kilroe.png",
+      "iracingDesign": {
+        "source": "iracing_sdk",
+        "capturedAt": "2026-08-17T07:00:12.703Z",
+        "userId": "317726",
+        "carNumber": "41",
+        "number": {
+          "raw": "48,2,ffffff,bb3636,000000",
+          "font": 48,
+          "slant": 2,
+          "color1": "#ffffff",
+          "color2": "#bb3636",
+          "color3": "#000000"
+        },
+        "car": {
+          "raw": "9,000000,ffffff,bb3636.b1171c",
+          "pattern": "9",
+          "color1": "#000000",
+          "color2": "#ffffff",
+          "color3": "#bb3636",
+          "wheelType": 2,
+          "wheelColor": "#b1171c"
+        },
+        "suit": {
+          "raw": "28,2a3795,000000,ed2129",
+          "pattern": "28",
+          "color1": "#2a3795",
+          "color2": "#000000",
+          "color3": "#ed2129"
+        },
+        "numberStyleAuthoritative": false
+      }
     },
     {
       "name": "Brian Zimmerman3",
@@ -54,7 +209,38 @@
       "carNumber": "28",
       "iracingCustomerId": 327558,
       "slug": "brian-zimmerman3",
-      "carImage": "/assets/images/cars/Brian Zimmerman3.png"
+      "carImage": "/assets/images/cars/Brian Zimmerman3.png",
+      "iracingDesign": {
+        "source": "iracing_sdk",
+        "capturedAt": "2026-08-17T07:00:12.703Z",
+        "userId": "327558",
+        "carNumber": "28",
+        "number": {
+          "raw": "0,0,ffffff,777777,000000",
+          "font": 0,
+          "slant": 0,
+          "color1": "#ffffff",
+          "color2": "#777777",
+          "color3": "#000000"
+        },
+        "car": {
+          "raw": "0,000000,a8000f,ffffff;d0d0d0",
+          "pattern": "0",
+          "color1": "#000000",
+          "color2": "#a8000f",
+          "color3": "#ffffff",
+          "wheelType": 1,
+          "wheelColor": "#d0d0d0"
+        },
+        "suit": {
+          "raw": "23,ffffff,6d6e71,a8000f",
+          "pattern": "23",
+          "color1": "#ffffff",
+          "color2": "#6d6e71",
+          "color3": "#a8000f"
+        },
+        "numberStyleAuthoritative": false
+      }
     },
     {
       "name": "Michael Boone2",
@@ -70,7 +256,38 @@
       "carNumber": "99",
       "iracingCustomerId": 307392,
       "slug": "chris-carroll3",
-      "carImage": "/assets/images/cars/Chris Carroll3.png"
+      "carImage": "/assets/images/cars/Chris Carroll3.png",
+      "iracingDesign": {
+        "source": "iracing_sdk",
+        "capturedAt": "2026-08-17T07:00:12.703Z",
+        "userId": "307392",
+        "carNumber": "99",
+        "number": {
+          "raw": "14,4,ff0000,000000,ffffff",
+          "font": 14,
+          "slant": 4,
+          "color1": "#ff0000",
+          "color2": "#000000",
+          "color3": "#ffffff"
+        },
+        "car": {
+          "raw": "10,000000,ed0000,ffffff;000000",
+          "pattern": "10",
+          "color1": "#000000",
+          "color2": "#ed0000",
+          "color3": "#ffffff",
+          "wheelType": 1,
+          "wheelColor": "#000000"
+        },
+        "suit": {
+          "raw": "21,000000,ffffff,ff0000",
+          "pattern": "21",
+          "color1": "#000000",
+          "color2": "#ffffff",
+          "color3": "#ff0000"
+        },
+        "numberStyleAuthoritative": true
+      }
     },
     {
       "name": "Taylor Butcher-Benjamin",
@@ -78,7 +295,36 @@
       "carNumber": "10",
       "iracingCustomerId": 297522,
       "slug": "taylor-butcher-benjamin",
-      "carImage": "/assets/images/cars/Taylor Butcher-Benjamin.png"
+      "carImage": "/assets/images/cars/Taylor Butcher-Benjamin.png",
+      "iracingDesign": {
+        "source": "iracing_sdk",
+        "capturedAt": "2026-08-17T07:00:12.703Z",
+        "userId": "297522",
+        "carNumber": "10",
+        "number": {
+          "raw": "48,0,ffffff,777777,000000",
+          "font": 48,
+          "slant": 0,
+          "color1": "#ffffff",
+          "color2": "#777777",
+          "color3": "#000000"
+        },
+        "car": {
+          "raw": "10,1a03bd,184252,111111",
+          "pattern": "10",
+          "color1": "#1a03bd",
+          "color2": "#184252",
+          "color3": "#111111"
+        },
+        "suit": {
+          "raw": "7,1803bd,184252,111111",
+          "pattern": "7",
+          "color1": "#1803bd",
+          "color2": "#184252",
+          "color3": "#111111"
+        },
+        "numberStyleAuthoritative": true
+      }
     },
     {
       "name": "Tanner Marr",
@@ -86,7 +332,38 @@
       "carNumber": "4",
       "iracingCustomerId": 437976,
       "slug": "tanner-marr",
-      "carImage": "/assets/images/cars/Tanner Marr.png"
+      "carImage": "/assets/images/cars/Tanner Marr.png",
+      "iracingDesign": {
+        "source": "iracing_sdk",
+        "capturedAt": "2026-08-17T07:00:12.703Z",
+        "userId": "437976",
+        "carNumber": "4",
+        "number": {
+          "raw": "53,2,ff0000,ffffff,000000",
+          "font": 53,
+          "slant": 2,
+          "color1": "#ff0000",
+          "color2": "#ffffff",
+          "color3": "#000000"
+        },
+        "car": {
+          "raw": "17,090a0a,ed2129,ffffff,000000",
+          "pattern": "17",
+          "color1": "#090a0a",
+          "color2": "#ed2129",
+          "color3": "#ffffff",
+          "wheelType": 0,
+          "wheelColor": "#000000"
+        },
+        "suit": {
+          "raw": "27,00a3ff,ea79fc,000000",
+          "pattern": "27",
+          "color1": "#00a3ff",
+          "color2": "#ea79fc",
+          "color3": "#000000"
+        },
+        "numberStyleAuthoritative": true
+      }
     },
     {
       "name": "Bryan Dees",
@@ -94,7 +371,38 @@
       "carNumber": "17",
       "iracingCustomerId": 257995,
       "slug": "bryan-dees",
-      "carImage": "/assets/images/cars/Bryan Dees.png"
+      "carImage": "/assets/images/cars/Bryan Dees.png",
+      "iracingDesign": {
+        "source": "iracing_sdk",
+        "capturedAt": "2026-08-17T07:00:12.703Z",
+        "userId": "257995",
+        "carNumber": "17",
+        "number": {
+          "raw": "35,3,ffffff,ff0000,000000",
+          "font": 35,
+          "slant": 3,
+          "color1": "#ffffff",
+          "color2": "#ff0000",
+          "color3": "#000000"
+        },
+        "car": {
+          "raw": "0,000000,1a1a64,ffffff;ffffff",
+          "pattern": "0",
+          "color1": "#000000",
+          "color2": "#1a1a64",
+          "color3": "#ffffff",
+          "wheelType": 1,
+          "wheelColor": "#ffffff"
+        },
+        "suit": {
+          "raw": "27,ed1d24,000000,000000",
+          "pattern": "27",
+          "color1": "#ed1d24",
+          "color2": "#000000",
+          "color3": "#000000"
+        },
+        "numberStyleAuthoritative": false
+      }
     },
     {
       "name": "Ty Marasco",
@@ -102,7 +410,38 @@
       "carNumber": "1",
       "iracingCustomerId": 330842,
       "slug": "ty-marasco",
-      "carImage": "/assets/images/cars/Ty Marasco.png"
+      "carImage": "/assets/images/cars/Ty Marasco.png",
+      "iracingDesign": {
+        "source": "iracing_sdk",
+        "capturedAt": "2026-08-17T07:00:12.703Z",
+        "userId": "330842",
+        "carNumber": "1",
+        "number": {
+          "raw": "48,4,000000,d80000,ffffff",
+          "font": 48,
+          "slant": 4,
+          "color1": "#000000",
+          "color2": "#d80000",
+          "color3": "#ffffff"
+        },
+        "car": {
+          "raw": "7,ffffff,ffffff,ffffff,000000",
+          "pattern": "7",
+          "color1": "#ffffff",
+          "color2": "#ffffff",
+          "color3": "#ffffff",
+          "wheelType": 0,
+          "wheelColor": "#000000"
+        },
+        "suit": {
+          "raw": "17,036d12,000000,ffffff",
+          "pattern": "17",
+          "color1": "#036d12",
+          "color2": "#000000",
+          "color3": "#ffffff"
+        },
+        "numberStyleAuthoritative": false
+      }
     },
     {
       "name": "William Bruton",
@@ -110,7 +449,38 @@
       "carNumber": "83",
       "iracingCustomerId": 616089,
       "slug": "william-bruton",
-      "carImage": "/assets/images/cars/William Bruton.png"
+      "carImage": "/assets/images/cars/William Bruton.png",
+      "iracingDesign": {
+        "source": "iracing_sdk",
+        "capturedAt": "2026-08-17T07:00:12.703Z",
+        "userId": "616089",
+        "carNumber": "83",
+        "number": {
+          "raw": "39,0,000000,7c7c83,f4f0f0",
+          "font": 39,
+          "slant": 0,
+          "color1": "#000000",
+          "color2": "#7c7c83",
+          "color3": "#f4f0f0"
+        },
+        "car": {
+          "raw": "1,2a3795,ed2129,ffffff.b43dd8",
+          "pattern": "1",
+          "color1": "#2a3795",
+          "color2": "#ed2129",
+          "color3": "#ffffff",
+          "wheelType": 2,
+          "wheelColor": "#b43dd8"
+        },
+        "suit": {
+          "raw": "28,363634,0e01fd,f9f5f5",
+          "pattern": "28",
+          "color1": "#363634",
+          "color2": "#0e01fd",
+          "color3": "#f9f5f5"
+        },
+        "numberStyleAuthoritative": false
+      }
     },
     {
       "name": "Trevor Harmon2",
@@ -126,7 +496,38 @@
       "carNumber": "22",
       "iracingCustomerId": 497305,
       "slug": "scotty-stevens",
-      "carImage": "/assets/images/cars/Scotty Stevens.png"
+      "carImage": "/assets/images/cars/Scotty Stevens.png",
+      "iracingDesign": {
+        "source": "iracing_sdk",
+        "capturedAt": "2026-08-17T07:00:12.703Z",
+        "userId": "497305",
+        "carNumber": "22",
+        "number": {
+          "raw": "42,3,ff091d,030303,e5cc29",
+          "font": 42,
+          "slant": 3,
+          "color1": "#ff091d",
+          "color2": "#030303",
+          "color3": "#e5cc29"
+        },
+        "car": {
+          "raw": "3,000000,e1ce1b,ff0000,fa0000",
+          "pattern": "3",
+          "color1": "#000000",
+          "color2": "#e1ce1b",
+          "color3": "#ff0000",
+          "wheelType": 0,
+          "wheelColor": "#fa0000"
+        },
+        "suit": {
+          "raw": "30,0b0b0b,f3fcf2,000000",
+          "pattern": "30",
+          "color1": "#0b0b0b",
+          "color2": "#f3fcf2",
+          "color3": "#000000"
+        },
+        "numberStyleAuthoritative": true
+      }
     },
     {
       "name": "Dustin Ping",
@@ -134,7 +535,38 @@
       "carNumber": "81",
       "iracingCustomerId": 162152,
       "slug": "dustin-ping",
-      "carImage": "/assets/images/cars/Dustin Ping.png"
+      "carImage": "/assets/images/cars/Dustin Ping.png",
+      "iracingDesign": {
+        "source": "iracing_sdk",
+        "capturedAt": "2026-08-17T07:00:12.703Z",
+        "userId": "162152",
+        "carNumber": "81",
+        "number": {
+          "raw": "42,3,ffffff,000000,000000",
+          "font": 42,
+          "slant": 3,
+          "color1": "#ffffff",
+          "color2": "#000000",
+          "color3": "#000000"
+        },
+        "car": {
+          "raw": "19,000000,000000,ffffff.dc0000",
+          "pattern": "19",
+          "color1": "#000000",
+          "color2": "#000000",
+          "color3": "#ffffff",
+          "wheelType": 2,
+          "wheelColor": "#dc0000"
+        },
+        "suit": {
+          "raw": "32,000000,ff0000,ffffff",
+          "pattern": "32",
+          "color1": "#000000",
+          "color2": "#ff0000",
+          "color3": "#ffffff"
+        },
+        "numberStyleAuthoritative": false
+      }
     },
     {
       "name": "Logan M Wilson",
@@ -150,7 +582,36 @@
       "carNumber": "59",
       "iracingCustomerId": 269720,
       "slug": "matthew-kleinschmidt2",
-      "carImage": "/assets/images/cars/Matthew Kleinschmidt2.png"
+      "carImage": "/assets/images/cars/Matthew Kleinschmidt2.png",
+      "iracingDesign": {
+        "source": "iracing_sdk",
+        "capturedAt": "2026-08-17T07:00:12.703Z",
+        "userId": "269720",
+        "carNumber": "59",
+        "number": {
+          "raw": "52,3,ffffff,d71414,01003a",
+          "font": 52,
+          "slant": 3,
+          "color1": "#ffffff",
+          "color2": "#d71414",
+          "color3": "#01003a"
+        },
+        "car": {
+          "raw": "1,000000,a30000,ffffff",
+          "pattern": "1",
+          "color1": "#000000",
+          "color2": "#a30000",
+          "color3": "#ffffff"
+        },
+        "suit": {
+          "raw": "18,ff0000,000000,ffffff",
+          "pattern": "18",
+          "color1": "#ff0000",
+          "color2": "#000000",
+          "color3": "#ffffff"
+        },
+        "numberStyleAuthoritative": false
+      }
     },
     {
       "name": "Robbie Good",
@@ -166,7 +627,38 @@
       "carNumber": "66",
       "iracingCustomerId": 173350,
       "slug": "chris-berg",
-      "carImage": "/assets/images/cars/Chris Berg.png"
+      "carImage": "/assets/images/cars/Chris Berg.png",
+      "iracingDesign": {
+        "source": "iracing_sdk",
+        "capturedAt": "2026-08-17T07:00:12.703Z",
+        "userId": "173350",
+        "carNumber": "66",
+        "number": {
+          "raw": "40,0,ffff14,000000,696969",
+          "font": 40,
+          "slant": 0,
+          "color1": "#ffff14",
+          "color2": "#000000",
+          "color3": "#696969"
+        },
+        "car": {
+          "raw": "18,000000,05e614,f9ff0f;ffffff",
+          "pattern": "18",
+          "color1": "#000000",
+          "color2": "#05e614",
+          "color3": "#f9ff0f",
+          "wheelType": 1,
+          "wheelColor": "#ffffff"
+        },
+        "suit": {
+          "raw": "21,000000,ff2929,ff8514",
+          "pattern": "21",
+          "color1": "#000000",
+          "color2": "#ff2929",
+          "color3": "#ff8514"
+        },
+        "numberStyleAuthoritative": false
+      }
     },
     {
       "name": "Nicholas Moody",
@@ -194,7 +686,7 @@
     },
     {
       "name": "Jacob Bell",
-      "iracingName": "Jacob Bell",
+      "iracingName": "Luca Siciliano",
       "carNumber": "77",
       "iracingCustomerId": 119444,
       "slug": "jacob-bell",
@@ -358,7 +850,36 @@
       "carNumber": "3",
       "iracingCustomerId": 244220,
       "slug": "justin-levine",
-      "carImage": "/assets/images/cars/Justin Levine.png"
+      "carImage": "/assets/images/cars/Justin Levine.png",
+      "iracingDesign": {
+        "source": "iracing_sdk",
+        "capturedAt": "2026-08-17T07:00:12.703Z",
+        "userId": "244220",
+        "carNumber": "3",
+        "number": {
+          "raw": "7,4,000000,ffffff,000000",
+          "font": 7,
+          "slant": 4,
+          "color1": "#000000",
+          "color2": "#ffffff",
+          "color3": "#000000"
+        },
+        "car": {
+          "raw": "7,001d44,e1ff14,15afff",
+          "pattern": "7",
+          "color1": "#001d44",
+          "color2": "#e1ff14",
+          "color3": "#15afff"
+        },
+        "suit": {
+          "raw": "21,152e55,e51836,ffffff",
+          "pattern": "21",
+          "color1": "#152e55",
+          "color2": "#e51836",
+          "color3": "#ffffff"
+        },
+        "numberStyleAuthoritative": false
+      }
     },
     {
       "name": "Miguel Gomez-Gaudet",
@@ -366,7 +887,36 @@
       "carNumber": "89",
       "iracingCustomerId": 1478479,
       "slug": "miguel-gomez-gaudet",
-      "carImage": "/assets/images/cars/Miguel Gomez-Gaudet.png"
+      "carImage": "/assets/images/cars/Miguel Gomez-Gaudet.png",
+      "iracingDesign": {
+        "source": "iracing_sdk",
+        "capturedAt": "2026-08-17T07:00:12.703Z",
+        "userId": "1478479",
+        "carNumber": "89",
+        "number": {
+          "raw": "0,0,ffffff,777777,000000",
+          "font": 0,
+          "slant": 0,
+          "color1": "#ffffff",
+          "color2": "#777777",
+          "color3": "#000000"
+        },
+        "car": {
+          "raw": "2,ec232d,ffffff,2e358f",
+          "pattern": "2",
+          "color1": "#ec232d",
+          "color2": "#ffffff",
+          "color3": "#2e358f"
+        },
+        "suit": {
+          "raw": "1,ffffff,deac3b,deac3b",
+          "pattern": "1",
+          "color1": "#ffffff",
+          "color2": "#deac3b",
+          "color3": "#deac3b"
+        },
+        "numberStyleAuthoritative": true
+      }
     },
     {
       "name": "Rick Thompson",
@@ -374,7 +924,38 @@
       "carNumber": "25",
       "iracingCustomerId": 15836,
       "slug": "rick-thompson",
-      "carImage": "/assets/images/cars/Rick Thompson.png"
+      "carImage": "/assets/images/cars/Rick Thompson.png",
+      "iracingDesign": {
+        "source": "iracing_sdk",
+        "capturedAt": "2026-08-17T07:00:12.703Z",
+        "userId": "15836",
+        "carNumber": "25",
+        "number": {
+          "raw": "48,2,ffffff,a50909,000000",
+          "font": 48,
+          "slant": 2,
+          "color1": "#ffffff",
+          "color2": "#a50909",
+          "color3": "#000000"
+        },
+        "car": {
+          "raw": "12,faf9f9,b6061b,000000,000000",
+          "pattern": "12",
+          "color1": "#faf9f9",
+          "color2": "#b6061b",
+          "color3": "#000000",
+          "wheelType": 0,
+          "wheelColor": "#000000"
+        },
+        "suit": {
+          "raw": "7,ffffff,ed2129,040461",
+          "pattern": "7",
+          "color1": "#ffffff",
+          "color2": "#ed2129",
+          "color3": "#040461"
+        },
+        "numberStyleAuthoritative": true
+      }
     },
     {
       "name": "John Perkins",
@@ -382,7 +963,38 @@
       "carNumber": "34",
       "iracingCustomerId": 175138,
       "slug": "john-perkins",
-      "carImage": "/assets/images/cars/John Perkins.png"
+      "carImage": "/assets/images/cars/John Perkins.png",
+      "iracingDesign": {
+        "source": "iracing_sdk",
+        "capturedAt": "2026-08-17T07:00:12.703Z",
+        "userId": "175138",
+        "carNumber": "34",
+        "number": {
+          "raw": "0,4,ebf707,000000,f50505",
+          "font": 0,
+          "slant": 4,
+          "color1": "#ebf707",
+          "color2": "#000000",
+          "color3": "#f50505"
+        },
+        "car": {
+          "raw": "0,f3f006,000000,f70707,ffff00",
+          "pattern": "0",
+          "color1": "#f3f006",
+          "color2": "#000000",
+          "color3": "#f70707",
+          "wheelType": 0,
+          "wheelColor": "#ffff00"
+        },
+        "suit": {
+          "raw": "17,ed2129,ffffff,2a3795",
+          "pattern": "17",
+          "color1": "#ed2129",
+          "color2": "#ffffff",
+          "color3": "#2a3795"
+        },
+        "numberStyleAuthoritative": false
+      }
     },
     {
       "name": "Michael Kelly",
@@ -398,7 +1010,38 @@
       "carNumber": "00",
       "iracingCustomerId": 202913,
       "slug": "noah-s-vanhoute",
-      "carImage": "/assets/images/cars/Noah S. VanHoute.png"
+      "carImage": "/assets/images/cars/Noah S. VanHoute.png",
+      "iracingDesign": {
+        "source": "iracing_sdk",
+        "capturedAt": "2026-08-17T07:00:12.703Z",
+        "userId": "202913",
+        "carNumber": "00",
+        "number": {
+          "raw": "40,0,05f53c,05f53c,000000",
+          "font": 40,
+          "slant": 0,
+          "color1": "#05f53c",
+          "color2": "#05f53c",
+          "color3": "#000000"
+        },
+        "car": {
+          "raw": "1,111111,000000,000000;05f53c",
+          "pattern": "1",
+          "color1": "#111111",
+          "color2": "#000000",
+          "color3": "#000000",
+          "wheelType": 1,
+          "wheelColor": "#05f53c"
+        },
+        "suit": {
+          "raw": "2,111111,ffee47,0300c2",
+          "pattern": "2",
+          "color1": "#111111",
+          "color2": "#ffee47",
+          "color3": "#0300c2"
+        },
+        "numberStyleAuthoritative": false
+      }
     },
     {
       "name": "Brad Collins",
@@ -406,7 +1049,36 @@
       "carNumber": "67",
       "iracingCustomerId": 17343,
       "slug": "brad-collins",
-      "carImage": "/assets/images/cars/Brad Collins.png"
+      "carImage": "/assets/images/cars/Brad Collins.png",
+      "iracingDesign": {
+        "source": "iracing_sdk",
+        "capturedAt": "2026-08-17T07:00:12.703Z",
+        "userId": "17343",
+        "carNumber": "67",
+        "number": {
+          "raw": "45,2,ff0404,ffffff,fcf9f9",
+          "font": 45,
+          "slant": 2,
+          "color1": "#ff0404",
+          "color2": "#ffffff",
+          "color3": "#fcf9f9"
+        },
+        "car": {
+          "raw": "1,ff0000,00ff00,0000ff",
+          "pattern": "1",
+          "color1": "#ff0000",
+          "color2": "#00ff00",
+          "color3": "#0000ff"
+        },
+        "suit": {
+          "raw": "1,ffffff,6d6e71,000000",
+          "pattern": "1",
+          "color1": "#ffffff",
+          "color2": "#6d6e71",
+          "color3": "#000000"
+        },
+        "numberStyleAuthoritative": true
+      }
     },
     {
       "name": "Fred Thompson",
@@ -422,7 +1094,36 @@
       "carNumber": "79",
       "iracingCustomerId": 108615,
       "slug": "levi-allen",
-      "carImage": "/assets/images/cars/Levi Allen.png"
+      "carImage": "/assets/images/cars/Levi Allen.png",
+      "iracingDesign": {
+        "source": "iracing_sdk",
+        "capturedAt": "2026-08-17T07:00:12.703Z",
+        "userId": "108615",
+        "carNumber": "79",
+        "number": {
+          "raw": "52,3,ffffff,000000,d60000",
+          "font": 52,
+          "slant": 3,
+          "color1": "#ffffff",
+          "color2": "#000000",
+          "color3": "#d60000"
+        },
+        "car": {
+          "raw": "22,000000,ffffff,ff0000",
+          "pattern": "22",
+          "color1": "#000000",
+          "color2": "#ffffff",
+          "color3": "#ff0000"
+        },
+        "suit": {
+          "raw": "2,000000,ffffff,ffffff",
+          "pattern": "2",
+          "color1": "#000000",
+          "color2": "#ffffff",
+          "color3": "#ffffff"
+        },
+        "numberStyleAuthoritative": true
+      }
     },
     {
       "name": "Alex Menet",
@@ -438,7 +1139,36 @@
       "carNumber": "11",
       "iracingCustomerId": 1207664,
       "slug": "kody-miller",
-      "carImage": "/assets/images/cars/Kody Miller.png"
+      "carImage": "/assets/images/cars/Kody Miller.png",
+      "iracingDesign": {
+        "source": "iracing_sdk",
+        "capturedAt": "2026-08-17T07:00:12.703Z",
+        "userId": "1207664",
+        "carNumber": "11",
+        "number": {
+          "raw": "0,0,ffffff,777777,000000",
+          "font": 0,
+          "slant": 0,
+          "color1": "#ffffff",
+          "color2": "#777777",
+          "color3": "#000000"
+        },
+        "car": {
+          "raw": "22,000000,da7d1c,f6f6f6",
+          "pattern": "22",
+          "color1": "#000000",
+          "color2": "#da7d1c",
+          "color3": "#f6f6f6"
+        },
+        "suit": {
+          "raw": "35,000000,d5861d,ffffff",
+          "pattern": "35",
+          "color1": "#000000",
+          "color2": "#d5861d",
+          "color3": "#ffffff"
+        },
+        "numberStyleAuthoritative": false
+      }
     },
     {
       "name": "Ryan Wash",
@@ -454,7 +1184,38 @@
       "carNumber": "49",
       "iracingCustomerId": 44045,
       "slug": "earl-hall",
-      "carImage": "/assets/images/cars/Earl Hall.png"
+      "carImage": "/assets/images/cars/Earl Hall.png",
+      "iracingDesign": {
+        "source": "iracing_sdk",
+        "capturedAt": "2026-08-17T07:00:12.703Z",
+        "userId": "44045",
+        "carNumber": "49",
+        "number": {
+          "raw": "0,2,ffffff,1f7b12,000000",
+          "font": 0,
+          "slant": 2,
+          "color1": "#ffffff",
+          "color2": "#1f7b12",
+          "color3": "#000000"
+        },
+        "car": {
+          "raw": "21,11a304,59ce37,ffffff;20d516",
+          "pattern": "21",
+          "color1": "#11a304",
+          "color2": "#59ce37",
+          "color3": "#ffffff",
+          "wheelType": 1,
+          "wheelColor": "#20d516"
+        },
+        "suit": {
+          "raw": "1,5e5e5e,f50a0a,000000",
+          "pattern": "1",
+          "color1": "#5e5e5e",
+          "color2": "#f50a0a",
+          "color3": "#000000"
+        },
+        "numberStyleAuthoritative": true
+      }
     },
     {
       "name": "Gordon Miller",
@@ -463,6 +1224,14 @@
       "iracingCustomerId": 394772,
       "slug": "gordon-miller",
       "carImage": "/assets/images/cars/Gordon Miller.png"
+    },
+    {
+      "name": "Samuel Baumgarten",
+      "iracingName": "Samuel Baumgarten",
+      "carNumber": "53",
+      "iracingCustomerId": 316539,
+      "slug": "samuel-baumgarten",
+      "carImage": "/assets/images/cars/Samuel Baumgarten.png"
     }
   ]
 }
