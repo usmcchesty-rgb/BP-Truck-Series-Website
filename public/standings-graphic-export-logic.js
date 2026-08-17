@@ -143,8 +143,8 @@ export const TYPOGRAPHY = {
   points: 19,
   statValue: 19,
   statSpecial: 17,
-  statHeader: 12,
-  statLabel: 12,
+  statHeader: 16,
+  statLabel: 16,
   playoffCut: 18,
   footerPresentedBy: 13,
   footerSponsor: 30,
@@ -660,7 +660,7 @@ export function formatChampionshipStatDisplays(stat = {}) {
   if (stat.gapToLeader == null && !stat.isLeader) {
     lead = { ...unavailable };
   } else if (stat.isLeader || stat.gapToLeader === 0) {
-    lead = { valueText: "LEADER", labelText: "", special: true, tone: "neutral" };
+    lead = { valueText: "--", labelText: "", special: true, tone: "neutral" };
   } else {
     lead = {
       valueText: String(stat.gapToLeader),
@@ -698,54 +698,55 @@ export const STAT_COLUMN_HEADERS = {
 
 /**
  * Fixed local X geometry for PTS | TO LEAD | TO CUT inside every standings row.
- * Values (and LEADER / CUT specials) are independently right-aligned to valueRight.
+ * Three contiguous regions share the stats band. Values stay right-aligned;
+ * headers center on each region's center X.
  */
 export function computeStandingsStatGeometry(layout = computeStandingsLayoutMetrics()) {
   const pad = layout.rowPad ?? 6;
   const statsRight = layout.colW - pad;
-  const labelGap = layout.statLabelGap ?? 2;
-  const colGap = layout.statColGap ?? 4;
-  const valueW = layout.statValueW ?? 30;
-  const pointsLabelW = layout.statPointsLabelW ?? 16;
-  const leadLabelW = layout.statLeadLabelW ?? 24;
-  const cutLabelW = layout.statCutLabelW ?? 16;
+  const statsLeft = layout.colW - pad - (layout.statsW ?? 172);
 
-  const cutValueRight = statsRight - cutLabelW - labelGap;
-  const cut = {
-    colRight: statsRight,
-    colLeft: cutValueRight - valueW,
-    valueRight: cutValueRight,
-    labelW: cutLabelW,
-    labelGap,
-    valueW,
-  };
+  /** Stable value right edges (local to each standings column). */
+  const pointsValueRight = layout.statPointsValueRight ?? 476;
+  const leadValueRight = layout.statLeadValueRight ?? 528;
+  const cutValueRight = layout.statCutValueRight ?? 588;
 
-  const leadColRight = cut.colLeft - colGap;
-  const leadValueRight = leadColRight - leadLabelW - labelGap;
-  const lead = {
-    colRight: leadColRight,
-    colLeft: leadValueRight - valueW,
-    valueRight: leadValueRight,
-    labelW: leadLabelW,
-    labelGap,
-    valueW,
-  };
+  const boundaryLead = Math.round((pointsValueRight + leadValueRight) / 2);
+  const boundaryCut = Math.round((leadValueRight + cutValueRight) / 2);
 
-  const pointsColRight = lead.colLeft - colGap;
-  const pointsValueRight = pointsColRight - pointsLabelW - labelGap;
   const points = {
-    colRight: pointsColRight,
-    colLeft: pointsValueRight - valueW,
+    left: statsLeft,
+    right: boundaryLead,
+    colLeft: statsLeft,
+    colRight: boundaryLead,
+    center: (statsLeft + boundaryLead) / 2,
     valueRight: pointsValueRight,
-    labelW: pointsLabelW,
-    labelGap,
-    valueW,
+    valueW: pointsValueRight - statsLeft,
+  };
+  const lead = {
+    left: boundaryLead,
+    right: boundaryCut,
+    colLeft: boundaryLead,
+    colRight: boundaryCut,
+    center: (boundaryLead + boundaryCut) / 2,
+    valueRight: leadValueRight,
+    valueW: leadValueRight - boundaryLead,
+  };
+  const cut = {
+    left: boundaryCut,
+    right: statsRight,
+    colLeft: boundaryCut,
+    colRight: statsRight,
+    center: (boundaryCut + statsRight) / 2,
+    valueRight: cutValueRight,
+    valueW: cutValueRight - boundaryCut,
   };
 
   return {
     points,
     lead,
     cut,
+    statsLeft,
     statsRight,
     pointsValueRight: points.valueRight,
     leadValueRight: lead.valueRight,
@@ -758,43 +759,54 @@ export function computeStandingsStatGeometry(layout = computeStandingsLayoutMetr
 
 /**
  * Per-column PTS / TO LEAD / TO CUT header strip.
- * Header X is derived from the same row stat geometry so all three columns match.
+ * Header X uses explicit region centers from the same row stat geometry.
  */
 export function computeStatColumnHeaderGeometry(layout = computeStandingsLayoutMetrics()) {
   const stats = computeStandingsStatGeometry(layout);
-  const height = layout.statHeaderH ?? 18;
-  const y = layout.headerH + height / 2;
-  const centerX = (region) => (region.colLeft + region.colRight) / 2;
+  const height = layout.statHeaderH ?? 32;
+  const ruleY = layout.ruleY ?? layout.headerH - 8;
+  const postRuleGap = layout.postRuleGap ?? 10;
+  const y = ruleY + postRuleGap + height / 2;
   const points = {
     key: "points",
     text: STAT_COLUMN_HEADERS.points,
-    x: centerX(stats.points),
+    x: stats.points.center,
+    left: stats.points.left,
+    right: stats.points.right,
+    center: stats.points.center,
     valueRight: stats.pointsValueRight,
   };
   const lead = {
     key: "lead",
     text: STAT_COLUMN_HEADERS.lead,
-    x: centerX(stats.lead),
+    x: stats.lead.center,
+    left: stats.lead.left,
+    right: stats.lead.right,
+    center: stats.lead.center,
     valueRight: stats.leadValueRight,
   };
   const cut = {
     key: "cut",
     text: STAT_COLUMN_HEADERS.cut,
-    x: centerX(stats.cut),
+    x: stats.cut.center,
+    left: stats.cut.left,
+    right: stats.cut.right,
+    center: stats.cut.center,
     valueRight: stats.cutValueRight,
   };
   return {
     y,
     height,
-    ruleY: layout.ruleY ?? layout.headerH - 6,
+    ruleY,
+    postRuleGap,
     firstRowY: layout.gridTop,
     labels: [points, lead, cut],
     points,
     lead,
     cut,
     separators: [
-      { x: (stats.points.colRight + stats.lead.colLeft) / 2 },
-      { x: (stats.lead.colRight + stats.cut.colLeft) / 2 },
+      { x: stats.points.right },
+      { x: stats.lead.right },
     ],
   };
 }
@@ -1327,13 +1339,14 @@ export function computeStandingsLayoutMetrics({
   hasTrackName = true,
 } = {}) {
   const padX = 24;
-  const headerH = hasTrackName ? 80 : 64;
-  const statHeaderH = 18;
-  const footerH = 80;
-  const topGap = 6;
-  const bottomGap = 6;
-  const ruleY = headerH - 6;
-  const gridTop = headerH + statHeaderH + topGap;
+  const headerH = hasTrackName ? 108 : 86;
+  const ruleY = hasTrackName ? 100 : 78;
+  const postRuleGap = 10;
+  const statHeaderH = 32;
+  const preGridGap = 8;
+  const footerH = 64;
+  const bottomGap = 8;
+  const gridTop = ruleY + postRuleGap + statHeaderH + preGridGap;
   const gridBottom = LOGICAL_HEIGHT - footerH - bottomGap;
   const gridSpan = gridBottom - gridTop;
   const colGap = 18;
@@ -1343,18 +1356,21 @@ export function computeStandingsLayoutMetrics({
   const maxRows = Math.max(1, ...columns.map((c) => c.length || 1));
   const rowGap = 5;
   const rawRowH = (gridSpan - rowGap * (maxRows - 1)) / maxRows;
-  const rowH = Math.max(36, Math.min(58, Math.floor(rawRowH)));
+  const rowH = Math.max(56, Math.min(60, Math.floor(rawRowH)));
   const rowsUsed = maxRows * rowH + Math.max(0, maxRows - 1) * rowGap;
   const fits = rowsUsed <= gridSpan + 0.01;
-  const plateH = Math.max(36, Math.min(44, rowH - 12));
-  const plateW = plateH * 2;
+  const plateH = 44;
+  const plateW = 88;
 
   return {
     padX,
     headerH,
     statHeaderH,
     ruleY,
+    postRuleGap,
+    preGridGap,
     footerH,
+    bottomGap,
     gridTop,
     gridBottom,
     colGap,
@@ -1378,13 +1394,10 @@ export function computeStandingsLayoutMetrics({
     gapMovePlate: 8,
     gapPlateName: 8,
     gapNameStats: 6,
-    /** Fixed PTS | LEAD | CUT column metrics (logical px). */
-    statValueW: 30,
-    statLabelGap: 2,
-    statColGap: 4,
-    statPointsLabelW: 16,
-    statLeadLabelW: 24,
-    statCutLabelW: 16,
+    /** Fixed PTS | TO LEAD | TO CUT value right edges (local px). */
+    statPointsValueRight: 476,
+    statLeadValueRight: 528,
+    statCutValueRight: 588,
     rowPad: 6,
   };
 }

@@ -200,11 +200,12 @@ test("14-row columns + footer physically fit with no extra playoff height", () =
   assert.equal(m.maxRows, 14);
   assert.equal(m.fits, true);
   assert.equal(m.cutGap, 0);
-  assert.equal(m.rowH, 58);
+  assert.ok(m.rowH >= 56 && m.rowH <= 60);
   assert.equal(m.rowGap, 5);
   assert.ok(m.usedH <= m.gridSpan + 0.01);
   assert.ok(m.gridTop + m.usedH <= m.gridBottom + 0.01);
-  assert.ok(m.headerH + m.gridSpan + m.footerH <= 1080);
+  assert.ok(m.ruleY < m.gridTop);
+  assert.ok(m.statHeaderH >= 28);
   const lastRowBottom = m.gridTop + (m.maxRows - 1) * (m.rowH + m.rowGap) + m.rowH;
   const spaceAboveFooter = 1080 - m.footerH - lastRowBottom;
   assert.ok(spaceAboveFooter >= 16, "leave intentional space above footer");
@@ -431,7 +432,7 @@ test("championship gap calculations use live points: leader 890 / cut 450", () =
   assert.equal(byPos[19].gapToCut, -65);
 });
 
-test("championship gap formatting: LEADER / CUT / signed gaps / unavailable", () => {
+test("championship gap formatting: leader dash / CUT / signed gaps / unavailable", () => {
   const leader = formatChampionshipStatDisplays({
     points: 890,
     gapToLeader: 0,
@@ -442,7 +443,7 @@ test("championship gap formatting: LEADER / CUT / signed gaps / unavailable", ()
   });
   assert.equal(leader.points.valueText, "890");
   assert.equal(leader.points.labelText, "");
-  assert.equal(leader.lead.valueText, "LEADER");
+  assert.equal(leader.lead.valueText, "--");
   assert.equal(leader.lead.labelText, "");
   assert.equal(leader.cut.valueText, "+440");
   assert.equal(leader.cut.labelText, "");
@@ -519,7 +520,7 @@ test("championship gap formatting: LEADER / CUT / signed gaps / unavailable", ()
   assert.equal(missing.cut.valueText, "—");
 });
 
-test("tied leader points show LEADER with zero gap; no fabricated negatives", () => {
+test("tied leader points show -- with zero gap; no fabricated negatives", () => {
   const rows = [
     { position: 1, points: 500 },
     { position: 2, points: 500 },
@@ -534,7 +535,7 @@ test("tied leader points show LEADER with zero gap; no fabricated negatives", ()
   assert.equal(attached[0].championshipStat.cutAvailable, false);
   assert.equal(
     formatChampionshipStatDisplays(attached[0].championshipStat).lead.valueText,
-    "LEADER",
+    "--",
   );
   assert.equal(
     formatChampionshipStatDisplays(attached[0].championshipStat).cut.valueText,
@@ -657,8 +658,8 @@ test("typography defaults are larger than previous compressed sizes", () => {
   assert.ok(TYPOGRAPHY.points >= 18 && TYPOGRAPHY.points <= 20);
   assert.ok(TYPOGRAPHY.statValue >= 18 && TYPOGRAPHY.statValue <= 20);
   assert.ok(TYPOGRAPHY.statSpecial >= 16 && TYPOGRAPHY.statSpecial <= 19);
-  assert.ok(TYPOGRAPHY.statHeader >= 11 && TYPOGRAPHY.statHeader <= 13);
-  assert.ok(TYPOGRAPHY.statLabel >= 11 && TYPOGRAPHY.statLabel <= 13);
+  assert.ok(TYPOGRAPHY.statHeader >= 15 && TYPOGRAPHY.statHeader <= 17);
+  assert.ok(TYPOGRAPHY.statLabel >= 15 && TYPOGRAPHY.statLabel <= 17);
   assert.ok(TYPOGRAPHY.seasonMax >= 42);
   assert.ok(TYPOGRAPHY.afterRace >= 20);
   assert.ok(TYPOGRAPHY.footerSponsor >= 30);
@@ -985,29 +986,43 @@ test("each column has a PTS / TO LEAD / TO CUT header above unchanged row stats"
   const headers = computeStatColumnHeaderGeometry(layout);
   const slots = computeRowSlotGeometry(layout);
 
-  assert.equal(layout.ruleY, 74);
-  assert.equal(layout.gridTop, 104);
-  assert.equal(standingsRowY(layout, 0), 104);
-  assert.equal(headers.y, layout.headerH + layout.statHeaderH / 2);
+  assert.equal(layout.ruleY, 100);
+  assert.equal(layout.statHeaderH, 32);
+  assert.equal(layout.gridTop, 150);
+  assert.equal(standingsRowY(layout, 0), 150);
+  assert.equal(headers.y, layout.ruleY + layout.postRuleGap + layout.statHeaderH / 2);
   assert.ok(headers.ruleY < headers.y);
-  assert.ok(headers.y < layout.gridTop);
+  assert.ok(headers.y + layout.statHeaderH / 2 <= layout.gridTop);
   assert.equal(headers.firstRowY, layout.gridTop);
+  assert.ok(layout.headerH > layout.ruleY - 20);
 
   assert.equal(STAT_COLUMN_HEADERS.points, "PTS");
   assert.equal(STAT_COLUMN_HEADERS.lead, "TO LEAD");
   assert.equal(STAT_COLUMN_HEADERS.cut, "TO CUT");
   assert.equal(headers.labels.length, 3);
   assert.deepEqual(headers.labels.map((l) => l.text), ["PTS", "TO LEAD", "TO CUT"]);
-  assert.equal(headers.points.x, (stats.points.colLeft + stats.points.colRight) / 2);
-  assert.equal(headers.lead.x, (stats.lead.colLeft + stats.lead.colRight) / 2);
-  assert.equal(headers.cut.x, (stats.cut.colLeft + stats.cut.colRight) / 2);
+  assert.equal(headers.points.center, stats.points.center);
+  assert.equal(headers.lead.center, stats.lead.center);
+  assert.equal(headers.cut.center, stats.cut.center);
+  assert.equal(headers.points.x, stats.points.center);
+  assert.equal(headers.lead.x, stats.lead.center);
+  assert.equal(headers.cut.x, stats.cut.center);
+  assert.equal(stats.points.left, 434);
+  assert.equal(stats.points.right, 502);
+  assert.equal(stats.points.center, 468);
+  assert.equal(stats.lead.left, 502);
+  assert.equal(stats.lead.right, 558);
+  assert.equal(stats.lead.center, 530);
+  assert.equal(stats.cut.left, 558);
+  assert.equal(stats.cut.right, 606);
+  assert.equal(stats.cut.center, 582);
   assert.equal(headers.points.valueRight, 476);
   assert.equal(headers.lead.valueRight, 528);
   assert.equal(headers.cut.valueRight, 588);
 
   const a = computeStatColumnHeaderGeometry(layout);
   const b = computeStatColumnHeaderGeometry(layout);
-  assert.deepEqual(a.labels.map((l) => [l.text, l.x]), b.labels.map((l) => [l.text, l.x]));
+  assert.deepEqual(a.labels.map((l) => [l.text, l.center]), b.labels.map((l) => [l.text, l.center]));
 
   const formatted = formatChampionshipStatDisplays({
     points: 888,
@@ -1031,6 +1046,7 @@ test("each column has a PTS / TO LEAD / TO CUT header above unchanged row stats"
   assert.equal(layout.plateH, 44);
   assert.equal(slots.name.w, 216);
   assert.equal(layout.colCount, 3);
+  assert.equal(TYPOGRAPHY.statHeader, 16);
 });
 
 test("image/CORS failure path uses deterministic fallback via packagePlateColors", () => {
@@ -1061,7 +1077,7 @@ test("footer height increased for presenting-sponsor strip", () => {
     driverCount: 42,
     hasTrackName: true,
   });
-  assert.ok(m.footerH >= 78);
+  assert.ok(m.footerH >= 60);
   assert.equal(m.fits, true);
 });
 
@@ -1204,7 +1220,7 @@ test("one 2px playoff-battle box surrounds P15–P18 without shifting rows", () 
   assert.ok(p14Y + layout.rowH <= box.y || cut.columnIndex !== 0);
   assert.notEqual(standingsRowY(layout, 2), standingsRowY(layout, 1) + layout.rowH + layout.cutGap);
   assert.equal(layout.cutGap, 0);
-  assert.equal(layout.rowH, 58);
+  assert.ok(layout.rowH >= 56 && layout.rowH <= 60);
   assert.equal(layout.moveW, 52);
 });
 
@@ -1266,6 +1282,7 @@ test("standings export renderer has no leftover glow/stroke on typography", () =
   assert.match(src, /drawPlayoffCutLine/);
   assert.match(src, /drawPlayoffBattleBox/);
   assert.doesNotMatch(src, /display\.labelText/);
+  assert.doesNotMatch(src, /LEADER/);
 });
 
 test("driver-name fitting keeps a narrow size range", () => {

@@ -405,7 +405,7 @@ function drawHeader(ctx, model, logoImg, layout) {
   drawFillText(ctx, {
     text: formatSeasonHeading(seasonName),
     x: rightX,
-    y: hasTrack ? ruleY - 56 : ruleY - 40,
+    y: hasTrack ? ruleY - 66 : ruleY - 44,
     font: displayFont(T.seasonMax),
     fill: "#ffffff",
     align: "right",
@@ -416,7 +416,7 @@ function drawHeader(ctx, model, logoImg, layout) {
   drawFillText(ctx, {
     text: formatAfterRaceLine(raceNumber),
     x: rightX,
-    y: hasTrack ? ruleY - 32 : ruleY - 16,
+    y: hasTrack ? ruleY - 40 : ruleY - 18,
     font: bodyFont(T.afterRace),
     fill: "#f2f2f2",
     align: "right",
@@ -435,7 +435,7 @@ function drawHeader(ctx, model, logoImg, layout) {
       minSize: T.trackMin,
       tracking: T.tracking.track,
     });
-    const lineStartY = trackFit.lines.length > 1 ? ruleY - 28 : ruleY - 14;
+    const lineStartY = trackFit.lines.length > 1 ? ruleY - 36 : ruleY - 18;
     trackFit.lines.forEach((line, index) => {
       drawFillText(ctx, {
         text: line,
@@ -630,10 +630,10 @@ function drawStatColumnHeader(ctx, colX, layout) {
   geo.labels.forEach((item) => {
     drawFillText(ctx, {
       text: item.text,
-      x: colX + item.x,
+      x: colX + item.center,
       y: geo.y,
-      font: bodyFont(T.statHeader || 12, "bold"),
-      fill: "#d4d4d4",
+      font: bodyFont(T.statHeader || 16, "bold"),
+      fill: "#d8d8d8",
       align: "center",
       baseline: "middle",
       tracking: T.tracking.statHeader || 0.55,
@@ -642,13 +642,13 @@ function drawStatColumnHeader(ctx, colX, layout) {
 
   ctx.save();
   resetTextRenderingState(ctx);
-  ctx.strokeStyle = "rgba(255,255,255,0.16)";
+  ctx.strokeStyle = "rgba(255,255,255,0.18)";
   ctx.lineWidth = 1;
   geo.separators.forEach((sep) => {
     const x = Math.round(colX + sep.x) + 0.5;
     ctx.beginPath();
-    ctx.moveTo(x, Math.round(geo.y - 6));
-    ctx.lineTo(x, Math.round(geo.y + 6));
+    ctx.moveTo(x, Math.round(geo.y - 9));
+    ctx.lineTo(x, Math.round(geo.y + 9));
     ctx.stroke();
   });
   ctx.restore();
