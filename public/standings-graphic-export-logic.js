@@ -1376,22 +1376,104 @@ export function validateOutputDimensions(width, height) {
   return Number(width) === OUTPUT_WIDTH && Number(height) === OUTPUT_HEIGHT;
 }
 
+/** Main-header band above the red divider: logo group + season/race/track stack. */
+export const MAIN_HEADER_BAND = {
+  logoH: 56,
+  logoMaxW: 160,
+  truckSeriesSize: 22,
+  seasonToAfter: 28,
+  afterToTrack: 20,
+  fallbackLineGap: 24,
+};
+
 /**
- * Layout metrics for the 42-driver / 14 / 14 / 14 board.
- * Playoff cutoff is a line inside the normal P16/P17 gap — no extra column height.
+ * Vertically center the left logo group and right text stack in the band above the red divider.
+ * Shared by the renderer and tests so both sides stay aligned.
  */
+export function computeMainHeaderBandLayout(
+  layout = computeStandingsLayoutMetrics(),
+  { hasTrackName = true, trackLineCount = 1 } = {},
+) {
+  const ruleY = Number(layout.ruleY) || 136;
+  const bandTop = 0;
+  const bandBottom = ruleY;
+  const bandCenter = ruleY / 2;
+
+  const leftH = MAIN_HEADER_BAND.logoH;
+  const leftTop = Math.round(bandCenter - leftH / 2);
+  const leftBottom = leftTop + leftH;
+  const leftCenter = leftTop + leftH / 2;
+
+  const seasonHalf = TYPOGRAPHY.seasonMax / 2;
+  const afterHalf = TYPOGRAPHY.afterRace / 2;
+  const trackHalf = TYPOGRAPHY.trackMax / 2;
+  const extraTrack = hasTrackName
+    ? Math.max(0, Number(trackLineCount) - 1) * (TYPOGRAPHY.trackMax + 3)
+    : 0;
+  const rightH = hasTrackName
+    ? seasonHalf + MAIN_HEADER_BAND.seasonToAfter + MAIN_HEADER_BAND.afterToTrack + extraTrack + trackHalf
+    : seasonHalf + MAIN_HEADER_BAND.seasonToAfter + afterHalf;
+  const rightTop = bandCenter - rightH / 2;
+  const seasonY = rightTop + seasonHalf;
+  const afterY = seasonY + MAIN_HEADER_BAND.seasonToAfter;
+  const trackY = hasTrackName ? afterY + MAIN_HEADER_BAND.afterToTrack : null;
+  const rightBottom = hasTrackName
+    ? trackY + extraTrack + trackHalf
+    : afterY + afterHalf;
+
+  const fallbackTop = Math.round(bandCenter - MAIN_HEADER_BAND.fallbackLineGap / 2 - 8);
+  const fallbackBottom = fallbackTop + MAIN_HEADER_BAND.fallbackLineGap;
+
+  const trackExtent = hasTrackName ? trackY + extraTrack + trackHalf : null;
+
+  return {
+    bandTop,
+    bandBottom,
+    bandCenter,
+    ruleY,
+    left: {
+      top: leftTop,
+      bottom: leftBottom,
+      center: leftCenter,
+      height: leftH,
+      logoY: leftTop,
+      logoH: leftH,
+      truckSeriesY: leftCenter,
+    },
+    right: {
+      top: rightTop,
+      bottom: rightBottom,
+      center: (rightTop + rightBottom) / 2,
+      height: rightH,
+      seasonY,
+      afterY,
+      trackY,
+    },
+    fallback: {
+      top: fallbackTop,
+      bottom: fallbackBottom,
+      blazingY: fallbackTop,
+      truckSeriesY: fallbackBottom,
+    },
+    seasonToAfter: MAIN_HEADER_BAND.seasonToAfter,
+    afterToTrack: hasTrackName ? MAIN_HEADER_BAND.afterToTrack : null,
+    trackToRule: hasTrackName ? ruleY - trackExtent : null,
+    ruleToStatHeader: layout.postRuleGap ?? 14,
+  };
+}
+
 export function computeStandingsLayoutMetrics({
   driverCount = MAX_DRIVERS,
   hasTrackName = true,
 } = {}) {
   const padX = 24;
-  const headerH = hasTrackName ? 114 : 90;
-  const ruleY = hasTrackName ? 106 : 82;
+  const headerH = hasTrackName ? 136 : 112;
+  const ruleY = hasTrackName ? 136 : 112;
   const postRuleGap = 14;
   const statHeaderH = 32;
-  const preGridGap = 11;
-  const footerH = 52;
-  const bottomGap = 8;
+  const preGridGap = 9;
+  const footerH = 36;
+  const bottomGap = 4;
   const gridTop = ruleY + postRuleGap + statHeaderH + preGridGap;
   const gridBottom = LOGICAL_HEIGHT - footerH - bottomGap;
   const gridSpan = gridBottom - gridTop;

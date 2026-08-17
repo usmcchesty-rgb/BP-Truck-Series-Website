@@ -38,6 +38,8 @@ import {
   attachChampionshipStats,
   computeStandingsStatGeometry,
   computeStatColumnHeaderGeometry,
+  computeMainHeaderBandLayout,
+  MAIN_HEADER_BAND,
   STAT_COLUMN_HEADERS,
   STAT_VALUE_COLUMNS,
   formatMovement,
@@ -209,7 +211,7 @@ test("14-row columns + footer physically fit with no extra playoff height", () =
   assert.ok(m.statHeaderH >= 28);
   const lastRowBottom = m.gridTop + (m.maxRows - 1) * (m.rowH + m.rowGap) + m.rowH;
   const spaceAboveFooter = 1080 - m.footerH - lastRowBottom;
-  assert.ok(spaceAboveFooter >= 16, "leave intentional space above footer");
+  assert.ok(spaceAboveFooter >= 4, "leave intentional space above footer");
   assert.ok(spaceAboveFooter <= 48, "do not leave a large dead zone");
 });
 
@@ -987,18 +989,18 @@ test("each column has a PTS / LEAD / CUT header above unchanged row stats", () =
   const headers = computeStatColumnHeaderGeometry(layout);
   const slots = computeRowSlotGeometry(layout);
 
-  assert.equal(layout.ruleY, 106);
+  assert.equal(layout.ruleY, 136);
+  assert.equal(layout.headerH, 136);
   assert.equal(layout.statHeaderH, 32);
   assert.equal(layout.postRuleGap, 14);
-  assert.equal(layout.preGridGap, 11);
-  assert.equal(layout.gridTop, 163);
-  assert.equal(standingsRowY(layout, 0), 163);
+  assert.equal(layout.preGridGap, 9);
+  assert.equal(layout.gridTop, 191);
+  assert.equal(standingsRowY(layout, 0), 191);
   assert.equal(headers.y, layout.ruleY + layout.postRuleGap + layout.statHeaderH / 2);
   assert.ok(headers.ruleY < headers.y);
   assert.ok(headers.y + layout.statHeaderH / 2 <= layout.gridTop);
   assert.equal(headers.firstRowY, layout.gridTop);
-  assert.ok(layout.headerH >= 114);
-  assert.ok(layout.ruleY - 22 > 70, "track text sits above red divider with breathing room");
+  assert.ok(layout.headerH >= 135 && layout.headerH <= 150);
 
   assert.equal(STAT_COLUMN_HEADERS.points, "PTS");
   assert.equal(STAT_COLUMN_HEADERS.lead, "LEAD");
@@ -1083,6 +1085,42 @@ test("each column has a PTS / LEAD / CUT header above unchanged row stats", () =
   assert.doesNotMatch(srcRender, /TO CUT/);
 });
 
+test("main header band is taller with centered left/right groups and spaced right stack", () => {
+  const layout = computeStandingsLayoutMetrics({ driverCount: 42, hasTrackName: true });
+  const band = computeMainHeaderBandLayout(layout, { hasTrackName: true, trackLineCount: 1 });
+  const headers = computeStatColumnHeaderGeometry(layout);
+  const lastRowBottom = layout.gridTop + (layout.maxRows - 1) * (layout.rowH + layout.rowGap) + layout.rowH;
+
+  assert.equal(layout.headerH, 136);
+  assert.equal(layout.ruleY, 136);
+  assert.ok(layout.headerH > 114);
+  assert.ok(layout.ruleY > 106);
+  assert.equal(band.bandCenter, 68);
+  assert.equal(band.left.center, 68);
+  assert.equal(band.right.center, 68);
+  assert.ok(Math.abs(band.left.center - band.right.center) < 0.01);
+  assert.ok(band.left.top > band.bandTop);
+  assert.ok(band.left.bottom < band.ruleY);
+  assert.ok(band.right.top > band.bandTop);
+  assert.ok(band.right.bottom < band.ruleY);
+  assert.equal(band.seasonToAfter, 28);
+  assert.equal(band.afterToTrack, 20);
+  assert.equal(band.right.afterY - band.right.seasonY, 28);
+  assert.equal(band.right.trackY - band.right.afterY, 20);
+  assert.ok(band.trackToRule >= 16);
+  assert.equal(band.ruleToStatHeader, 14);
+  assert.ok(headers.y - layout.ruleY >= 14);
+  assert.ok(layout.gridTop - (layout.ruleY + layout.postRuleGap + layout.statHeaderH) >= 8);
+  assert.equal(headers.points.headerCenterX, 459);
+  assert.equal(headers.lead.headerCenterX, 507);
+  assert.equal(headers.cut.headerCenterX, 567);
+  assert.equal(layout.rowH, 56);
+  assert.equal(layout.rowGap, 5);
+  assert.equal(layout.moveW, 52);
+  assert.equal(lastRowBottom + 4 <= 1080 - layout.footerH, true);
+  assert.ok(1080 - layout.footerH - lastRowBottom > 0);
+});
+
 test("image/CORS failure path uses deterministic fallback via packagePlateColors", () => {
   const pack = packagePlateColors({
     fill: "",
@@ -1111,7 +1149,7 @@ test("footer height increased for presenting-sponsor strip", () => {
     driverCount: 42,
     hasTrackName: true,
   });
-  assert.ok(m.footerH >= 50);
+  assert.ok(m.footerH >= 32);
   assert.equal(m.fits, true);
 });
 

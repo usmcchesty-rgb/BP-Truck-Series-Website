@@ -19,6 +19,7 @@ import {
   buildDriverChampionshipStat,
   computeStandingsStatGeometry,
   computeStatColumnHeaderGeometry,
+  computeMainHeaderBandLayout,
   formatSeasonHeading,
   formatAfterRaceLine,
   fitTextFontSize,
@@ -362,17 +363,18 @@ function drawHeader(ctx, model, logoImg, layout) {
   const hasTrack = Boolean(trackName);
   const rightX = LOGICAL_WIDTH - layout.padX;
   const T = TYPOGRAPHY;
-  const ruleY = layout.ruleY ?? layout.headerH - 6;
+  const ruleY = layout.ruleY ?? layout.headerH;
+  const band = computeMainHeaderBandLayout(layout, { hasTrackName: hasTrack, trackLineCount: 1 });
 
   if (logoImg) {
-    const logoH = 56;
+    const logoH = band.left.logoH;
     const scale = logoH / (logoImg.naturalHeight || 1);
     const logoW = Math.min(160, (logoImg.naturalWidth || 1) * scale);
-    ctx.drawImage(logoImg, layout.padX, 8, logoW, logoH);
+    ctx.drawImage(logoImg, layout.padX, band.left.logoY, logoW, logoH);
     drawFillText(ctx, {
       text: "TRUCK SERIES",
       x: layout.padX + logoW + 12,
-      y: 36,
+      y: band.left.truckSeriesY,
       font: displayFont(22),
       fill: "#ffffff",
       align: "left",
@@ -383,7 +385,7 @@ function drawHeader(ctx, model, logoImg, layout) {
     drawFillText(ctx, {
       text: "BLAZING PEDALS",
       x: layout.padX,
-      y: 22,
+      y: band.fallback.blazingY,
       font: bodyFont(16),
       fill: "#ff3030",
       align: "left",
@@ -393,7 +395,7 @@ function drawHeader(ctx, model, logoImg, layout) {
     drawFillText(ctx, {
       text: "TRUCK SERIES",
       x: layout.padX,
-      y: 46,
+      y: band.fallback.truckSeriesY,
       font: displayFont(24),
       fill: "#ffffff",
       align: "left",
@@ -405,7 +407,7 @@ function drawHeader(ctx, model, logoImg, layout) {
   drawFillText(ctx, {
     text: formatSeasonHeading(seasonName),
     x: rightX,
-    y: hasTrack ? ruleY - 70 : ruleY - 46,
+    y: band.right.seasonY,
     font: displayFont(T.seasonMax),
     fill: "#ffffff",
     align: "right",
@@ -416,7 +418,7 @@ function drawHeader(ctx, model, logoImg, layout) {
   drawFillText(ctx, {
     text: formatAfterRaceLine(raceNumber),
     x: rightX,
-    y: hasTrack ? ruleY - 44 : ruleY - 20,
+    y: band.right.afterY,
     font: bodyFont(T.afterRace),
     fill: "#f2f2f2",
     align: "right",
@@ -435,12 +437,15 @@ function drawHeader(ctx, model, logoImg, layout) {
       minSize: T.trackMin,
       tracking: T.tracking.track,
     });
-    const lineStartY = trackFit.lines.length > 1 ? ruleY - 40 : ruleY - 22;
+    const lineCount = Math.max(1, trackFit.lines.length);
+    const stacked = lineCount > 1
+      ? computeMainHeaderBandLayout(layout, { hasTrackName: true, trackLineCount: lineCount })
+      : band;
     trackFit.lines.forEach((line, index) => {
       drawFillText(ctx, {
         text: line,
         x: rightX,
-        y: lineStartY + index * (trackFit.fontSize + 3),
+        y: stacked.right.trackY + index * (trackFit.fontSize + 3),
         font: bodyFont(trackFit.fontSize),
         fill: "#e8e8e8",
         align: "right",
@@ -781,7 +786,7 @@ function drawFooter(ctx, layout) {
   drawFillText(ctx, {
     text: footer.presentedBy,
     x: LOGICAL_WIDTH / 2,
-    y: midY - 16,
+    y: midY - 10,
     font: bodyFont(T.footerPresentedBy),
     fill: "#e8e8e8",
     align: "center",
@@ -791,7 +796,7 @@ function drawFooter(ctx, layout) {
   drawFillText(ctx, {
     text: footer.sponsorLine,
     x: LOGICAL_WIDTH / 2,
-    y: midY + 12,
+    y: midY + 10,
     font: displayFont(T.footerSponsor),
     fill: "#ffffff",
     align: "center",
