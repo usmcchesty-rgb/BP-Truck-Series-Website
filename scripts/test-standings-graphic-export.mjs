@@ -37,6 +37,8 @@ import {
   buildDriverChampionshipStat,
   attachChampionshipStats,
   computeStandingsStatGeometry,
+  computeStatColumnHeaderGeometry,
+  STAT_COLUMN_HEADERS,
   formatMovement,
   resolveMovementDelta,
   fitTextFontSize,
@@ -386,6 +388,7 @@ test("wins helper remains available; graphic uses PTS/LEAD/CUT instead", () => {
   assert.doesNotMatch(src, /formatWinsLabel/);
   assert.doesNotMatch(src, /WINS/);
   assert.match(src, /drawChampionshipStats/);
+  assert.match(src, /drawStatColumnHeader/);
 });
 
 test("championship gap calculations use live points: leader 890 / cut 450", () => {
@@ -438,11 +441,11 @@ test("championship gap formatting: LEADER / CUT / signed gaps / unavailable", ()
     cutAvailable: true,
   });
   assert.equal(leader.points.valueText, "890");
-  assert.equal(leader.points.labelText, "PTS");
+  assert.equal(leader.points.labelText, "");
   assert.equal(leader.lead.valueText, "LEADER");
   assert.equal(leader.lead.labelText, "");
   assert.equal(leader.cut.valueText, "+440");
-  assert.equal(leader.cut.labelText, "CUT");
+  assert.equal(leader.cut.labelText, "");
 
   const mid = formatChampionshipStatDisplays({
     points: 501,
@@ -453,8 +456,9 @@ test("championship gap formatting: LEADER / CUT / signed gaps / unavailable", ()
     cutAvailable: true,
   });
   assert.equal(mid.lead.valueText, "-389");
-  assert.equal(mid.lead.labelText, "LEAD");
+  assert.equal(mid.lead.labelText, "");
   assert.equal(mid.cut.valueText, "+51");
+  assert.equal(mid.cut.labelText, "");
 
   const below = formatChampionshipStatDisplays({
     points: 414,
@@ -466,7 +470,7 @@ test("championship gap formatting: LEADER / CUT / signed gaps / unavailable", ()
   });
   assert.equal(below.lead.valueText, "-476");
   assert.equal(below.cut.valueText, "-36");
-  assert.equal(below.cut.labelText, "CUT");
+  assert.equal(below.cut.labelText, "");
 
   const cutRow = formatChampionshipStatDisplays({
     points: 450,
@@ -489,7 +493,7 @@ test("championship gap formatting: LEADER / CUT / signed gaps / unavailable", ()
     cutAvailable: true,
   });
   assert.equal(tiny.lead.valueText, "-2");
-  assert.equal(tiny.lead.labelText, "LEAD");
+  assert.equal(tiny.lead.labelText, "");
 
   const noCut = formatChampionshipStatDisplays({
     points: 100,
@@ -650,10 +654,11 @@ test("typography defaults are larger than previous compressed sizes", () => {
   assert.ok(TYPOGRAPHY.positionTop10 >= 28);
   assert.ok(TYPOGRAPHY.movement >= 18 && TYPOGRAPHY.movement <= 19);
   assert.ok(TYPOGRAPHY.movementArrow >= 21 && TYPOGRAPHY.movementArrow <= 22);
-  assert.ok(TYPOGRAPHY.points >= 16 && TYPOGRAPHY.points <= 18);
-  assert.ok(TYPOGRAPHY.statValue >= 16 && TYPOGRAPHY.statValue <= 18);
+  assert.ok(TYPOGRAPHY.points >= 18 && TYPOGRAPHY.points <= 20);
+  assert.ok(TYPOGRAPHY.statValue >= 18 && TYPOGRAPHY.statValue <= 20);
+  assert.ok(TYPOGRAPHY.statSpecial >= 16 && TYPOGRAPHY.statSpecial <= 19);
+  assert.ok(TYPOGRAPHY.statHeader >= 11 && TYPOGRAPHY.statHeader <= 13);
   assert.ok(TYPOGRAPHY.statLabel >= 11 && TYPOGRAPHY.statLabel <= 13);
-  assert.ok(TYPOGRAPHY.statSpecial >= 12 && TYPOGRAPHY.statSpecial <= 14);
   assert.ok(TYPOGRAPHY.seasonMax >= 42);
   assert.ok(TYPOGRAPHY.afterRace >= 20);
   assert.ok(TYPOGRAPHY.footerSponsor >= 30);
@@ -974,6 +979,60 @@ test("reduced movement recovers name width without moving PTS/LEAD/CUT", () => {
   );
 });
 
+test("each column has a PTS / TO LEAD / TO CUT header above unchanged row stats", () => {
+  const layout = computeStandingsLayoutMetrics({ driverCount: 42, hasTrackName: true });
+  const stats = computeStandingsStatGeometry(layout);
+  const headers = computeStatColumnHeaderGeometry(layout);
+  const slots = computeRowSlotGeometry(layout);
+
+  assert.equal(layout.ruleY, 74);
+  assert.equal(layout.gridTop, 104);
+  assert.equal(standingsRowY(layout, 0), 104);
+  assert.equal(headers.y, layout.headerH + layout.statHeaderH / 2);
+  assert.ok(headers.ruleY < headers.y);
+  assert.ok(headers.y < layout.gridTop);
+  assert.equal(headers.firstRowY, layout.gridTop);
+
+  assert.equal(STAT_COLUMN_HEADERS.points, "PTS");
+  assert.equal(STAT_COLUMN_HEADERS.lead, "TO LEAD");
+  assert.equal(STAT_COLUMN_HEADERS.cut, "TO CUT");
+  assert.equal(headers.labels.length, 3);
+  assert.deepEqual(headers.labels.map((l) => l.text), ["PTS", "TO LEAD", "TO CUT"]);
+  assert.equal(headers.points.x, (stats.points.colLeft + stats.points.colRight) / 2);
+  assert.equal(headers.lead.x, (stats.lead.colLeft + stats.lead.colRight) / 2);
+  assert.equal(headers.cut.x, (stats.cut.colLeft + stats.cut.colRight) / 2);
+  assert.equal(headers.points.valueRight, 476);
+  assert.equal(headers.lead.valueRight, 528);
+  assert.equal(headers.cut.valueRight, 588);
+
+  const a = computeStatColumnHeaderGeometry(layout);
+  const b = computeStatColumnHeaderGeometry(layout);
+  assert.deepEqual(a.labels.map((l) => [l.text, l.x]), b.labels.map((l) => [l.text, l.x]));
+
+  const formatted = formatChampionshipStatDisplays({
+    points: 888,
+    gapToLeader: -2,
+    gapToCut: 438,
+    isLeader: false,
+    isCut: false,
+    cutAvailable: true,
+  });
+  assert.equal(formatted.points.labelText, "");
+  assert.equal(formatted.lead.labelText, "");
+  assert.equal(formatted.cut.labelText, "");
+  assert.equal(formatted.points.valueText, "888");
+  assert.equal(formatted.lead.valueText, "-2");
+  assert.equal(formatted.cut.valueText, "+438");
+
+  assert.equal(layout.moveW, 52);
+  assert.equal(TYPOGRAPHY.movementArrow, 22);
+  assert.equal(TYPOGRAPHY.movement, 18);
+  assert.equal(layout.plateW, 88);
+  assert.equal(layout.plateH, 44);
+  assert.equal(slots.name.w, 216);
+  assert.equal(layout.colCount, 3);
+});
+
 test("image/CORS failure path uses deterministic fallback via packagePlateColors", () => {
   const pack = packagePlateColors({
     fill: "",
@@ -1203,8 +1262,10 @@ test("standings export renderer has no leftover glow/stroke on typography", () =
   assert.doesNotMatch(src, /pos >= 2 && pos <= 10/);
   assert.doesNotMatch(src, /formatWinsLabel/);
   assert.match(src, /drawChampionshipStats/);
+  assert.match(src, /drawStatColumnHeader/);
   assert.match(src, /drawPlayoffCutLine/);
   assert.match(src, /drawPlayoffBattleBox/);
+  assert.doesNotMatch(src, /display\.labelText/);
 });
 
 test("driver-name fitting keeps a narrow size range", () => {

@@ -18,6 +18,7 @@ import {
   formatChampionshipStatDisplays,
   buildDriverChampionshipStat,
   computeStandingsStatGeometry,
+  computeStatColumnHeaderGeometry,
   formatSeasonHeading,
   formatAfterRaceLine,
   fitTextFontSize,
@@ -361,16 +362,17 @@ function drawHeader(ctx, model, logoImg, layout) {
   const hasTrack = Boolean(trackName);
   const rightX = LOGICAL_WIDTH - layout.padX;
   const T = TYPOGRAPHY;
+  const ruleY = layout.ruleY ?? layout.headerH - 6;
 
   if (logoImg) {
     const logoH = 56;
     const scale = logoH / (logoImg.naturalHeight || 1);
     const logoW = Math.min(160, (logoImg.naturalWidth || 1) * scale);
-    ctx.drawImage(logoImg, layout.padX, 10, logoW, logoH);
+    ctx.drawImage(logoImg, layout.padX, 8, logoW, logoH);
     drawFillText(ctx, {
       text: "TRUCK SERIES",
       x: layout.padX + logoW + 12,
-      y: 38,
+      y: 36,
       font: displayFont(22),
       fill: "#ffffff",
       align: "left",
@@ -381,7 +383,7 @@ function drawHeader(ctx, model, logoImg, layout) {
     drawFillText(ctx, {
       text: "BLAZING PEDALS",
       x: layout.padX,
-      y: 26,
+      y: 22,
       font: bodyFont(16),
       fill: "#ff3030",
       align: "left",
@@ -391,7 +393,7 @@ function drawHeader(ctx, model, logoImg, layout) {
     drawFillText(ctx, {
       text: "TRUCK SERIES",
       x: layout.padX,
-      y: 50,
+      y: 46,
       font: displayFont(24),
       fill: "#ffffff",
       align: "left",
@@ -403,7 +405,7 @@ function drawHeader(ctx, model, logoImg, layout) {
   drawFillText(ctx, {
     text: formatSeasonHeading(seasonName),
     x: rightX,
-    y: hasTrack ? 22 : 34,
+    y: hasTrack ? ruleY - 56 : ruleY - 40,
     font: displayFont(T.seasonMax),
     fill: "#ffffff",
     align: "right",
@@ -414,7 +416,7 @@ function drawHeader(ctx, model, logoImg, layout) {
   drawFillText(ctx, {
     text: formatAfterRaceLine(raceNumber),
     x: rightX,
-    y: hasTrack ? 52 : 64,
+    y: hasTrack ? ruleY - 32 : ruleY - 16,
     font: bodyFont(T.afterRace),
     fill: "#f2f2f2",
     align: "right",
@@ -433,7 +435,7 @@ function drawHeader(ctx, model, logoImg, layout) {
       minSize: T.trackMin,
       tracking: T.tracking.track,
     });
-    const lineStartY = trackFit.lines.length > 1 ? 68 : 74;
+    const lineStartY = trackFit.lines.length > 1 ? ruleY - 28 : ruleY - 14;
     trackFit.lines.forEach((line, index) => {
       drawFillText(ctx, {
         text: line,
@@ -448,7 +450,6 @@ function drawHeader(ctx, model, logoImg, layout) {
     });
   }
 
-  const ruleY = layout.headerH - 6;
   ctx.save();
   resetTextRenderingState(ctx);
   ctx.strokeStyle = "#e50914";
@@ -608,37 +609,49 @@ function championshipStatFills(display) {
 
 function drawStatRegion(ctx, display, region, cy, T) {
   const fills = championshipStatFills(display);
-  if (display.special || !display.labelText) {
-    drawFillText(ctx, {
-      text: display.valueText,
-      x: region.colRight,
-      y: cy,
-      font: bodyFont(T.statSpecial || T.statValue || T.points, "bold"),
-      fill: fills.value,
-      align: "right",
-      baseline: "middle",
-    });
-    return;
-  }
-
+  const size = display.special
+    ? (T.statSpecial || 17)
+    : (T.statValue || T.points || 19);
   drawFillText(ctx, {
     text: display.valueText,
     x: region.valueRight,
     y: cy,
-    font: bodyFont(T.statValue || T.points, "bold"),
+    font: bodyFont(size, "bold"),
     fill: fills.value,
     align: "right",
     baseline: "middle",
   });
-  drawFillText(ctx, {
-    text: display.labelText,
-    x: region.valueRight + region.labelGap,
-    y: cy,
-    font: bodyFont(T.statLabel || 11, "bold"),
-    fill: fills.label,
-    align: "left",
-    baseline: "middle",
+}
+
+function drawStatColumnHeader(ctx, colX, layout) {
+  const geo = computeStatColumnHeaderGeometry(layout);
+  const T = TYPOGRAPHY;
+
+  geo.labels.forEach((item) => {
+    drawFillText(ctx, {
+      text: item.text,
+      x: colX + item.x,
+      y: geo.y,
+      font: bodyFont(T.statHeader || 12, "bold"),
+      fill: "#d4d4d4",
+      align: "center",
+      baseline: "middle",
+      tracking: T.tracking.statHeader || 0.55,
+    });
   });
+
+  ctx.save();
+  resetTextRenderingState(ctx);
+  ctx.strokeStyle = "rgba(255,255,255,0.16)";
+  ctx.lineWidth = 1;
+  geo.separators.forEach((sep) => {
+    const x = Math.round(colX + sep.x) + 0.5;
+    ctx.beginPath();
+    ctx.moveTo(x, Math.round(geo.y - 6));
+    ctx.lineTo(x, Math.round(geo.y + 6));
+    ctx.stroke();
+  });
+  ctx.restore();
 }
 
 function drawChampionshipStats(ctx, driver, rowX, cy, layout, T) {
@@ -1008,6 +1021,7 @@ export async function renderStandingsGraphicCanvas(model, options = {}) {
   for (let col = 0; col < columns.length; col += 1) {
     const colX = layout.padX + col * (layout.colW + layout.colGap);
     const colDrivers = columns[col] || [];
+    drawStatColumnHeader(ctx, colX, layout);
 
     colDrivers.forEach((driver, rowIndex) => {
       const y = Math.round(standingsRowY(layout, rowIndex));

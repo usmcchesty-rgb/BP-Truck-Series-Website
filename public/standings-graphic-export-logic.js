@@ -139,11 +139,12 @@ export const TYPOGRAPHY = {
   positionRest: 24,
   movement: 18,
   movementArrow: 22,
-  /** Right-side championship stats (PTS | LEAD | CUT). */
-  points: 16,
-  statValue: 16,
-  statLabel: 11,
-  statSpecial: 13,
+  /** Right-side championship stats (PTS | TO LEAD | TO CUT). */
+  points: 19,
+  statValue: 19,
+  statSpecial: 17,
+  statHeader: 12,
+  statLabel: 12,
   playoffCut: 18,
   footerPresentedBy: 13,
   footerSponsor: 30,
@@ -155,6 +156,7 @@ export const TYPOGRAPHY = {
     season: 1.8,
     afterRace: 0.9,
     track: 0.7,
+    statHeader: 0.55,
     playoffCut: 1.8,
     presentedBy: 2.2,
     sponsor: 2.4,
@@ -638,8 +640,8 @@ export function attachChampionshipStats(rows = [], playoffCut = DEFAULT_PLAYOFF_
 }
 
 /**
- * Format helpers for fixed-column drawing (value + label kept separate).
- * Never emits +0 / -0 / 0 for LEAD or CUT.
+ * Format helpers for fixed-column drawing.
+ * Row values are numbers/specials only — PTS / TO LEAD / TO CUT live in the column header.
  */
 export function formatChampionshipStatDisplays(stat = {}) {
   const unavailable = { valueText: "—", labelText: "", special: true, tone: "neutral" };
@@ -649,7 +651,7 @@ export function formatChampionshipStatDisplays(stat = {}) {
       ? { ...unavailable }
       : {
           valueText: String(stat.points),
-          labelText: "PTS",
+          labelText: "",
           special: false,
           tone: "neutral",
         };
@@ -662,7 +664,7 @@ export function formatChampionshipStatDisplays(stat = {}) {
   } else {
     lead = {
       valueText: String(stat.gapToLeader),
-      labelText: "LEAD",
+      labelText: "",
       special: false,
       tone: "neutral",
     };
@@ -679,7 +681,7 @@ export function formatChampionshipStatDisplays(stat = {}) {
     const n = Number(stat.gapToCut);
     cut = {
       valueText: n > 0 ? `+${n}` : String(n),
-      labelText: "CUT",
+      labelText: "",
       special: false,
       tone: n > 0 ? "positive" : "negative",
     };
@@ -688,10 +690,15 @@ export function formatChampionshipStatDisplays(stat = {}) {
   return { points, lead, cut };
 }
 
+export const STAT_COLUMN_HEADERS = {
+  points: "PTS",
+  lead: "TO LEAD",
+  cut: "TO CUT",
+};
+
 /**
- * Fixed local X geometry for PTS | LEAD | CUT inside every standings row.
- * Values are right-aligned to valueRight; labels sit in a fixed slot to the right.
- * Special states (LEADER / CUT / —) right-align to colRight so columns never shift.
+ * Fixed local X geometry for PTS | TO LEAD | TO CUT inside every standings row.
+ * Values (and LEADER / CUT specials) are independently right-aligned to valueRight.
  */
 export function computeStandingsStatGeometry(layout = computeStandingsLayoutMetrics()) {
   const pad = layout.rowPad ?? 6;
@@ -746,6 +753,49 @@ export function computeStandingsStatGeometry(layout = computeStandingsLayoutMetr
     pointsColRight: points.colRight,
     leadColRight: lead.colRight,
     cutColRight: cut.colRight,
+  };
+}
+
+/**
+ * Per-column PTS / TO LEAD / TO CUT header strip.
+ * Header X is derived from the same row stat geometry so all three columns match.
+ */
+export function computeStatColumnHeaderGeometry(layout = computeStandingsLayoutMetrics()) {
+  const stats = computeStandingsStatGeometry(layout);
+  const height = layout.statHeaderH ?? 18;
+  const y = layout.headerH + height / 2;
+  const centerX = (region) => (region.colLeft + region.colRight) / 2;
+  const points = {
+    key: "points",
+    text: STAT_COLUMN_HEADERS.points,
+    x: centerX(stats.points),
+    valueRight: stats.pointsValueRight,
+  };
+  const lead = {
+    key: "lead",
+    text: STAT_COLUMN_HEADERS.lead,
+    x: centerX(stats.lead),
+    valueRight: stats.leadValueRight,
+  };
+  const cut = {
+    key: "cut",
+    text: STAT_COLUMN_HEADERS.cut,
+    x: centerX(stats.cut),
+    valueRight: stats.cutValueRight,
+  };
+  return {
+    y,
+    height,
+    ruleY: layout.ruleY ?? layout.headerH - 6,
+    firstRowY: layout.gridTop,
+    labels: [points, lead, cut],
+    points,
+    lead,
+    cut,
+    separators: [
+      { x: (stats.points.colRight + stats.lead.colLeft) / 2 },
+      { x: (stats.lead.colRight + stats.cut.colLeft) / 2 },
+    ],
   };
 }
 
@@ -1277,11 +1327,13 @@ export function computeStandingsLayoutMetrics({
   hasTrackName = true,
 } = {}) {
   const padX = 24;
-  const headerH = hasTrackName ? 98 : 82;
+  const headerH = hasTrackName ? 80 : 64;
+  const statHeaderH = 18;
   const footerH = 80;
   const topGap = 6;
   const bottomGap = 6;
-  const gridTop = headerH + topGap;
+  const ruleY = headerH - 6;
+  const gridTop = headerH + statHeaderH + topGap;
   const gridBottom = LOGICAL_HEIGHT - footerH - bottomGap;
   const gridSpan = gridBottom - gridTop;
   const colGap = 18;
@@ -1300,6 +1352,8 @@ export function computeStandingsLayoutMetrics({
   return {
     padX,
     headerH,
+    statHeaderH,
+    ruleY,
     footerH,
     gridTop,
     gridBottom,
