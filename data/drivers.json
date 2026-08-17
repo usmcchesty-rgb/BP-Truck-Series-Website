@@ -326,7 +326,45 @@
       "carNumber": "15",
       "iracingCustomerId": 842668,
       "slug": "michael-boone2",
-      "carImage": "/assets/images/cars/Michael Boone2.png"
+      "carImage": "/assets/images/cars/Michael Boone2.png",
+      "iracingDesign": {
+        "source": "iracing_sdk",
+        "capturedAt": "2026-08-17T08:02:31.093Z",
+        "userId": "842668",
+        "carNumber": "15",
+        "number": {
+          "raw": "48,2,202020,02fd06,202020",
+          "font": 48,
+          "slant": 2,
+          "color1": "#202020",
+          "color2": "#02fd06",
+          "color3": "#202020"
+        },
+        "car": {
+          "raw": "2,202020,02fd06,202020,000000",
+          "pattern": "2",
+          "color1": "#202020",
+          "color2": "#02fd06",
+          "color3": "#202020",
+          "wheelType": 0,
+          "wheelColor": "#000000"
+        },
+        "suit": {
+          "raw": "5,f40707,080808,f6f6f6",
+          "pattern": "5",
+          "color1": "#f40707",
+          "color2": "#080808",
+          "color3": "#f6f6f6"
+        },
+        "numberStyleAuthoritative": false,
+        "numberImage": {
+          "sdkPath": "/assets/images/numbers/842668.png",
+          "customPath": null,
+          "preferredSource": "none",
+          "source": "iracing_sdk_number",
+          "authoritative": false
+        }
+      }
     },
     {
       "name": "Chris Carroll3",
@@ -657,7 +695,7 @@
       "carImage": "/assets/images/cars/Scotty Stevens.png",
       "iracingDesign": {
         "source": "iracing_sdk",
-        "capturedAt": "2026-08-17T07:00:12.703Z",
+        "capturedAt": "2026-08-17T08:02:31.093Z",
         "userId": "497305",
         "carNumber": "22",
         "number": {
@@ -669,11 +707,11 @@
           "color3": "#e5cc29"
         },
         "car": {
-          "raw": "3,000000,e1ce1b,ff0000,fa0000",
+          "raw": "3,ff0000,00ff00,0000ff,fa0000",
           "pattern": "3",
-          "color1": "#000000",
-          "color2": "#e1ce1b",
-          "color3": "#ff0000",
+          "color1": "#ff0000",
+          "color2": "#00ff00",
+          "color3": "#0000ff",
           "wheelType": 0,
           "wheelColor": "#fa0000"
         },
@@ -684,14 +722,14 @@
           "color2": "#f3fcf2",
           "color3": "#000000"
         },
-        "numberStyleAuthoritative": true,
         "numberImage": {
           "sdkPath": "/assets/images/numbers/497305.png",
           "customPath": null,
           "preferredSource": "sdk",
           "source": "iracing_sdk_number",
           "authoritative": true
-        }
+        },
+        "numberStyleAuthoritative": true
       }
     },
     {
@@ -946,7 +984,43 @@
       "carNumber": "85",
       "iracingCustomerId": 133542,
       "slug": "brad-lawson",
-      "carImage": "/assets/images/cars/Brad Lawson.png"
+      "carImage": "/assets/images/cars/Brad Lawson.png",
+      "iracingDesign": {
+        "source": "iracing_sdk",
+        "capturedAt": "2026-08-17T08:02:31.093Z",
+        "userId": "133542",
+        "carNumber": "85",
+        "number": {
+          "raw": "0,0,ffffff,777777,000000",
+          "font": 0,
+          "slant": 0,
+          "color1": "#ffffff",
+          "color2": "#777777",
+          "color3": "#000000"
+        },
+        "car": {
+          "raw": "18,ffffff,ffffff,ffffff",
+          "pattern": "18",
+          "color1": "#ffffff",
+          "color2": "#ffffff",
+          "color3": "#ffffff"
+        },
+        "suit": {
+          "raw": "21,000000,ff0d0a,ffffff",
+          "pattern": "21",
+          "color1": "#000000",
+          "color2": "#ff0d0a",
+          "color3": "#ffffff"
+        },
+        "numberStyleAuthoritative": false,
+        "numberImage": {
+          "sdkPath": "/assets/images/numbers/133542.png",
+          "customPath": null,
+          "preferredSource": "none",
+          "source": "iracing_sdk_number",
+          "authoritative": false
+        }
+      }
     },
     {
       "name": "Caleb Elswick",
@@ -1478,7 +1552,43 @@
       "carNumber": "55",
       "iracingCustomerId": 1455272,
       "slug": "alex-menet",
-      "carImage": "/assets/images/cars/Alex Menet.png"
+      "carImage": "/assets/images/cars/Alex Menet.png",
+      "iracingDesign": {
+        "source": "iracing_sdk",
+        "capturedAt": "2026-08-17T08:02:31.093Z",
+        "userId": "1455272",
+        "carNumber": "55",
+        "number": {
+          "raw": "53,2,000000,ffffff,ffffff",
+          "font": 53,
+          "slant": 2,
+          "color1": "#000000",
+          "color2": "#ffffff",
+          "color3": "#ffffff"
+        },
+        "car": {
+          "raw": "14,000000,fdd60f,000000",
+          "pattern": "14",
+          "color1": "#000000",
+          "color2": "#fdd60f",
+          "color3": "#000000"
+        },
+        "suit": {
+          "raw": "8,000000,02fa28,0a0a0a",
+          "pattern": "8",
+          "color1": "#000000",
+          "color2": "#02fa28",
+          "color3": "#0a0a0a"
+        },
+        "numberStyleAuthoritative": false,
+        "numberImage": {
+          "sdkPath": "/assets/images/numbers/1455272.png",
+          "customPath": null,
+          "preferredSource": "none",
+          "source": "iracing_sdk_number",
+          "authoritative": false
+        }
+      }
     },
     {
       "name": "Kody Miller",
@@ -1530,7 +1640,45 @@
       "carNumber": "86",
       "iracingCustomerId": 329874,
       "slug": "ryan-wash",
-      "carImage": "/assets/images/cars/Ryan Wash.png"
+      "carImage": "/assets/images/cars/Ryan Wash.png",
+      "iracingDesign": {
+        "source": "iracing_sdk",
+        "capturedAt": "2026-08-17T08:02:31.093Z",
+        "userId": "329874",
+        "carNumber": "86",
+        "number": {
+          "raw": "0,0,000000,ffffff,777777",
+          "font": 0,
+          "slant": 0,
+          "color1": "#000000",
+          "color2": "#ffffff",
+          "color3": "#777777"
+        },
+        "car": {
+          "raw": "11,be0000,ffffff,2b00ff;000000",
+          "pattern": "11",
+          "color1": "#be0000",
+          "color2": "#ffffff",
+          "color3": "#2b00ff",
+          "wheelType": 1,
+          "wheelColor": "#000000"
+        },
+        "suit": {
+          "raw": "28,000000,b82323,ffffff",
+          "pattern": "28",
+          "color1": "#000000",
+          "color2": "#b82323",
+          "color3": "#ffffff"
+        },
+        "numberStyleAuthoritative": false,
+        "numberImage": {
+          "sdkPath": "/assets/images/numbers/329874.png",
+          "customPath": null,
+          "preferredSource": "none",
+          "source": "iracing_sdk_number",
+          "authoritative": false
+        }
+      }
     },
     {
       "name": "Earl Hall",
