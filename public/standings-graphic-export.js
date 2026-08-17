@@ -34,6 +34,7 @@ import {
   buildStandingsGraphicModel,
   computeStandingsLayoutMetrics,
   computeRowSlotGeometry,
+  computeMovementGlyphGeometry,
   computePlayoffCutLine,
   computePlayoffBattleBox,
   standingsRowY,
@@ -666,12 +667,12 @@ function drawMovementIndicator(ctx, movement, slotX, cy, slotW, T) {
   const data = movement || { text: "—", dir: "flat", arrow: "—", valueLabel: "" };
   const fill =
     data.dir === "up" ? "#2fd36a" : data.dir === "down" ? "#ff3b3b" : "#d0d0d0";
-  const mid = slotX + slotW / 2;
+  const geo = computeMovementGlyphGeometry(slotW, T);
 
   if (data.dir === "flat" || !data.valueLabel) {
     drawFillText(ctx, {
       text: data.arrow || "—",
-      x: mid,
+      x: slotX + geo.dashX,
       y: cy,
       font: displayFont(T.movement),
       fill,
@@ -683,7 +684,7 @@ function drawMovementIndicator(ctx, movement, slotX, cy, slotW, T) {
 
   drawFillText(ctx, {
     text: data.arrow,
-    x: mid - 11,
+    x: slotX + geo.arrowX,
     y: cy,
     font: displayFont(T.movementArrow),
     fill,
@@ -692,7 +693,7 @@ function drawMovementIndicator(ctx, movement, slotX, cy, slotW, T) {
   });
   drawFillText(ctx, {
     text: data.valueLabel,
-    x: mid + 12,
+    x: slotX + geo.valueX,
     y: cy,
     font: displayFont(T.movement),
     fill,

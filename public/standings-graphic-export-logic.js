@@ -137,8 +137,8 @@ export const TYPOGRAPHY = {
   driverNamePreferredMin: 17,
   positionTop10: 28,
   positionRest: 24,
-  movement: 22,
-  movementArrow: 26,
+  movement: 18,
+  movementArrow: 22,
   /** Right-side championship stats (PTS | LEAD | CUT). */
   points: 16,
   statValue: 16,
@@ -1318,7 +1318,7 @@ export function computeStandingsLayoutMetrics({
     plateW,
     plateH,
     posW: 44,
-    moveW: 68,
+    moveW: 52,
     statsW: 172,
     gapPosMove: 6,
     gapMovePlate: 8,
@@ -1350,6 +1350,33 @@ export function computeRowSlotGeometry(layout = computeStandingsLayoutMetrics())
     number: { x: numberX, w: layout.plateW },
     name: { x: nameX, w: nameW },
     stats: { x: statsX, w: layout.statsW },
+  };
+}
+
+/**
+ * Arrow + value pair centered in the movement slot.
+ * Offsets scale with slot width so double-digit values still fit after the modest shrink.
+ */
+export function computeMovementGlyphGeometry(slotW, typography = TYPOGRAPHY) {
+  const w = Math.max(0, Number(slotW) || 0);
+  const arrowSize = Number(typography.movementArrow) || 22;
+  const valueSize = Number(typography.movement) || 18;
+  const arrowW = Math.ceil(arrowSize * 0.52);
+  const valueW = Math.ceil(valueSize * 1.2);
+  const gap = 3;
+  const pairW = arrowW + gap + valueW;
+  const start = (w - pairW) / 2;
+  return {
+    slotW: w,
+    dashX: w / 2,
+    arrowX: start + arrowW / 2,
+    valueX: start + arrowW + gap + valueW / 2,
+    arrowW,
+    valueW,
+    pairW,
+    pad: (w - pairW) / 2,
+    fits: pairW <= w,
+    doubleDigitFits: pairW + 4 <= w,
   };
 }
 

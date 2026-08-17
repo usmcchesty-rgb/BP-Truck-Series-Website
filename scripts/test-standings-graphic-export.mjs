@@ -62,6 +62,7 @@ import {
   formatPreviewStatus,
   computeStandingsLayoutMetrics,
   computeRowSlotGeometry,
+  computeMovementGlyphGeometry,
   computePlayoffCutLine,
   computePlayoffBattleBox,
   standingsRowY,
@@ -647,8 +648,8 @@ test("typography defaults are larger than previous compressed sizes", () => {
   assert.ok(TYPOGRAPHY.driverNameTop10 >= 19 && TYPOGRAPHY.driverNameTop10 <= 20);
   assert.ok(TYPOGRAPHY.driverNameMin >= 15);
   assert.ok(TYPOGRAPHY.positionTop10 >= 28);
-  assert.ok(TYPOGRAPHY.movement >= 22);
-  assert.ok(TYPOGRAPHY.movementArrow >= 26);
+  assert.ok(TYPOGRAPHY.movement >= 18 && TYPOGRAPHY.movement <= 19);
+  assert.ok(TYPOGRAPHY.movementArrow >= 21 && TYPOGRAPHY.movementArrow <= 22);
   assert.ok(TYPOGRAPHY.points >= 16 && TYPOGRAPHY.points <= 18);
   assert.ok(TYPOGRAPHY.statValue >= 16 && TYPOGRAPHY.statValue <= 18);
   assert.ok(TYPOGRAPHY.statLabel >= 11 && TYPOGRAPHY.statLabel <= 13);
@@ -920,7 +921,7 @@ test("standings rows keep shared numberArtwork and fall back without inventing a
   assert.equal(rows[1].hasNumberArtwork, false);
 });
 
-test("number display box is 2:1 contain-fit and does not collide with larger movement", () => {
+test("number display box is 2:1 contain-fit and does not collide with movement", () => {
   const m = computeStandingsLayoutMetrics({
     driverCount: 42,
     hasTrackName: true,
@@ -932,8 +933,45 @@ test("number display box is 2:1 contain-fit and does not collide with larger mov
   assert.ok(slots.move.x + slots.move.w <= slots.number.x);
   assert.ok(slots.number.x + slots.number.w <= slots.name.x);
   assert.ok(slots.name.x + slots.name.w <= slots.stats.x);
-  assert.equal(slots.move.w, 68);
-  assert.ok(slots.name.w >= 190, "name slot should use recovered horizontal room");
+  assert.equal(slots.move.w, 52);
+  assert.ok(slots.name.w >= 210, "name slot should recover width from reduced movement");
+});
+
+test("reduced movement recovers name width without moving PTS/LEAD/CUT", () => {
+  const layout = computeStandingsLayoutMetrics({ driverCount: 42, hasTrackName: true });
+  const slots = computeRowSlotGeometry(layout);
+  const geo = computeStandingsStatGeometry(layout);
+  const moveGlyphs = computeMovementGlyphGeometry(layout.moveW, TYPOGRAPHY);
+
+  assert.equal(layout.moveW, 52);
+  assert.equal(TYPOGRAPHY.movementArrow, 22);
+  assert.equal(TYPOGRAPHY.movement, 18);
+  assert.equal(slots.number.x, 116);
+  assert.equal(slots.number.w, 88);
+  assert.equal(layout.plateH, 44);
+  assert.equal(slots.name.w, 216);
+  assert.ok(slots.name.w >= 210);
+  assert.ok(slots.name.x + slots.name.w <= slots.stats.x);
+
+  assert.ok(slots.pos.x + slots.pos.w <= slots.move.x);
+  assert.ok(slots.move.x + slots.move.w <= slots.number.x);
+  assert.ok(moveGlyphs.fits);
+  assert.ok(moveGlyphs.doubleDigitFits);
+  assert.ok(moveGlyphs.pad >= 2);
+  assert.ok(moveGlyphs.arrowX - moveGlyphs.arrowW / 2 >= 0);
+  assert.ok(moveGlyphs.valueX + moveGlyphs.valueW / 2 <= layout.moveW);
+  assert.ok(moveGlyphs.dashX > 0 && moveGlyphs.dashX < layout.moveW);
+
+  assert.equal(geo.pointsValueRight, 476);
+  assert.equal(geo.leadValueRight, 528);
+  assert.equal(geo.cutValueRight, 588);
+
+  const colA = computeRowSlotGeometry(layout);
+  const colB = computeRowSlotGeometry(layout);
+  assert.deepEqual(
+    [colA.move.x, colA.number.x, colA.name.x, colA.name.w],
+    [colB.move.x, colB.number.x, colB.name.x, colB.name.w],
+  );
 });
 
 test("image/CORS failure path uses deterministic fallback via packagePlateColors", () => {
@@ -984,7 +1022,7 @@ test("playoff cutoff is a zero-height red line between P16 and P17 in column 2",
   assert.equal(cut.afterRowIndex, 1);
   assert.equal(cut.playoffCut, 16);
   assert.equal(layout.cutGap, 0);
-  assert.equal(layout.moveW, 68);
+  assert.equal(layout.moveW, 52);
 
   const line = computePlayoffCutLine(layout, cut);
   const p16Y = standingsRowY(layout, 1);
@@ -1108,7 +1146,7 @@ test("one 2px playoff-battle box surrounds P15–P18 without shifting rows", () 
   assert.notEqual(standingsRowY(layout, 2), standingsRowY(layout, 1) + layout.rowH + layout.cutGap);
   assert.equal(layout.cutGap, 0);
   assert.equal(layout.rowH, 58);
-  assert.equal(layout.moveW, 68);
+  assert.equal(layout.moveW, 52);
 });
 
 test("custom number artwork still beats SDK, SDK beats legacy", () => {
@@ -1205,6 +1243,7 @@ test("driver-name fitting keeps a narrow size range", () => {
   assert.ok(gomez.size >= 16);
   assert.ok(matthew.size >= 16);
   assert.ok(taylor.size >= 15);
+  assert.ok(slots.name.w >= 210);
   assert.ok(taylor.size > 12);
   assert.ok(berg.size < 22);
   const spread = berg.size - taylor.size;
