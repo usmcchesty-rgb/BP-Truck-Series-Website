@@ -53,6 +53,8 @@ import {
   sanitizeTrackName,
   formatPreviewStatus,
   computeStandingsLayoutMetrics,
+  computeRowSlotGeometry,
+  computePlayoffCutBand,
 } from "../public/standings-graphic-export-logic.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -139,42 +141,56 @@ test("output dimensions are exactly 3840×2160 at scale 2", () => {
   assert.equal(validateOutputDimensions(3840, 2160), true);
 });
 
-test("43 drivers → 16 / 14 / 13 columns", () => {
-  assert.deepEqual(COLUMN_SIZES, [16, 14, 13]);
-  const cols = distributeColumns(takeTopDrivers(makeDrivers(43)));
-  assert.deepEqual(cols.map((c) => c.length), [16, 14, 13]);
+test("42 drivers → 14 / 14 / 14 columns; P43 omitted from graphic", () => {
+  assert.deepEqual(COLUMN_SIZES, [14, 14, 14]);
+  assert.equal(MAX_DRIVERS, 42);
+  const source = makeDrivers(43);
+  assert.equal(source.length, 43);
+  const displayed = takeTopDrivers(source);
+  assert.equal(displayed.length, 42);
+  assert.equal(displayed[41].position, 42);
+  assert.equal(displayed.some((d) => d.position === 43), false);
+  const cols = distributeColumns(displayed);
+  assert.deepEqual(cols.map((c) => c.length), [14, 14, 14]);
   assert.equal(cols[0][0].position, 1);
-  assert.equal(cols[0][15].position, 16);
-  assert.equal(cols[1][0].position, 17);
-  assert.equal(cols[1][13].position, 30);
-  assert.equal(cols[2][0].position, 31);
-  assert.equal(cols[2][12].position, 43);
+  assert.equal(cols[0][13].position, 14);
+  assert.equal(cols[1][0].position, 15);
+  assert.equal(cols[1][1].position, 16);
+  assert.equal(cols[1][13].position, 28);
+  assert.equal(cols[2][0].position, 29);
+  assert.equal(cols[2][13].position, 42);
 });
 
-test("P1–P16 all in column 1; playoff divider below P16", () => {
+test("P16 playoff divider sits in column 2 after P16", () => {
   const drivers = takeTopDrivers(makeDrivers(43));
   const cut = findPlayoffCutPlacement(drivers, DEFAULT_PLAYOFF_CUT);
   assert.ok(cut);
-  assert.equal(cut.columnIndex, 0);
-  assert.equal(cut.afterRowIndex, 15);
+  assert.equal(cut.playoffCut, 16);
+  assert.equal(cut.columnIndex, 1);
+  assert.equal(cut.afterRowIndex, 1);
   assert.match(cut.label, /TOP 16 PLAYOFF CUT/);
 });
 
-test("16-row first column + cut + footer physically fits", () => {
+test("14-row columns + playoff divider + footer physically fit", () => {
   const m = computeStandingsLayoutMetrics({
-    driverCount: 43,
+    driverCount: 42,
     hasTrackName: true,
     reserveCutGap: true,
   });
-  assert.equal(m.maxRows, 16);
+  assert.equal(m.maxRows, 14);
   assert.equal(m.fits, true);
   assert.ok(m.rowH >= 48);
+  assert.ok(m.cutGap >= 40);
   assert.ok(m.usedH <= m.gridSpan + 0.01);
+  assert.ok(m.gridTop + m.usedH <= m.gridBottom + 0.01);
+  assert.ok(m.headerH + m.gridSpan + m.footerH <= 1080);
 });
 
-test("fewer than 43 drivers — no placeholders", () => {
+test("fewer than 42 drivers — no placeholders", () => {
   const rows = takeTopDrivers(makeDrivers(12), MAX_DRIVERS);
   assert.equal(rows.length, 12);
+  const cols = distributeColumns(rows);
+  assert.deepEqual(cols.map((c) => c.length), [12, 0, 0]);
 });
 
 test("standings ordering preserved", () => {
@@ -266,10 +282,11 @@ test("luminance picks readable number color", () => {
 });
 
 test("movement gained / lost / unchanged / missing", () => {
-  assert.deepEqual(formatMovement(3), { text: "▲3", dir: "up", value: 3 });
-  assert.deepEqual(formatMovement(-2), { text: "▼2", dir: "down", value: -2 });
-  assert.deepEqual(formatMovement(0), { text: "—", dir: "flat", value: 0 });
-  assert.deepEqual(formatMovement(null), { text: "—", dir: "flat", value: null });
+  assert.deepEqual(formatMovement(3), { text: "▲3", dir: "up", value: 3, arrow: "▲", valueLabel: "3" });
+  assert.deepEqual(formatMovement(-2), { text: "▼2", dir: "down", value: -2, arrow: "▼", valueLabel: "2" });
+  assert.deepEqual(formatMovement(12), { text: "▲12", dir: "up", value: 12, arrow: "▲", valueLabel: "12" });
+  assert.deepEqual(formatMovement(0), { text: "—", dir: "flat", value: 0, arrow: "—", valueLabel: "" });
+  assert.deepEqual(formatMovement(null), { text: "—", dir: "flat", value: null, arrow: "—", valueLabel: "" });
   assert.equal(resolveMovementDelta({ gainLoss: 3 }), 3);
   assert.equal(resolveMovementDelta({ previousPosition: 5, position: 2 }), 3);
   assert.equal(resolveMovementDelta({ previousPosition: 0, position: 4 }), null);
@@ -320,18 +337,21 @@ test("preview/export share same model; Refresh Snapshot updates race data", () =
   });
   assert.equal(a.latestCompletedRace.raceNumber, 1);
   assert.equal(b.latestCompletedRace.raceNumber, 17);
-  assert.deepEqual(b.columns.map((c) => c.length), [16, 14, 13]);
-  assert.equal(b.drivers.length, 43);
+  assert.deepEqual(b.columns.map((c) => c.length), [14, 14, 14]);
+  assert.equal(b.drivers.length, 42);
+  assert.equal(b.drivers.some((d) => d.position === 43), false);
+  assert.equal(standingsData.rows.length, 43);
   assert.match(formatPreviewStatus(b), /After Race 17/);
   assert.match(formatPreviewStatus(b), /Homestead/);
 });
 
-test("fewer than 43 drivers show correct preview count", () => {
+test("fewer than 42 drivers show correct preview count", () => {
   const model = buildStandingsGraphicModel(
     { settings: { seasonName: "Season 11" }, rows: makeDrivers(38) },
     { races: homesteadScheduleFixture() },
   );
   assert.equal(model.drivers.length, 38);
+  assert.deepEqual(model.columns.map((c) => c.length), [14, 14, 10]);
   assert.match(formatPreviewStatus(model), /38 drivers/);
 });
 
@@ -364,17 +384,18 @@ test("master canvas constants remain 3840×2160 for preview/export", () => {
 });
 
 test("typography defaults are larger than previous compressed sizes", () => {
-  assert.ok(TYPOGRAPHY.driverNameRest >= 19);
-  assert.ok(TYPOGRAPHY.positionTop10 >= 26);
-  assert.ok(TYPOGRAPHY.movement >= 16);
-  assert.ok(TYPOGRAPHY.points >= 17);
-  assert.ok(TYPOGRAPHY.wins >= 14);
-  assert.ok(TYPOGRAPHY.seasonMax >= 36);
-  assert.ok(TYPOGRAPHY.afterRace >= 18);
-  assert.ok(TYPOGRAPHY.footerSponsor >= 26);
-  assert.ok(TYPOGRAPHY.footerSeries >= 15);
-  assert.ok(TYPOGRAPHY.footerSite >= 16);
-  assert.ok(TYPOGRAPHY.playoffCut >= 14);
+  assert.ok(TYPOGRAPHY.driverNameRest >= 20);
+  assert.ok(TYPOGRAPHY.positionTop10 >= 28);
+  assert.ok(TYPOGRAPHY.movement >= 22);
+  assert.ok(TYPOGRAPHY.movementArrow >= 26);
+  assert.ok(TYPOGRAPHY.points >= 18);
+  assert.ok(TYPOGRAPHY.wins >= 15);
+  assert.ok(TYPOGRAPHY.seasonMax >= 42);
+  assert.ok(TYPOGRAPHY.afterRace >= 20);
+  assert.ok(TYPOGRAPHY.footerSponsor >= 30);
+  assert.ok(TYPOGRAPHY.footerSeries >= 16);
+  assert.ok(TYPOGRAPHY.footerSite >= 17);
+  assert.ok(TYPOGRAPHY.playoffCut >= 18);
 });
 
 test("tracked width is included in name fitting", () => {
@@ -635,14 +656,20 @@ test("standings rows keep shared numberArtwork and fall back without inventing a
   assert.equal(rows[1].hasNumberArtwork, false);
 });
 
-test("number display box uses the shared 640×320 contain box", () => {
+test("number display box is 2:1 contain-fit and does not collide with larger movement", () => {
   const m = computeStandingsLayoutMetrics({
-    driverCount: 43,
+    driverCount: 42,
     hasTrackName: true,
     reserveCutGap: true,
   });
-  assert.equal(m.plateW, 80);
-  assert.ok(m.plateH >= 32 && m.plateH <= 40);
+  assert.equal(m.plateW / m.plateH, 2);
+  assert.ok(m.plateH >= 36 && m.plateH <= 46);
+  const slots = computeRowSlotGeometry(m);
+  assert.ok(slots.pos.x + slots.pos.w <= slots.move.x);
+  assert.ok(slots.move.x + slots.move.w <= slots.number.x);
+  assert.ok(slots.number.x + slots.number.w <= slots.name.x);
+  assert.ok(slots.name.x + slots.name.w <= slots.stats.x);
+  assert.ok(slots.move.w >= 64, "double-digit movement needs dedicated width");
 });
 
 test("image/CORS failure path uses deterministic fallback via packagePlateColors", () => {
@@ -670,12 +697,82 @@ test("footer is text-only with sponsor larger than presented-by", () => {
 
 test("footer height increased for presenting-sponsor strip", () => {
   const m = computeStandingsLayoutMetrics({
-    driverCount: 43,
+    driverCount: 42,
     hasTrackName: true,
     reserveCutGap: true,
   });
   assert.ok(m.footerH >= 78);
   assert.equal(m.fits, true);
+});
+
+test("playoff divider occupies dedicated column-2 space after P16", () => {
+  const model = buildStandingsGraphicModel(
+    { settings: { seasonName: "Season 11", playoffCut: 16 }, rows: makeDrivers(43) },
+    { races: homesteadScheduleFixture() },
+  );
+  const layout = model.layoutHints;
+  const cut = model.cutPlacement;
+  assert.equal(cut.columnIndex, 1);
+  assert.equal(cut.afterRowIndex, 1);
+  const band = computePlayoffCutBand(layout, cut.afterRowIndex);
+  const p16Bottom = layout.gridTop + 2 * (layout.rowH + layout.rowGap) - layout.rowGap;
+  const p17Top = p16Bottom + layout.cutGap;
+  assert.ok(band.bandTop >= p16Bottom);
+  assert.ok(band.bandTop + band.bandH <= p17Top);
+  assert.ok(band.bandH >= 28);
+  assert.ok(layout.cutGap >= 40);
+});
+
+test("custom number artwork still beats SDK, SDK beats legacy", () => {
+  const custom = normalizeStandingsRows([
+    {
+      position: 1,
+      driver: "Custom",
+      carNumber: "12",
+      numberArtwork: {
+        source: "custom",
+        imagePath: "/assets/images/numbers/custom/1.png",
+        sdkPath: "/assets/images/numbers/1.png",
+        customPath: "/assets/images/numbers/custom/1.png",
+        authoritative: true,
+      },
+    },
+  ])[0];
+  const sdk = normalizeStandingsRows([
+    {
+      position: 1,
+      driver: "SDK",
+      carNumber: "7",
+      iracingDesign: {
+        numberImage: {
+          sdkPath: "/assets/images/numbers/2.png",
+          customPath: null,
+          preferredSource: "sdk",
+          authoritative: true,
+        },
+      },
+    },
+  ])[0];
+  const fallback = normalizeStandingsRows([
+    { position: 1, driver: "Legacy", carNumber: "99", iracingCustomerId: "3" },
+  ])[0];
+  assert.equal(custom.numberArtwork.source, "custom");
+  assert.equal(custom.hasNumberArtwork, true);
+  assert.equal(sdk.numberArtwork.source, "sdk");
+  assert.equal(sdk.hasNumberArtwork, true);
+  assert.equal(fallback.numberArtwork.source, "fallback");
+  assert.equal(fallback.hasNumberArtwork, false);
+});
+
+test("standings export renderer has no leftover glow/stroke on typography", () => {
+  const src = fs.readFileSync(path.join(root, "public", "standings-graphic-export.js"), "utf8");
+  assert.match(src, /function resetTextRenderingState/);
+  assert.match(src, /ctx\.shadowBlur = 0/);
+  assert.match(src, /ctx\.filter = "none"/);
+  assert.match(src, /ctx\.globalAlpha = 1/);
+  assert.doesNotMatch(src, /strokeText\(/);
+  assert.doesNotMatch(src, /bold \$\{T\.seasonMax\}px/);
+  assert.doesNotMatch(src, /Arial Narrow/);
 });
 
 test("luminance still picks readable number colors", () => {

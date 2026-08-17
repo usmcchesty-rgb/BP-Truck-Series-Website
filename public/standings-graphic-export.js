@@ -31,6 +31,8 @@ import {
   validateOutputDimensions,
   buildStandingsGraphicModel,
   computeStandingsLayoutMetrics,
+  computeRowSlotGeometry,
+  computePlayoffCutBand,
   sanitizeTrackName,
   measureTrackedTextWidth,
 } from "./standings-graphic-export-logic.js";
@@ -43,7 +45,7 @@ import {
 
 const BP_LOGO = "/assets/logos/New%20Clean%20Logo.png";
 const FONT_DISPLAY = 'Impact, Haettenschweiler, "Arial Black", Arial, sans-serif';
-const FONT_BODY = '"Arial Narrow", Arial, sans-serif';
+const FONT_BODY = "Arial, Helvetica, sans-serif";
 const PR_SUIT_CACHE_KEY = "bp_pr_suit_colors_v4";
 
 const imageAssetCache = new Map();
@@ -61,6 +63,14 @@ if (typeof localStorage !== "undefined") {
   }
 }
 
+function displayFont(size) {
+  return `${size}px ${FONT_DISPLAY}`;
+}
+
+function bodyFont(size, weight = "bold") {
+  return `${weight} ${size}px ${FONT_BODY}`;
+}
+
 function resetTextRenderingState(ctx) {
   ctx.globalAlpha = 1;
   ctx.filter = "none";
@@ -69,6 +79,7 @@ function resetTextRenderingState(ctx) {
   ctx.shadowOffsetX = 0;
   ctx.shadowOffsetY = 0;
   ctx.lineWidth = 1;
+  if (typeof ctx.letterSpacing !== "undefined") ctx.letterSpacing = "0px";
 }
 
 function measureCtxChar(ctx, font, ch) {
@@ -91,52 +102,44 @@ function measureCtxText(ctx, font, text) {
  * Tracked Canvas text with correct left/center/right alignment.
  * Tracking is included in total measured width.
  */
-function drawTextWithTracking(ctx, text, x, y, tracking, {
-  font,
-  fill,
-  align = "left",
-  baseline = "middle",
-} = {}) {
-  const value = String(text || "");
-  const chars = Array.from(value);
-  ctx.save();
-  resetTextRenderingState(ctx);
-  ctx.font = font;
-  ctx.fillStyle = fill;
-  ctx.textAlign = "left";
-  ctx.textBaseline = baseline;
-
-  const total = measureTrackedTextWidth(
-    (f, ch) => measureCtxChar(ctx, f, ch),
-    font,
-    value,
-    tracking,
-  );
-
-  let cursor = x;
-  if (align === "center") cursor = x - total / 2;
-  else if (align === "right") cursor = x - total;
-
-  chars.forEach((ch, index) => {
-    ctx.fillText(ch, Math.round(cursor), Math.round(y));
-    cursor += measureCtxChar(ctx, font, ch);
-    if (index < chars.length - 1) cursor += tracking;
-  });
-  ctx.restore();
-  return total;
-}
-
 function drawFillText(ctx, { text, x, y, font, fill, align = "left", baseline = "middle", tracking = 0 }) {
-  if (tracking) {
-    return drawTextWithTracking(ctx, text, x, y, tracking, { font, fill, align, baseline });
-  }
+  const value = String(text || "");
   ctx.save();
   resetTextRenderingState(ctx);
   ctx.font = font;
   ctx.fillStyle = fill;
-  ctx.textAlign = align;
   ctx.textBaseline = baseline;
-  ctx.fillText(String(text || ""), Math.round(x), Math.round(y));
+
+  if (tracking && typeof ctx.letterSpacing !== "undefined") {
+    ctx.letterSpacing = `${Number(tracking)}px`;
+    ctx.textAlign = align;
+    ctx.fillText(value, Math.round(x), Math.round(y));
+    ctx.restore();
+    return;
+  }
+
+  if (tracking) {
+    ctx.textAlign = "left";
+    const total = measureTrackedTextWidth(
+      (f, ch) => measureCtxChar(ctx, f, ch),
+      font,
+      value,
+      tracking,
+    );
+    let cursor = x;
+    if (align === "center") cursor = x - total / 2;
+    else if (align === "right") cursor = x - total;
+    Array.from(value).forEach((ch, index) => {
+      ctx.fillText(ch, Math.round(cursor), Math.round(y));
+      cursor += measureCtxChar(ctx, font, ch);
+      if (index < value.length - 1) cursor += tracking;
+    });
+    ctx.restore();
+    return total;
+  }
+
+  ctx.textAlign = align;
+  ctx.fillText(value, Math.round(x), Math.round(y));
   ctx.restore();
 }
 
@@ -362,40 +365,40 @@ function drawHeader(ctx, model, logoImg, layout) {
       text: "TRUCK SERIES",
       x: layout.padX + logoW + 12,
       y: 38,
-      font: `bold 22px ${FONT_DISPLAY}`,
+      font: displayFont(22),
       fill: "#ffffff",
       align: "left",
       baseline: "middle",
-      tracking: 0.6,
+      tracking: 0.8,
     });
   } else {
     drawFillText(ctx, {
       text: "BLAZING PEDALS",
       x: layout.padX,
       y: 26,
-      font: `bold 16px ${FONT_BODY}`,
-      fill: "#ff3a3a",
+      font: bodyFont(16),
+      fill: "#ff3030",
       align: "left",
       baseline: "middle",
-      tracking: 0.8,
+      tracking: 1.0,
     });
     drawFillText(ctx, {
       text: "TRUCK SERIES",
       x: layout.padX,
       y: 50,
-      font: `bold 24px ${FONT_DISPLAY}`,
+      font: displayFont(24),
       fill: "#ffffff",
       align: "left",
       baseline: "middle",
-      tracking: 0.6,
+      tracking: 0.8,
     });
   }
 
   drawFillText(ctx, {
     text: formatSeasonHeading(seasonName),
     x: rightX,
-    y: hasTrack ? 20 : 32,
-    font: `bold ${T.seasonMax}px ${FONT_DISPLAY}`,
+    y: hasTrack ? 22 : 34,
+    font: displayFont(T.seasonMax),
     fill: "#ffffff",
     align: "right",
     baseline: "middle",
@@ -405,9 +408,9 @@ function drawHeader(ctx, model, logoImg, layout) {
   drawFillText(ctx, {
     text: formatAfterRaceLine(raceNumber),
     x: rightX,
-    y: hasTrack ? 48 : 60,
-    font: `bold ${T.afterRace}px ${FONT_BODY}`,
-    fill: "#d0d0d0",
+    y: hasTrack ? 52 : 64,
+    font: bodyFont(T.afterRace),
+    fill: "#f2f2f2",
     align: "right",
     baseline: "middle",
     tracking: T.tracking.afterRace,
@@ -430,8 +433,8 @@ function drawHeader(ctx, model, logoImg, layout) {
         text: line,
         x: rightX,
         y: lineStartY + index * (trackFit.fontSize + 3),
-        font: `bold ${trackFit.fontSize}px ${FONT_BODY}`,
-        fill: "#b8b8b8",
+        font: bodyFont(trackFit.fontSize),
+        fill: "#e8e8e8",
         align: "right",
         baseline: "middle",
         tracking: T.tracking.track,
@@ -442,11 +445,11 @@ function drawHeader(ctx, model, logoImg, layout) {
   const ruleY = layout.headerH - 6;
   ctx.save();
   resetTextRenderingState(ctx);
-  ctx.strokeStyle = "rgba(255,48,48,0.9)";
+  ctx.strokeStyle = "#e50914";
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(layout.padX, ruleY);
-  ctx.lineTo(LOGICAL_WIDTH - layout.padX, ruleY);
+  ctx.moveTo(Math.round(layout.padX), Math.round(ruleY));
+  ctx.lineTo(Math.round(LOGICAL_WIDTH - layout.padX), Math.round(ruleY));
   ctx.stroke();
   ctx.restore();
 
@@ -500,11 +503,11 @@ function drawNumberPlate(ctx, carNumber, colors, x, y, w, h) {
     maxSize: Math.floor(h * 0.74),
     minSize: 12,
   });
-  ctx.font = `bold ${fontSize}px ${FONT_DISPLAY}`;
+  ctx.font = displayFont(fontSize);
   ctx.fillStyle = numberFill;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(display, x + w / 2, y + h / 2 + 0.5);
+  ctx.fillText(display, Math.round(x + w / 2), Math.round(y + h / 2));
   ctx.restore();
 }
 
@@ -540,26 +543,26 @@ function rowStyle(position) {
 function drawDriverRow(ctx, driver, box, plateColors, layout, numberImg = null) {
   const { x, y, w, h } = box;
   const style = rowStyle(driver.position);
-  const pad = 6;
+  const pad = layout.rowPad ?? 6;
   const T = TYPOGRAPHY;
+  const slots = computeRowSlotGeometry(layout);
   const plateW = layout.plateW;
   const plateH = layout.plateH;
   const posW = layout.posW;
   const moveW = layout.moveW;
-  const statsW = layout.statsW;
 
   ctx.save();
   resetTextRenderingState(ctx);
   ctx.fillStyle = style.bg;
-  roundRect(ctx, x, y, w, h, 4);
+  roundRect(ctx, Math.round(x), Math.round(y), Math.round(w), Math.round(h), 4);
   ctx.fill();
   ctx.strokeStyle = style.border;
-  ctx.lineWidth = Number(driver.position) === 1 ? 1.75 : 1;
-  roundRect(ctx, x + 0.5, y + 0.5, w - 1, h - 1, 4);
+  ctx.lineWidth = Number(driver.position) === 1 ? 2 : 1;
+  roundRect(ctx, Math.round(x) + 0.5, Math.round(y) + 0.5, Math.round(w) - 1, Math.round(h) - 1, 4);
   ctx.stroke();
   ctx.restore();
 
-  const cy = y + h / 2;
+  const cy = Math.round(y + h / 2);
   const posSize =
     Number(driver.position) <= 10 ? T.positionTop10 : T.positionRest;
 
@@ -567,28 +570,16 @@ function drawDriverRow(ctx, driver, box, plateColors, layout, numberImg = null) 
     text: String(driver.position),
     x: x + pad + posW / 2,
     y: cy,
-    font: `bold ${posSize}px ${FONT_DISPLAY}`,
+    font: displayFont(posSize),
     fill: style.posFill,
     align: "center",
     baseline: "middle",
   });
 
-  const movement = driver.movement || { text: "—", dir: "flat" };
-  const moveColor =
-    movement.dir === "up" ? "#3dce6a" : movement.dir === "down" ? "#ff5a5a" : "#888888";
-  const moveX = x + pad + posW + layout.gapPosMove + moveW / 2;
-  drawFillText(ctx, {
-    text: movement.text,
-    x: moveX,
-    y: cy,
-    font: `bold ${T.movement}px ${FONT_BODY}`,
-    fill: moveColor,
-    align: "center",
-    baseline: "middle",
-  });
+  drawMovementIndicator(ctx, driver.movement, x + slots.move.x, cy, moveW, T);
 
-  const plateX = x + pad + posW + layout.gapPosMove + moveW + layout.gapMovePlate;
-  const plateY = y + (h - plateH) / 2;
+  const plateX = x + slots.number.x;
+  const plateY = Math.round(y + (h - plateH) / 2);
   const usedArtwork = hasUsableNumberArtwork(driver.numberArtwork) && numberImg
     ? drawNumberArtwork(ctx, numberImg, plateX, plateY, plateW, plateH)
     : false;
@@ -596,8 +587,8 @@ function drawDriverRow(ctx, driver, box, plateColors, layout, numberImg = null) 
     drawNumberPlate(ctx, driver.carNumber, plateColors, plateX, plateY, plateW, plateH);
   }
 
-  const nameX = plateX + plateW + layout.gapPlateName;
-  const nameMaxW = w - (nameX - x) - statsW - pad;
+  const nameX = x + slots.name.x;
+  const nameMaxW = slots.name.w;
   const tracking = T.tracking.driverName;
   const nameMax =
     Number(driver.position) <= 10 ? T.driverNameTop10 : T.driverNameRest;
@@ -614,7 +605,7 @@ function drawDriverRow(ctx, driver, box, plateColors, layout, numberImg = null) 
     text: driver.driverName.toUpperCase(),
     x: nameX,
     y: cy,
-    font: `${style.nameWeight} ${nameSize}px ${FONT_BODY}`,
+    font: bodyFont(nameSize, style.nameWeight),
     fill: style.nameFill,
     align: "left",
     baseline: "middle",
@@ -624,14 +615,14 @@ function drawDriverRow(ctx, driver, box, plateColors, layout, numberImg = null) 
   const statsRight = x + w - pad;
   const winsLabel = formatWinsLabel(driver.wins);
   const pointsLabel = formatPointsLabel(driver.points);
-  const winsW = measureCtxText(ctx, `bold ${T.wins}px ${FONT_BODY}`, winsLabel);
+  const winsW = measureCtxText(ctx, bodyFont(T.wins), winsLabel);
 
   drawFillText(ctx, {
     text: winsLabel,
     x: statsRight,
     y: cy,
-    font: `bold ${T.wins}px ${FONT_BODY}`,
-    fill: "#c0c0c0",
+    font: bodyFont(T.wins),
+    fill: "#e0e0e0",
     align: "right",
     baseline: "middle",
   });
@@ -640,9 +631,48 @@ function drawDriverRow(ctx, driver, box, plateColors, layout, numberImg = null) 
     text: pointsLabel,
     x: statsRight - winsW - layout.gapPtsWins,
     y: cy,
-    font: `bold ${T.points}px ${FONT_BODY}`,
+    font: bodyFont(T.points),
     fill: "#ffffff",
     align: "right",
+    baseline: "middle",
+  });
+}
+
+function drawMovementIndicator(ctx, movement, slotX, cy, slotW, T) {
+  const data = movement || { text: "—", dir: "flat", arrow: "—", valueLabel: "" };
+  const fill =
+    data.dir === "up" ? "#2fd36a" : data.dir === "down" ? "#ff3b3b" : "#d0d0d0";
+  const mid = slotX + slotW / 2;
+
+  if (data.dir === "flat" || !data.valueLabel) {
+    drawFillText(ctx, {
+      text: data.arrow || "—",
+      x: mid,
+      y: cy,
+      font: displayFont(T.movement),
+      fill,
+      align: "center",
+      baseline: "middle",
+    });
+    return;
+  }
+
+  drawFillText(ctx, {
+    text: data.arrow,
+    x: mid - 11,
+    y: cy,
+    font: displayFont(T.movementArrow),
+    fill,
+    align: "center",
+    baseline: "middle",
+  });
+  drawFillText(ctx, {
+    text: data.valueLabel,
+    x: mid + 12,
+    y: cy,
+    font: displayFont(T.movement),
+    fill,
+    align: "center",
     baseline: "middle",
   });
 }
@@ -651,35 +681,28 @@ function drawPlayoffCut(ctx, layout, placement, colX) {
   if (!placement) return;
   const { afterRowIndex, label } = placement;
   const T = TYPOGRAPHY;
-  const cutRowBottom =
-    layout.gridTop + (afterRowIndex + 1) * (layout.rowH + layout.rowGap) - layout.rowGap;
-  const y = cutRowBottom + (layout.cutGap || 16) / 2;
+  const band = computePlayoffCutBand(layout, afterRowIndex);
+  const x = Math.round(colX);
+  const w = Math.round(layout.colW);
+  const y = band.bandTop;
+  const h = band.bandH;
+  const barH = band.barH;
 
   ctx.save();
   resetTextRenderingState(ctx);
-  ctx.strokeStyle = "#e01010";
-  ctx.lineWidth = 2.5;
-  ctx.beginPath();
-  ctx.moveTo(colX, y);
-  ctx.lineTo(colX + layout.colW, y);
-  ctx.stroke();
-
-  const mid = colX + layout.colW / 2;
-  const labelW = Math.min(layout.colW - 12, 260);
-  const labelH = 22;
-  ctx.fillStyle = "#140404";
-  ctx.fillRect(mid - labelW / 2, y - labelH / 2, labelW, labelH);
-  ctx.strokeStyle = "#e01010";
-  ctx.lineWidth = 1.25;
-  ctx.strokeRect(mid - labelW / 2, y - labelH / 2, labelW, labelH);
+  ctx.fillStyle = "#6a0000";
+  ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = "#e50914";
+  ctx.fillRect(x, y, w, barH);
+  ctx.fillRect(x, y + h - barH, w, barH);
   ctx.restore();
 
   drawFillText(ctx, {
     text: label,
-    x: mid,
-    y,
-    font: `bold ${T.playoffCut}px ${FONT_BODY}`,
-    fill: "#ff6a6a",
+    x: x + w / 2,
+    y: band.textY,
+    font: displayFont(T.playoffCut),
+    fill: "#ffffff",
     align: "center",
     baseline: "middle",
     tracking: T.tracking.playoffCut,
@@ -694,11 +717,11 @@ function drawFooter(ctx, layout) {
 
   ctx.save();
   resetTextRenderingState(ctx);
-  ctx.strokeStyle = "#b80000";
+  ctx.strokeStyle = "#e50914";
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(layout.padX, y0);
-  ctx.lineTo(LOGICAL_WIDTH - layout.padX, y0);
+  ctx.moveTo(Math.round(layout.padX), Math.round(y0));
+  ctx.lineTo(Math.round(LOGICAL_WIDTH - layout.padX), Math.round(y0));
   ctx.stroke();
   ctx.restore();
 
@@ -707,8 +730,8 @@ function drawFooter(ctx, layout) {
     text: "BLAZING PEDALS TRUCK SERIES",
     x: layout.padX,
     y: midY,
-    font: `bold ${T.footerSeries}px ${FONT_BODY}`,
-    fill: "#c8c8c8",
+    font: bodyFont(T.footerSeries),
+    fill: "#f0f0f0",
     align: "left",
     baseline: "middle",
     tracking: T.tracking.series,
@@ -718,9 +741,9 @@ function drawFooter(ctx, layout) {
   drawFillText(ctx, {
     text: footer.presentedBy,
     x: LOGICAL_WIDTH / 2,
-    y: midY - 14,
-    font: `bold ${T.footerPresentedBy}px ${FONT_BODY}`,
-    fill: "#aaaaaa",
+    y: midY - 16,
+    font: bodyFont(T.footerPresentedBy),
+    fill: "#e8e8e8",
     align: "center",
     baseline: "middle",
     tracking: T.tracking.presentedBy,
@@ -729,7 +752,7 @@ function drawFooter(ctx, layout) {
     text: footer.sponsorLine,
     x: LOGICAL_WIDTH / 2,
     y: midY + 12,
-    font: `bold ${T.footerSponsor}px ${FONT_DISPLAY}`,
+    font: displayFont(T.footerSponsor),
     fill: "#ffffff",
     align: "center",
     baseline: "middle",
@@ -741,8 +764,8 @@ function drawFooter(ctx, layout) {
     text: SITE_URL,
     x: LOGICAL_WIDTH - layout.padX,
     y: midY,
-    font: `bold ${T.footerSite}px ${FONT_BODY}`,
-    fill: "#d0d0d0",
+    font: bodyFont(T.footerSite),
+    fill: "#f2f2f2",
     align: "right",
     baseline: "middle",
     tracking: T.tracking.site,
@@ -755,9 +778,9 @@ async function ensureFontsReady() {
   }
   await document.fonts.ready;
   await Promise.all([
-    document.fonts.load(`bold 36px Impact`).catch(() => null),
-    document.fonts.load(`bold 18px "Arial Narrow"`).catch(() => null),
-    document.fonts.load(`bold 18px Arial`).catch(() => null),
+    document.fonts.load(`42px Impact`).catch(() => null),
+    document.fonts.load(`bold 20px Arial`).catch(() => null),
+    document.fonts.load(`bold 22px Arial`).catch(() => null),
   ]);
   return { fallbackRequired: false, warnings: [] };
 }
@@ -940,7 +963,7 @@ export async function renderStandingsGraphicCanvas(model, options = {}) {
   layout.footerY = LOGICAL_HEIGHT - layout.footerH;
 
   if (!layout.fits) {
-    console.warn("[standings-graphic-export] Layout tight for 43-driver board", layout);
+    console.warn("[standings-graphic-export] Layout tight for 42-driver board", layout);
   }
 
   const canvas = document.createElement("canvas");
@@ -967,8 +990,9 @@ export async function renderStandingsGraphicCanvas(model, options = {}) {
         cutPlacement.columnIndex === col &&
         rowIndex > cutPlacement.afterRowIndex
       ) {
-        y += layout.cutGap || 16;
+        y += layout.cutGap || 44;
       }
+      y = Math.round(y);
       const plateColors = plateColorsList[driverColorIndex] || DEFAULT_PLATE;
       const numberImg = numberImages[driverColorIndex] || null;
       driverColorIndex += 1;

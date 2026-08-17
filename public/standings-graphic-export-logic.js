@@ -4,7 +4,6 @@
  */
 
 import {
-  STANDINGS_NUMBER_BOX,
   hasUsableNumberArtwork,
   resolveNumberArtwork,
 } from "./number-artwork-logic.js";
@@ -14,15 +13,15 @@ export const LOGICAL_HEIGHT = 1080;
 export const RENDER_SCALE = 2;
 export const OUTPUT_WIDTH = LOGICAL_WIDTH * RENDER_SCALE; // 3840
 export const OUTPUT_HEIGHT = LOGICAL_HEIGHT * RENDER_SCALE; // 2160
-export const MAX_DRIVERS = 43;
+export const MAX_DRIVERS = 42;
 export const DEFAULT_PLAYOFF_CUT = 16;
 export const DEFAULT_SEASON_NAME = "Season 11";
 export const SPONSOR_NAME = "OHIO & INDIANA ROOFING";
 export const SITE_URL = "blazingpedalsracing.com";
 export const NON_POINTS_LABEL_PATTERN = /\b(duel|duels|non-points|exhibition|clash)\b/i;
 
-/** Top 16 playoff field stays together in column 1. */
-export const COLUMN_SIZES = [16, 14, 13];
+/** Graphic presentation only: P1–P14 / P15–P28 / P29–P42. */
+export const COLUMN_SIZES = [14, 14, 14];
 
 export const DEFAULT_PLATE = {
   fill: "#1a1a1e",
@@ -31,35 +30,36 @@ export const DEFAULT_PLATE = {
   numberFill: "#ffffff",
 };
 
-/** Typography targets (logical px) — larger for Discord/Facebook scale-down. */
+/** Typography targets (logical px). Impact titles are regular weight — Impact has no true bold. */
 export const TYPOGRAPHY = {
-  seasonMax: 36,
-  afterRace: 18,
-  trackMax: 16,
-  trackMin: 11,
-  driverNameTop10: 21,
-  driverNameRest: 19,
-  driverNameMin: 11,
-  positionTop10: 26,
-  positionRest: 22,
-  movement: 16,
-  points: 17,
-  wins: 14,
-  playoffCut: 14,
+  seasonMax: 42,
+  afterRace: 20,
+  trackMax: 17,
+  trackMin: 12,
+  driverNameTop10: 22,
+  driverNameRest: 20,
+  driverNameMin: 12,
+  positionTop10: 28,
+  positionRest: 24,
+  movement: 22,
+  movementArrow: 26,
+  points: 18,
+  wins: 15,
+  playoffCut: 18,
   footerPresentedBy: 13,
-  footerSponsor: 26,
-  footerSeries: 15,
-  footerSite: 16,
+  footerSponsor: 30,
+  footerSeries: 16,
+  footerSite: 17,
   tracking: {
-    driverName: 0.85,
-    season: 1.35,
-    afterRace: 0.7,
-    track: 0.55,
-    playoffCut: 1.1,
-    presentedBy: 1.6,
-    sponsor: 1.9,
-    series: 1.0,
-    site: 0.35,
+    driverName: 0.9,
+    season: 1.8,
+    afterRace: 0.9,
+    track: 0.7,
+    playoffCut: 1.8,
+    presentedBy: 2.2,
+    sponsor: 2.4,
+    series: 1.2,
+    site: 0.5,
   },
 };
 
@@ -340,12 +340,15 @@ export function resolveMovementDelta(row = {}) {
 
 export function formatMovement(delta) {
   if (delta == null || !Number.isFinite(Number(delta))) {
-    return { text: "—", dir: "flat", value: null };
+    return { text: "—", dir: "flat", value: null, arrow: "—", valueLabel: "" };
   }
   const n = Number(delta);
-  if (n === 0) return { text: "—", dir: "flat", value: 0 };
-  if (n > 0) return { text: `▲${n}`, dir: "up", value: n };
-  return { text: `▼${Math.abs(n)}`, dir: "down", value: n };
+  if (n === 0) return { text: "—", dir: "flat", value: 0, arrow: "—", valueLabel: "" };
+  if (n > 0) {
+    return { text: `▲${n}`, dir: "up", value: n, arrow: "▲", valueLabel: String(n) };
+  }
+  const abs = Math.abs(n);
+  return { text: `▼${abs}`, dir: "down", value: n, arrow: "▼", valueLabel: String(abs) };
 }
 
 export function normalizeStandingsRows(rows = []) {
@@ -404,7 +407,7 @@ export function distributeColumns(drivers, sizes = COLUMN_SIZES) {
   return columns.slice(0, sizes.length);
 }
 
-/** Playoff divider immediately below P16 — expected in column 1 with 16/14/13. */
+/** Playoff divider immediately below P16 — column 2 with 14/14/14. */
 export function findPlayoffCutPlacement(drivers, playoffCut = DEFAULT_PLAYOFF_CUT) {
   const cut = Number(playoffCut) || DEFAULT_PLAYOFF_CUT;
   const list = Array.isArray(drivers) ? drivers : [];
@@ -909,34 +912,37 @@ export function validateOutputDimensions(width, height) {
 }
 
 /**
- * Layout metrics for the 43-driver / 16-row first column case.
- * Ensures header + 16 rows + cut + footer fit in 1080 logical px.
+ * Layout metrics for the 42-driver / 14 / 14 / 14 board.
+ * Column 2 reserves dedicated vertical space for the Top 16 playoff divider.
  */
 export function computeStandingsLayoutMetrics({
   driverCount = MAX_DRIVERS,
   hasTrackName = true,
   reserveCutGap = true,
 } = {}) {
-  const padX = 22;
-  const headerH = hasTrackName ? 94 : 78;
-  const footerH = 78;
-  const topGap = 2;
-  const bottomGap = 2;
+  const padX = 24;
+  const headerH = hasTrackName ? 98 : 82;
+  const footerH = 80;
+  const topGap = 6;
+  const bottomGap = 6;
   const gridTop = headerH + topGap;
   const gridBottom = LOGICAL_HEIGHT - footerH - bottomGap;
   const gridSpan = gridBottom - gridTop;
-  const colGap = 14;
+  const colGap = 18;
   const colCount = 3;
-  const colW = (LOGICAL_WIDTH - padX * 2 - colGap * (colCount - 1)) / colCount;
+  const colW = Math.floor((LOGICAL_WIDTH - padX * 2 - colGap * (colCount - 1)) / colCount);
   const columns = distributeColumns(new Array(Math.min(driverCount, MAX_DRIVERS)).fill(null));
   const maxRows = Math.max(1, ...columns.map((c) => c.length || 1));
-  const cutGap = reserveCutGap ? 16 : 0;
-  const rowGap = 2;
+  const cutGap = reserveCutGap ? 44 : 0;
+  const rowGap = 4;
   const rowStackBudget = Math.max(0, gridSpan - cutGap);
-  const rowH = Math.min(56, (rowStackBudget - rowGap * (maxRows - 1)) / maxRows);
+  const rawRowH = (rowStackBudget - rowGap * (maxRows - 1)) / maxRows;
+  const rowH = Math.max(36, Math.min(58, Math.floor(rawRowH)));
   const rowsUsed = maxRows * rowH + Math.max(0, maxRows - 1) * rowGap;
   const usedH = rowsUsed + cutGap;
   const fits = usedH <= gridSpan + 0.01;
+  const plateH = Math.max(36, Math.min(46, rowH - 12));
+  const plateW = plateH * 2;
 
   return {
     padX,
@@ -950,22 +956,54 @@ export function computeStandingsLayoutMetrics({
     rowH,
     rowGap,
     cutGap,
+    cutBarH: 4,
     maxRows,
     gridSpan,
     rowsUsed,
     usedH,
     fits,
-    plateW: STANDINGS_NUMBER_BOX.width,
-    plateH: Math.min(STANDINGS_NUMBER_BOX.height, Math.max(32, rowH - 8)),
-    // Horizontal row slots (more breathing room)
-    posW: 40,
-    moveW: 46,
-    statsW: 168,
-    gapPosMove: 4,
-    gapMovePlate: 8,
-    gapPlateName: 12,
-    gapNameStats: 14,
-    gapPtsWins: 16,
+    plateW,
+    plateH,
+    posW: 44,
+    moveW: 68,
+    statsW: 172,
+    gapPosMove: 6,
+    gapMovePlate: 10,
+    gapPlateName: 10,
+    gapNameStats: 12,
+    gapPtsWins: 14,
+    rowPad: 6,
+  };
+}
+
+/** Horizontal slots inside a standings row. Used to keep movement / numbers / names from colliding. */
+export function computeRowSlotGeometry(layout = computeStandingsLayoutMetrics()) {
+  const pad = layout.rowPad ?? 6;
+  const posX = pad;
+  const moveX = posX + layout.posW + layout.gapPosMove;
+  const numberX = moveX + layout.moveW + layout.gapMovePlate;
+  const nameX = numberX + layout.plateW + layout.gapPlateName;
+  const statsX = layout.colW - pad - layout.statsW;
+  const nameW = Math.max(0, statsX - layout.gapNameStats - nameX);
+  return {
+    pos: { x: posX, w: layout.posW },
+    move: { x: moveX, w: layout.moveW },
+    number: { x: numberX, w: layout.plateW },
+    name: { x: nameX, w: nameW },
+    stats: { x: statsX, w: layout.statsW },
+  };
+}
+
+export function computePlayoffCutBand(layout, afterRowIndex) {
+  const cutRowBottom =
+    layout.gridTop + (afterRowIndex + 1) * (layout.rowH + layout.rowGap) - layout.rowGap;
+  const bandTop = Math.round(cutRowBottom + 5);
+  const bandH = Math.max(28, (layout.cutGap || 44) - 10);
+  return {
+    bandTop,
+    bandH,
+    barH: layout.cutBarH || 4,
+    textY: Math.round(bandTop + bandH / 2),
   };
 }
 
