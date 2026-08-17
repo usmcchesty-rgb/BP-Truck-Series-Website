@@ -56,10 +56,17 @@ import {
   computeStandingsLayoutMetrics,
   computeRowSlotGeometry,
   computePlayoffCutLine,
+  computePlayoffBattleBox,
   standingsRowY,
   playoffBubbleKind,
+  standingsRowVisualStyle,
   PLAYOFF_BUBBLE,
+  PLAYOFF_BATTLE_BOX,
   PLAYOFF_CUT_LINE,
+  STANDINGS_NORMAL_ROW,
+  STANDINGS_P1_GOLD,
+  STANDINGS_P2_SILVER,
+  STANDINGS_P3_BRONZE,
 } from "../public/standings-graphic-export-logic.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -771,12 +778,91 @@ test("P15–P18 are the only playoff-bubble rows, inside vs outside", () => {
   assert.equal(playoffBubbleKind(1), null);
   assert.deepEqual(PLAYOFF_BUBBLE.inside.positions, [15, 16]);
   assert.deepEqual(PLAYOFF_BUBBLE.outside.positions, [17, 18]);
-  assert.equal(PLAYOFF_BUBBLE.inside.bg, "rgba(170, 35, 45, 0.30)");
-  assert.equal(PLAYOFF_BUBBLE.inside.border, "rgba(190, 55, 65, 0.38)");
-  assert.equal(PLAYOFF_BUBBLE.outside.bg, "rgba(105, 25, 38, 0.30)");
-  assert.equal(PLAYOFF_BUBBLE.outside.border, "rgba(125, 35, 48, 0.38)");
+  assert.equal(PLAYOFF_BUBBLE.inside.bg, "rgba(145, 38, 45, 0.55)");
+  assert.equal(PLAYOFF_BUBBLE.outside.bg, "rgba(100, 27, 35, 0.55)");
+  assert.equal(PLAYOFF_BUBBLE.inside.border, STANDINGS_NORMAL_ROW.border);
+  assert.equal(PLAYOFF_BUBBLE.outside.border, STANDINGS_NORMAL_ROW.border);
   assert.equal(PLAYOFF_CUT_LINE.color, "#e50914");
   assert.equal(PLAYOFF_CUT_LINE.thickness, 4);
+});
+
+test("podium outlines and removed Top 10 red treatment", () => {
+  const p1 = standingsRowVisualStyle(1);
+  const p2 = standingsRowVisualStyle(2);
+  const p3 = standingsRowVisualStyle(3);
+  const p4 = standingsRowVisualStyle(4);
+  const p10 = standingsRowVisualStyle(10);
+  const p14 = standingsRowVisualStyle(14);
+  const p15 = standingsRowVisualStyle(15);
+  const p16 = standingsRowVisualStyle(16);
+  const p17 = standingsRowVisualStyle(17);
+  const p18 = standingsRowVisualStyle(18);
+  const p19 = standingsRowVisualStyle(19);
+
+  assert.equal(p1.bg, STANDINGS_P1_GOLD.bg);
+  assert.equal(p1.border, STANDINGS_P1_GOLD.border);
+  assert.equal(p1.borderWidth, 2);
+
+  assert.equal(p2.bg, STANDINGS_NORMAL_ROW.bg);
+  assert.equal(p2.border, "#bfc3c7");
+  assert.equal(p2.borderWidth, 2);
+  assert.equal(p3.bg, STANDINGS_NORMAL_ROW.bg);
+  assert.equal(p3.border, "#b87333");
+  assert.equal(p3.borderWidth, 2);
+
+  for (const style of [p4, p10, p14, p19]) {
+    assert.equal(style.bg, STANDINGS_NORMAL_ROW.bg);
+    assert.equal(style.border, STANDINGS_NORMAL_ROW.border);
+    assert.equal(style.borderWidth, 1);
+    assert.notEqual(style.border, "rgba(180,40,40,0.5)");
+    assert.notEqual(style.bg, "rgba(42,42,42,0.58)");
+  }
+
+  assert.equal(p15.bg, PLAYOFF_BUBBLE.inside.bg);
+  assert.equal(p16.bg, PLAYOFF_BUBBLE.inside.bg);
+  assert.equal(p17.bg, PLAYOFF_BUBBLE.outside.bg);
+  assert.equal(p18.bg, PLAYOFF_BUBBLE.outside.bg);
+  assert.equal(p15.border, STANDINGS_NORMAL_ROW.border);
+  assert.equal(p18.border, STANDINGS_NORMAL_ROW.border);
+  assert.equal(p15.borderWidth, 1);
+
+  assert.notEqual(p2.bg, p1.bg);
+  assert.notEqual(p2.border, p1.border);
+});
+
+test("one 2px playoff-battle box surrounds P15–P18 without shifting rows", () => {
+  const model = buildStandingsGraphicModel(
+    { settings: { seasonName: "Season 11", playoffCut: 16 }, rows: makeDrivers(43) },
+    { races: homesteadScheduleFixture() },
+  );
+  const layout = model.layoutHints;
+  const cut = model.cutPlacement;
+  const box = computePlayoffBattleBox(layout, cut);
+  const p14Y = standingsRowY(layout, 13);
+  const p15Y = standingsRowY(layout, 0);
+  const p18Y = standingsRowY(layout, 3);
+  const p19Y = standingsRowY(layout, 4);
+  assert.equal(box.columnIndex, 1);
+  assert.equal(box.startRow, 0);
+  assert.equal(box.endRow, 3);
+  assert.equal(box.startPosition, 15);
+  assert.equal(box.endPosition, 18);
+  assert.equal(box.thickness, 2);
+  assert.equal(box.color, "#c81018");
+  assert.equal(PLAYOFF_BATTLE_BOX.thickness, 2);
+  assert.ok(PLAYOFF_BATTLE_BOX.thickness < PLAYOFF_CUT_LINE.thickness);
+  assert.equal(box.extraLayoutHeight, 0);
+  assert.equal(box.consumesLayoutHeight, false);
+  assert.equal(box.includesP14, false);
+  assert.equal(box.includesP19, false);
+  assert.equal(box.y, p15Y);
+  assert.equal(box.height, p18Y + layout.rowH - p15Y);
+  assert.ok(box.y + box.height <= p19Y);
+  assert.ok(p14Y + layout.rowH <= box.y || cut.columnIndex !== 0);
+  assert.notEqual(standingsRowY(layout, 2), standingsRowY(layout, 1) + layout.rowH + layout.cutGap);
+  assert.equal(layout.cutGap, 0);
+  assert.equal(layout.rowH, 58);
+  assert.equal(layout.moveW, 68);
 });
 
 test("custom number artwork still beats SDK, SDK beats legacy", () => {
@@ -830,7 +916,9 @@ test("standings export renderer has no leftover glow/stroke on typography", () =
   assert.doesNotMatch(src, /bold \$\{T\.seasonMax\}px/);
   assert.doesNotMatch(src, /Arial Narrow/);
   assert.doesNotMatch(src, /TOP 16 PLAYOFF CUT/);
+  assert.doesNotMatch(src, /pos >= 2 && pos <= 10/);
   assert.match(src, /drawPlayoffCutLine/);
+  assert.match(src, /drawPlayoffBattleBox/);
 });
 
 test("driver-name fitting keeps a narrow size range", () => {

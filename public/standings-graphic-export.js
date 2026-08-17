@@ -34,9 +34,9 @@ import {
   computeStandingsLayoutMetrics,
   computeRowSlotGeometry,
   computePlayoffCutLine,
+  computePlayoffBattleBox,
   standingsRowY,
-  playoffBubbleKind,
-  PLAYOFF_BUBBLE,
+  standingsRowVisualStyle,
   sanitizeTrackName,
   measureTrackedTextWidth,
 } from "./standings-graphic-export-logic.js";
@@ -516,51 +516,7 @@ function drawNumberPlate(ctx, carNumber, colors, x, y, w, h) {
 }
 
 function rowStyle(position) {
-  const pos = Number(position);
-  if (pos === 1) {
-    return {
-      bg: "rgba(90,70,18,0.32)",
-      border: "rgba(212,175,55,0.6)",
-      posFill: "#f0d060",
-      nameFill: "#fff8e0",
-      nameWeight: "bold",
-    };
-  }
-  if (pos >= 2 && pos <= 10) {
-    return {
-      bg: "rgba(42,42,42,0.58)",
-      border: "rgba(180,40,40,0.5)",
-      posFill: "#ffffff",
-      nameFill: "#ffffff",
-      nameWeight: "bold",
-    };
-  }
-  const bubble = playoffBubbleKind(pos);
-  if (bubble === "inside") {
-    return {
-      bg: PLAYOFF_BUBBLE.inside.bg,
-      border: PLAYOFF_BUBBLE.inside.border,
-      posFill: "#d0d0d0",
-      nameFill: "#f0f0f0",
-      nameWeight: "bold",
-    };
-  }
-  if (bubble === "outside") {
-    return {
-      bg: PLAYOFF_BUBBLE.outside.bg,
-      border: PLAYOFF_BUBBLE.outside.border,
-      posFill: "#d0d0d0",
-      nameFill: "#f0f0f0",
-      nameWeight: "bold",
-    };
-  }
-  return {
-    bg: "rgba(22,22,22,0.5)",
-    border: "rgba(70,70,70,0.55)",
-    posFill: "#d0d0d0",
-    nameFill: "#f0f0f0",
-    nameWeight: "bold",
-  };
+  return standingsRowVisualStyle(position);
 }
 
 function drawDriverRow(ctx, driver, box, plateColors, layout, numberImg = null) {
@@ -573,6 +529,7 @@ function drawDriverRow(ctx, driver, box, plateColors, layout, numberImg = null) 
   const plateH = layout.plateH;
   const posW = layout.posW;
   const moveW = layout.moveW;
+  const borderWidth = style.borderWidth || 1;
 
   ctx.save();
   resetTextRenderingState(ctx);
@@ -580,7 +537,7 @@ function drawDriverRow(ctx, driver, box, plateColors, layout, numberImg = null) 
   roundRect(ctx, Math.round(x), Math.round(y), Math.round(w), Math.round(h), 4);
   ctx.fill();
   ctx.strokeStyle = style.border;
-  ctx.lineWidth = Number(driver.position) === 1 ? 2 : 1;
+  ctx.lineWidth = borderWidth;
   roundRect(ctx, Math.round(x) + 0.5, Math.round(y) + 0.5, Math.round(w) - 1, Math.round(h) - 1, 4);
   ctx.stroke();
   ctx.restore();
@@ -699,6 +656,25 @@ function drawMovementIndicator(ctx, movement, slotX, cy, slotW, T) {
     align: "center",
     baseline: "middle",
   });
+}
+
+function drawPlayoffBattleBox(ctx, layout, placement, colX) {
+  const box = computePlayoffBattleBox(layout, placement);
+  if (!box) return;
+  const x = Math.round(colX);
+  const y = Math.round(box.y);
+  const w = Math.round(box.width);
+  const h = Math.round(box.height);
+  const t = box.thickness;
+
+  ctx.save();
+  resetTextRenderingState(ctx);
+  ctx.fillStyle = box.color;
+  ctx.fillRect(x, y, w, t);
+  ctx.fillRect(x, y + h - t, w, t);
+  ctx.fillRect(x, y, t, h);
+  ctx.fillRect(x + w - t, y, t, h);
+  ctx.restore();
 }
 
 function drawPlayoffCutLine(ctx, layout, placement, colX) {
@@ -1007,6 +983,7 @@ export async function renderStandingsGraphicCanvas(model, options = {}) {
 
   if (cutPlacement) {
     const cutColX = layout.padX + cutPlacement.columnIndex * (layout.colW + layout.colGap);
+    drawPlayoffBattleBox(ctx, layout, cutPlacement, cutColX);
     drawPlayoffCutLine(ctx, layout, cutPlacement, cutColX);
   }
 

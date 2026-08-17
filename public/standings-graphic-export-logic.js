@@ -30,18 +30,60 @@ export const PLAYOFF_CUT_LINE = {
   inset: 4,
 };
 
-/** Subtle row-background tints for the four drivers around the cutoff. */
+export const STANDINGS_NORMAL_ROW = {
+  bg: "rgba(22,22,22,0.5)",
+  border: "rgba(70,70,70,0.55)",
+  borderWidth: 1,
+  posFill: "#d0d0d0",
+  nameFill: "#f0f0f0",
+  nameWeight: "bold",
+};
+
+/** Fill-only playoff-battle tints. Individual row borders stay normal; the group uses one outer box. */
 export const PLAYOFF_BUBBLE = {
   inside: {
     positions: [15, 16],
-    bg: "rgba(170, 35, 45, 0.30)",
-    border: "rgba(190, 55, 65, 0.38)",
+    bg: "rgba(145, 38, 45, 0.55)",
+    border: STANDINGS_NORMAL_ROW.border,
   },
   outside: {
     positions: [17, 18],
-    bg: "rgba(105, 25, 38, 0.30)",
-    border: "rgba(125, 35, 48, 0.38)",
+    bg: "rgba(100, 27, 35, 0.55)",
+    border: STANDINGS_NORMAL_ROW.border,
   },
+};
+
+/** One 2px box around P15–P18. Less intense than the 4px cutoff line. Adds no layout height. */
+export const PLAYOFF_BATTLE_BOX = {
+  color: "#c81018",
+  thickness: 2,
+};
+
+export const STANDINGS_P1_GOLD = {
+  bg: "rgba(90,70,18,0.32)",
+  border: "rgba(212,175,55,0.6)",
+  borderWidth: 2,
+  posFill: "#f0d060",
+  nameFill: "#fff8e0",
+  nameWeight: "bold",
+};
+
+export const STANDINGS_P2_SILVER = {
+  bg: STANDINGS_NORMAL_ROW.bg,
+  border: "#bfc3c7",
+  borderWidth: 2,
+  posFill: STANDINGS_NORMAL_ROW.posFill,
+  nameFill: STANDINGS_NORMAL_ROW.nameFill,
+  nameWeight: "bold",
+};
+
+export const STANDINGS_P3_BRONZE = {
+  bg: STANDINGS_NORMAL_ROW.bg,
+  border: "#b87333",
+  borderWidth: 2,
+  posFill: STANDINGS_NORMAL_ROW.posFill,
+  nameFill: STANDINGS_NORMAL_ROW.nameFill,
+  nameWeight: "bold",
 };
 
 export function playoffBubbleKind(position) {
@@ -49,6 +91,31 @@ export function playoffBubbleKind(position) {
   if (PLAYOFF_BUBBLE.inside.positions.includes(pos)) return "inside";
   if (PLAYOFF_BUBBLE.outside.positions.includes(pos)) return "outside";
   return null;
+}
+
+export function standingsRowVisualStyle(position) {
+  const pos = Number(position);
+  if (pos === 1) return { ...STANDINGS_P1_GOLD, kind: "p1-gold" };
+  if (pos === 2) return { ...STANDINGS_P2_SILVER, kind: "p2-silver" };
+  if (pos === 3) return { ...STANDINGS_P3_BRONZE, kind: "p3-bronze" };
+  const bubble = playoffBubbleKind(pos);
+  if (bubble === "inside") {
+    return {
+      ...STANDINGS_NORMAL_ROW,
+      bg: PLAYOFF_BUBBLE.inside.bg,
+      border: PLAYOFF_BUBBLE.inside.border,
+      kind: "playoff-inside",
+    };
+  }
+  if (bubble === "outside") {
+    return {
+      ...STANDINGS_NORMAL_ROW,
+      bg: PLAYOFF_BUBBLE.outside.bg,
+      border: PLAYOFF_BUBBLE.outside.border,
+      kind: "playoff-outside",
+    };
+  }
+  return { ...STANDINGS_NORMAL_ROW, kind: "normal" };
 }
 
 export const DEFAULT_PLATE = {
@@ -1097,6 +1164,32 @@ export function computePlayoffCutLine(layout, placement) {
     p16Bottom,
     p17Top,
     gap,
+  };
+}
+
+/** Outer 2px box around P15–P18. Uses existing row Ys; adds no layout height. */
+export function computePlayoffBattleBox(layout, placement) {
+  if (!placement) return null;
+  const startRow = placement.afterRowIndex - 1;
+  const endRow = placement.afterRowIndex + 2;
+  if (startRow < 0 || endRow < startRow) return null;
+  const y = standingsRowY(layout, startRow);
+  const bottom = standingsRowY(layout, endRow) + layout.rowH;
+  return {
+    columnIndex: placement.columnIndex,
+    startRow,
+    endRow,
+    startPosition: 15,
+    endPosition: 18,
+    y,
+    height: bottom - y,
+    width: layout.colW,
+    thickness: PLAYOFF_BATTLE_BOX.thickness,
+    color: PLAYOFF_BATTLE_BOX.color,
+    consumesLayoutHeight: false,
+    extraLayoutHeight: 0,
+    includesP14: false,
+    includesP19: false,
   };
 }
 
