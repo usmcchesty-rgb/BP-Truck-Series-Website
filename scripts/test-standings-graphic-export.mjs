@@ -33,6 +33,7 @@ import {
   formatMovement,
   resolveMovementDelta,
   fitTextFontSize,
+  fitDriverName,
   fitTrackNameDisplay,
   plateNumberFontSize,
   formatPlateDisplay,
@@ -182,11 +183,15 @@ test("14-row columns + footer physically fit with no extra playoff height", () =
   assert.equal(m.maxRows, 14);
   assert.equal(m.fits, true);
   assert.equal(m.cutGap, 0);
-  assert.equal(m.rowH, 56);
-  assert.equal(m.rowGap, 4);
+  assert.equal(m.rowH, 58);
+  assert.equal(m.rowGap, 5);
   assert.ok(m.usedH <= m.gridSpan + 0.01);
   assert.ok(m.gridTop + m.usedH <= m.gridBottom + 0.01);
   assert.ok(m.headerH + m.gridSpan + m.footerH <= 1080);
+  const lastRowBottom = m.gridTop + (m.maxRows - 1) * (m.rowH + m.rowGap) + m.rowH;
+  const spaceAboveFooter = 1080 - m.footerH - lastRowBottom;
+  assert.ok(spaceAboveFooter >= 16, "leave intentional space above footer");
+  assert.ok(spaceAboveFooter <= 48, "do not leave a large dead zone");
 });
 
 test("fewer than 42 drivers — no placeholders", () => {
@@ -387,7 +392,9 @@ test("master canvas constants remain 3840×2160 for preview/export", () => {
 });
 
 test("typography defaults are larger than previous compressed sizes", () => {
-  assert.ok(TYPOGRAPHY.driverNameRest >= 20);
+  assert.ok(TYPOGRAPHY.driverNameRest >= 19 && TYPOGRAPHY.driverNameRest <= 20);
+  assert.ok(TYPOGRAPHY.driverNameTop10 >= 19 && TYPOGRAPHY.driverNameTop10 <= 20);
+  assert.ok(TYPOGRAPHY.driverNameMin >= 15);
   assert.ok(TYPOGRAPHY.positionTop10 >= 28);
   assert.ok(TYPOGRAPHY.movement >= 22);
   assert.ok(TYPOGRAPHY.movementArrow >= 26);
@@ -419,7 +426,7 @@ test("tracked width is included in name fitting", () => {
   assert.ok(estimateTrackedWidth(100, text, tracking) > 100);
 });
 
-test("normal names keep larger default; long names shrink", () => {
+test("normal names keep a moderate default; long names shrink modestly", () => {
   const short = fitTextFontSize(approxMeasure, "LEE", 400, {
     maxSize: TYPOGRAPHY.driverNameRest,
     minSize: TYPOGRAPHY.driverNameMin,
@@ -432,6 +439,7 @@ test("normal names keep larger default; long names shrink", () => {
   });
   assert.equal(short, TYPOGRAPHY.driverNameRest);
   assert.ok(long < TYPOGRAPHY.driverNameRest);
+  assert.ok(long >= TYPOGRAPHY.driverNameMin);
 });
 
 test("raw white primary + red secondary → red final fill", () => {
@@ -664,14 +672,15 @@ test("number display box is 2:1 contain-fit and does not collide with larger mov
     driverCount: 42,
     hasTrackName: true,
   });
-  assert.equal(m.plateW / m.plateH, 2);
-  assert.ok(m.plateH >= 36 && m.plateH <= 46);
+  assert.equal(m.plateW, 88);
+  assert.equal(m.plateH, 44);
   const slots = computeRowSlotGeometry(m);
   assert.ok(slots.pos.x + slots.pos.w <= slots.move.x);
   assert.ok(slots.move.x + slots.move.w <= slots.number.x);
   assert.ok(slots.number.x + slots.number.w <= slots.name.x);
   assert.ok(slots.name.x + slots.name.w <= slots.stats.x);
-  assert.ok(slots.move.w >= 64, "double-digit movement needs dedicated width");
+  assert.equal(slots.move.w, 68);
+  assert.ok(slots.name.w >= 190, "name slot should use recovered horizontal room");
 });
 
 test("image/CORS failure path uses deterministic fallback via packagePlateColors", () => {
@@ -762,8 +771,8 @@ test("P15–P18 are the only playoff-bubble rows, inside vs outside", () => {
   assert.equal(playoffBubbleKind(1), null);
   assert.deepEqual(PLAYOFF_BUBBLE.inside.positions, [15, 16]);
   assert.deepEqual(PLAYOFF_BUBBLE.outside.positions, [17, 18]);
-  assert.equal(PLAYOFF_BUBBLE.inside.bg, "rgba(148, 22, 22, 0.40)");
-  assert.equal(PLAYOFF_BUBBLE.outside.bg, "rgba(58, 8, 14, 0.52)");
+  assert.equal(PLAYOFF_BUBBLE.inside.bg, "rgba(132, 28, 28, 0.18)");
+  assert.equal(PLAYOFF_BUBBLE.outside.bg, "rgba(40, 14, 18, 0.22)");
   assert.equal(PLAYOFF_CUT_LINE.color, "#e50914");
   assert.equal(PLAYOFF_CUT_LINE.thickness, 4);
 });
@@ -820,6 +829,48 @@ test("standings export renderer has no leftover glow/stroke on typography", () =
   assert.doesNotMatch(src, /Arial Narrow/);
   assert.doesNotMatch(src, /TOP 16 PLAYOFF CUT/);
   assert.match(src, /drawPlayoffCutLine/);
+});
+
+test("driver-name fitting keeps a narrow size range", () => {
+  const layout = computeStandingsLayoutMetrics({ driverCount: 42, hasTrackName: true });
+  const slots = computeRowSlotGeometry(layout);
+  const names = [
+    "CHRIS BERG",
+    "CHRIS CARROLL3",
+    "MIGUEL GOMEZ-GAUDET",
+    "MATTHEW KLEINSCHMIDT2",
+    "TAYLOR BUTCHER-BENJAMIN",
+  ];
+  const fitted = names.map((name) => {
+    const result = fitDriverName(approxMeasure, name, slots.name.w);
+    const width = estimateTrackedWidth(
+      approxMeasure(`bold ${result.size}px Arial, Helvetica, sans-serif`, name),
+      name,
+      result.tracking,
+    );
+    assert.ok(width <= slots.name.w + 0.01, `${name} overflows name slot`);
+    assert.ok(result.size >= TYPOGRAPHY.driverNameMin, `${name} dropped below floor`);
+    assert.ok(result.size <= TYPOGRAPHY.driverNameRest, `${name} exceeded default`);
+    assert.ok(result.tracking >= TYPOGRAPHY.tracking.driverNameMin);
+    assert.ok(result.tracking <= TYPOGRAPHY.tracking.driverName);
+    return { name, ...result, width };
+  });
+
+  const berg = fitted.find((n) => n.name === "CHRIS BERG");
+  const carroll = fitted.find((n) => n.name === "CHRIS CARROLL3");
+  const gomez = fitted.find((n) => n.name === "MIGUEL GOMEZ-GAUDET");
+  const matthew = fitted.find((n) => n.name === "MATTHEW KLEINSCHMIDT2");
+  const taylor = fitted.find((n) => n.name === "TAYLOR BUTCHER-BENJAMIN");
+
+  assert.equal(berg.size, TYPOGRAPHY.driverNameRest);
+  assert.ok(carroll.size >= 18);
+  assert.ok(gomez.size >= 16);
+  assert.ok(matthew.size >= 16);
+  assert.ok(taylor.size >= 15);
+  assert.ok(taylor.size > 12);
+  assert.ok(berg.size < 22);
+  const spread = berg.size - taylor.size;
+  assert.ok(spread <= 5, `name size spread too wide: ${spread}`);
 });
 
 test("luminance still picks readable number colors", () => {

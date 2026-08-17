@@ -20,6 +20,7 @@ import {
   formatSeasonHeading,
   formatAfterRaceLine,
   fitTextFontSize,
+  fitDriverName,
   fitTrackNameDisplay,
   plateNumberFontSize,
   formatPlateDisplay,
@@ -611,27 +612,28 @@ function drawDriverRow(ctx, driver, box, plateColors, layout, numberImg = null) 
 
   const nameX = x + slots.name.x;
   const nameMaxW = slots.name.w;
-  const tracking = T.tracking.driverName;
   const nameMax =
     Number(driver.position) <= 10 ? T.driverNameTop10 : T.driverNameRest;
   const measure = (font, text) => measureCtxText(ctx, font, text);
-  const nameSize = fitTextFontSize(measure, driver.driverName.toUpperCase(), nameMaxW, {
+  const fitted = fitDriverName(measure, driver.driverName.toUpperCase(), nameMaxW, {
     fontFamily: FONT_BODY,
     fontWeight: style.nameWeight,
     maxSize: nameMax,
+    preferredMin: T.driverNamePreferredMin,
     minSize: T.driverNameMin,
-    tracking,
+    tracking: T.tracking.driverName,
+    trackingMin: T.tracking.driverNameMin,
   });
 
   drawFillText(ctx, {
     text: driver.driverName.toUpperCase(),
     x: nameX,
     y: cy,
-    font: bodyFont(nameSize, style.nameWeight),
+    font: bodyFont(fitted.size, style.nameWeight),
     fill: style.nameFill,
     align: "left",
     baseline: "middle",
-    tracking,
+    tracking: fitted.tracking,
   });
 
   const statsRight = x + w - pad;

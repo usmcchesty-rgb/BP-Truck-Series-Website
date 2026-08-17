@@ -34,13 +34,13 @@ export const PLAYOFF_CUT_LINE = {
 export const PLAYOFF_BUBBLE = {
   inside: {
     positions: [15, 16],
-    bg: "rgba(148, 22, 22, 0.40)",
-    border: "rgba(196, 48, 48, 0.55)",
+    bg: "rgba(132, 28, 28, 0.18)",
+    border: "rgba(176, 48, 48, 0.28)",
   },
   outside: {
     positions: [17, 18],
-    bg: "rgba(58, 8, 14, 0.52)",
-    border: "rgba(110, 22, 30, 0.62)",
+    bg: "rgba(40, 14, 18, 0.22)",
+    border: "rgba(88, 24, 30, 0.28)",
   },
 };
 
@@ -64,9 +64,10 @@ export const TYPOGRAPHY = {
   afterRace: 20,
   trackMax: 17,
   trackMin: 12,
-  driverNameTop10: 22,
-  driverNameRest: 20,
-  driverNameMin: 12,
+  driverNameTop10: 19,
+  driverNameRest: 19,
+  driverNameMin: 15,
+  driverNamePreferredMin: 17,
   positionTop10: 28,
   positionRest: 24,
   movement: 22,
@@ -79,7 +80,8 @@ export const TYPOGRAPHY = {
   footerSeries: 16,
   footerSite: 17,
   tracking: {
-    driverName: 0.9,
+    driverName: 0.65,
+    driverNameMin: 0.35,
     season: 1.8,
     afterRace: 0.9,
     track: 0.7,
@@ -487,6 +489,57 @@ export function fitTextFontSize(measureFn, text, maxWidth, {
     size -= 1;
   }
   return minSize;
+}
+
+/**
+ * Fit a standings driver name into the name slot.
+ * Sequence: normal size+tracking → modest size drop → modest tracking drop → size floor.
+ */
+export function fitDriverName(measureFn, text, maxWidth, {
+  fontFamily = "Arial, Helvetica, sans-serif",
+  fontWeight = "bold",
+  maxSize = TYPOGRAPHY.driverNameRest,
+  preferredMin = TYPOGRAPHY.driverNamePreferredMin,
+  minSize = TYPOGRAPHY.driverNameMin,
+  tracking = TYPOGRAPHY.tracking.driverName,
+  trackingMin = TYPOGRAPHY.tracking.driverNameMin,
+} = {}) {
+  const value = String(text || "").toUpperCase();
+  const widthOf = (size, track) => {
+    const font = `${fontWeight} ${size}px ${fontFamily}`;
+    return estimateTrackedWidth(measureFn(font, value), value, track);
+  };
+
+  if (widthOf(maxSize, tracking) <= maxWidth) {
+    return { size: maxSize, tracking };
+  }
+
+  for (let size = maxSize - 1; size >= preferredMin; size -= 1) {
+    if (widthOf(size, tracking) <= maxWidth) {
+      return { size, tracking };
+    }
+  }
+
+  let track = tracking;
+  while (track > trackingMin + 0.049) {
+    track = Math.round((track - 0.1) * 10) / 10;
+    if (track < trackingMin) track = trackingMin;
+    if (widthOf(preferredMin, track) <= maxWidth) {
+      return { size: preferredMin, tracking: track };
+    }
+  }
+
+  if (widthOf(preferredMin, trackingMin) <= maxWidth) {
+    return { size: preferredMin, tracking: trackingMin };
+  }
+
+  for (let size = preferredMin - 1; size >= minSize; size -= 1) {
+    if (widthOf(size, trackingMin) <= maxWidth) {
+      return { size, tracking: trackingMin };
+    }
+  }
+
+  return { size: minSize, tracking: trackingMin };
 }
 
 /** Extra width from letter-spacing: (charCount - 1) * tracking. */
@@ -960,12 +1013,12 @@ export function computeStandingsLayoutMetrics({
   const colW = Math.floor((LOGICAL_WIDTH - padX * 2 - colGap * (colCount - 1)) / colCount);
   const columns = distributeColumns(new Array(Math.min(driverCount, MAX_DRIVERS)).fill(null));
   const maxRows = Math.max(1, ...columns.map((c) => c.length || 1));
-  const rowGap = 4;
+  const rowGap = 5;
   const rawRowH = (gridSpan - rowGap * (maxRows - 1)) / maxRows;
-  const rowH = Math.max(36, Math.min(56, Math.floor(rawRowH)));
+  const rowH = Math.max(36, Math.min(58, Math.floor(rawRowH)));
   const rowsUsed = maxRows * rowH + Math.max(0, maxRows - 1) * rowGap;
   const fits = rowsUsed <= gridSpan + 0.01;
-  const plateH = Math.max(36, Math.min(46, rowH - 12));
+  const plateH = Math.max(36, Math.min(44, rowH - 12));
   const plateW = plateH * 2;
 
   return {
@@ -990,12 +1043,12 @@ export function computeStandingsLayoutMetrics({
     plateH,
     posW: 44,
     moveW: 68,
-    statsW: 172,
+    statsW: 160,
     gapPosMove: 6,
-    gapMovePlate: 10,
-    gapPlateName: 10,
-    gapNameStats: 12,
-    gapPtsWins: 14,
+    gapMovePlate: 8,
+    gapPlateName: 8,
+    gapNameStats: 8,
+    gapPtsWins: 12,
     rowPad: 6,
   };
 }
@@ -1030,7 +1083,7 @@ export function computePlayoffCutLine(layout, placement) {
   const p16Bottom = standingsRowY(layout, placement.afterRowIndex) + layout.rowH;
   const p17Top = standingsRowY(layout, placement.afterRowIndex + 1);
   const gap = p17Top - p16Bottom;
-  const y = p16Bottom + (gap - thickness) / 2;
+  const y = p16Bottom + Math.max(0, Math.floor((gap - thickness) / 2));
   return {
     columnIndex: placement.columnIndex,
     afterRowIndex: placement.afterRowIndex,
