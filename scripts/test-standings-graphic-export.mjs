@@ -203,7 +203,7 @@ test("14-row columns + footer physically fit with no extra playoff height", () =
   assert.equal(m.maxRows, 14);
   assert.equal(m.fits, true);
   assert.equal(m.cutGap, 0);
-  assert.ok(m.rowH >= 56 && m.rowH <= 60);
+  assert.equal(m.rowH, 54);
   assert.equal(m.rowGap, 5);
   assert.ok(m.usedH <= m.gridSpan + 0.01);
   assert.ok(m.gridTop + m.usedH <= m.gridBottom + 0.01);
@@ -211,7 +211,7 @@ test("14-row columns + footer physically fit with no extra playoff height", () =
   assert.ok(m.statHeaderH >= 28);
   const lastRowBottom = m.gridTop + (m.maxRows - 1) * (m.rowH + m.rowGap) + m.rowH;
   const spaceAboveFooter = 1080 - m.footerH - lastRowBottom;
-  assert.ok(spaceAboveFooter >= 4, "leave intentional space above footer");
+  assert.ok(spaceAboveFooter >= 12, "leave intentional space above footer");
   assert.ok(spaceAboveFooter <= 48, "do not leave a large dead zone");
 });
 
@@ -937,6 +937,8 @@ test("number display box is 2:1 contain-fit and does not collide with movement",
   });
   assert.equal(m.plateW, 88);
   assert.equal(m.plateH, 44);
+  assert.equal(m.rowH, 54);
+  assert.ok(m.rowH - m.plateH >= 8, "44px number artwork still has vertical padding in the row");
   const slots = computeRowSlotGeometry(m);
   assert.ok(slots.pos.x + slots.pos.w <= slots.move.x);
   assert.ok(slots.move.x + slots.move.w <= slots.number.x);
@@ -1075,7 +1077,7 @@ test("each column has a PTS / LEAD / CUT header above unchanged row stats", () =
   assert.equal(layout.colCount, 3);
   assert.equal(TYPOGRAPHY.statHeader, 16);
   assert.equal(TYPOGRAPHY.statValue, 17);
-  assert.equal(layout.rowH, 56);
+  assert.equal(layout.rowH, 54);
 
   const srcLogic = fs.readFileSync(path.join(root, "public", "standings-graphic-export-logic.js"), "utf8");
   const srcRender = fs.readFileSync(path.join(root, "public", "standings-graphic-export.js"), "utf8");
@@ -1114,11 +1116,10 @@ test("main header band is taller with centered left/right groups and spaced righ
   assert.equal(headers.points.headerCenterX, 459);
   assert.equal(headers.lead.headerCenterX, 507);
   assert.equal(headers.cut.headerCenterX, 567);
-  assert.equal(layout.rowH, 56);
+  assert.equal(layout.rowH, 54);
   assert.equal(layout.rowGap, 5);
   assert.equal(layout.moveW, 52);
-  assert.equal(lastRowBottom + 4 <= 1080 - layout.footerH, true);
-  assert.ok(1080 - layout.footerH - lastRowBottom > 0);
+  assert.ok(1080 - layout.footerH - lastRowBottom >= 12);
 });
 
 test("image/CORS failure path uses deterministic fallback via packagePlateColors", () => {
@@ -1149,7 +1150,7 @@ test("footer height increased for presenting-sponsor strip", () => {
     driverCount: 42,
     hasTrackName: true,
   });
-  assert.ok(m.footerH >= 32);
+  assert.ok(m.footerH >= 50);
   assert.equal(m.fits, true);
 });
 
@@ -1292,7 +1293,7 @@ test("one 2px playoff-battle box surrounds P15–P18 without shifting rows", () 
   assert.ok(p14Y + layout.rowH <= box.y || cut.columnIndex !== 0);
   assert.notEqual(standingsRowY(layout, 2), standingsRowY(layout, 1) + layout.rowH + layout.cutGap);
   assert.equal(layout.cutGap, 0);
-  assert.ok(layout.rowH >= 56 && layout.rowH <= 60);
+  assert.ok(layout.rowH >= 54 && layout.rowH <= 56);
   assert.equal(layout.moveW, 52);
 });
 

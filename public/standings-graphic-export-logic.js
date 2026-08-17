@@ -1472,8 +1472,8 @@ export function computeStandingsLayoutMetrics({
   const postRuleGap = 14;
   const statHeaderH = 32;
   const preGridGap = 9;
-  const footerH = 36;
-  const bottomGap = 4;
+  const footerH = 52;
+  const bottomGap = 6;
   const gridTop = ruleY + postRuleGap + statHeaderH + preGridGap;
   const gridBottom = LOGICAL_HEIGHT - footerH - bottomGap;
   const gridSpan = gridBottom - gridTop;
@@ -1483,8 +1483,7 @@ export function computeStandingsLayoutMetrics({
   const columns = distributeColumns(new Array(Math.min(driverCount, MAX_DRIVERS)).fill(null));
   const maxRows = Math.max(1, ...columns.map((c) => c.length || 1));
   const rowGap = 5;
-  const rawRowH = (gridSpan - rowGap * (maxRows - 1)) / maxRows;
-  const rowH = Math.max(56, Math.min(60, Math.floor(rawRowH)));
+  const rowH = 54;
   const rowsUsed = maxRows * rowH + Math.max(0, maxRows - 1) * rowGap;
   const fits = rowsUsed <= gridSpan + 0.01;
   const plateH = 44;

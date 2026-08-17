@@ -786,7 +786,7 @@ function drawFooter(ctx, layout) {
   drawFillText(ctx, {
     text: footer.presentedBy,
     x: LOGICAL_WIDTH / 2,
-    y: midY - 10,
+    y: midY - 16,
     font: bodyFont(T.footerPresentedBy),
     fill: "#e8e8e8",
     align: "center",
@@ -796,7 +796,7 @@ function drawFooter(ctx, layout) {
   drawFillText(ctx, {
     text: footer.sponsorLine,
     x: LOGICAL_WIDTH / 2,
-    y: midY + 10,
+    y: midY + 12,
     font: displayFont(T.footerSponsor),
     fill: "#ffffff",
     align: "center",
