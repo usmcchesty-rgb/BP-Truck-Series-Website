@@ -1394,7 +1394,7 @@ export function computeMainHeaderBandLayout(
   layout = computeStandingsLayoutMetrics(),
   { hasTrackName = true, trackLineCount = 1 } = {},
 ) {
-  const ruleY = Number(layout.ruleY) || 136;
+  const ruleY = Number(layout.ruleY) || 126;
   const bandTop = 0;
   const bandBottom = ruleY;
   const bandCenter = ruleY / 2;
@@ -1467,12 +1467,12 @@ export function computeStandingsLayoutMetrics({
   hasTrackName = true,
 } = {}) {
   const padX = 24;
-  const headerH = hasTrackName ? 136 : 112;
-  const ruleY = hasTrackName ? 136 : 112;
+  const headerH = hasTrackName ? 126 : 102;
+  const ruleY = hasTrackName ? 126 : 102;
   const postRuleGap = 14;
   const statHeaderH = 32;
   const preGridGap = 9;
-  const footerH = 52;
+  const footerH = 64;
   const bottomGap = 6;
   const gridTop = ruleY + postRuleGap + statHeaderH + preGridGap;
   const gridBottom = LOGICAL_HEIGHT - footerH - bottomGap;

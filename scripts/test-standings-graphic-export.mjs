@@ -991,18 +991,18 @@ test("each column has a PTS / LEAD / CUT header above unchanged row stats", () =
   const headers = computeStatColumnHeaderGeometry(layout);
   const slots = computeRowSlotGeometry(layout);
 
-  assert.equal(layout.ruleY, 136);
-  assert.equal(layout.headerH, 136);
+  assert.equal(layout.ruleY, 126);
+  assert.equal(layout.headerH, 126);
   assert.equal(layout.statHeaderH, 32);
   assert.equal(layout.postRuleGap, 14);
   assert.equal(layout.preGridGap, 9);
-  assert.equal(layout.gridTop, 191);
-  assert.equal(standingsRowY(layout, 0), 191);
+  assert.equal(layout.gridTop, 181);
+  assert.equal(standingsRowY(layout, 0), 181);
   assert.equal(headers.y, layout.ruleY + layout.postRuleGap + layout.statHeaderH / 2);
   assert.ok(headers.ruleY < headers.y);
   assert.ok(headers.y + layout.statHeaderH / 2 <= layout.gridTop);
   assert.equal(headers.firstRowY, layout.gridTop);
-  assert.ok(layout.headerH >= 135 && layout.headerH <= 150);
+  assert.ok(layout.headerH >= 124 && layout.headerH <= 128);
 
   assert.equal(STAT_COLUMN_HEADERS.points, "PTS");
   assert.equal(STAT_COLUMN_HEADERS.lead, "LEAD");
@@ -1093,13 +1093,14 @@ test("main header band is taller with centered left/right groups and spaced righ
   const headers = computeStatColumnHeaderGeometry(layout);
   const lastRowBottom = layout.gridTop + (layout.maxRows - 1) * (layout.rowH + layout.rowGap) + layout.rowH;
 
-  assert.equal(layout.headerH, 136);
-  assert.equal(layout.ruleY, 136);
+  assert.equal(layout.headerH, 126);
+  assert.equal(layout.ruleY, 126);
+  assert.ok(layout.headerH < 136);
+  assert.ok(layout.ruleY < 136);
   assert.ok(layout.headerH > 114);
-  assert.ok(layout.ruleY > 106);
-  assert.equal(band.bandCenter, 68);
-  assert.equal(band.left.center, 68);
-  assert.equal(band.right.center, 68);
+  assert.equal(band.bandCenter, 63);
+  assert.equal(band.left.center, 63);
+  assert.equal(band.right.center, 63);
   assert.ok(Math.abs(band.left.center - band.right.center) < 0.01);
   assert.ok(band.left.top > band.bandTop);
   assert.ok(band.left.bottom < band.ruleY);
@@ -1119,7 +1120,16 @@ test("main header band is taller with centered left/right groups and spaced righ
   assert.equal(layout.rowH, 54);
   assert.equal(layout.rowGap, 5);
   assert.equal(layout.moveW, 52);
-  assert.ok(1080 - layout.footerH - lastRowBottom >= 12);
+  assert.equal(layout.footerH, 64);
+  const footerY = 1080 - layout.footerH;
+  const footerClearance = footerY - lastRowBottom;
+  assert.ok(footerClearance >= 12);
+  assert.ok(footerClearance <= 16);
+  const sponsorBaseline = footerY + layout.footerH / 2 + 12;
+  const sponsorExtent = TYPOGRAPHY.footerSponsor / 2;
+  const footerTextBottom = sponsorBaseline + sponsorExtent;
+  assert.ok(footerTextBottom < 1080, "footer sponsor text stays inside the canvas");
+  assert.ok(1080 - footerTextBottom >= 4, "positive padding below footer text");
 });
 
 test("image/CORS failure path uses deterministic fallback via packagePlateColors", () => {
@@ -1150,7 +1160,7 @@ test("footer height increased for presenting-sponsor strip", () => {
     driverCount: 42,
     hasTrackName: true,
   });
-  assert.ok(m.footerH >= 50);
+  assert.ok(m.footerH >= 62 && m.footerH <= 66);
   assert.equal(m.fits, true);
 });
 
