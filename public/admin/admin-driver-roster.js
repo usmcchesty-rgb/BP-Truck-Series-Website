@@ -152,6 +152,14 @@
       standingPhotoUpdatedAt: profile?.standingPhotoUpdatedAt,
       standing_photo_enabled: profile?.standing_photo_enabled ?? profile?.standingPhotoEnabled,
       standingPhotoEnabled: profile?.standingPhotoEnabled,
+      numberArtwork: profile?.numberArtwork || row?.numberArtwork || null,
+      iracingDesign: profile?.iracingDesign || profile?.iracing_design || row?.iracingDesign || null,
+      numberImage:
+        profile?.numberImage ||
+        profile?.number_image ||
+        profile?.iracingDesign?.numberImage ||
+        null,
+      iracingCustomerId: profileCustomerId || explicitCustomerId || '',
       active,
       in_standings: inStandings,
       source_application_id:

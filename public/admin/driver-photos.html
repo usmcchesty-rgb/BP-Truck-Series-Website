@@ -708,8 +708,11 @@
       import {
         NUMBER_ARTWORK_CANVAS_HEIGHT,
         NUMBER_ARTWORK_CANVAS_WIDTH,
+        adminSdkCaptureStatus,
+        describeAdminNumberArtworkPanels,
         hasUsableNumberArtwork,
         normalizeNumberArtworkPixels,
+        readSdkNumberArtworkPath,
         resolveNumberArtwork,
       } from "/number-artwork-logic.js";
 
@@ -1460,8 +1463,12 @@
         numberMsg.className = type;
       }
 
+      let sdkPreviewToken = 0;
+
       function setNumberPreviewImage(imgEl, url) {
         if (!imgEl) return;
+        imgEl.onload = null;
+        imgEl.onerror = null;
         if (url) {
           imgEl.src = url;
           imgEl.hidden = false;
@@ -1469,6 +1476,33 @@
           imgEl.removeAttribute("src");
           imgEl.hidden = true;
         }
+      }
+
+      function setSdkCapturePreview(sdkPath) {
+        if (!numberSdkImg) return;
+        const token = ++sdkPreviewToken;
+        const status = adminSdkCaptureStatus({ sdkPath, loadFailed: false });
+        numberSdkImg.onload = null;
+        numberSdkImg.onerror = null;
+        if (!status.showImage) {
+          numberSdkImg.removeAttribute("src");
+          numberSdkImg.hidden = true;
+          return status;
+        }
+        numberSdkImg.onload = () => {
+          if (token !== sdkPreviewToken) return;
+          numberSdkImg.hidden = false;
+        };
+        numberSdkImg.onerror = () => {
+          if (token !== sdkPreviewToken) return;
+          numberSdkImg.removeAttribute("src");
+          numberSdkImg.hidden = true;
+          const failed = adminSdkCaptureStatus({ sdkPath, loadFailed: true });
+          if (numberSdkMeta) numberSdkMeta.textContent = failed.message;
+        };
+        numberSdkImg.hidden = true;
+        numberSdkImg.src = sdkPath;
+        return status;
       }
 
       function drawPreviewCanvas(canvas, source, metaTextEl, metaText) {
@@ -1494,27 +1528,30 @@
 
       function updateNumberArtworkState() {
         const driver = selectedDriver();
-        const artwork = driver?.numberArtwork || resolveNumberArtwork(driver || {});
-        const sdkPath = artwork.sdkPath || driver?.iracingDesign?.numberImage?.sdkPath || "";
+        const resolved = resolveNumberArtwork(driver || {});
+        const artwork = {
+          ...resolved,
+          imageUrl: driver?.numberArtwork?.imageUrl || resolved.imageUrl,
+        };
+        const panels = describeAdminNumberArtworkPanels(driver || {});
+        const sdkPath = readSdkNumberArtworkPath(driver || {}) || panels.sdkPath;
         const preferredPath = hasUsableNumberArtwork(artwork)
-          ? artwork.imageUrl || artwork.imagePath
+          ? artwork.imageUrl || artwork.imagePath || panels.preferredPath
           : "";
 
         setNumberPreviewImage(numberPreferredImg, preferredPath);
-        setNumberPreviewImage(numberSdkImg, sdkPath);
+        const sdkStatus = setSdkCapturePreview(sdkPath);
 
         if (!driver) {
           numberPreferredMeta.textContent = "Select a driver...";
           numberSdkMeta.textContent = "—";
         } else {
           numberPreferredMeta.textContent =
-            `Source: ${artwork.source || "fallback"}\n` +
+            `Source: ${artwork.source || panels.preferredSource || "fallback"}\n` +
             `Car #: ${artwork.carNumber || driver.bp_number || driver.car_number || "—"}\n` +
             `iRacing ID: ${artwork.customerId || driver.iracing_customer_id || "—"}\n` +
             `Path: ${preferredPath || "(legacy plate fallback)"}`;
-          numberSdkMeta.textContent = sdkPath
-            ? `SDK PNG: ${sdkPath}`
-            : "No SDK number capture is stored for this driver yet.";
+          numberSdkMeta.textContent = sdkStatus?.message || "—";
         }
 
         const customerId = String(driver?.iracing_customer_id || driver?.iracingCustomerId || artwork.customerId || "").replace(/\D/g, "");
@@ -1654,6 +1691,7 @@
           }
           driver.numberArtwork = {
             ...(driver.numberArtwork || {}),
+            sdkPath: readSdkNumberArtworkPath(driver) || driver.numberArtwork?.sdkPath || "",
             source: "custom",
             imagePath: data.customPath,
             imageUrl: data.publicUrl,
@@ -1709,17 +1747,20 @@
             setNumberMsg(data.error || "Could not remove custom number.", "error");
             return;
           }
+          const sdkPath = readSdkNumberArtworkPath(driver) || driver.numberArtwork?.sdkPath || "";
           driver.numberArtwork = resolveNumberArtwork({
             ...driver,
             numberArtwork: {
               ...(driver.numberArtwork || {}),
+              sdkPath,
               customPath: null,
-              preferredSource: "sdk",
+              preferredSource: sdkPath ? "sdk" : "none",
             },
             numberImage: {
-              sdkPath: driver.numberArtwork?.sdkPath || "",
+              ...(driver.numberImage || {}),
+              sdkPath,
               customPath: null,
-              preferredSource: "sdk",
+              preferredSource: sdkPath ? "sdk" : "none",
             },
           });
           updateNumberArtworkState();

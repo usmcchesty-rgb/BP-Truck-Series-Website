@@ -203,4 +203,28 @@ const standingsBrad = {
   );
 }
 
+{
+  const Roster = loadAdminDriverRoster();
+  const list = Roster.buildDriverList(
+    [{ driverId: "mk2", driver: "Matthew Kleinschmidt" }],
+    [
+      {
+        driver_id: "mk2",
+        display_name: "Matthew Kleinschmidt",
+        iracing_customer_id: "269720",
+        car_number: "59",
+        active: true,
+        numberArtwork: {
+          sdkPath: "/assets/images/numbers/269720.png",
+          customPath: "/assets/images/numbers/custom/269720.png",
+          preferredSource: "custom",
+          source: "custom",
+        },
+      },
+    ]
+  );
+  assert.equal(list[0].numberArtwork.sdkPath, "/assets/images/numbers/269720.png");
+  assert.equal(list[0].numberArtwork.customPath, "/assets/images/numbers/custom/269720.png");
+}
+
 console.log('test-drivers-write-identity: ok');

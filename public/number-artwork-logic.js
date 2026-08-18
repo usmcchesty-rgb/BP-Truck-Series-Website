@@ -44,11 +44,100 @@ function nonemptyPath(value) {
   return path || "";
 }
 
+export function mergeNumberImageRecords(base = {}, override = {}) {
+  const merged = {
+    ...(base || {}),
+    ...(override || {}),
+  };
+  const overrideCustom = nonemptyPath(override?.customPath || override?.custom_path);
+  const overridePreferred = String(override?.preferredSource || override?.preferred_source || "")
+    .trim()
+    .toLowerCase();
+  const overrideSource = String(override?.source || "")
+    .trim()
+    .toLowerCase();
+  if (
+    overrideCustom &&
+    !overridePreferred &&
+    (overrideSource === NUMBER_ARTWORK_SOURCE.CUSTOM || overrideSource === "custom_upload")
+  ) {
+    merged.preferredSource = NUMBER_ARTWORK_SOURCE.CUSTOM;
+  }
+  if (!nonemptyPath(merged.sdkPath || merged.sdk_path)) {
+    merged.sdkPath = nonemptyPath(base?.sdkPath || base?.sdk_path) || merged.sdkPath || null;
+  }
+  return merged;
+}
+
 function readNumberImage(driver = {}) {
-  const fromField = driver.numberImage || driver.number_image || null;
-  const fromDesign = driver.iracingDesign?.numberImage || driver.iracing_design?.numberImage || null;
-  const fromResolved = driver.numberArtwork || driver.number_artwork || null;
-  return fromField || fromDesign || fromResolved || {};
+  const records = [
+    driver.numberImage || driver.number_image,
+    driver.iracingDesign?.numberImage || driver.iracing_design?.numberImage,
+    driver.numberArtwork || driver.number_artwork,
+  ].filter((record) => record && typeof record === "object");
+
+  const withCustom = records.find((record) => nonemptyPath(record.customPath || record.custom_path));
+  const withSdk = records.find((record) => nonemptyPath(record.sdkPath || record.sdk_path));
+  if (withCustom && withSdk) return mergeNumberImageRecords(withSdk, withCustom);
+  if (withCustom) return withCustom;
+  if (withSdk) return withSdk;
+  return records[0] || {};
+}
+
+/**
+ * SDK capture path only. Never uses preferred imagePath / customPath.
+ */
+export function readSdkNumberArtworkPath(driver = {}) {
+  const candidates = [
+    driver.iracingDesign?.numberImage,
+    driver.iracing_design?.numberImage,
+    driver.numberImage,
+    driver.number_image,
+    driver.numberArtwork,
+    driver.number_artwork,
+  ];
+  for (const record of candidates) {
+    const sdkPath = nonemptyPath(record?.sdkPath || record?.sdk_path);
+    if (sdkPath) return sdkPath;
+  }
+  return "";
+}
+
+export function describeAdminNumberArtworkPanels(driver = {}) {
+  const preferred = resolveNumberArtwork(driver);
+  const sdkPath = readSdkNumberArtworkPath(driver) || nonemptyPath(preferred.sdkPath);
+  const preferredPath = hasUsableNumberArtwork(preferred) ? preferred.imagePath : "";
+  return {
+    preferredSource: preferred.source,
+    preferredPath,
+    preferredAuthoritative: preferred.authoritative,
+    customPath: nonemptyPath(preferred.customPath),
+    sdkPath,
+    sdkAvailable: Boolean(sdkPath),
+  };
+}
+
+export function adminSdkCaptureStatus({ sdkPath = "", loadFailed = false } = {}) {
+  const path = nonemptyPath(sdkPath);
+  if (!path) {
+    return {
+      state: "missing",
+      showImage: false,
+      message: "No SDK number capture is stored for this driver yet.",
+    };
+  }
+  if (loadFailed) {
+    return {
+      state: "failed",
+      showImage: false,
+      message: `SDK capture failed to load\n${path}`,
+    };
+  }
+  return {
+    state: "ok",
+    showImage: true,
+    message: `SDK PNG: ${path}`,
+  };
 }
 
 /**
@@ -437,8 +526,10 @@ export function resolveNumberArtworkForDriver(driver = {}, catalog = null, overr
       entry?.iracing_customer_id,
   );
   const override = customerId ? overrides[customerId] || overrides[String(customerId)] : null;
+  const catalogNumberImage = entry?.iracingDesign?.numberImage || entry?.numberImage || {};
+  const driverNumberImage = driver.numberImage || driver.iracingDesign?.numberImage || {};
   const numberImage = applyCustomOverrideToNumberImage(
-    driver.numberImage || entry?.iracingDesign?.numberImage || {},
+    mergeNumberImageRecords(catalogNumberImage, driverNumberImage),
     override,
   );
   return resolveNumberArtwork(
@@ -471,6 +562,10 @@ if (typeof window !== "undefined") {
     normalizeCustomerId,
     resolveNumberArtwork,
     resolveNumberArtworkForDriver,
+    mergeNumberImageRecords,
+    readSdkNumberArtworkPath,
+    describeAdminNumberArtworkPanels,
+    adminSdkCaptureStatus,
     hasUsableNumberArtwork,
     computeContainDest,
     computeNumberDisplayBox,

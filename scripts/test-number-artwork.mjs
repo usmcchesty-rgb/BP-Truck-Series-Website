@@ -3,21 +3,30 @@
  * Run: node scripts/test-number-artwork.mjs
  */
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   NUMBER_ARTWORK_CANVAS_HEIGHT,
   NUMBER_ARTWORK_CANVAS_WIDTH,
   NUMBER_ARTWORK_SOURCE,
   POWER_RANKINGS_CARD_NUMBER_BOX,
   STANDINGS_NUMBER_BOX,
+  adminSdkCaptureStatus,
   computeContainDest,
   computeNumberDisplayBox,
+  describeAdminNumberArtworkPanels,
   hasUsableNumberArtwork,
   indexNumberArtworkCatalog,
+  mergeNumberImageRecords,
   normalizeNumberArtworkPixels,
+  readSdkNumberArtworkPath,
   removeConnectedBackground,
   resolveNumberArtwork,
   resolveNumberArtworkForDriver,
 } from "../public/number-artwork-logic.js";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 function pixel(data, x, y, width) {
   const i = (y * width + x) * 4;
@@ -213,6 +222,221 @@ test("Standings and Power Rankings share the same display-box helper", () => {
   assert.equal(standings.width / standings.height, 2);
   assert.equal(card.width, POWER_RANKINGS_CARD_NUMBER_BOX.width);
   assert.equal(honorable.width, 80);
+});
+
+function loadAdminDriverRoster() {
+  const source = readFileSync(join(__dirname, "../public/admin/admin-driver-roster.js"), "utf8");
+  const runner = new Function(`${source}; return BPAdminDriverRoster;`);
+  return runner();
+}
+
+function loadDriversCatalog() {
+  return indexNumberArtworkCatalog(
+    JSON.parse(readFileSync(join(__dirname, "../data/drivers.json"), "utf8")),
+  );
+}
+
+test("customer 269720 catalog keeps SDK path when custom is preferred", () => {
+  const catalog = loadDriversCatalog();
+  const entry = catalog.byCustomerId.get("269720");
+  assert.ok(entry, "269720 must exist in data/drivers.json");
+  assert.equal(entry.carNumber, "59");
+  assert.equal(entry.iracingDesign.numberImage.sdkPath, "/assets/images/numbers/269720.png");
+  assert.equal(entry.iracingDesign.numberImage.customPath, null);
+
+  const customPath = "/assets/images/numbers/custom/269720.png";
+  const resolved = resolveNumberArtworkForDriver(
+    { iracingCustomerId: "269720", carNumber: "59" },
+    catalog,
+    {
+      269720: {
+        customPath,
+        preferredSource: "custom",
+      },
+    },
+  );
+  assert.equal(resolved.source, NUMBER_ARTWORK_SOURCE.CUSTOM);
+  assert.equal(resolved.imagePath, customPath);
+  assert.equal(resolved.sdkPath, "/assets/images/numbers/269720.png");
+  assert.equal(resolved.customPath, customPath);
+
+  const panels = describeAdminNumberArtworkPanels({
+    iracingCustomerId: "269720",
+    carNumber: "59",
+    numberArtwork: resolved,
+    iracingDesign: entry.iracingDesign,
+  });
+  assert.equal(panels.preferredSource, "custom");
+  assert.equal(panels.preferredPath, customPath);
+  assert.equal(panels.sdkPath, "/assets/images/numbers/269720.png");
+  assert.equal(panels.sdkAvailable, true);
+  assert.notEqual(
+    adminSdkCaptureStatus({ sdkPath: panels.sdkPath }).message,
+    "No SDK number capture is stored for this driver yet.",
+  );
+});
+
+test("custom-only numberImage override still preserves catalog SDK path", () => {
+  const catalog = loadDriversCatalog();
+  const resolved = resolveNumberArtworkForDriver(
+    {
+      iracingCustomerId: "269720",
+      numberImage: {
+        customPath: "/assets/images/numbers/custom/269720.png",
+        preferredSource: "custom",
+      },
+    },
+    catalog,
+    {},
+  );
+  assert.equal(resolved.source, NUMBER_ARTWORK_SOURCE.CUSTOM);
+  assert.equal(resolved.imagePath, "/assets/images/numbers/custom/269720.png");
+  assert.equal(resolved.sdkPath, "/assets/images/numbers/269720.png");
+});
+
+test("nested numberImage merge keeps SDK metadata under a custom override", () => {
+  const merged = mergeNumberImageRecords(
+    {
+      sdkPath: "/assets/images/numbers/269720.png",
+      customPath: null,
+      preferredSource: "none",
+      authoritative: false,
+    },
+    {
+      customPath: "/assets/images/numbers/custom/269720.png",
+      preferredSource: "custom",
+    },
+  );
+  assert.equal(merged.sdkPath, "/assets/images/numbers/269720.png");
+  assert.equal(merged.customPath, "/assets/images/numbers/custom/269720.png");
+  assert.equal(merged.preferredSource, "custom");
+  assert.equal(merged.authoritative, false);
+});
+
+test("admin roster preserves numberArtwork sdkPath through profileFromRow", () => {
+  const Roster = loadAdminDriverRoster();
+  const customPath = "/assets/images/numbers/custom/269720.png";
+  const sdkPath = "/assets/images/numbers/269720.png";
+  const list = Roster.buildDriverList(
+    [{ driverId: "mk2", driver: "Matthew Kleinschmidt" }],
+    [
+      {
+        driver_id: "mk2",
+        display_name: "Matthew Kleinschmidt",
+        iracing_name: "Matthew Kleinschmidt",
+        iracing_customer_id: "269720",
+        car_number: "59",
+        active: true,
+        numberArtwork: {
+          source: "custom",
+          imagePath: customPath,
+          customPath,
+          sdkPath,
+          preferredSource: "custom",
+          authoritative: true,
+          customerId: "269720",
+          carNumber: "59",
+        },
+        iracingDesign: {
+          numberImage: {
+            sdkPath,
+            customPath,
+            preferredSource: "custom",
+          },
+        },
+      },
+    ],
+  );
+  assert.equal(list.length, 1);
+  assert.equal(list[0].iracing_customer_id, "269720");
+  assert.equal(list[0].numberArtwork.sdkPath, sdkPath);
+  assert.equal(list[0].numberArtwork.customPath, customPath);
+  assert.equal(list[0].iracingDesign.numberImage.sdkPath, sdkPath);
+
+  const panels = describeAdminNumberArtworkPanels(list[0]);
+  assert.equal(panels.preferredSource, "custom");
+  assert.equal(panels.preferredPath, customPath);
+  assert.equal(readSdkNumberArtworkPath(list[0]), sdkPath);
+  assert.equal(panels.sdkPath, sdkPath);
+});
+
+test("admin SDK panel stays independent of preferred source", () => {
+  const sdkOnly = describeAdminNumberArtworkPanels({
+    iracingCustomerId: "1",
+    numberImage: {
+      sdkPath: "/assets/images/numbers/1.png",
+      customPath: null,
+      preferredSource: "sdk",
+    },
+  });
+  assert.equal(sdkOnly.preferredSource, "sdk");
+  assert.equal(sdkOnly.preferredPath, "/assets/images/numbers/1.png");
+  assert.equal(sdkOnly.sdkPath, "/assets/images/numbers/1.png");
+  assert.equal(adminSdkCaptureStatus({ sdkPath: sdkOnly.sdkPath }).state, "ok");
+
+  const customAndSdk = describeAdminNumberArtworkPanels({
+    iracingCustomerId: "269720",
+    numberImage: {
+      sdkPath: "/assets/images/numbers/269720.png",
+      customPath: "/assets/images/numbers/custom/269720.png",
+      preferredSource: "custom",
+    },
+  });
+  assert.equal(customAndSdk.preferredSource, "custom");
+  assert.equal(customAndSdk.preferredPath, "/assets/images/numbers/custom/269720.png");
+  assert.equal(customAndSdk.sdkPath, "/assets/images/numbers/269720.png");
+  assert.equal(adminSdkCaptureStatus({ sdkPath: customAndSdk.sdkPath }).state, "ok");
+
+  const customOnly = describeAdminNumberArtworkPanels({
+    iracingCustomerId: "2",
+    numberImage: {
+      customPath: "/assets/images/numbers/custom/2.png",
+      preferredSource: "custom",
+    },
+  });
+  assert.equal(customOnly.preferredSource, "custom");
+  assert.equal(customOnly.preferredPath, "/assets/images/numbers/custom/2.png");
+  assert.equal(customOnly.sdkPath, "");
+  assert.equal(adminSdkCaptureStatus({ sdkPath: customOnly.sdkPath }).state, "missing");
+  assert.match(
+    adminSdkCaptureStatus({ sdkPath: customOnly.sdkPath }).message,
+    /No SDK number capture is stored/,
+  );
+
+  const none = describeAdminNumberArtworkPanels({ iracingCustomerId: "3", carNumber: "00" });
+  assert.equal(none.preferredSource, "fallback");
+  assert.equal(none.preferredPath, "");
+  assert.equal(none.sdkPath, "");
+  assert.equal(adminSdkCaptureStatus({ sdkPath: none.sdkPath }).state, "missing");
+
+  const broken = adminSdkCaptureStatus({
+    sdkPath: "/assets/images/numbers/missing-sdk.png",
+    loadFailed: true,
+  });
+  assert.equal(broken.state, "failed");
+  assert.equal(broken.showImage, false);
+  assert.match(broken.message, /SDK capture failed to load/);
+  assert.match(broken.message, /\/assets\/images\/numbers\/missing-sdk\.png/);
+  assert.doesNotMatch(broken.message, /No SDK number capture is stored/);
+});
+
+test("SDK panel never uses preferred custom imagePath as the SDK src", () => {
+  const customPath = "/assets/images/numbers/custom/269720.png";
+  const sdkPath = "/assets/images/numbers/269720.png";
+  const driver = {
+    iracingCustomerId: "269720",
+    numberArtwork: {
+      source: "custom",
+      imagePath: customPath,
+      customPath,
+      sdkPath,
+      preferredSource: "custom",
+    },
+  };
+  assert.equal(readSdkNumberArtworkPath(driver), sdkPath);
+  assert.notEqual(readSdkNumberArtworkPath(driver), customPath);
+  const preferred = resolveNumberArtwork(driver);
+  assert.equal(preferred.imagePath, customPath);
 });
 
 console.log("test-number-artwork.mjs: all checks passed");
