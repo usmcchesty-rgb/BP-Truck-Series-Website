@@ -18,6 +18,7 @@ import {
   buildRepairHints,
 } from './_news-writer-multipass-validation.js';
 import { thinSectionIdsForDepthRepair } from './_news-writer-pipeline-diagnostics.js';
+import { logWriterPipelineDebug } from './_news-writer-pipeline-diagnostics.js';
 import {
   cloneLedger,
   applySectionDraftToLedger,
@@ -35,6 +36,7 @@ import {
   buildArticleDifferences,
   buildComparisonMetrics,
 } from './_news-writer-shadow.js';
+import { summarizeFactLedgerMetrics } from './_news-writer-fact-metrics.js';
 import {
   buildFactVerificationReport,
   sanitizeHeadlinePack,
@@ -281,13 +283,21 @@ function buildShadowResult(checkpoint, ctx) {
   const multipassResult = buildMultipassPipelineResult(checkpoint, ctx);
   const legacyResult = checkpoint.legacyResult;
   const storyPlan = checkpoint.planResult?.storyPlan;
+  const factMetrics = summarizeFactLedgerMetrics({
+    articleType: ctx.articleType || 'race-recap',
+    ledgerSnapshot: multipassResult?.ledgerCoverageAfterWrite || null,
+    sectionDrafts: multipassResult?.generatedSections || [],
+    racePackage: ctx.racePackage || null,
+    takeaways: storyPlan?.readerTakeaways || [],
+    body: multipassResult?.article?.body || '',
+  });
   const metrics = buildComparisonMetrics({
     legacyResult,
     multipassResult,
     packageFingerprint: ctx.packageFingerprint,
     storyPlan,
   });
-  metrics.packageFactCount = ctx.factCount;
+  metrics.packageFactCount = factMetrics.factsAvailable;
   const differences = buildArticleDifferences({
     legacyArticle: legacyResult?.article,
     multipassArticle: multipassResult.article,
@@ -298,7 +308,8 @@ function buildShadowResult(checkpoint, ctx) {
   return {
     mode: 'shadow',
     packageFingerprint: ctx.packageFingerprint,
-    packageFactCount: ctx.factCount,
+    packageFactCount: factMetrics.factsAvailable,
+    factMetrics,
     pinnedIntelligencePackage: true,
     legacy: legacyResult,
     multipass: multipassResult,
@@ -365,6 +376,16 @@ export async function advanceWriterRun(run, {
   }
 
   const planResult = rebuildPlanFromCheckpoint(checkpoint);
+  logWriterPipelineDebug('fact-metrics-context', {
+    packageFingerprint: ctx.fingerprint,
+    raceNumber: run.raceNumber,
+    articleDepth: run.articleDepth,
+    preparedFacts: Array.isArray(ctx.preparedFacts) ? ctx.preparedFacts.length : null,
+    packageFacts: Array.isArray(ctx.racePackage?.facts) ? ctx.racePackage.facts.length : null,
+    takeaways: Array.isArray(planResult?.storyPlan?.readerTakeaways)
+      ? planResult.storyPlan.readerTakeaways.length
+      : 0,
+  });
   const storyPlan = planResult.storyPlan;
   if (!checkpoint.factVerification && ctx.racePackage && ctx.preparedFacts) {
     checkpoint.factVerification = buildFactVerificationReport({
@@ -702,7 +723,11 @@ export async function advanceWriterRun(run, {
       articleType: run.articleType,
       articleDepth: run.articleDepth,
       packageFingerprint: ctx.fingerprint,
-      factCount: ctx.racePackage.facts?.length ?? 0,
+      factCount:
+        checkpoint.ledger && checkpoint.ledger.facts
+          ? Object.keys(checkpoint.ledger.facts).length
+          : ctx.racePackage.facts?.length ?? 0,
+      racePackage: ctx.racePackage,
     };
     const result =
       run.runType === 'shadow_compare'

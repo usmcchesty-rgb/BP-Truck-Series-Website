@@ -57,7 +57,7 @@ export function ledgerCoverageSnapshot(ledger) {
     criticalUsed,
     criticalTotal: critical.length,
     criticalCoveragePercent:
-      critical.length === 0 ? 100 : Math.round((criticalUsed / critical.length) * 1000) / 10,
+      critical.length === 0 ? null : Math.round((criticalUsed / critical.length) * 1000) / 10,
   };
 }
 

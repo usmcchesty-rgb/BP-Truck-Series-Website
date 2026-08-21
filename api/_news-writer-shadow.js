@@ -7,6 +7,7 @@ import { formatIntelligencePromptBlock } from './_race-research-handlers.js';
 import { generateNewsArticle } from './_news-generator.js';
 import { runMultipassWriterPipeline } from './_news-writer-orchestrator.js';
 import { loadRaceResearchBootstrapContext } from './_race-research-sync.js';
+import { summarizeFactLedgerMetrics } from './_news-writer-fact-metrics.js';
 
 function wordCount(text) {
   return String(text || '')
@@ -25,7 +26,7 @@ function tokenizeLabel(label) {
 export function takeawayCoverageScore(body, takeaways) {
   const text = String(body || '').toLowerCase();
   const list = takeaways || [];
-  if (!list.length) return 100;
+  if (!list.length) return null;
   let hit = 0;
   for (const t of list) {
     const tokens = tokenizeLabel(t.label);
@@ -106,9 +107,20 @@ export function buildComparisonMetrics({ legacyResult, multipassResult, packageF
   const multiPrompt = multipassResult?.openAiUsage?.promptTokens || 0;
   const multiCompletion = multipassResult?.openAiUsage?.completionTokens || 0;
 
+  const factMetrics = summarizeFactLedgerMetrics({
+    articleType: multipassResult?.articleType || 'race-recap',
+    ledgerSnapshot: multipassResult?.ledgerCoverageAfterWrite || null,
+    sectionDrafts: multipassResult?.generatedSections || [],
+    preparedFacts: multipassResult?.preparedFacts || multipassResult?.factVerification?.preparedFacts || null,
+    racePackage: multipassResult?.racePackage || null,
+    takeaways: storyPlan?.readerTakeaways || multipassResult?.deterministicPlan?.storyPlan?.readerTakeaways || [],
+    body: multiArticle.body || '',
+  });
+
   return {
     packageFingerprint,
-    packageFactCount: storyPlan ? undefined : undefined,
+    packageFactCount: factMetrics.factsAvailable,
+    factMetrics,
     legacy: {
       headline: legacyArticle.headline || '',
       wordCount: wordCount(legacyArticle.body),
@@ -128,7 +140,9 @@ export function buildComparisonMetrics({ legacyResult, multipassResult, packageF
       headline: multiArticle.headline || multipassResult?.headlinePack?.headline || '',
       wordCount: wordCount(multiArticle.body),
       validationScore: validationScoreFromMultipass(multipassResult?.validation),
-      canonicalCoveragePercent: multipassResult?.ledgerCoverageAfterWrite?.criticalCoveragePercent ?? null,
+      canonicalCoveragePercent: factMetrics.criticalCoveragePercent,
+      criticalFactsAvailable: factMetrics.criticalFactsAvailable,
+      criticalFactsUsed: factMetrics.criticalFactsUsed,
       openAiCalls: multipassResult?.openAiUsage?.calls || 0,
       promptTokens: multiPrompt,
       completionTokens: multiCompletion,
@@ -144,7 +158,12 @@ export function buildComparisonMetrics({ legacyResult, multipassResult, packageF
         multiArticle.body,
         storyPlan?.readerTakeaways || multipassResult?.deterministicPlan?.storyPlan?.readerTakeaways
       ),
-      factsUsed: multipassResult?.ledgerCoverageAfterWrite?.factsUsed ?? null,
+      takeawaysAvailable: factMetrics.takeawaysAvailable,
+      takeawaysCovered: factMetrics.takeawaysCovered,
+      factsUsed: factMetrics.factsUsed,
+      factsVerified: factMetrics.factsVerified,
+      factsAvailable: factMetrics.factsAvailable,
+      diagnosticCode: factMetrics.diagnosticCode,
       depthCompliance: multipassResult?.depthCompliance || multipassResult?.validation?.depthCompliance || null,
       depthScore:
         multipassResult?.validation?.depthCompliance?.overallDepthScore ??
@@ -217,13 +236,21 @@ export async function runWriterShadowComparison({
   };
 
   const storyPlan = multipassResult.deterministicPlan?.storyPlan || multipassResult.storyPlan;
+  const factMetrics = summarizeFactLedgerMetrics({
+    articleType,
+    ledgerSnapshot: multipassResult?.ledgerCoverageAfterWrite || null,
+    sectionDrafts: multipassResult?.generatedSections || [],
+    racePackage,
+    takeaways: storyPlan?.readerTakeaways || [],
+    body: multipassResult?.article?.body || '',
+  });
   const metrics = buildComparisonMetrics({
     legacyResult,
     multipassResult,
     packageFingerprint,
     storyPlan,
   });
-  metrics.packageFactCount = racePackage.facts?.length || 0;
+  metrics.packageFactCount = factMetrics.factsAvailable;
 
   const differences = buildArticleDifferences({
     legacyArticle: legacyResult.article,
@@ -236,7 +263,8 @@ export async function runWriterShadowComparison({
   return {
     mode: 'shadow',
     packageFingerprint,
-    packageFactCount: racePackage.facts?.length || 0,
+    packageFactCount: factMetrics.factsAvailable,
+    factMetrics,
     pinnedIntelligencePackage: true,
     legacy: legacyResult,
     multipass: multipassResult,

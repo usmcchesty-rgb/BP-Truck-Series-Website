@@ -10,6 +10,10 @@ import {
   buildDepthRepairHints,
   validationRequiresDepthRepair,
 } from './_news-writer-pipeline-diagnostics.js';
+import {
+  applyFactGroundingValidationGuard,
+  summarizeFactLedgerMetrics,
+} from './_news-writer-fact-metrics.js';
 
 function normalizeText(text) {
   return String(text || '').toLowerCase();
@@ -161,7 +165,34 @@ export function validateMultipassDraft({
   const newsPenalty = newsworthinessValidation.scorePenalty;
   const depthPenalty = depthValidation.scorePenalty;
   const depthRepairRequired = depthValidation.depthRepairRequired === true;
-  const validationScore = Math.max(0, 100 - stylePenalty - factPenalty - newsPenalty - depthPenalty);
+  let validationScore = Math.max(0, 100 - stylePenalty - factPenalty - newsPenalty - depthPenalty);
+  const factMetrics = summarizeFactLedgerMetrics({
+    articleType: storyPlan?.articleType || 'race-recap',
+    ledgerSnapshot,
+    sectionDrafts,
+    takeaways,
+    body: editedArticle?.body || '',
+  });
+  const factGuard = applyFactGroundingValidationGuard({
+    articleType: storyPlan?.articleType || 'race-recap',
+    factMetrics,
+    validationScore,
+  });
+  validationScore = factGuard.validationScore;
+  if (factGuard.diagnosticCode === 'FACTS_UNAVAILABLE') {
+    warnings.push({
+      type: 'facts_unavailable',
+      message: 'No canonical facts were available in the pinned package.',
+      diagnosticCode: factGuard.diagnosticCode,
+    });
+  } else if (factGuard.diagnosticCode === 'FACT_VERIFICATION_FAILED') {
+    errors.push({
+      type: 'fact_verification_failed',
+      message:
+        'Fact-grounded race recap validation failed: canonical facts were available but zero facts were verified in the draft.',
+      diagnosticCode: factGuard.diagnosticCode,
+    });
+  }
 
   return {
     ok: errors.length === 0 && !depthRepairRequired,
@@ -173,6 +204,8 @@ export function validateMultipassDraft({
     newsworthinessValidation,
     depthValidation,
     depthCompliance: depthValidation.depthCompliance,
+    factMetrics,
+    factGroundingGuard: factGuard,
     depthRepairRequired,
     checksRun: [
       'required_recap',

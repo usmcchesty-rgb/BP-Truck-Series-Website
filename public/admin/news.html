@@ -2938,18 +2938,20 @@
       const diff = data.differences || {};
       const leg = cmp.legacy || {};
       const mul = cmp.multipass || {};
+      const factMetrics = data.factMetrics || cmp.factMetrics || {};
+      const pctOrNa = (v) => (v == null ? 'N/A' : `${escapeHtml(v)}%`);
       const legacyArticle = data.legacy?.article || {};
       const multiArticle = data.multipass?.article || {};
       return `
-        <p class="sub">Shadow comparison · Package ${escapeHtml(data.packageFingerprint || '—')} · ${escapeHtml(data.packageFactCount ?? '—')} facts · ${escapeHtml(data.totalElapsedMs ?? 0)} ms total · pinned package: ${data.pinnedIntelligencePackage ? 'yes' : 'no'}</p>
+        <p class="sub">Shadow comparison · Package ${escapeHtml(data.packageFingerprint || '—')} · ${escapeHtml(factMetrics.factsAvailable ?? data.packageFactCount ?? '—')} facts · ${escapeHtml(data.totalElapsedMs ?? 0)} ms total · pinned package: ${data.pinnedIntelligencePackage ? 'yes' : 'no'}</p>
         <table class="research-table">
           <thead><tr><th>Metric</th><th>Legacy</th><th>Multipass</th></tr></thead>
           <tbody>
             <tr><td>Headline</td><td>${escapeHtml(leg.headline || '—')}</td><td>${escapeHtml(mul.headline || '—')}</td></tr>
             <tr><td>Word count</td><td>${escapeHtml(leg.wordCount ?? '—')}</td><td>${escapeHtml(mul.wordCount ?? '—')}</td></tr>
             <tr><td>Validation score</td><td>${escapeHtml(leg.validationScore ?? '—')}</td><td>${escapeHtml(mul.validationScore ?? '—')}</td></tr>
-            <tr><td>Takeaway coverage</td><td>${escapeHtml(leg.takeawayCoveragePercent ?? '—')}%</td><td>${escapeHtml(mul.takeawayCoveragePercent ?? '—')}%</td></tr>
-            <tr><td>Critical fact usage</td><td>—</td><td>${escapeHtml(mul.canonicalCoveragePercent ?? '—')}%</td></tr>
+            <tr><td>Takeaway coverage</td><td>${pctOrNa(leg.takeawayCoveragePercent)}</td><td>${pctOrNa(mul.takeawayCoveragePercent)}</td></tr>
+            <tr><td>Critical fact usage</td><td>—</td><td>${pctOrNa(mul.canonicalCoveragePercent)}</td></tr>
             <tr><td>OpenAI calls</td><td>${escapeHtml(leg.openAiCalls ?? '—')}</td><td>${escapeHtml(mul.openAiCalls ?? '—')}</td></tr>
             <tr><td>Prompt tokens</td><td>${escapeHtml(leg.promptTokens ?? '—')}</td><td>${escapeHtml(mul.promptTokens ?? '—')}</td></tr>
             <tr><td>Completion tokens</td><td>${escapeHtml(leg.completionTokens ?? '—')}</td><td>${escapeHtml(mul.completionTokens ?? '—')}</td></tr>
@@ -2957,7 +2959,12 @@
             <tr><td>Generation time</td><td>${escapeHtml(leg.generationTimeMs ?? '—')} ms</td><td>${escapeHtml(mul.generationTimeMs ?? '—')} ms</td></tr>
             <tr><td>Repair attempts</td><td>${escapeHtml(leg.repairAttempts ?? 0)}</td><td>${escapeHtml(mul.repairAttempts ?? 0)}</td></tr>
             <tr><td>Sections</td><td>1</td><td>${escapeHtml(mul.sectionCount ?? '—')}</td></tr>
+            <tr><td>Facts available</td><td>—</td><td>${escapeHtml(mul.factsAvailable ?? factMetrics.factsAvailable ?? '—')}</td></tr>
             <tr><td>Facts used</td><td>—</td><td>${escapeHtml(mul.factsUsed ?? '—')}</td></tr>
+            <tr><td>Facts verified</td><td>—</td><td>${escapeHtml(mul.factsVerified ?? '—')}</td></tr>
+            <tr><td>Critical facts</td><td>—</td><td>${escapeHtml(mul.criticalFactsUsed ?? factMetrics.criticalFactsUsed ?? '—')} / ${escapeHtml(mul.criticalFactsAvailable ?? factMetrics.criticalFactsAvailable ?? '—')}</td></tr>
+            <tr><td>Takeaways</td><td>—</td><td>${escapeHtml(mul.takeawaysCovered ?? factMetrics.takeawaysCovered ?? '—')} / ${escapeHtml(mul.takeawaysAvailable ?? factMetrics.takeawaysAvailable ?? '—')}</td></tr>
+            <tr><td>Fact diagnostics</td><td>—</td><td>${escapeHtml(mul.diagnosticCode ?? factMetrics.diagnosticCode ?? '—')}</td></tr>
             <tr><td>Depth score</td><td>—</td><td>${escapeHtml(mul.depthScore ?? '—')}%</td></tr>
           </tbody>
         </table>
