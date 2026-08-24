@@ -16,6 +16,10 @@ import {
   driverProfilePublicUrl,
   resolveProfileForStandingsRow,
 } from './_driver-profile-resolve.js';
+import {
+  resolveSeasonPhaseFromSchedule,
+  formatStandingsSidebarPhase,
+} from './_championship-season.js';
 import * as cheerio from "cheerio";
 
 
@@ -235,16 +239,37 @@ const avgFinish =
           averageCautionsPerRace: null,
         };
 
+    const enrichedSchedule = scheduleHtml
+      ? enrichScheduleRaces(parseScheduleRacesFromHtml(scheduleHtml))
+      : [];
+    const seasonState = resolveSeasonPhaseFromSchedule(enrichedSchedule, {
+      now: new Date(),
+      settings,
+    });
+    const sidebarPhase = formatStandingsSidebarPhase(
+      seasonState.phase,
+      seasonState.counts
+    );
+    const playoffCut =
+      seasonState.phase?.cutPosition != null
+        ? seasonState.phase.cutPosition
+        : seasonState.phase?.isFinalRound
+          ? null
+          : 16;
+
     res.setHeader('Cache-Control', 's-maxage=120, stale-while-revalidate=300');
     return res.status(200).json({
       settings: {
         seriesName: 'Blazing Pedals Truck Series',
         seasonName: data.lss?.season_name || 'Season 11',
-        playoffCut: 16
+        playoffCut: playoffCut ?? 16,
       },
       rows,
       schedules: data.schedules || [],
       cautionStats,
+      seasonCounts: seasonState.counts,
+      playoffPhase: seasonState.phase,
+      sidebarPhase,
       updatedAt: new Date().toISOString()
     });
   } catch (e) {

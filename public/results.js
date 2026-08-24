@@ -37,15 +37,68 @@ function driverProfileUrl(row) {
   return `/drivers/${encodeURIComponent(String(id || ""))}`;
 }
 
-function renderRaceSelector(completedRaces, selectedRaceNumber) {
+function raceDisplayLabel(raceOrResults) {
+  return (
+    raceOrResults?.displayRaceLabel ||
+    raceOrResults?.selectedDisplayRaceLabel ||
+    (raceOrResults?.raceNumber != null ? String(raceOrResults.raceNumber) : "") ||
+    (raceOrResults?.selectedRaceNumber != null
+      ? String(raceOrResults.selectedRaceNumber)
+      : "")
+  );
+}
+
+function raceOptionValue(race) {
+  if (race?.scheduleId) return `sid:${race.scheduleId}`;
+  if (race?.displayRaceLabel) return `label:${race.displayRaceLabel}`;
+  return `n:${race?.raceNumber ?? ""}`;
+}
+
+function parseResultsQuery() {
+  const params = new URLSearchParams(window.location.search);
+  return {
+    scheduleId: params.get("scheduleId") || params.get("schedule_id") || "",
+    race:
+      params.get("race") ||
+      params.get("raceLabel") ||
+      params.get("raceNumber") ||
+      "",
+  };
+}
+
+function buildResultsApiUrl({ scheduleId = "", race = "" } = {}) {
+  const params = new URLSearchParams();
+  if (scheduleId) params.set("scheduleId", scheduleId);
+  if (race) {
+    if (/^\d+[A-Za-z]$/i.test(race)) params.set("race", race);
+    else if (/^\d+$/.test(String(race))) params.set("raceNumber", String(race));
+    else params.set("race", race);
+  }
+  const qs = params.toString();
+  return qs ? `/api/schedule?${qs}` : "/api/schedule";
+}
+
+function renderRaceSelector(completedRaces, selected) {
   if (!completedRaces?.length) return "";
+
+  const selectedSid = selected?.selectedScheduleId
+    ? String(selected.selectedScheduleId)
+    : "";
+  const selectedLabel = raceDisplayLabel(selected);
 
   const options = completedRaces
     .map((race) => {
-      const label = `Race ${race.raceNumber} — ${race.track || "TBD"}`;
-      const selected =
-        Number(race.raceNumber) === Number(selectedRaceNumber) ? " selected" : "";
-      return `<option value="${escapeAttr(race.raceNumber)}"${selected}>${escapeHtml(label)}</option>`;
+      const label =
+        race.displayTitle ||
+        `Race ${race.displayRaceLabel || race.raceNumber} — ${race.track || "TBD"}`;
+      const value = raceOptionValue(race);
+      const selectedAttr =
+        (selectedSid && String(race.scheduleId) === selectedSid) ||
+        (!selectedSid &&
+          String(race.displayRaceLabel || race.raceNumber) === String(selectedLabel))
+          ? " selected"
+          : "";
+      return `<option value="${escapeAttr(value)}"${selectedAttr}>${escapeHtml(label)}</option>`;
     })
     .join("");
 
@@ -54,19 +107,26 @@ function renderRaceSelector(completedRaces, selectedRaceNumber) {
 }
 
 function renderFeaturedHeader(raceResults) {
-  const raceNumber = raceResults.selectedRaceNumber;
+  const label = raceDisplayLabel(raceResults);
   const track = raceResults.selectedRaceName || "TBD";
   const date = raceResults.selectedRaceDate || "";
   const winner = raceResults.selectedRaceWinner || "—";
+  const latestLabel =
+    raceResults.latestCompletedDisplayRaceLabel ||
+    raceResults.latestCompletedRaceNumber;
   const isLatest =
-    Number(raceResults.selectedRaceNumber) ===
-    Number(raceResults.latestCompletedRaceNumber);
+    label &&
+    latestLabel != null &&
+    String(label) === String(latestLabel);
   const kicker = isLatest ? "Latest Race Results" : "Race Results";
+  const title =
+    raceResults.selectedDisplayTitle ||
+    (label ? `Race ${label} — ${track}` : `Race Results — ${track}`);
 
   return `<section class="results-featured">
     <div class="results-featured-head">
       <span class="results-kicker">${escapeHtml(kicker)}</span>
-      <h1 class="results-featured-title">Race ${escapeHtml(raceNumber)} — ${escapeHtml(track)}</h1>
+      <h1 class="results-featured-title">${escapeHtml(title)}</h1>
       <div class="results-featured-meta">
         ${date ? `<span>${escapeHtml(date)}</span>` : ""}
         <span class="results-featured-winner">Winner: <strong>${escapeHtml(winner)}</strong></span>
@@ -74,7 +134,7 @@ function renderFeaturedHeader(raceResults) {
     </div>
     <div class="results-featured-tools">
       <div class="results-selector-wrap">
-        ${renderRaceSelector(raceResults.completedRaces, raceResults.selectedRaceNumber)}
+        ${renderRaceSelector(raceResults.completedRaces, raceResults)}
       </div>
       <div id="resultsShareHost"></div>
     </div>
@@ -91,18 +151,18 @@ function renderResultsTable(rows, raceResults = {}) {
       ? `<p class="results-field-summary">Official starters: ${raceResults.officialStarterCount}${
           raceResults.provisionalCount
             ? ` · Provisionals: ${raceResults.provisionalCount}`
-            : ''
+            : ""
         } · Total scored field: ${raceResults.totalScoredFieldCount ?? rows.length}</p>`
-      : '';
+      : "";
 
   const body = rows
     .map((row) => {
       const rowClass = row.isWinner
-        ? 'results-row is-winner'
+        ? "results-row is-winner"
         : row.isProvisional
-          ? 'results-row is-provisional'
-          : 'results-row';
-      const statusLabel = row.isProvisional ? 'Provisional' : row.status || 'Finished';
+          ? "results-row is-provisional"
+          : "results-row";
+      const statusLabel = row.isProvisional ? "Provisional" : row.status || "Finished";
       return `<tr class="${rowClass}">
         <td class="results-pos">${escapeHtml(String(row.position))}</td>
         <td class="results-driver">
@@ -119,14 +179,14 @@ function renderResultsTable(rows, raceResults = {}) {
         </td>
         <td>${escapeHtml(formatCell(row.carNumber))}</td>
         <td>${escapeHtml(statusLabel)}</td>
-        <td>${row.startingPos ? escapeHtml(formatOrdinal(row.startingPos)) : '—'}</td>
+        <td>${row.startingPos ? escapeHtml(formatOrdinal(row.startingPos)) : "—"}</td>
         <td class="results-finish">${escapeHtml(formatOrdinal(row.finish))}</td>
         <td>${formatCell(row.lapsLed)}</td>
         <td>${formatCell(row.incidents)}</td>
         <td>${formatCell(row.points)}</td>
       </tr>`;
     })
-    .join('');
+    .join("");
 
   return `${fieldSummary}<div class="results-table-wrap">
     <table class="results-table">
@@ -157,7 +217,7 @@ function renderPage(raceResults) {
       <section class="results-featured results-featured--empty">
         <span class="results-kicker">Race Results</span>
         <h1 class="results-featured-title">No Completed Races Yet</h1>
-        <p class="results-empty">Race results will appear here after the first points race is completed.</p>
+        <p class="results-empty">Race results will appear here after the first race is completed.</p>
       </section>
     `;
     return;
@@ -171,44 +231,73 @@ function renderPage(raceResults) {
   `;
 
   $("#raceSelector")?.addEventListener("change", (event) => {
-    const raceNumber = event.target.value;
-    loadResults(raceNumber);
+    const value = String(event.target.value || "");
+    if (value.startsWith("sid:")) {
+      loadResults({ scheduleId: value.slice(4) });
+      return;
+    }
+    if (value.startsWith("label:")) {
+      loadResults({ race: value.slice(6) });
+      return;
+    }
+    if (value.startsWith("n:")) {
+      loadResults({ race: value.slice(2) });
+    }
   });
 
   mountResultsShare(raceResults);
 }
 
 function mountResultsShare(raceResults) {
-  if (!window.BPShare?.initPageShare || !raceResults?.selectedRaceNumber) return;
-  const raceNumber = raceResults.selectedRaceNumber;
+  if (!window.BPShare?.initPageShare) return;
+  const label = raceDisplayLabel(raceResults);
+  if (!label && !raceResults?.selectedScheduleId) return;
   const track = raceResults.selectedRaceName || "TBD";
   const winner = raceResults.selectedRaceWinner || "";
-  const title = `Race ${raceNumber} Results — ${track}`;
+  const title =
+    raceResults.selectedDisplayTitle ||
+    `Race ${label} Results — ${track}`;
   const text = winner
-    ? `Race ${raceNumber} at ${track}. Winner: ${winner}.`
-    : `Race ${raceNumber} results at ${track}.`;
+    ? `${title}. Winner: ${winner}.`
+    : `${title}.`;
+  const shareParams = new URLSearchParams();
+  if (raceResults.selectedScheduleId) {
+    shareParams.set("scheduleId", String(raceResults.selectedScheduleId));
+  } else if (label) {
+    shareParams.set("race", String(label));
+  }
   window.BPShare.initPageShare("#resultsShareHost", {
     title,
     text,
     description: text,
-    url: `${window.location.origin}/results.html?race=${encodeURIComponent(raceNumber)}`,
+    url: `${window.location.origin}/results.html?${shareParams.toString()}`,
     image: window.BPShare.DEFAULT_IMAGE,
     type: "website",
   });
 }
 
-async function loadResults(raceNumber) {
+async function loadResults(query = null) {
   const page = $("#resultsPage");
   if (!page) return;
 
+  const resolved = query || parseResultsQuery();
+
   try {
-    const url = raceNumber
-      ? `/api/schedule?raceNumber=${encodeURIComponent(raceNumber)}`
-      : "/api/schedule";
+    const url = buildResultsApiUrl(resolved);
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     renderPage(data.raceResults || {});
+
+    const params = new URLSearchParams();
+    if (resolved.scheduleId) params.set("scheduleId", resolved.scheduleId);
+    else if (resolved.race) params.set("race", resolved.race);
+    const next = params.toString()
+      ? `${window.location.pathname}?${params.toString()}`
+      : window.location.pathname;
+    if (next !== `${window.location.pathname}${window.location.search}`) {
+      window.history.replaceState({}, "", next);
+    }
   } catch (e) {
     console.error("Failed to load race results:", e);
     page.innerHTML = `<p class="results-empty">Failed to load race results.</p>`;

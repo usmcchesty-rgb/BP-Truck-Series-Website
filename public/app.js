@@ -1,8 +1,12 @@
-const PLAYOFF_CUT = 16;
+const DEFAULT_PLAYOFF_CUT = 16;
 const $ = (s) => document.querySelector(s);
 let standings = [];
 let standingsTableView = "top16";
 let latestCautionStats = null;
+let playoffCut = DEFAULT_PLAYOFF_CUT;
+let playoffPhase = null;
+let sidebarPhase = null;
+let seasonCounts = null;
 
 // Secondary lookups used only if the slug-based image fails to load.
 const TRACK_IMAGE_ALIASES = {
@@ -95,24 +99,42 @@ function renderPodium() {
     .join("");
 }
 
+function activeFieldSize() {
+  if (playoffPhase?.fieldSize) return Number(playoffPhase.fieldSize);
+  if (playoffCut != null) return Number(playoffCut);
+  return DEFAULT_PLAYOFF_CUT;
+}
+
+function cutLineLabel() {
+  if (playoffPhase?.isFinalRound) return null;
+  if (playoffPhase?.isPlayoffs && playoffPhase?.advanceSize) {
+    return `ADVANCEMENT CUT — TOP ${playoffPhase.advanceSize} ADVANCE`;
+  }
+  return `PLAYOFF CUT LINE — TOP ${playoffCut || DEFAULT_PLAYOFF_CUT}`;
+}
+
 function renderTable(target, rows, cut = true) {
   const html = [];
+  const cutPos = playoffPhase?.isFinalRound
+    ? null
+    : Number(playoffCut || DEFAULT_PLAYOFF_CUT);
+  const cutLabel = cutLineLabel();
 
   rows.forEach((r, i) => {
     html.push(row(r));
 
-    // Insert after the last row at/inside the cut, even when positions
-    // have ties or gaps and no row is exactly PLAYOFF_CUT.
     const place = Number(r.place);
     const nextPlace = rows[i + 1] ? Number(rows[i + 1].place) : Infinity;
     if (
       cut &&
-      rows.length >= PLAYOFF_CUT &&
-      place <= PLAYOFF_CUT &&
-      nextPlace > PLAYOFF_CUT
+      cutPos &&
+      cutLabel &&
+      rows.length >= cutPos &&
+      place <= cutPos &&
+      nextPlace > cutPos
     ) {
       html.push(
-        `<tr class="cutline"><td colspan="10">PLAYOFF CUT LINE — TOP ${PLAYOFF_CUT}</td></tr>`
+        `<tr class="cutline"><td colspan="10">${cutLabel}</td></tr>`
       );
     }
   });
@@ -316,22 +338,47 @@ async function loadScheduleSidebar() {
 }
 
 function renderSidebar() {
-  const maxRaces = standings.length
-    ? Math.max(...standings.map((x) => Number(x.races || 0)))
-    : 0;
+  const raceCountEl = $("#raceCount");
+  if (raceCountEl) {
+    if (sidebarPhase?.primary) {
+      raceCountEl.textContent = sidebarPhase.primary;
+      const labelEl = raceCountEl.parentElement?.querySelector("span");
+      if (labelEl) {
+        const parts = [sidebarPhase.secondary, sidebarPhase.detail].filter(Boolean);
+        labelEl.textContent = parts.join(" · ") || "SEASON PROGRESS";
+      }
+    } else if (seasonCounts) {
+      raceCountEl.textContent = `${seasonCounts.completedRegularSeasonRaces} / ${seasonCounts.regularSeasonRacesTotal}`;
+      const labelEl = raceCountEl.parentElement?.querySelector("span");
+      if (labelEl) labelEl.textContent = "REGULAR SEASON RACES";
+    } else {
+      const maxRaces = standings.length
+        ? Math.max(...standings.map((x) => Number(x.races || 0)))
+        : 0;
+      raceCountEl.textContent = `${maxRaces} / 20`;
+    }
+  }
 
-  $("#raceCount").textContent = `${maxRaces} / 20`;
   $("#winnerCount").textContent = String(countDifferentWinners(standings));
   window.BPSeasonSummary?.renderAvgCautions(latestCautionStats);
   const count = standings.length;
   const fullStandingsTab = $("#fullStandingsTab");
   if (fullStandingsTab) fullStandingsTab.textContent = `FULL STANDINGS (1–${count})`;
+
+  const topTab = document.querySelector('[data-table-view="top16"]');
+  if (topTab) {
+    const field = activeFieldSize();
+    if (playoffPhase?.isFinalRound) topTab.textContent = `FINAL ${field}`;
+    else if (playoffPhase?.isPlayoffs) topTab.textContent = `PLAYOFF FIELD (1–${field})`;
+    else topTab.textContent = `TOP ${field}`;
+  }
+
   loadScheduleSidebar();
 }
 
 function getStandingsTableRows() {
   if (standingsTableView === "top16") {
-    return standings.slice(0, PLAYOFF_CUT);
+    return standings.slice(0, activeFieldSize());
   }
 
   const q = $("#search")?.value?.toLowerCase() || "";
@@ -419,6 +466,16 @@ async function load(force = false) {
     });
 
     latestCautionStats = data.cautionStats || null;
+    playoffPhase = data.playoffPhase || null;
+    sidebarPhase = data.sidebarPhase || null;
+    seasonCounts = data.seasonCounts || null;
+    if (playoffPhase?.cutPosition != null) {
+      playoffCut = Number(playoffPhase.cutPosition);
+    } else if (playoffPhase?.isFinalRound || playoffPhase?.showCutColumn === false) {
+      playoffCut = null;
+    } else {
+      playoffCut = Number(data.settings?.playoffCut) || DEFAULT_PLAYOFF_CUT;
+    }
 
     $("#lastUpdated").textContent = data.updatedAt
       ? new Date(data.updatedAt).toLocaleString()

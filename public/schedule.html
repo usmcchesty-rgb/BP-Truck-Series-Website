@@ -232,7 +232,7 @@
 
 
         const nextText = next
-          ? `Next: Race ${escapeHtml(next.raceNumber ?? '')} — ${escapeHtml(next.date ?? '')} (${escapeHtml(next.track ?? 'TBD')})`
+          ? `Next: Race ${escapeHtml(next.displayRaceLabel ?? next.officialPointsRaceNumber ?? next.raceNumber ?? '')} — ${escapeHtml(next.date ?? '')} (${escapeHtml(next.track ?? 'TBD')})`
           : 'Next: —';
 
         const races = Array.isArray(data.races) ? data.races : [];
@@ -250,11 +250,11 @@
               <div class="schedule-summary-stats" role="list">
                 <div class="summary-stat" role="listitem">
                   <span class="summary-emoji" aria-hidden="true">🏁</span>
-                  <b>${completed} </b><span>RACES COMPLETED</span>
+                  <b>${data?.seasonCounts?.completedNormalChampionshipRaces ?? completed} </b><span>CHAMPIONSHIP RACES COMPLETED</span>
                 </div>
                 <div class="summary-stat" role="listitem">
                   <span class="summary-emoji" aria-hidden="true">📊</span>
-                  <b>${totalPointsRaces} </b><span>POINTS RACES</span>
+                  <b>${data?.seasonCounts?.normalChampionshipRacesTotal ?? totalPointsRaces} </b><span>CHAMPIONSHIP RACES</span>
                 </div>
                 <div class="summary-stat" role="listitem">
                   <span class="summary-emoji" aria-hidden="true">🏆</span>
@@ -349,25 +349,41 @@
 
         const raceCountEl = document.getElementById('raceCount');
         const winnerCountEl = document.getElementById('winnerCount');
-        if (raceCountEl) raceCountEl.textContent = `${completed} / ${races.length || 20}`;
+        const sidebarPhase = data?.sidebarPhase;
+        if (raceCountEl) {
+          if (sidebarPhase?.primary) {
+            raceCountEl.textContent = sidebarPhase.primary;
+            const labelEl = raceCountEl.parentElement?.querySelector('span');
+            if (labelEl) {
+              const parts = [sidebarPhase.secondary, sidebarPhase.detail].filter(Boolean);
+              labelEl.textContent = parts.join(' · ') || 'SEASON PROGRESS';
+            }
+          } else {
+            const counts = data?.seasonCounts;
+            raceCountEl.textContent = counts
+              ? `${counts.completedRegularSeasonRaces} / ${counts.regularSeasonRacesTotal}`
+              : `${completed} / ${totalPointsRaces || 20}`;
+          }
+        }
         if (winnerCountEl) winnerCountEl.textContent = String(uniqueWinners.size);
         window.BPSeasonSummary?.renderAvgCautions(data?.cautionStats);
 
         tbodyEl.innerHTML = races
           .map((r) => {
-            const raceNum = r.raceNumber ?? '';
+            const raceNum = r.displayRaceLabel ?? r.officialPointsRaceNumber ?? r.raceNumber ?? '';
             const date = escapeHtml(r.date ?? '');
             const pointsStatus = escapeHtml(r.status ?? '');
             const track = escapeHtml(r.track ?? '');
             const length = escapeHtml(r.length ?? '');
             const winner = raceWinnerCell(r.winner);
-            const link = r.link ? String(r.link) : '';
-
-            const raceHtml = link
-              ? `<a href="${escapeHtml(link)}">${escapeHtml(raceNum)}</a>`
-              : escapeHtml(raceNum);
-
+            const resultsUrl = r.resultsUrl ? String(r.resultsUrl) : '';
             const isCompleted = !!String(r?.winner ?? '').trim();
+
+            const raceHtml =
+              isCompleted && resultsUrl
+                ? `<a href="${escapeHtml(resultsUrl)}">${escapeHtml(raceNum)}</a>`
+                : escapeHtml(raceNum);
+
             const rowClass = isCompleted ? 'schedule-row-completed' : 'schedule-row-upcoming';
 
             return `

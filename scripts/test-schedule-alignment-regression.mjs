@@ -122,32 +122,11 @@ async function runRegression() {
   const settings = await getSettings();
   const scheduleHtml = await fetchHtml(settings.scheduleUrl);
   const scheduleRaces = enrichScheduleRaces(parseScheduleRaces(scheduleHtml));
-  const latestRace = getLatestCompletedPointsRace(scheduleRaces);
-  const raceNumber = latestRace?.officialPointsRaceNumber ?? 12;
 
-  const raceNumberDebug = buildRaceNumberDebug(scheduleRaces, raceNumber);
-  const { rows: standings, schedules } = await fetchStandingsRows(
-    settings,
-    raceNumberDebug.standingsScheduleId
-  );
-  const driverLookup = buildDriverLookup(standings);
-  const finishRaces = extractFinishRacesFromSchedules(schedules);
-
-  const justinId = matchDriverIdByName('Justin Levine', driverLookup);
-  assert(String(justinId) === JUSTIN_LEVINE_ID, `Expected Justin Levine id ${JUSTIN_LEVINE_ID}, got ${justinId}`);
-
-  const factualGrounding = buildFactualGroundingContext({
-    standings,
-    scheduleRaces,
-    raceNumber,
-    schedules,
-    driverLookup,
-    recentResults: [],
-    manualRaceNotes: '',
-    transcriptSummary: '',
-  });
-
-  const justinGrounding = factualGrounding.drivers[JUSTIN_LEVINE_ID];
+  // Historical last-3 fixture window for Justin Levine:
+  // Rockingham (DNP) → Charlotte (P1) → Iowa (P1).
+  // This must stay pinned to Iowa — NOT the drifting "latest completed" race —
+  // otherwise Charlotte/Iowa fall out of recentRaceFinishes as the season advances.
   const rockinghamPointsRace = scheduleRaces.find(
     (race) => !race.nonPoints && /rockingham/i.test(race.track || '')
   )?.officialPointsRaceNumber;
@@ -161,6 +140,50 @@ async function runRegression() {
   assert(rockinghamPointsRace, 'Rockingham points race not found on schedule page');
   assert(charlottePointsRace, 'Charlotte points race not found on schedule page');
   assert(iowaPointsRace, 'Iowa points race not found on schedule page');
+
+  const charlotteRace = scheduleRaces.find(
+    (race) => !race.nonPoints && /charlotte/i.test(race.track || '')
+  );
+  assert(
+    String(charlotteRace?.scheduleId) === CHARLOTTE_SCHEDULE_ID,
+    `Charlotte scheduleId should remain ${CHARLOTTE_SCHEDULE_ID}, got ${charlotteRace?.scheduleId}`
+  );
+  assert(
+    Number(charlottePointsRace) === 11,
+    `Charlotte officialPointsRaceNumber should be 11 (after Duels), got ${charlottePointsRace}`
+  );
+  assert(
+    String(charlotteRace?.displayRaceLabel) === '11',
+    `Charlotte displayRaceLabel should be "11", got ${charlotteRace?.displayRaceLabel}`
+  );
+
+  const historicalAnchorRaceNumber = iowaPointsRace;
+  const raceNumberDebug = buildRaceNumberDebug(
+    scheduleRaces,
+    historicalAnchorRaceNumber
+  );
+  const { rows: standings, schedules } = await fetchStandingsRows(
+    settings,
+    raceNumberDebug.standingsScheduleId || IOWA_SCHEDULE_ID
+  );
+  const driverLookup = buildDriverLookup(standings);
+  const finishRaces = extractFinishRacesFromSchedules(schedules);
+
+  const justinId = matchDriverIdByName('Justin Levine', driverLookup);
+  assert(String(justinId) === JUSTIN_LEVINE_ID, `Expected Justin Levine id ${JUSTIN_LEVINE_ID}, got ${justinId}`);
+
+  const factualGrounding = buildFactualGroundingContext({
+    standings,
+    scheduleRaces,
+    raceNumber: historicalAnchorRaceNumber,
+    schedules,
+    driverLookup,
+    recentResults: [],
+    manualRaceNotes: '',
+    transcriptSummary: '',
+  });
+
+  const justinGrounding = factualGrounding.drivers[JUSTIN_LEVINE_ID];
 
   const rockinghamFinish = finishForDriver(justinGrounding, rockinghamPointsRace);
   assert(!rockinghamFinish, `Justin Levine should have no Rockingham recentRaceFinish (DNP), got ${JSON.stringify(rockinghamFinish)}`);
@@ -192,13 +215,24 @@ async function runRegression() {
     `Justin Levine average should be 1.0 from 2 starts, got ${justinGrounding.last3RaceAverageFinish}`
   );
 
-  const alignedLatest = alignFinishRacesWithTrace(
-    getRecentPointsRaceResults(scheduleRaces, raceNumber, 3),
+  // Direct scheduleId finish proof: Charlotte result still exists in SRH schedules
+  // even when it is outside the drifting "latest completed" last-3 window.
+  const charlotteFinishRace = finishRaces.find(
+    (entry) => String(entry.scheduleId) === CHARLOTTE_SCHEDULE_ID
+  );
+  assert(charlotteFinishRace, `Charlotte finish race missing for scheduleId ${CHARLOTTE_SCHEDULE_ID}`);
+  assert(
+    charlotteFinishRace.finishes?.[JUSTIN_LEVINE_ID] === 1,
+    `Justin Levine should be P1 at Charlotte via scheduleId ${CHARLOTTE_SCHEDULE_ID}, got ${charlotteFinishRace.finishes?.[JUSTIN_LEVINE_ID]}`
+  );
+
+  const alignedHistorical = alignFinishRacesWithTrace(
+    getRecentPointsRaceResults(scheduleRaces, historicalAnchorRaceNumber, 3),
     finishRaces,
     driverLookup
   );
 
-  const rockinghamAligned = findAlignedByTrack(alignedLatest, 'rockingham');
+  const rockinghamAligned = findAlignedByTrack(alignedHistorical, 'rockingham');
   assert(
     rockinghamAligned?.schedulesApiScheduleId === ROCKINGHAM_SCHEDULE_ID,
     `Rockingham should align to ${ROCKINGHAM_SCHEDULE_ID}, got ${rockinghamAligned?.schedulesApiScheduleId}`
@@ -208,13 +242,13 @@ async function runRegression() {
     `Rockingham alignmentMethod should be schedules-api-schedule-id-match, got ${rockinghamAligned?.alignmentMethod}`
   );
 
-  const iowaAligned = findAlignedByTrack(alignedLatest, 'iowa');
+  const iowaAligned = findAlignedByTrack(alignedHistorical, 'iowa');
   assert(
     iowaAligned?.schedulesApiScheduleId === IOWA_SCHEDULE_ID,
     `Iowa should align to ${IOWA_SCHEDULE_ID}, got ${iowaAligned?.schedulesApiScheduleId}`
   );
 
-  const charlotteAligned = findAlignedByTrack(alignedLatest, 'charlotte');
+  const charlotteAligned = findAlignedByTrack(alignedHistorical, 'charlotte');
   assert(
     charlotteAligned?.schedulesApiScheduleId === CHARLOTTE_SCHEDULE_ID,
     `Charlotte should align to ${CHARLOTTE_SCHEDULE_ID}, got ${charlotteAligned?.schedulesApiScheduleId}`
@@ -259,16 +293,58 @@ async function runRegression() {
     'Rockingham must not reuse Bristol schedule_id'
   );
 
+  // Latest-completed window still aligns by scheduleId when using a
+  // standings snapshot anchored at the latest completed race.
+  const latestRace = getLatestCompletedPointsRace(scheduleRaces);
+  const latestRaceNumber = latestRace?.officialPointsRaceNumber;
+  assert(latestRaceNumber, 'Latest completed points race should exist');
+  const latestDebug = buildRaceNumberDebug(scheduleRaces, latestRaceNumber);
+  const { schedules: latestSchedules } = await fetchStandingsRows(
+    settings,
+    latestDebug.standingsScheduleId || latestRace.scheduleId
+  );
+  const latestFinishRaces = extractFinishRacesFromSchedules(latestSchedules);
+  const alignedLatest = alignFinishRacesWithTrace(
+    getRecentPointsRaceResults(scheduleRaces, latestRaceNumber, 3),
+    latestFinishRaces,
+    driverLookup
+  );
+  assert(
+    alignedLatest.length === 3,
+    `Latest last-3 window should align 3 races, got ${alignedLatest.length}`
+  );
+  for (const race of alignedLatest) {
+    assert(
+      race.schedulesApiScheduleId,
+      `Latest-window race ${race.track} missing schedulesApiScheduleId`
+    );
+    assert(
+      race.alignmentMethod === 'schedules-api-schedule-id-match',
+      `Latest-window ${race.track} should align by schedule id, got ${race.alignmentMethod}`
+    );
+  }
+
   console.log('All schedule alignment regression checks passed.');
   console.log(
     JSON.stringify(
       {
-        raceNumber,
+        historicalAnchorRaceNumber,
+        charlotte: {
+          scheduleId: charlotteRace?.scheduleId,
+          officialPointsRaceNumber: charlottePointsRace,
+          displayRaceLabel: charlotteRace?.displayRaceLabel,
+        },
+        latestRaceNumber,
         justinRecentRaceFinishes: justinGrounding.recentRaceFinishes,
-        alignedLatest: alignedLatest.map((race) => ({
+        alignedHistorical: alignedHistorical.map((race) => ({
           track: race.track,
           alignmentMethod: race.alignmentMethod,
           schedulePageScheduleId: race.schedulePageScheduleId,
+          schedulesApiScheduleId: race.schedulesApiScheduleId,
+        })),
+        alignedLatest: alignedLatest.map((race) => ({
+          track: race.track,
+          alignmentMethod: race.alignmentMethod,
           schedulesApiScheduleId: race.schedulesApiScheduleId,
         })),
       },

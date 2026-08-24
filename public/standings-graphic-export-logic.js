@@ -86,19 +86,24 @@ export const STANDINGS_P3_BRONZE = {
   nameWeight: "bold",
 };
 
-export function playoffBubbleKind(position) {
+export function playoffBubbleKind(position, playoffCut = DEFAULT_PLAYOFF_CUT) {
   const pos = Number(position);
-  if (PLAYOFF_BUBBLE.inside.positions.includes(pos)) return "inside";
-  if (PLAYOFF_BUBBLE.outside.positions.includes(pos)) return "outside";
+  const cut = Number(playoffCut);
+  if (!Number.isFinite(pos) || !Number.isFinite(cut) || cut < 1) return null;
+  if (pos === cut - 1 || pos === cut) return "inside";
+  if (pos === cut + 1 || pos === cut + 2) return "outside";
   return null;
 }
 
-export function standingsRowVisualStyle(position) {
+export function standingsRowVisualStyle(position, playoffCut = DEFAULT_PLAYOFF_CUT) {
   const pos = Number(position);
   if (pos === 1) return { ...STANDINGS_P1_GOLD, kind: "p1-gold" };
   if (pos === 2) return { ...STANDINGS_P2_SILVER, kind: "p2-silver" };
   if (pos === 3) return { ...STANDINGS_P3_BRONZE, kind: "p3-bronze" };
-  const bubble = playoffBubbleKind(pos);
+  if (playoffCut == null) {
+    return { ...STANDINGS_NORMAL_ROW, kind: "normal" };
+  }
+  const bubble = playoffBubbleKind(pos, playoffCut);
   if (bubble === "inside") {
     return {
       ...STANDINGS_NORMAL_ROW,
@@ -592,8 +597,9 @@ export function buildDriverChampionshipStat(row, {
 } = {}) {
   const points = parseStandingsPoints(row?.points);
   const position = Number(row?.position);
-  const cutPos = Number(playoffCut) || DEFAULT_PLAYOFF_CUT;
-  const cutAvailable = cutPoints != null && Number.isFinite(Number(cutPoints));
+  const cutPos = playoffCut == null ? null : Number(playoffCut) || DEFAULT_PLAYOFF_CUT;
+  const cutAvailable =
+    cutPos != null && cutPoints != null && Number.isFinite(Number(cutPoints));
 
   let gapToLeader = null;
   let isLeader = false;
@@ -1603,9 +1609,10 @@ export function computePlayoffCutLine(layout, placement) {
   };
 }
 
-/** Outer 2px box around P15–P18. Uses existing row Ys; adds no layout height. */
+/** Outer 2px box around cut-1 … cut+2. Uses existing row Ys; adds no layout height. */
 export function computePlayoffBattleBox(layout, placement) {
   if (!placement) return null;
+  const cut = Number(placement.playoffCut) || DEFAULT_PLAYOFF_CUT;
   const startRow = placement.afterRowIndex - 1;
   const endRow = placement.afterRowIndex + 2;
   if (startRow < 0 || endRow < startRow) return null;
@@ -1615,8 +1622,8 @@ export function computePlayoffBattleBox(layout, placement) {
     columnIndex: placement.columnIndex,
     startRow,
     endRow,
-    startPosition: 15,
-    endPosition: 18,
+    startPosition: cut - 1,
+    endPosition: cut + 2,
     y,
     height: bottom - y,
     width: layout.colW,
@@ -1629,17 +1636,26 @@ export function computePlayoffBattleBox(layout, placement) {
   };
 }
 
+export function resolveGraphicPlayoffCut(options = {}, standingsData = {}) {
+  if (options.playoffPhase) {
+    if (options.playoffPhase.showCutColumn === false) return null;
+    if (options.playoffPhase.cutPosition != null) {
+      return Number(options.playoffPhase.cutPosition);
+    }
+  }
+  if (options.playoffCut === null) return null;
+  if (options.playoffCut != null) return Number(options.playoffCut);
+  return resolvePlayoffCut(standingsData?.settings || {});
+}
+
 export function buildStandingsGraphicModel(standingsData, scheduleData, options = {}) {
   const seasonName =
     options.seasonName ||
     standingsData?.settings?.seasonName ||
     DEFAULT_SEASON_NAME;
   const seasonNumber = parseSeasonNumber(seasonName);
-  const playoffCut = resolvePlayoffCut(
-    options.playoffCut != null
-      ? { playoffCut: options.playoffCut }
-      : standingsData?.settings || {},
-  );
+  const playoffPhase = options.playoffPhase || standingsData?.playoffPhase || null;
+  const playoffCut = resolveGraphicPlayoffCut(options, standingsData);
 
   let latestCompletedRace =
     options.latestCompletedRace ||
@@ -1662,12 +1678,26 @@ export function buildStandingsGraphicModel(standingsData, scheduleData, options 
     trackName: sanitizeTrackName(latestCompletedRace?.trackName),
   };
 
-  const drivers = attachChampionshipStats(
-    takeTopDrivers(standingsData?.rows || [], MAX_DRIVERS),
-    playoffCut,
-  );
+  const drivers =
+    playoffCut == null
+      ? takeTopDrivers(standingsData?.rows || [], MAX_DRIVERS).map((row) => ({
+          ...row,
+          championshipStat: buildDriverChampionshipStat(row, {
+            leaderPoints: resolveLeaderPoints(standingsData?.rows || []),
+            cutPoints: null,
+            playoffCut: null,
+          }),
+        }))
+      : attachChampionshipStats(
+          takeTopDrivers(standingsData?.rows || [], MAX_DRIVERS),
+          playoffCut,
+        );
   const columns = distributeColumns(drivers);
-  const cutPlacement = findPlayoffCutPlacement(drivers, playoffCut);
+  const cutPlacement =
+    playoffCut == null ? null : findPlayoffCutPlacement(drivers, playoffCut);
+  if (cutPlacement && playoffPhase?.isPlayoffs && playoffPhase?.advanceSize) {
+    cutPlacement.label = `TOP ${playoffCut} ADVANCE`;
+  }
   const filename = buildStandingsGraphicFilename({ seasonName, latestCompletedRace });
   const layoutHints = computeStandingsLayoutMetrics({
     driverCount: drivers.length,
@@ -1680,6 +1710,8 @@ export function buildStandingsGraphicModel(standingsData, scheduleData, options 
     latestCompletedRace,
     pointsRaceNumber: latestCompletedRace.raceNumber,
     playoffCut,
+    playoffPhase,
+    showCutColumn: playoffCut != null,
     drivers,
     columns,
     cutPlacement,

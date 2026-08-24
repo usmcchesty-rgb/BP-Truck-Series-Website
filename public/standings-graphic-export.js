@@ -523,13 +523,13 @@ function drawNumberPlate(ctx, carNumber, colors, x, y, w, h) {
   ctx.restore();
 }
 
-function rowStyle(position) {
-  return standingsRowVisualStyle(position);
+function rowStyle(position, playoffCut = DEFAULT_PLAYOFF_CUT) {
+  return standingsRowVisualStyle(position, playoffCut);
 }
 
-function drawDriverRow(ctx, driver, box, plateColors, layout, numberImg = null) {
+function drawDriverRow(ctx, driver, box, plateColors, layout, numberImg = null, playoffCut = DEFAULT_PLAYOFF_CUT) {
   const { x, y, w, h } = box;
-  const style = rowStyle(driver.position);
+  const style = rowStyle(driver.position, playoffCut);
   const pad = layout.rowPad ?? 6;
   const T = TYPOGRAPHY;
   const slots = computeRowSlotGeometry(layout);
@@ -601,7 +601,7 @@ function drawDriverRow(ctx, driver, box, plateColors, layout, numberImg = null) 
     tracking: fitted.tracking,
   });
 
-  drawChampionshipStats(ctx, driver, x, cy, layout, T);
+  drawChampionshipStats(ctx, driver, x, cy, layout, T, playoffCut != null);
 }
 
 function championshipStatFills(display) {
@@ -628,11 +628,12 @@ function drawStatRegion(ctx, display, region, cy, T) {
   });
 }
 
-function drawStatColumnHeader(ctx, colX, layout) {
+function drawStatColumnHeader(ctx, colX, layout, showCutColumn = true) {
   const geo = computeStatColumnHeaderGeometry(layout);
   const T = TYPOGRAPHY;
 
   geo.labels.forEach((item) => {
+    if (!showCutColumn && String(item.text).toUpperCase() === "CUT") return;
     drawFillText(ctx, {
       text: item.text,
       x: colX + item.headerCenterX,
@@ -649,7 +650,8 @@ function drawStatColumnHeader(ctx, colX, layout) {
   resetTextRenderingState(ctx);
   ctx.strokeStyle = "rgba(255,255,255,0.18)";
   ctx.lineWidth = 1;
-  geo.separators.forEach((sep) => {
+  geo.separators.forEach((sep, index) => {
+    if (!showCutColumn && index === geo.separators.length - 1) return;
     const x = Math.round(colX + sep.x) + 0.5;
     ctx.beginPath();
     ctx.moveTo(x, Math.round(geo.y - 9));
@@ -659,7 +661,7 @@ function drawStatColumnHeader(ctx, colX, layout) {
   ctx.restore();
 }
 
-function drawChampionshipStats(ctx, driver, rowX, cy, layout, T) {
+function drawChampionshipStats(ctx, driver, rowX, cy, layout, T, showCutColumn = true) {
   const geo = computeStandingsStatGeometry(layout);
   const stat = driver.championshipStat || buildDriverChampionshipStat(driver);
   const displays = formatChampionshipStatDisplays(stat);
@@ -674,11 +676,13 @@ function drawChampionshipStats(ctx, driver, rowX, cy, layout, T) {
     valueRight: rowX + geo.lead.valueRight,
     colRight: rowX + geo.lead.colRight,
   }, cy, T);
-  drawStatRegion(ctx, displays.cut, {
-    ...geo.cut,
-    valueRight: rowX + geo.cut.valueRight,
-    colRight: rowX + geo.cut.colRight,
-  }, cy, T);
+  if (showCutColumn) {
+    drawStatRegion(ctx, displays.cut, {
+      ...geo.cut,
+      valueRight: rowX + geo.cut.valueRight,
+      colRight: rowX + geo.cut.colRight,
+    }, cy, T);
+  }
 }
 
 function drawMovementIndicator(ctx, movement, slotX, cy, slotW, T) {
@@ -1023,10 +1027,12 @@ export async function renderStandingsGraphicCanvas(model, options = {}) {
   const trackFit = drawHeader(ctx, model, logoImg, layout);
 
   let driverColorIndex = 0;
+  const graphicCut = model.playoffCut == null ? null : model.playoffCut;
+  const showCutColumn = model.showCutColumn !== false && graphicCut != null;
   for (let col = 0; col < columns.length; col += 1) {
     const colX = layout.padX + col * (layout.colW + layout.colGap);
     const colDrivers = columns[col] || [];
-    drawStatColumnHeader(ctx, colX, layout);
+    drawStatColumnHeader(ctx, colX, layout, showCutColumn);
 
     colDrivers.forEach((driver, rowIndex) => {
       const y = Math.round(standingsRowY(layout, rowIndex));
@@ -1040,6 +1046,7 @@ export async function renderStandingsGraphicCanvas(model, options = {}) {
         plateColors,
         layout,
         numberImg,
+        graphicCut,
       );
     });
   }

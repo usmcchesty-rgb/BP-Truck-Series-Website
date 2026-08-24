@@ -1,5 +1,13 @@
 import { fetchHtml, getSettings } from "./_lib.js";
-import { enrichScheduleRaces } from "./_schedule-points-races.js";
+import {
+  enrichScheduleRaces,
+  buildSiteResultsUrl,
+  formatRaceDisplayTitle,
+} from "./_schedule-points-races.js";
+import {
+  resolveSeasonPhaseFromSchedule,
+  formatStandingsSidebarPhase,
+} from "./_championship-season.js";
 import { buildRaceResultsPayload } from "./_race-results-page.js";
 import {
   computeSeasonCautionStatsFromRaces,
@@ -7,7 +15,6 @@ import {
 } from "./_caution-stats.js";
 import {
   buildRaceProgressionDiagnostics,
-  countEffectiveCompletedScheduleRaces,
   findEffectiveNextScheduleRace,
   getEffectivePointsRaceProgression,
 } from "./_race-date-status.js";
@@ -24,6 +31,7 @@ function mapEnrichedRaceToApiShape(race) {
 
   return {
     raceNumber: race.scheduleRow ?? race.raceNumber,
+    displayRaceLabel: race.displayRaceLabel || null,
     date: race.date,
     points: race.points,
     status: race.status,
@@ -31,8 +39,13 @@ function mapEnrichedRaceToApiShape(race) {
     length: race.length,
     winner: race.winner,
     link: race.link,
+    scheduleId: race.scheduleId || null,
     officialPointsRaceNumber: race.officialPointsRaceNumber,
     nonPoints: race.nonPoints === true,
+    isOpeningDuel: race.isOpeningDuel === true,
+    countsAsNormalChampionshipRace: race.countsAsNormalChampionshipRace === true,
+    resultsUrl: buildSiteResultsUrl(race),
+    displayTitle: formatRaceDisplayTitle(race),
   };
 }
 
@@ -49,12 +62,15 @@ export default async function handler(req, res) {
     const raceProgression = buildRaceProgressionDiagnostics(enrichedRaces, progressionOptions);
     const { race: nextRaw } = findEffectiveNextScheduleRace(races, progressionOptions);
     const nextPointsRace = progression.currentUpcomingPointsRace;
-    const next = mapEnrichedRaceToApiShape(nextPointsRace) || nextRaw;
-    const completed = countEffectiveCompletedScheduleRaces(races, progressionOptions);
-    const totalPointsRaces = races.filter((race) => race.points?.toLowerCase() === "yes").length;
+    const next = mapEnrichedRaceToApiShape(nextPointsRace) || mapEnrichedRaceToApiShape(nextRaw);
+    const seasonState = resolveSeasonPhaseFromSchedule(enrichedRaces, progressionOptions);
+    const sidebarPhase = formatStandingsSidebarPhase(seasonState.phase, seasonState.counts);
     const cautionStats = await computeSeasonCautionStatsFromRaces(races, progressionOptions);
 
     const requestedRaceNumber = req.query?.raceNumber ?? req.query?.pointsRaceNumber ?? null;
+    const requestedScheduleId = req.query?.scheduleId ?? req.query?.schedule_id ?? null;
+    const requestedRaceLabel = req.query?.race ?? req.query?.raceLabel ?? null;
+
     let raceResults = null;
     try {
       raceResults = await buildRaceResultsPayload({
@@ -62,12 +78,15 @@ export default async function handler(req, res) {
         scheduleHtml: html,
         settings,
         requestedRaceNumber: requestedRaceNumber ? Number(requestedRaceNumber) : null,
+        requestedScheduleId,
+        requestedRaceLabel,
         progressionOptions,
       });
     } catch (raceResultsError) {
       raceResults = {
         resultsAvailable: false,
         selectedRaceNumber: null,
+        selectedDisplayRaceLabel: null,
         selectedScheduleId: null,
         selectedRaceName: null,
         selectedRaceDate: null,
@@ -87,9 +106,13 @@ export default async function handler(req, res) {
 
     const payload = {
       settings,
-      races,
-      completed,
-      totalPointsRaces,
+      races: enrichedRaces.map(mapEnrichedRaceToApiShape),
+      completed: seasonState.counts.completedNormalChampionshipRaces,
+      completedScheduleEvents: seasonState.counts.completedScheduleEvents,
+      totalPointsRaces: seasonState.counts.normalChampionshipRacesTotal,
+      seasonCounts: seasonState.counts,
+      playoffPhase: seasonState.phase,
+      sidebarPhase,
       next,
       raceProgression,
       cautionStats,

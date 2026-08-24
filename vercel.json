@@ -21,6 +21,8 @@
     { "source": "/api/admin/driver-applications/:id/refresh-iracing", "destination": "/api/settings?action=refreshDriverApplicationIracing&id=:id" },
     { "source": "/api/admin/driver-applications/:id", "destination": "/api/settings?action=driverApplication&id=:id" },
     { "source": "/api/iracing/member/:customerId", "destination": "/api/drivers?action=iracingMember&customerId=:customerId" },
+    { "source": "/results", "destination": "/results.html" },
+    { "source": "/results/", "destination": "/results.html" },
     { "source": "/news/:slug", "destination": "/news-article.html?slug=:slug" },
     { "source": "/drivers/:driverId", "destination": "/driver-profile.html?driverId=:driverId" },
     { "source": "/streamview", "destination": "/streamview.html" },

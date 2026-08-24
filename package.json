@@ -7,6 +7,7 @@
     "dev": "vite --host 127.0.0.1 --port 3000",
     "start": "vercel dev --listen 3000",
     "test:schedule-alignment": "node scripts/test-schedule-alignment-regression.mjs",
+    "test:championship-season-display": "node scripts/test-championship-season-display.mjs",
     "test:last3-wording": "node scripts/test-last3-average-wording.mjs",
     "test:race-date-status": "node scripts/test-race-date-status.mjs",
     "test:race-control-parser": "node scripts/test-race-control-parser-fixtures.mjs",

@@ -11,7 +11,10 @@ import {
   getCompletedPointsRaces,
   getLatestCompletedPointsRace,
   getPointsRaceByNumber,
+  resolveRaceForResultsQuery,
+  formatRaceDisplayTitle,
 } from './_schedule-points-races.js';
+import { isRaceCompleted } from './_championship-season.js';
 import { extractFinishRacesFromSchedules, extractSegmentResultsForDriver, findScheduleEntryByScheduleId } from './_simracerhub-schedule-results.js';
 import {
   driverProfilePublicUrl,
@@ -289,6 +292,8 @@ export async function buildRaceResultsPayload({
   scheduleHtml,
   settings,
   requestedRaceNumber = null,
+  requestedScheduleId = null,
+  requestedRaceLabel = null,
   progressionOptions = {},
 }) {
   const completedPointsRaces = getCompletedPointsRaces(
@@ -299,17 +304,29 @@ export async function buildRaceResultsPayload({
     enrichedRaces,
     progressionOptions
   );
-  const completedRaceOptions = completedPointsRaces.map((race) => ({
+
+  const completedResultEvents = (enrichedRaces || []).filter((race) => {
+    if (!isRaceCompleted(race, progressionOptions)) return false;
+    return race.countsAsNormalChampionshipRace || race.isOpeningDuel;
+  });
+
+  const completedRaceOptions = completedResultEvents.map((race) => ({
     raceNumber: race.officialPointsRaceNumber,
+    displayRaceLabel: race.displayRaceLabel,
+    scheduleId: race.scheduleId || null,
     track: race.track,
     date: race.date,
     winner: race.winner,
+    isOpeningDuel: race.isOpeningDuel === true,
+    displayTitle: formatRaceDisplayTitle(race),
   }));
 
-  if (!completedPointsRaces.length) {
+  if (!completedResultEvents.length) {
     return {
       resultsAvailable: false,
       selectedRaceNumber: null,
+      selectedDisplayRaceLabel: null,
+      selectedDisplayTitle: null,
       selectedScheduleId: null,
       selectedRaceName: null,
       selectedRaceDate: null,
@@ -318,29 +335,62 @@ export async function buildRaceResultsPayload({
       dataSource: 'none',
       alignmentMethod: 'none',
       latestCompletedRaceNumber: null,
+      latestCompletedDisplayRaceLabel: null,
       completedRaces: [],
       rows: [],
       winnerSummary: null,
     };
   }
 
-  const requested = Number(requestedRaceNumber);
   let selectedRace = latestCompletedRace;
 
-  if (Number.isFinite(requested) && requested > 0) {
-    const candidate = getPointsRaceByNumber(enrichedRaces, requested);
-    const isCompleted = completedPointsRaces.some(
-      (race) => race.officialPointsRaceNumber === candidate?.officialPointsRaceNumber
+  const queried = resolveRaceForResultsQuery(enrichedRaces, {
+    scheduleId: requestedScheduleId,
+    race: requestedRaceLabel,
+    raceNumber: requestedRaceNumber,
+    raceLabel: requestedRaceLabel,
+  });
+
+  if (queried) {
+    const isCompleted = completedResultEvents.some((race) => {
+      if (queried.scheduleId && race.scheduleId) {
+        return String(race.scheduleId) === String(queried.scheduleId);
+      }
+      if (
+        queried.displayRaceLabel &&
+        race.displayRaceLabel &&
+        String(race.displayRaceLabel) === String(queried.displayRaceLabel)
+      ) {
+        return true;
+      }
+      return (
+        queried.officialPointsRaceNumber != null &&
+        race.officialPointsRaceNumber === queried.officialPointsRaceNumber
+      );
+    });
+    if (isCompleted) selectedRace = queried;
+  } else if (
+    requestedRaceNumber != null &&
+    Number.isFinite(Number(requestedRaceNumber)) &&
+    Number(requestedRaceNumber) > 0
+  ) {
+    const candidate = getPointsRaceByNumber(
+      enrichedRaces,
+      Number(requestedRaceNumber)
     );
-    if (candidate && isCompleted) {
-      selectedRace = candidate;
-    }
+    const isCompleted = completedPointsRaces.some(
+      (race) =>
+        race.officialPointsRaceNumber === candidate?.officialPointsRaceNumber
+    );
+    if (candidate && isCompleted) selectedRace = candidate;
   }
 
   if (!selectedRace) {
     return {
       resultsAvailable: false,
       selectedRaceNumber: null,
+      selectedDisplayRaceLabel: null,
+      selectedDisplayTitle: null,
       selectedScheduleId: null,
       selectedRaceName: null,
       selectedRaceDate: null,
@@ -349,6 +399,7 @@ export async function buildRaceResultsPayload({
       dataSource: 'none',
       alignmentMethod: 'none',
       latestCompletedRaceNumber: latestCompletedRace?.officialPointsRaceNumber ?? null,
+      latestCompletedDisplayRaceLabel: latestCompletedRace?.displayRaceLabel ?? null,
       completedRaces: completedRaceOptions,
       rows: [],
       winnerSummary: null,
@@ -380,9 +431,12 @@ export async function buildRaceResultsPayload({
   return {
     resultsAvailable: rows.length > 0,
     selectedRaceNumber: selectedRace.officialPointsRaceNumber,
+    selectedDisplayRaceLabel: selectedRace.displayRaceLabel || null,
+    selectedDisplayTitle: formatRaceDisplayTitle(selectedRace),
     selectedScheduleId:
       alignedRace?.schedulesApiScheduleId ||
       finishRace?.scheduleId ||
+      selectedRace.scheduleId ||
       snapshotScheduleId ||
       null,
     selectedRaceName: selectedRace.track || null,
@@ -395,6 +449,7 @@ export async function buildRaceResultsPayload({
     dataSource: rows.length ? 'simracerhub-schedules-api' : 'none',
     alignmentMethod: alignedRace?.alignmentMethod || 'none',
     latestCompletedRaceNumber: latestCompletedRace?.officialPointsRaceNumber ?? null,
+    latestCompletedDisplayRaceLabel: latestCompletedRace?.displayRaceLabel ?? null,
     completedRaces: completedRaceOptions,
     rows,
     winnerSummary,

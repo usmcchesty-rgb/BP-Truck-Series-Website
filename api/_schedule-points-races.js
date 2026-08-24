@@ -25,6 +25,142 @@ export function isNonPointsRace(race) {
   return NON_POINTS_LABEL_PATTERN.test(label);
 }
 
+function extractScheduleId(race) {
+  if (race?.scheduleId != null && String(race.scheduleId).trim()) {
+    return String(race.scheduleId).trim();
+  }
+  const match = String(race?.link || '').match(/[?&]schedule_id=(\d+)/i);
+  return match?.[1] ? String(match[1]) : null;
+}
+
+function openingDuelLetter(ordinal) {
+  if (!Number.isInteger(ordinal) || ordinal < 1 || ordinal > 26) return null;
+  return String.fromCharCode(64 + ordinal);
+}
+
+/**
+ * Public Season 11 display labels:
+ * opening duels before the first points race → 1A, 1B, …
+ * normal championship races → "1", "2", … (official points index)
+ */
+export function attachDisplayRaceLabels(races = []) {
+  let openingDuelOrdinal = 0;
+  let seenPointsRace = false;
+
+  return (races || []).map((race) => {
+    const scheduleId = extractScheduleId(race);
+    const scheduleRow = getScheduleRow(race);
+    const nonPoints = race.nonPoints === true || isNonPointsRace(race);
+
+    if (nonPoints) {
+      let isOpeningDuel = false;
+      let duelCode = null;
+      let displayRaceLabel = null;
+
+      if (!seenPointsRace) {
+        openingDuelOrdinal += 1;
+        isOpeningDuel = true;
+        duelCode = openingDuelLetter(openingDuelOrdinal);
+        displayRaceLabel = duelCode ? `1${duelCode}` : null;
+      }
+
+      return {
+        ...race,
+        scheduleRow,
+        scheduleId,
+        nonPoints: true,
+        isOpeningDuel,
+        duelCode,
+        displayRaceLabel,
+        countsAsNormalChampionshipRace: false,
+        officialPointsRaceNumber: race.officialPointsRaceNumber ?? null,
+      };
+    }
+
+    seenPointsRace = true;
+    const officialPointsRaceNumber = Number(race.officialPointsRaceNumber);
+    const label =
+      Number.isFinite(officialPointsRaceNumber) && officialPointsRaceNumber > 0
+        ? String(officialPointsRaceNumber)
+        : null;
+
+    return {
+      ...race,
+      scheduleRow,
+      scheduleId,
+      nonPoints: false,
+      isOpeningDuel: false,
+      duelCode: null,
+      displayRaceLabel: label,
+      countsAsNormalChampionshipRace: true,
+      officialPointsRaceNumber: Number.isFinite(officialPointsRaceNumber)
+        ? officialPointsRaceNumber
+        : null,
+    };
+  });
+}
+
+export function formatRaceDisplayTitle(raceOrLabel) {
+  if (raceOrLabel == null) return 'Race';
+  if (typeof raceOrLabel === 'string' || typeof raceOrLabel === 'number') {
+    const label = String(raceOrLabel).trim();
+    return label ? `Race ${label}` : 'Race';
+  }
+  const label = String(raceOrLabel.displayRaceLabel || '').trim();
+  if (label) return `Race ${label}`;
+  if (raceOrLabel.officialPointsRaceNumber != null) {
+    return `Race ${raceOrLabel.officialPointsRaceNumber}`;
+  }
+  return 'Race';
+}
+
+export function buildSiteResultsUrl(race) {
+  if (!race || !hasRaceResults(race)) return null;
+  const scheduleId = extractScheduleId(race);
+  if (scheduleId) {
+    return `/results.html?scheduleId=${encodeURIComponent(scheduleId)}`;
+  }
+  const label = String(race.displayRaceLabel || '').trim();
+  if (label) {
+    return `/results.html?race=${encodeURIComponent(label)}`;
+  }
+  if (race.officialPointsRaceNumber != null) {
+    return `/results.html?race=${encodeURIComponent(
+      String(race.officialPointsRaceNumber)
+    )}`;
+  }
+  return null;
+}
+
+export function resolveRaceForResultsQuery(
+  enrichedRaces = [],
+  { scheduleId = null, race = null, raceNumber = null, raceLabel = null } = {}
+) {
+  const list = enrichedRaces || [];
+
+  if (scheduleId != null && String(scheduleId).trim()) {
+    const id = String(scheduleId).trim();
+    const byId = list.find((row) => String(row.scheduleId || '') === id);
+    if (byId) return byId;
+  }
+
+  const raw = String(raceLabel || race || raceNumber || '').trim();
+  if (!raw) return null;
+
+  if (/^\d+[A-Za-z]$/i.test(raw)) {
+    const needle = raw.toUpperCase();
+    return (
+      list.find(
+        (row) => String(row.displayRaceLabel || '').toUpperCase() === needle
+      ) || null
+    );
+  }
+
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 1) return null;
+  return getPointsRaceByNumber(list, n);
+}
+
 export function buildPointsRaceIndex(races) {
   let officialPointsRaceNumber = 0;
   const excludedNonPointsRaces = [];
@@ -59,7 +195,7 @@ export function buildPointsRaceIndex(races) {
   });
 
   return {
-    races: enriched,
+    races: attachDisplayRaceLabels(enriched),
     excludedNonPointsCount: excludedNonPointsRaces.length,
     excludedNonPointsRaces,
   };
