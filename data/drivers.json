@@ -1779,6 +1779,14 @@
           "authoritative": false
         }
       }
+    },
+    {
+      "name": "Joseph Causey",
+      "iracingName": "Joseph Causey",
+      "carNumber": "8",
+      "iracingCustomerId": 368826,
+      "slug": "joseph-causey",
+      "carImage": "/assets/images/cars/Joseph Causey.png"
     }
   ]
 }
