@@ -65,15 +65,28 @@ export default async function handler(req, res) {
     const next = mapEnrichedRaceToApiShape(nextPointsRace) || mapEnrichedRaceToApiShape(nextRaw);
     const seasonState = resolveSeasonPhaseFromSchedule(enrichedRaces, progressionOptions);
     const sidebarPhase = formatStandingsSidebarPhase(seasonState.phase, seasonState.counts);
-    const cautionStats = await computeSeasonCautionStatsFromRaces(races, progressionOptions);
 
     const requestedRaceNumber = req.query?.raceNumber ?? req.query?.pointsRaceNumber ?? null;
     const requestedScheduleId = req.query?.scheduleId ?? req.query?.schedule_id ?? null;
     const requestedRaceLabel = req.query?.race ?? req.query?.raceLabel ?? null;
+    const omitCautionStats =
+      req.query?.omitCautionStats === "1" ||
+      req.query?.omitCautionStats === "true" ||
+      req.query?.skipCautionStats === "1";
 
-    let raceResults = null;
-    try {
-      raceResults = await buildRaceResultsPayload({
+    const cautionPromise = omitCautionStats
+      ? Promise.resolve({
+          cautionDataAvailable: false,
+          cautionDataSource: "omitted-by-request",
+          cautionRacesCounted: 0,
+          totalCautions: null,
+          averageCautionsPerRace: null,
+        })
+      : computeSeasonCautionStatsFromRaces(races, progressionOptions);
+
+    const [cautionStats, raceResults] = await Promise.all([
+      cautionPromise,
+      buildRaceResultsPayload({
         enrichedRaces,
         scheduleHtml: html,
         settings,
@@ -81,9 +94,7 @@ export default async function handler(req, res) {
         requestedScheduleId,
         requestedRaceLabel,
         progressionOptions,
-      });
-    } catch (raceResultsError) {
-      raceResults = {
+      }).catch((raceResultsError) => ({
         resultsAvailable: false,
         selectedRaceNumber: null,
         selectedDisplayRaceLabel: null,
@@ -91,15 +102,16 @@ export default async function handler(req, res) {
         selectedRaceName: null,
         selectedRaceDate: null,
         selectedRaceWinner: null,
+        cautionCount: null,
         resultRowsCount: 0,
-        dataSource: 'error',
-        alignmentMethod: 'none',
+        dataSource: "error",
+        alignmentMethod: "none",
         latestCompletedRaceNumber: null,
         completedRaces: [],
         rows: [],
-        error: raceResultsError.message || 'Race results unavailable',
-      };
-    }
+        error: raceResultsError.message || "Race results unavailable",
+      })),
+    ]);
 
     console.log("[schedule] htmlLength:", html.length);
     console.log("[schedule] parsedRaceCount:", races.length);

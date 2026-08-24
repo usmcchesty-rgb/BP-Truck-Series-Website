@@ -669,48 +669,72 @@ async function loadHome() {
   let leader = null;
   let rows = [];
 
-  try {
-    const standingsRes = await fetch("/api/standings");
-    const standingsData = await standingsRes.json();
-    const apiRows = standingsData.rows || [];
+  // Standings and schedule are independent — fetch in parallel.
+  const [standingsOutcome, scheduleOutcome] = await Promise.all([
+    fetch("/api/standings?omitCautionStats=1")
+      .then(async (standingsRes) => {
+        const standingsData = await standingsRes.json();
+        return { ok: true, standingsData };
+      })
+      .catch((e) => ({ ok: false, error: e })),
+    fetch("/api/schedule?omitCautionStats=1")
+      .then(async (scheduleRes) => {
+        const scheduleData = await scheduleRes.json();
+        return { ok: true, scheduleData };
+      })
+      .catch((e) => ({ ok: false, error: e })),
+  ]);
 
-    if (standingsData.settings?.seasonName) {
-      const seasonEl = $("#seasonLabel");
-      if (seasonEl) seasonEl.textContent = standingsData.settings.seasonName.toUpperCase();
+  if (standingsOutcome.ok) {
+    try {
+      const standingsData = standingsOutcome.standingsData;
+      const apiRows = standingsData.rows || [];
+
+      if (standingsData.settings?.seasonName) {
+        const seasonEl = $("#seasonLabel");
+        if (seasonEl) seasonEl.textContent = standingsData.settings.seasonName.toUpperCase();
+      }
+
+      rows = apiRows.map((r) => ({
+        place: r.position,
+        driver: r.driver,
+        carNumber: r.carNumber || "",
+        photoUrl: r.photoUrl,
+        points: r.points,
+        races: r.races,
+        wins: r.wins,
+      }));
+
+      leader = rows[0] || null;
+      renderStandingsTop10(rows);
+      renderPointsLeader(leader);
+      renderQuickStats(rows);
+    } catch (e) {
+      console.warn("Home standings render failed:", e);
     }
-
-    rows = apiRows.map((r, index) => ({
-      place: r.position,
-      driver: r.driver,
-      carNumber: r.carNumber || "",
-      photoUrl: r.photoUrl,
-      points: r.points,
-      races: r.races,
-      wins: r.wins,
-    }));
-
-    leader = rows[0] || null;
-    renderStandingsTop10(rows);
-    renderPointsLeader(leader);
-    renderQuickStats(rows);
-  } catch (e) {
-    console.warn("Home standings load failed:", e);
+  } else {
+    console.warn("Home standings load failed:", standingsOutcome.error);
   }
 
-  try {
-    const scheduleRes = await fetch("/api/schedule");
-    const scheduleData = await scheduleRes.json();
-    if (window.BPTrackImages?.applySettings) {
-      window.BPTrackImages.applySettings(scheduleData.settings || {});
-    }
-    const races = scheduleData.races || [];
-    const completed = races.filter((r) => r.winner);
-    const lastRace = completed[completed.length - 1] || null;
+  if (scheduleOutcome.ok) {
+    try {
+      const scheduleData = scheduleOutcome.scheduleData;
+      if (window.BPTrackImages?.applySettings) {
+        window.BPTrackImages.applySettings(scheduleData.settings || {});
+      }
+      const races = scheduleData.races || [];
+      const completed = races.filter((r) => r.winner);
+      const lastRace = completed[completed.length - 1] || null;
 
-    renderNextRace(scheduleData.next || null, scheduleData.settings?.raceStartTime || "");
-    renderLastWinner(scheduleData.raceResults || null, lastRace);
-  } catch (e) {
-    console.warn("Home schedule load failed:", e);
+      renderNextRace(scheduleData.next || null, scheduleData.settings?.raceStartTime || "");
+      renderLastWinner(scheduleData.raceResults || null, lastRace);
+    } catch (e) {
+      console.warn("Home schedule render failed:", e);
+      renderNextRace(null, "");
+      renderLastWinner(null, null);
+    }
+  } else {
+    console.warn("Home schedule load failed:", scheduleOutcome.error);
     renderNextRace(null, "");
     renderLastWinner(null, null);
   }

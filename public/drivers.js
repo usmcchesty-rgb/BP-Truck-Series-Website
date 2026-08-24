@@ -244,7 +244,7 @@ function renderDriverGrid(drivers) {
         ${inactiveBadge}
         <a class="driver-card-link" href="${escapeAttr(profileUrl)}">
           <div class="driver-card-media">
-            <img src="${escapeHtml(photo)}" alt="" onerror="this.onerror=null;this.src='/assets/drivers/placeholder.png'" />
+            <img src="${escapeHtml(photo)}" alt="" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='/assets/drivers/placeholder.png'" />
           </div>
           <div class="driver-card-body">
             <h2>${number}${escapeHtml(name)}</h2>

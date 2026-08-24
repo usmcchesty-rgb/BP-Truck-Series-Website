@@ -6,6 +6,13 @@ import {
   hasRaceResults,
   resolveRaceProgressionSettings,
 } from './_race-date-status.js';
+import {
+  buildCautionSeasonCacheKey,
+  getCachedCautionSeason,
+  getCachedRaceCautionCount,
+  setCachedCautionSeason,
+  setCachedRaceCautionCount,
+} from './_fantasy-srh-cache.js';
 
 const CAUTION_SUMMARY_PATTERN =
   /Lead Changes\s*·\s*(\d+)\s+cautions?\b/i;
@@ -105,6 +112,38 @@ export function resolveRaceResultUrl(link) {
   return `https://www.simracerhub.com/scoring/${href.replace(/^\//, '')}`;
 }
 
+/**
+ * Authoritative caution count from a SimRacerHub race result page summary.
+ * Returns a finite number (including 0) or null when unavailable.
+ * Does not infer from incidents/laps.
+ */
+export async function fetchCautionCountForRace(race) {
+  const scheduleId =
+    race?.scheduleId != null && String(race.scheduleId).trim()
+      ? String(race.scheduleId).trim()
+      : null;
+
+  if (scheduleId) {
+    const cached = getCachedRaceCautionCount(scheduleId);
+    if (cached != null && Number.isFinite(Number(cached))) {
+      return Number(cached);
+    }
+  }
+
+  const url = resolveRaceResultUrl(race?.link);
+  if (!url) return null;
+
+  try {
+    const html = await fetchHtml(url);
+    const cautions = parseCautionCountFromRaceHtml(html);
+    if (!Number.isFinite(cautions)) return null;
+    if (scheduleId) setCachedRaceCautionCount(scheduleId, cautions);
+    return cautions;
+  } catch {
+    return null;
+  }
+}
+
 function buildStatusOptions(options = {}) {
   const now = options.now instanceof Date ? options.now : new Date();
   const progressionSettings = resolveRaceProgressionSettings(options.settings || null);
@@ -156,24 +195,23 @@ export async function computeAverageCautionsPerRace(enrichedRaces, options = {})
     });
   }
 
+  const seasonCacheKey = buildCautionSeasonCacheKey(
+    racesWithLinks.map(
+      (race) =>
+        `${race.scheduleId || race.officialPointsRaceNumber || race.raceNumber}:${race.link}`
+    )
+  );
+  const cachedSeason = getCachedCautionSeason(seasonCacheKey);
+  if (cachedSeason) return cachedSeason;
+
   const parsedResults = await Promise.all(
     racesWithLinks.map(async (race) => {
-      const url = resolveRaceResultUrl(race.link);
-      try {
-        const html = await fetchHtml(url);
-        const cautions = parseCautionCountFromRaceHtml(html);
-        return {
-          race,
-          cautions,
-          ok: Number.isFinite(cautions),
-        };
-      } catch {
-        return {
-          race,
-          cautions: null,
-          ok: false,
-        };
-      }
+      const cautions = await fetchCautionCountForRace(race);
+      return {
+        race,
+        cautions,
+        ok: Number.isFinite(cautions),
+      };
     })
   );
 
@@ -188,7 +226,7 @@ export async function computeAverageCautionsPerRace(enrichedRaces, options = {})
   const totalCautions = valid.reduce((sum, entry) => sum + entry.cautions, 0);
   const averageCautionsPerRace = Number((totalCautions / valid.length).toFixed(2));
 
-  return {
+  const result = {
     cautionDataAvailable: true,
     cautionDataSource: 'simracerhub-race-page-summary',
     cautionRacesCounted: valid.length,
@@ -197,10 +235,13 @@ export async function computeAverageCautionsPerRace(enrichedRaces, options = {})
     completedPointsRaceCount: completedPointsRaces.length,
     racesParsed: valid.map((entry) => ({
       raceNumber: entry.race.officialPointsRaceNumber ?? entry.race.raceNumber,
+      scheduleId: entry.race.scheduleId || null,
       track: entry.race.track,
       cautions: entry.cautions,
     })),
   };
+  setCachedCautionSeason(seasonCacheKey, result);
+  return result;
 }
 
 export async function computeSeasonCautionStatsFromScheduleHtml(html, options = {}) {

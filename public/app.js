@@ -82,7 +82,7 @@ function renderPodium() {
       (r) =>
         `<article class="podium-card ${podiumClass(r.place)}">
           <div class="rank-badge">${r.place}</div>
-          <img class="driver-img" src="${r.photoUrl || driverImage(r.driver)}" alt="" onerror="this.onerror=null;this.src='/assets/drivers/placeholder.png'"/>
+          <img class="driver-img" src="${r.photoUrl || driverImage(r.driver)}" alt="" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='/assets/drivers/placeholder.png'"/>
           <div class="podium-info">
             <h2>${String(r.driver).toUpperCase()}</h2>
             <div class="podium-points">${r.points}<small> PTS</small></div>

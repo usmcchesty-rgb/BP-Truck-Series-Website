@@ -2656,13 +2656,22 @@ a.home-news-item:hover h4{color:#fff}
 .results-featured--empty{padding-bottom:18px}
 .results-featured-head{min-width:0;flex:1 1 420px}
 .results-featured-title{
-  margin:0 0 12px;
+  margin:0 0 8px;
   font-size:clamp(28px,4vw,42px);
   line-height:1.05;
   font-weight:900;
   letter-spacing:-.02em;
   text-transform:uppercase;
   color:var(--bp-text-primary);
+}
+.results-featured-track{
+  margin:0 0 12px;
+  font-size:clamp(15px,2vw,20px);
+  line-height:1.2;
+  font-weight:800;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  color:var(--red);
 }
 .results-featured-meta{
   display:flex;
@@ -2672,6 +2681,8 @@ a.home-news-item:hover h4{color:#fff}
   font-size:14px;
 }
 .results-featured-winner strong{color:#fff}
+.results-featured-cautions strong{color:#fff}
+.results-featured-meta-sep{opacity:.55;user-select:none}
 .results-selector-wrap{
   display:grid;
   gap:8px;

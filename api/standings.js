@@ -1,4 +1,4 @@
-import { getSettings, getDriverProfiles, slugify, withPhotoCacheBust, photoCacheVersion, supabase } from './_lib.js';
+import { getSettings, getDriverProfiles, slugify, withPhotoCacheBust, photoCacheVersion, supabase, fetchHtml } from './_lib.js';
 import { computeSeasonCautionStatsFromScheduleHtml, parseScheduleRacesFromHtml } from './_caution-stats.js';
 import { enrichScheduleRaces } from './_schedule-points-races.js';
 import { buildDriverActivityMap } from './_driver-activity.js';
@@ -20,6 +20,11 @@ import {
   resolveSeasonPhaseFromSchedule,
   formatStandingsSidebarPhase,
 } from './_championship-season.js';
+import {
+  buildStandingsCacheKey,
+  getCachedStandings,
+  setCachedStandings,
+} from './_fantasy-srh-cache.js';
 import * as cheerio from "cheerio";
 
 
@@ -40,10 +45,7 @@ export default async function handler(req, res) {
     };
 
     try {
-      scheduleHtml = await fetch(
-        settings.scheduleUrl,
-        { headers: { 'user-agent': 'BP-Truck-Series-Website/1.0' } }
-      ).then((r) => (r.ok ? r.text() : ''));
+      scheduleHtml = await fetchHtml(settings.scheduleUrl);
 
       if (!scheduleHtml) {
         scheduleDetectionDebug.failureReason = 'Failed to fetch schedule html';
@@ -107,16 +109,50 @@ export default async function handler(req, res) {
     console.log('[standings] detectedScheduleId:', detectedScheduleId);
     console.log('[standings] final scheduleId used:', scheduleId);
 
+    const cautionPromise =
+      req.query?.omitCautionStats === '1' ||
+      req.query?.omitCautionStats === 'true' ||
+      req.query?.skipCautionStats === '1'
+        ? Promise.resolve({
+            cautionDataAvailable: false,
+            cautionDataSource: 'omitted-by-request',
+            cautionRacesCounted: 0,
+            totalCautions: null,
+            averageCautionsPerRace: null,
+          })
+        : scheduleHtml
+          ? computeSeasonCautionStatsFromScheduleHtml(scheduleHtml, {
+              now: new Date(),
+              settings,
+            })
+          : Promise.resolve({
+              cautionDataAvailable: false,
+              cautionDataSource: 'schedule-html-unavailable',
+              cautionRacesCounted: 0,
+              totalCautions: null,
+              averageCautionsPerRace: null,
+            });
 
-    const response = await fetch(
-      `https://www.simracerhub.com/scoring/get_standings.php?season_id=${seasonId}&schedule_id=${scheduleId}`
-    );
+    const standingsPromise = (async () => {
+      const cacheKey = buildStandingsCacheKey(seasonId, scheduleId);
+      const cached = getCachedStandings(cacheKey);
+      if (cached) return cached;
+      const response = await fetch(
+        `https://www.simracerhub.com/scoring/get_standings.php?season_id=${seasonId}&schedule_id=${scheduleId}`
+      );
+      const json = await response.json();
+      setCachedStandings(cacheKey, json);
+      return json;
+    })();
 
-    const data = await response.json();
-    const profiles = await getDriverProfiles();
-    const bpContext = await loadBpNumberContext(supabase());
+    const [data, cautionStats, profiles, bpContext, numberOverrides] = await Promise.all([
+      standingsPromise,
+      cautionPromise,
+      getDriverProfiles(),
+      loadBpNumberContext(supabase()),
+      loadNumberArtworkOverrides(),
+    ]);
     const numberCatalog = loadNumberArtworkCatalog();
-    const numberOverrides = await loadNumberArtworkOverrides();
 
     const scheduleRaces = scheduleHtml
       ? enrichScheduleRaces(parseScheduleRacesFromHtml(scheduleHtml))
@@ -226,22 +262,7 @@ const avgFinish =
       .filter(r => r.position >= 1)
       .sort((a, b) => a.position - b.position);
 
-    const cautionStats = scheduleHtml
-      ? await computeSeasonCautionStatsFromScheduleHtml(scheduleHtml, {
-          now: new Date(),
-          settings,
-        })
-      : {
-          cautionDataAvailable: false,
-          cautionDataSource: 'schedule-html-unavailable',
-          cautionRacesCounted: 0,
-          totalCautions: null,
-          averageCautionsPerRace: null,
-        };
-
-    const enrichedSchedule = scheduleHtml
-      ? enrichScheduleRaces(parseScheduleRacesFromHtml(scheduleHtml))
-      : [];
+    const enrichedSchedule = scheduleRaces;
     const seasonState = resolveSeasonPhaseFromSchedule(enrichedSchedule, {
       now: new Date(),
       settings,

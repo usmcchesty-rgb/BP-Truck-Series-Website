@@ -68,14 +68,15 @@ function parseResultsQuery() {
 
 function buildResultsApiUrl({ scheduleId = "", race = "" } = {}) {
   const params = new URLSearchParams();
+  // Results page only needs raceResults — skip season-wide caution scraping.
+  params.set("omitCautionStats", "1");
   if (scheduleId) params.set("scheduleId", scheduleId);
   if (race) {
     if (/^\d+[A-Za-z]$/i.test(race)) params.set("race", race);
     else if (/^\d+$/.test(String(race))) params.set("raceNumber", String(race));
     else params.set("race", race);
   }
-  const qs = params.toString();
-  return qs ? `/api/schedule?${qs}` : "/api/schedule";
+  return `/api/schedule?${params.toString()}`;
 }
 
 function renderRaceSelector(completedRaces, selected) {
@@ -106,11 +107,32 @@ function renderRaceSelector(completedRaces, selected) {
     <select id="raceSelector" class="results-selector">${options}</select>`;
 }
 
+function formatResultsMeta(raceResults) {
+  const parts = [];
+  if (raceResults.selectedRaceDate) {
+    parts.push(`<span>${escapeHtml(raceResults.selectedRaceDate)}</span>`);
+  }
+  parts.push(
+    `<span class="results-featured-winner">Winner: <strong>${escapeHtml(
+      raceResults.selectedRaceWinner || "—"
+    )}</strong></span>`
+  );
+  if (
+    raceResults.cautionCount != null &&
+    Number.isFinite(Number(raceResults.cautionCount))
+  ) {
+    parts.push(
+      `<span class="results-featured-cautions">Cautions: <strong>${escapeHtml(
+        String(Number(raceResults.cautionCount))
+      )}</strong></span>`
+    );
+  }
+  return parts.join('<span class="results-featured-meta-sep" aria-hidden="true"> · </span>');
+}
+
 function renderFeaturedHeader(raceResults) {
   const label = raceDisplayLabel(raceResults);
-  const track = raceResults.selectedRaceName || "TBD";
-  const date = raceResults.selectedRaceDate || "";
-  const winner = raceResults.selectedRaceWinner || "—";
+  const track = raceResults.selectedRaceName || "";
   const latestLabel =
     raceResults.latestCompletedDisplayRaceLabel ||
     raceResults.latestCompletedRaceNumber;
@@ -119,17 +141,22 @@ function renderFeaturedHeader(raceResults) {
     latestLabel != null &&
     String(label) === String(latestLabel);
   const kicker = isLatest ? "Latest Race Results" : "Race Results";
+  // Display label only — track comes from scheduleId-selected selectedRaceName.
   const title =
     raceResults.selectedDisplayTitle ||
-    (label ? `Race ${label} — ${track}` : `Race Results — ${track}`);
+    (label ? `Race ${label}` : "Race Results");
 
   return `<section class="results-featured">
     <div class="results-featured-head">
       <span class="results-kicker">${escapeHtml(kicker)}</span>
       <h1 class="results-featured-title">${escapeHtml(title)}</h1>
+      ${
+        track
+          ? `<p class="results-featured-track">${escapeHtml(track)}</p>`
+          : ""
+      }
       <div class="results-featured-meta">
-        ${date ? `<span>${escapeHtml(date)}</span>` : ""}
-        <span class="results-featured-winner">Winner: <strong>${escapeHtml(winner)}</strong></span>
+        ${formatResultsMeta(raceResults)}
       </div>
     </div>
     <div class="results-featured-tools">
@@ -172,6 +199,7 @@ function renderResultsTable(rows, raceResults = {}) {
               src="${escapeHtml(row.photoUrl || PLACEHOLDER_PHOTO)}"
               alt=""
               loading="lazy"
+              decoding="async"
               onerror="this.onerror=null;this.src='${PLACEHOLDER_PHOTO}'"
             />
             <span>${escapeHtml(row.driverName)}</span>
@@ -254,12 +282,18 @@ function mountResultsShare(raceResults) {
   if (!label && !raceResults?.selectedScheduleId) return;
   const track = raceResults.selectedRaceName || "TBD";
   const winner = raceResults.selectedRaceWinner || "";
-  const title =
+  const raceTitle =
     raceResults.selectedDisplayTitle ||
-    `Race ${label} Results — ${track}`;
+    (label ? `Race ${label}` : "Race Results");
+  const title = track ? `${raceTitle} — ${track}` : raceTitle;
+  const cautionPart =
+    raceResults.cautionCount != null &&
+    Number.isFinite(Number(raceResults.cautionCount))
+      ? ` Cautions: ${Number(raceResults.cautionCount)}.`
+      : "";
   const text = winner
-    ? `${title}. Winner: ${winner}.`
-    : `${title}.`;
+    ? `${title}. Winner: ${winner}.${cautionPart}`
+    : `${title}.${cautionPart}`;
   const shareParams = new URLSearchParams();
   if (raceResults.selectedScheduleId) {
     shareParams.set("scheduleId", String(raceResults.selectedScheduleId));

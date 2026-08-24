@@ -20,6 +20,7 @@ import {
   driverProfilePublicUrl,
   resolveProfileForStandingsRow,
 } from './_driver-profile-resolve.js';
+import { fetchCautionCountForRace } from './_caution-stats.js';
 
 function formatDriverName(rawName) {
   const raw = String(rawName || '').trim();
@@ -427,21 +428,30 @@ export async function buildRaceResultsPayload({
     alignedRace?.schedulesApiScheduleId || finishRace?.scheduleId || snapshotScheduleId
   );
   const winnerSummary = buildWinnerRaceSummary(winnerRow, scheduleEntry);
+  const selectedScheduleId =
+    alignedRace?.schedulesApiScheduleId ||
+    finishRace?.scheduleId ||
+    selectedRace.scheduleId ||
+    snapshotScheduleId ||
+    null;
+  const cautionCount = await fetchCautionCountForRace({
+    ...selectedRace,
+    scheduleId: selectedScheduleId || selectedRace.scheduleId || null,
+  });
 
   return {
     resultsAvailable: rows.length > 0,
     selectedRaceNumber: selectedRace.officialPointsRaceNumber,
     selectedDisplayRaceLabel: selectedRace.displayRaceLabel || null,
     selectedDisplayTitle: formatRaceDisplayTitle(selectedRace),
-    selectedScheduleId:
-      alignedRace?.schedulesApiScheduleId ||
-      finishRace?.scheduleId ||
-      selectedRace.scheduleId ||
-      snapshotScheduleId ||
-      null,
+    selectedScheduleId,
     selectedRaceName: selectedRace.track || null,
     selectedRaceDate: selectedRace.date || null,
     selectedRaceWinner: selectedRace.winner || null,
+    cautionCount: Number.isFinite(cautionCount) ? cautionCount : null,
+    cautionCountSource: Number.isFinite(cautionCount)
+      ? 'simracerhub-race-page-summary'
+      : null,
     resultRowsCount: rows.length,
     officialStarterCount: finishRace?.officialStarterCount ?? null,
     provisionalCount: finishRace?.provisionalCount ?? 0,
