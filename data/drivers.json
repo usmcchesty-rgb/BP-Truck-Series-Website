@@ -932,7 +932,7 @@
     },
     {
       "name": "Bill Harkins",
-      "iracingName": "Kody Miller",
+      "iracingName": "Bill Harkins",
       "carNumber": "11",
       "iracingCustomerId": 315521,
       "slug": "bill-harkins",
@@ -976,7 +976,43 @@
       "carNumber": "27",
       "iracingCustomerId": 690525,
       "slug": "hunter-lagunes",
-      "carImage": "/assets/images/cars/Hunter Lagunes.png"
+      "carImage": "/assets/images/cars/Hunter Lagunes.png",
+      "iracingDesign": {
+        "source": "iracing_sdk",
+        "capturedAt": "2026-08-24T15:54:24.440Z",
+        "userId": "690525",
+        "carNumber": "27",
+        "number": {
+          "raw": "0,0,ffffff,777777,000000",
+          "font": 0,
+          "slant": 0,
+          "color1": "#ffffff",
+          "color2": "#777777",
+          "color3": "#000000"
+        },
+        "car": {
+          "raw": "1,000000,000000,ffa800",
+          "pattern": "1",
+          "color1": "#000000",
+          "color2": "#000000",
+          "color3": "#ffa800"
+        },
+        "suit": {
+          "raw": "3,000000,000000,000000",
+          "pattern": "3",
+          "color1": "#000000",
+          "color2": "#000000",
+          "color3": "#000000"
+        },
+        "numberStyleAuthoritative": false,
+        "numberImage": {
+          "sdkPath": "/assets/images/numbers/690525.png",
+          "customPath": null,
+          "preferredSource": "none",
+          "source": "iracing_sdk_number",
+          "authoritative": false
+        }
+      }
     },
     {
       "name": "Brad Lawson",
@@ -1183,29 +1219,29 @@
     {
       "name": "Justin Levine",
       "iracingName": "Justin Levine",
-      "carNumber": "3",
+      "carNumber": "19",
       "iracingCustomerId": 244220,
       "slug": "justin-levine",
       "carImage": "/assets/images/cars/Justin Levine.png",
       "iracingDesign": {
         "source": "iracing_sdk",
-        "capturedAt": "2026-08-17T07:00:12.703Z",
+        "capturedAt": "2026-08-24T15:54:24.440Z",
         "userId": "244220",
-        "carNumber": "3",
+        "carNumber": "19",
         "number": {
-          "raw": "7,4,000000,ffffff,000000",
-          "font": 7,
-          "slant": 4,
-          "color1": "#000000",
-          "color2": "#ffffff",
+          "raw": "0,0,ffffff,777777,000000",
+          "font": 0,
+          "slant": 0,
+          "color1": "#ffffff",
+          "color2": "#777777",
           "color3": "#000000"
         },
         "car": {
-          "raw": "7,001d44,e1ff14,15afff",
-          "pattern": "7",
-          "color1": "#001d44",
-          "color2": "#e1ff14",
-          "color3": "#15afff"
+          "raw": "20,152e55,ffffff,e51836",
+          "pattern": "20",
+          "color1": "#152e55",
+          "color2": "#ffffff",
+          "color3": "#e51836"
         },
         "suit": {
           "raw": "21,152e55,e51836,ffffff",
@@ -1214,14 +1250,14 @@
           "color2": "#e51836",
           "color3": "#ffffff"
         },
-        "numberStyleAuthoritative": false,
         "numberImage": {
           "sdkPath": "/assets/images/numbers/244220.png",
           "customPath": null,
           "preferredSource": "none",
           "source": "iracing_sdk_number",
           "authoritative": false
-        }
+        },
+        "numberStyleAuthoritative": false
       }
     },
     {
@@ -1277,23 +1313,23 @@
       "carImage": "/assets/images/cars/Rick Thompson.png",
       "iracingDesign": {
         "source": "iracing_sdk",
-        "capturedAt": "2026-08-17T07:00:12.703Z",
+        "capturedAt": "2026-08-24T15:54:24.440Z",
         "userId": "15836",
         "carNumber": "25",
         "number": {
-          "raw": "48,2,ffffff,a50909,000000",
+          "raw": "48,2,ffffff,000000,000000",
           "font": 48,
           "slant": 2,
           "color1": "#ffffff",
-          "color2": "#a50909",
+          "color2": "#000000",
           "color3": "#000000"
         },
         "car": {
-          "raw": "12,faf9f9,b6061b,000000,000000",
-          "pattern": "12",
-          "color1": "#faf9f9",
-          "color2": "#b6061b",
-          "color3": "#000000",
+          "raw": "0,000000,20cbfc,faf9f9,000000",
+          "pattern": "0",
+          "color1": "#000000",
+          "color2": "#20cbfc",
+          "color3": "#faf9f9",
           "wheelType": 0,
           "wheelColor": "#000000"
         },
@@ -1304,14 +1340,14 @@
           "color2": "#ed2129",
           "color3": "#040461"
         },
-        "numberStyleAuthoritative": true,
         "numberImage": {
           "sdkPath": "/assets/images/numbers/15836.png",
           "customPath": null,
           "preferredSource": "sdk",
           "source": "iracing_sdk_number",
           "authoritative": true
-        }
+        },
+        "numberStyleAuthoritative": true
       }
     },
     {
@@ -1500,7 +1536,43 @@
       "carNumber": "80",
       "iracingCustomerId": 36516,
       "slug": "fred-thompson",
-      "carImage": "/assets/images/cars/Fred Thompson.png"
+      "carImage": "/assets/images/cars/Fred Thompson.png",
+      "iracingDesign": {
+        "source": "iracing_sdk",
+        "capturedAt": "2026-08-24T15:54:24.440Z",
+        "userId": "36516",
+        "carNumber": "80",
+        "number": {
+          "raw": "5,0,f99c22,fdfafa,000000",
+          "font": 5,
+          "slant": 0,
+          "color1": "#f99c22",
+          "color2": "#fdfafa",
+          "color3": "#000000"
+        },
+        "car": {
+          "raw": "18,ef0a14,000000,ffffff",
+          "pattern": "18",
+          "color1": "#ef0a14",
+          "color2": "#000000",
+          "color3": "#ffffff"
+        },
+        "suit": {
+          "raw": "3,e39600,000000,f9e9e9",
+          "pattern": "3",
+          "color1": "#e39600",
+          "color2": "#000000",
+          "color3": "#f9e9e9"
+        },
+        "numberStyleAuthoritative": false,
+        "numberImage": {
+          "sdkPath": "/assets/images/numbers/36516.png",
+          "customPath": null,
+          "preferredSource": "none",
+          "source": "iracing_sdk_number",
+          "authoritative": false
+        }
+      }
     },
     {
       "name": "Levi Allen",
@@ -1786,7 +1858,43 @@
       "carNumber": "8",
       "iracingCustomerId": 368826,
       "slug": "joseph-causey",
-      "carImage": "/assets/images/cars/Joseph Causey.png"
+      "carImage": "/assets/images/cars/Joseph Causey.png",
+      "iracingDesign": {
+        "source": "iracing_sdk",
+        "capturedAt": "2026-08-24T15:54:24.440Z",
+        "userId": "368826",
+        "carNumber": "8",
+        "number": {
+          "raw": "7,3,ffffff,ed2129,000000",
+          "font": 7,
+          "slant": 3,
+          "color1": "#ffffff",
+          "color2": "#ed2129",
+          "color3": "#000000"
+        },
+        "car": {
+          "raw": "0,0000ff,ff0000,00ff00",
+          "pattern": "0",
+          "color1": "#0000ff",
+          "color2": "#ff0000",
+          "color3": "#00ff00"
+        },
+        "suit": {
+          "raw": "27,000000,17dc04,05db00",
+          "pattern": "27",
+          "color1": "#000000",
+          "color2": "#17dc04",
+          "color3": "#05db00"
+        },
+        "numberStyleAuthoritative": false,
+        "numberImage": {
+          "sdkPath": "/assets/images/numbers/368826.png",
+          "customPath": null,
+          "preferredSource": "none",
+          "source": "iracing_sdk_number",
+          "authoritative": false
+        }
+      }
     }
   ]
 }
