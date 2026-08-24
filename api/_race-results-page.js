@@ -13,6 +13,10 @@ import {
   getPointsRaceByNumber,
 } from './_schedule-points-races.js';
 import { extractFinishRacesFromSchedules, extractSegmentResultsForDriver, findScheduleEntryByScheduleId } from './_simracerhub-schedule-results.js';
+import {
+  driverProfilePublicUrl,
+  resolveProfileForStandingsRow,
+} from './_driver-profile-resolve.js';
 
 function formatDriverName(rawName) {
   const raw = String(rawName || '').trim();
@@ -112,16 +116,17 @@ function buildDriverLookup(standingsRows) {
 }
 
 function buildStandingsRows(data, profiles) {
-  const byDriverId = Object.fromEntries(
-    profiles.map((profile) => [String(profile.driver_id), profile])
-  );
-
   return Object.values(data.rps || {})
     .map((row) => {
       const driver = data.drivers?.[row.drid] || {};
       const rawName = driver.name || row.name || `Driver ${row.drid}`;
       const name = formatDriverName(rawName);
-      const profile = byDriverId[String(row.drid)] || null;
+      const srhDriverId = String(row.drid);
+      const resolution = resolveProfileForStandingsRow(
+        { driverId: srhDriverId, driverName: name },
+        profiles
+      );
+      const profile = resolution.profile;
       const displayName = profile?.display_name || name;
       const photoUrl = profile?.photo_url
         ? withPhotoCacheBust(
@@ -131,10 +136,12 @@ function buildStandingsRows(data, profiles) {
         : `/assets/drivers/${slugify(displayName || name)}.png`;
 
       return {
-        driverId: String(row.drid),
+        driverId: srhDriverId,
         driver: displayName,
         carNumber: profile?.car_number || '',
         photoUrl,
+        profileDriverId: resolution.profileDriverId || null,
+        identityMatchMethod: resolution.matchMethod || null,
       };
     })
     .filter((row) => row.driverId);
@@ -166,13 +173,17 @@ function buildFinishingOrderRows(finishRace, standingsRows, profiles) {
   const standingsById = Object.fromEntries(
     standingsRows.map((row) => [String(row.driverId), row])
   );
-  const profilesById = Object.fromEntries(
-    profiles.map((profile) => [String(profile.driver_id), profile])
-  );
 
   const rows = Object.entries(finishRace.driverResults).map(([driverId, result]) => {
     const standingsRow = standingsById[String(driverId)] || null;
-    const profile = profilesById[String(driverId)] || null;
+    const resolution = resolveProfileForStandingsRow(
+      {
+        driverId: String(driverId),
+        driverName: standingsRow?.driver || '',
+      },
+      profiles
+    );
+    const profile = resolution.profile;
     const driverName =
       standingsRow?.driver ||
       profile?.display_name ||
@@ -188,9 +199,14 @@ function buildFinishingOrderRows(finishRace, standingsRows, profiles) {
         : `/assets/drivers/${slugify(driverName)}.png`);
     const finish = Number(result.finishPosition ?? result.finish);
     const isProvisional = Boolean(result.isProvisional);
+    const profileDriverId =
+      resolution.profileDriverId || standingsRow?.profileDriverId || null;
 
     return {
       driverId: String(driverId),
+      profileDriverId,
+      profileUrl: driverProfilePublicUrl(profileDriverId || driverId),
+      identityMatchMethod: resolution.matchMethod || standingsRow?.identityMatchMethod || null,
       driverName,
       carNumber: standingsRow?.carNumber || profile?.car_number || '',
       photoUrl,
@@ -248,10 +264,13 @@ function buildWinnerRaceSummary(winnerRow, scheduleEntry) {
 
   return {
     driverId: winnerRow.driverId,
+    profileDriverId: winnerRow.profileDriverId || null,
     driverName: winnerRow.driverName,
     carNumber: winnerRow.carNumber || null,
     photoUrl: winnerRow.photoUrl,
-    profileUrl: `/drivers/${encodeURIComponent(String(winnerRow.driverId))}`,
+    profileUrl:
+      winnerRow.profileUrl ||
+      driverProfilePublicUrl(winnerRow.profileDriverId || winnerRow.driverId),
     finish,
     startingPos,
     positionsGained,

@@ -31,8 +31,10 @@ function formatCell(value) {
   return String(value);
 }
 
-function driverProfileUrl(driverId) {
-  return `/drivers/${encodeURIComponent(String(driverId || ""))}`;
+function driverProfileUrl(row) {
+  if (row?.profileUrl) return String(row.profileUrl);
+  const id = row?.profileDriverId || row?.driverId || "";
+  return `/drivers/${encodeURIComponent(String(id || ""))}`;
 }
 
 function renderRaceSelector(completedRaces, selectedRaceNumber) {
@@ -104,7 +106,7 @@ function renderResultsTable(rows, raceResults = {}) {
       return `<tr class="${rowClass}">
         <td class="results-pos">${escapeHtml(String(row.position))}</td>
         <td class="results-driver">
-          <a class="results-driver-link" href="${driverProfileUrl(row.driverId)}">
+          <a class="results-driver-link" href="${driverProfileUrl(row)}">
             <img
               class="results-driver-photo"
               src="${escapeHtml(row.photoUrl || PLACEHOLDER_PHOTO)}"

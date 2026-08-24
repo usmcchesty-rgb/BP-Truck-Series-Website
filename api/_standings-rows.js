@@ -1,6 +1,10 @@
 import * as cheerio from 'cheerio';
 import { getDriverProfiles } from './_lib.js';
 import {
+  driverProfilePublicUrl,
+  resolveProfileForStandingsRow,
+} from './_driver-profile-resolve.js';
+import {
   buildStandingsCacheKey,
   fetchCachedHtml,
   getCachedStandings,
@@ -81,9 +85,6 @@ export async function fetchStandingsRows(settings, scheduleId = null) {
 
   const data = await response.json();
   const profiles = await getDriverProfiles();
-  const byDriverId = Object.fromEntries(
-    profiles.map((p) => [String(p.driver_id), p]),
-  );
 
   const rows = Object.values(data.rps || {})
     .map((r) => {
@@ -97,13 +98,22 @@ export async function fetchStandingsRows(settings, scheduleId = null) {
             .join(' ')
         : rawName;
 
-      const profile = byDriverId[String(r.drid)] || null;
+      const srhDriverId = String(r.drid);
+      const resolution = resolveProfileForStandingsRow(
+        { driverId: srhDriverId, driverName: name },
+        profiles,
+      );
+      const profile = resolution.profile;
       const displayName = profile?.display_name || name;
+      const profileDriverId = resolution.profileDriverId || null;
 
       return {
-        driverId: String(r.drid),
+        driverId: srhDriverId,
         driverName: displayName,
         carNumber: profile?.car_number || '',
+        profileDriverId,
+        profileUrl: driverProfilePublicUrl(profileDriverId || srhDriverId),
+        identityMatchMethod: resolution.matchMethod || null,
         position: Number(r.pos2),
         previousPosition: Number(r.pos1),
         points: Number(r.tpts || 0),
@@ -132,6 +142,9 @@ export function buildDriverLookup(standings, profiles) {
 
   for (const row of standings) {
     lookup.set(String(row.driverId), row);
+    if (row.profileDriverId) {
+      lookup.set(String(row.profileDriverId), row);
+    }
   }
 
   for (const profile of profiles) {
@@ -141,6 +154,7 @@ export function buildDriverLookup(standings, profiles) {
         driverId: id,
         driverName: profile.display_name || profile.iracing_name,
         carNumber: profile.car_number || '',
+        profileDriverId: id,
       });
     }
   }

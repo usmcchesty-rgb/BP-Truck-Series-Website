@@ -1,4 +1,4 @@
-import { getDriverProfiles, supabase, slugify, stripPhotoUrlQuery, withPhotoCacheBust, photoCacheVersion } from './_lib.js';
+import { getDriverProfiles, getSettings, supabase, slugify, stripPhotoUrlQuery, withPhotoCacheBust, photoCacheVersion } from './_lib.js';
 import { buildAvailableNumberSummaryFromDb } from './_driver-number-reservations.js';
 import { attachBpNumber, loadBpNumberContext } from './_bp-driver-number.js';
 import {
@@ -34,6 +34,8 @@ import {
 import {
   enrichDriversWithNumberArtwork,
 } from './_number-artwork-catalog.js';
+import { findDriverProfileByQuery } from './_driver-profile-resolve.js';
+import { fetchStandingsRows } from './_standings-rows.js';
 
 export { stripPrivateDriverProfileFields } from './_driver-profile-privacy.js';
 
@@ -207,70 +209,20 @@ function normalizeCarNumber(value) {
   return text;
 }
 
-function normalizeLookupName(value) {
-  return String(value || '')
-    .toLowerCase()
-    .replace(/^@/, '')
-    .replace(/[^a-z0-9\s-]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
+async function findDriverProfileWithStandingsFallback(profiles, queryId) {
+  const direct = findDriverProfileByQuery(profiles, queryId);
+  if (direct.profile) return direct.profile;
 
-function twitterHandleFromUrl(value) {
-  const text = String(value || '').trim().toLowerCase();
-  if (!text) return '';
-  if (text.startsWith('@')) return text.slice(1);
-  const match = text.match(/(?:twitter\.com|x\.com)\/([^/?#]+)/i);
-  return match?.[1]?.replace(/^@/, '') || '';
-}
-
-function findDriverProfile(profiles, queryId) {
-  const raw = String(queryId ?? '').trim();
-  if (!raw) return null;
-
-  let match = profiles.find((row) => String(row.driver_id) === raw);
-  if (match) return match;
-
-  const lookupName = normalizeLookupName(raw);
-  const lookupSlug = slugify(raw.replace(/^@/, ''));
-
-  if (raw.startsWith('@')) {
-    const handle = raw.slice(1).toLowerCase();
-    match = profiles.find((row) => {
-      const twitter = String(row.twitter_url || row.twitterUrl || '').trim().toLowerCase();
-      const twitterHandle = twitterHandleFromUrl(twitter);
-      return (
-        twitter === raw.toLowerCase() ||
-        twitter.includes(`/${handle}`) ||
-        twitter.includes(`@${handle}`) ||
-        twitterHandle === handle
-      );
-    });
-    if (match) return match;
-
-    match = profiles.find((row) => {
-      const names = [row.display_name, row.iracing_name].map(normalizeLookupName);
-      return names.includes(handle) || names.includes(lookupName);
-    });
-    if (match) return match;
+  try {
+    const settings = await getSettings();
+    const standingsPayload = await fetchStandingsRows(settings);
+    const standingsRows = Array.isArray(standingsPayload)
+      ? standingsPayload
+      : standingsPayload?.rows || [];
+    return findDriverProfileByQuery(profiles, queryId, { standingsRows }).profile;
+  } catch {
+    return null;
   }
-
-  match = profiles.find((row) => {
-    const names = [row.display_name, row.iracing_name].map(normalizeLookupName);
-    return names.includes(lookupName);
-  });
-  if (match) return match;
-
-  if (lookupSlug) {
-    match = profiles.find(
-      (row) =>
-        slugify(row.display_name || row.iracing_name || '') === lookupSlug ||
-        slugify(row.driver_id || '') === lookupSlug
-    );
-    if (match) return match;
-  }
-
-  return null;
 }
 
 function normalizeStandingCrop(row = {}) {
@@ -864,7 +816,7 @@ export default async function handler(req, res) {
     const driverId = String(req.query?.driver_id ?? req.query?.id ?? '').trim();
     const format = String(req.query?.format || '').trim().toLowerCase();
     if (driverId) {
-      const profile = findDriverProfile(normalized, driverId);
+      const profile = await findDriverProfileWithStandingsFallback(normalized, driverId);
       if (!profile) {
         return res.status(404).json({ error: 'Driver not found.' });
       }

@@ -30,6 +30,11 @@ import {
   buildIncomingDriverSlug,
   normalizeDriverWriteName,
 } from './_drivers-write-identity.js';
+import {
+  resolveProfileForStandingsRow,
+} from './_driver-profile-resolve.js';
+
+export { resolveProfileForStandingsRow } from './_driver-profile-resolve.js';
 
 export const SLATE_MAX_STANDINGS_POSITION = 30;
 export const SLATE_LEGACY_STANDINGS_POOL_CAP = 30;
@@ -80,87 +85,6 @@ function parseSlateMeta(row) {
 
 function slugifyName(value) {
   return slugify(String(value || ''));
-}
-
-export function resolveProfileForStandingsRow(standingsRow = {}, profiles = []) {
-  const srhDriverId = String(standingsRow.driverId || '').trim();
-  const rowName = normalizeDriverWriteName(standingsRow.driverName);
-  const rowSlug = slugifyName(standingsRow.driverName);
-
-  const byDriverId = profiles.find((profile) => String(profile.driver_id) === srhDriverId);
-  if (byDriverId) {
-    return {
-      profile: byDriverId,
-      matchMethod: 'driver_id',
-      identitySplit: false,
-      profileDriverId: String(byDriverId.driver_id),
-    };
-  }
-
-  if (rowSlug) {
-    const bySlug = profiles.find((profile) => {
-      const profileSlug = slugifyName(
-        profile.slug || profile.display_name || profile.iracing_name || profile.driver_id
-      );
-      return profileSlug && profileSlug === rowSlug;
-    });
-    if (bySlug) {
-      return {
-        profile: bySlug,
-        matchMethod: 'slug',
-        identitySplit: String(bySlug.driver_id) !== srhDriverId,
-        profileDriverId: String(bySlug.driver_id),
-      };
-    }
-  }
-
-  const customerMatches = profiles.filter((profile) => {
-    const customerId = String(profile.iracing_customer_id || '').trim();
-    return customerId && customerId === srhDriverId;
-  });
-  if (customerMatches.length === 1) {
-    const profile = customerMatches[0];
-    return {
-      profile,
-      matchMethod: 'iracing_customer_id',
-      identitySplit: String(profile.driver_id) !== srhDriverId,
-      profileDriverId: String(profile.driver_id),
-    };
-  }
-
-  if (rowName) {
-    const nameMatches = profiles.filter((profile) => {
-      const names = [profile.iracing_name, profile.display_name, profile.driver_name]
-        .map(normalizeDriverWriteName)
-        .filter(Boolean);
-      return names.includes(rowName);
-    });
-    if (nameMatches.length === 1) {
-      const profile = nameMatches[0];
-      return {
-        profile,
-        matchMethod: 'normalized_name',
-        identitySplit: String(profile.driver_id) !== srhDriverId,
-        profileDriverId: String(profile.driver_id),
-      };
-    }
-    if (nameMatches.length > 1) {
-      return {
-        profile: null,
-        matchMethod: 'normalized_name_conflict',
-        identitySplit: true,
-        profileDriverId: null,
-        conflicts: nameMatches.map((profile) => String(profile.driver_id)),
-      };
-    }
-  }
-
-  return {
-    profile: null,
-    matchMethod: null,
-    identitySplit: false,
-    profileDriverId: null,
-  };
 }
 
 export function enrichStandingsRowWithProfile(standingsRow = {}, profileResolution = {}) {

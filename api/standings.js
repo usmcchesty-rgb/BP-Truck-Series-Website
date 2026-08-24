@@ -12,6 +12,10 @@ import {
   loadNumberArtworkCatalog,
   loadNumberArtworkOverrides,
 } from './_number-artwork-catalog.js';
+import {
+  driverProfilePublicUrl,
+  resolveProfileForStandingsRow,
+} from './_driver-profile-resolve.js';
 import * as cheerio from "cheerio";
 
 
@@ -106,7 +110,6 @@ export default async function handler(req, res) {
 
     const data = await response.json();
     const profiles = await getDriverProfiles();
-    const byDriverId = Object.fromEntries(profiles.map(p => [String(p.driver_id), p]));
     const bpContext = await loadBpNumberContext(supabase());
     const numberCatalog = loadNumberArtworkCatalog();
     const numberOverrides = await loadNumberArtworkOverrides();
@@ -129,13 +132,19 @@ export default async function handler(req, res) {
           ? rawName.split(',').reverse().map(s => s.trim()).join(' ')
           : rawName;
 
-        const slug = slugify(name);
-        const profile = byDriverId[String(r.drid)] || null;
+        const srhDriverId = String(r.drid);
+        const resolution = resolveProfileForStandingsRow(
+          { driverId: srhDriverId, driverName: name },
+          profiles,
+        );
+        const profile = resolution.profile;
         const displayName = profile?.display_name || name;
+        const slug = slugify(displayName || name);
+        const profileDriverId = resolution.profileDriverId || null;
         const standingsCarNumber = extractStandingsCarNumber(r, driver);
         const bp_number = attachBpNumber(
-          { driver_id: String(r.drid) },
-          profile || { driver_id: String(r.drid) },
+          { driver_id: srhDriverId },
+          profile || { driver_id: srhDriverId },
           bpContext,
           standingsCarNumber,
         ).bp_number;
@@ -167,6 +176,9 @@ const avgFinish =
 
           driver: displayName,
           driverId: r.drid,
+          profileDriverId,
+          profileUrl: driverProfilePublicUrl(profileDriverId || srhDriverId),
+          identityMatchMethod: resolution.matchMethod || null,
           carNumber: bp_number,
           bp_number,
           standingsCarNumber:
@@ -195,7 +207,7 @@ const avgFinish =
           iracingCustomerId: profile?.iracing_customer_id || '',
           numberArtwork: attachNumberArtwork(
             {
-              driverId: r.drid,
+              driverId: profileDriverId || r.drid,
               driverName: displayName,
               iracing_customer_id: profile?.iracing_customer_id,
               iracing_name: profile?.iracing_name,
