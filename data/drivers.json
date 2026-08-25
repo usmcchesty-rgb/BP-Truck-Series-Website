@@ -1663,12 +1663,12 @@
       }
     },
     {
-      "name": "Kody Miller",
+      "name": "Kody Miller2",
       "iracingName": "Kody Miller",
       "carNumber": "11",
       "iracingCustomerId": 1207664,
-      "slug": "kody-miller",
-      "carImage": "/assets/images/cars/Kody Miller.png",
+      "slug": "kody-miller2",
+      "carImage": "/assets/images/cars/Kody Miller2.png",
       "iracingDesign": {
         "source": "iracing_sdk",
         "capturedAt": "2026-08-17T07:00:12.703Z",
