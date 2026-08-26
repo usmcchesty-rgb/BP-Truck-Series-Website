@@ -34,6 +34,10 @@ import {
 import {
   enrichDriversWithNumberArtwork,
 } from './_number-artwork-catalog.js';
+import {
+  enrichDriversWithCarImages,
+  loadCarImageCatalog,
+} from './_car-image-resolve.js';
 import { findDriverProfileByQuery } from './_driver-profile-resolve.js';
 import { fetchStandingsRows } from './_standings-rows.js';
 
@@ -795,7 +799,9 @@ export default async function handler(req, res) {
         })
         .filter(Boolean),
     );
-    const normalized = withNumbers
+    const carCatalog = loadCarImageCatalog();
+    const withCars = enrichDriversWithCarImages(withNumbers, carCatalog);
+    const normalized = withCars
       .filter((row) => includePrivateFields || row.active !== false)
       .sort((a, b) => a.iracing_name.localeCompare(b.iracing_name));
 

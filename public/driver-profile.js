@@ -149,29 +149,32 @@ function toCarAssetUrl(baseName, ext) {
 }
 
 function buildLocalCarImageCandidates(profile) {
-  const name = profile.display_name || profile.iracing_name || "";
-  const nameBases = buildNameAssetBases(name);
-  const slug = slugifyDriverName(name);
+  const names = [
+    profile.display_name,
+    profile.iracing_name,
+    profile.name,
+  ].filter(Boolean);
+  const nameBases = [];
+  for (const name of names) {
+    for (const base of buildNameAssetBases(name)) {
+      nameBases.push(base);
+    }
+  }
+  const uniqueBases = [...new Set(nameBases.filter(Boolean))];
   const carNum = normalizeCarNumber(driverBpNumber(profile));
   const driverId = String(profile.driver_id || "").trim();
   const orderedBases = [];
 
-  for (const base of nameBases) {
+  // Prefer exact name bases before number-suffixed variants so
+  // "Kody Miller2.png" is tried before "Kody Miller2-11.png".
+  for (const base of uniqueBases) {
+    orderedBases.push(base);
+  }
+  for (const base of uniqueBases) {
     if (carNum) {
       orderedBases.push(`${base}-${carNum}`);
       orderedBases.push(`${carNum}-${base}`);
     }
-  }
-  for (const base of nameBases) {
-    orderedBases.push(base);
-  }
-
-  if (slug && !nameBases.includes(slug)) {
-    if (carNum) {
-      orderedBases.push(`${slug}-${carNum}`);
-      orderedBases.push(`${carNum}-${slug}`);
-    }
-    orderedBases.push(slug);
   }
 
   if (driverId) orderedBases.push(driverId);
@@ -186,6 +189,15 @@ function buildLocalCarImageCandidates(profile) {
   }
 
   return [...new Set(candidates)];
+}
+
+function isUsableCarImageUrl(value) {
+  const url = String(value || "").trim();
+  if (!url) return false;
+  if (/^https?:\/\/drive\.google\.com\/open\/?$/i.test(url)) return false;
+  if (/^https?:\/\/drive\.google\.com\/open\?id=$/i.test(url)) return false;
+  if (/drive\.google\.com\/open\/?$/i.test(url)) return false;
+  return true;
 }
 
 function shouldLogCarImageDiagnostics() {
@@ -233,13 +245,15 @@ async function resolveCarImageUrl(profile) {
   const failedCandidates = [];
   let selectedUrl = "";
 
-  if (carImageUrlFromProfile) {
+  if (isUsableCarImageUrl(carImageUrlFromProfile)) {
     const loaded = await probeImageUrl(carImageUrlFromProfile);
     if (loaded) {
       selectedUrl = loaded;
     } else {
       failedCandidates.push(carImageUrlFromProfile);
     }
+  } else if (carImageUrlFromProfile) {
+    failedCandidates.push(carImageUrlFromProfile);
   }
 
   if (!selectedUrl) {
