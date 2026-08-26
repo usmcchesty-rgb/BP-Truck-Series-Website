@@ -192,12 +192,40 @@ function buildLocalCarImageCandidates(profile) {
 }
 
 function isUsableCarImageUrl(value) {
-  const url = String(value || "").trim();
+  const url = String(value || "").trim().split("?")[0].split("#")[0];
   if (!url) return false;
   if (/^https?:\/\/drive\.google\.com\/open\/?$/i.test(url)) return false;
   if (/^https?:\/\/drive\.google\.com\/open\?id=$/i.test(url)) return false;
   if (/drive\.google\.com\/open\/?$/i.test(url)) return false;
   return true;
+}
+
+/** Encode path segments; keep query/hash intact for cache-bust versions. */
+function encodePublicAssetUrl(url) {
+  const raw = String(url || "").trim();
+  if (!raw) return "";
+  if (/^https?:\/\//i.test(raw)) return raw;
+
+  const hashIndex = raw.indexOf("#");
+  const withoutHash = hashIndex >= 0 ? raw.slice(0, hashIndex) : raw;
+  const hash = hashIndex >= 0 ? raw.slice(hashIndex) : "";
+  const qIndex = withoutHash.indexOf("?");
+  const pathPart = qIndex >= 0 ? withoutHash.slice(0, qIndex) : withoutHash;
+  const query = qIndex >= 0 ? withoutHash.slice(qIndex) : "";
+
+  const encodedPath = pathPart
+    .split("/")
+    .map((segment) => {
+      if (!segment) return "";
+      try {
+        return encodeURIComponent(decodeURIComponent(segment));
+      } catch {
+        return encodeURIComponent(segment);
+      }
+    })
+    .join("/");
+
+  return `${encodedPath}${query}${hash}`;
 }
 
 function shouldLogCarImageDiagnostics() {
@@ -224,7 +252,7 @@ function logCarImageResolution(details) {
 }
 
 function probeImageUrl(url) {
-  const src = String(url || "").trim();
+  const src = encodePublicAssetUrl(url);
   if (!src) return Promise.resolve("");
 
   return new Promise((resolve) => {
@@ -280,13 +308,14 @@ async function resolveCarImageUrl(profile) {
 
 function renderCarImageHeroSection(carImageUrl, driverName) {
   if (!carImageUrl) return "";
+  const src = encodePublicAssetUrl(carImageUrl);
 
   return `<div class="driver-profile-car-wrap" data-car-wrap>
     <div class="driver-profile-car-hero" aria-label="Race car">
       <div class="driver-profile-car-hero-inner">
         <img
           class="driver-profile-car-hero-image"
-          src="${escapeAttr(carImageUrl)}"
+          src="${escapeAttr(src)}"
           alt="${escapeAttr(`${driverName} race car`)}"
           loading="eager"
           decoding="async"

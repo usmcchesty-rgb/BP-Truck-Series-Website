@@ -7,12 +7,15 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   attachCarImage,
+  encodePublicAssetUrl,
   isUsableCarImageUrl,
   loadCarImageCatalog,
   localCarAssetExists,
   lookupCatalogCarImage,
+  normalizeCarImageUrl,
   resetCarImageCatalogCache,
   resolveCarImageForDriver,
+  withCarImageCacheBust,
 } from '../api/_car-image-resolve.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -34,6 +37,14 @@ const catalog = loadCarImageCatalog();
   assert.equal(resolved.carImageUrl, '/assets/images/cars/Kody Miller2.png');
   assert.equal(resolved.source, 'catalog');
   assert.equal(localCarAssetExists(resolved.carImageUrl), true);
+
+  const attached = attachCarImage(kody, catalog);
+  assert.equal(normalizeCarImageUrl(attached.car_image_url), '/assets/images/cars/Kody Miller2.png');
+  assert.match(attached.car_image_url, /\?v=\d+$/);
+  assert.equal(
+    encodePublicAssetUrl(attached.car_image_url),
+    `/assets/images/cars/Kody%20Miller2.png?v=${attached.car_image_url.split('?v=')[1]}`
+  );
 }
 
 {
@@ -71,8 +82,8 @@ const catalog = loadCarImageCatalog();
     },
     catalog
   );
-  assert.equal(attached.car_image_url, '/assets/images/cars/Kody Miller2.png');
-  assert.equal(attached.carImageUrl, '/assets/images/cars/Kody Miller2.png');
+  assert.equal(attached.car_image_url.startsWith('/assets/images/cars/Kody Miller2.png'), true);
+  assert.equal(normalizeCarImageUrl(attached.carImageUrl), '/assets/images/cars/Kody Miller2.png');
   assert.equal(attached.photo_url, '/assets/drivers/kody-miller2.png');
 }
 
@@ -150,6 +161,28 @@ const catalog = loadCarImageCatalog();
   const png = path.join(root, 'public', 'assets', 'images', 'cars', 'Kody Miller2.png');
   assert.equal(fs.existsSync(png), true);
   assert.ok(fs.statSync(png).size > 1000);
+
+  // Cache bust + encoding helpers
+  const busted = withCarImageCacheBust('/assets/images/cars/Kody Miller2.png');
+  assert.match(busted, /^\/assets\/images\/cars\/Kody Miller2\.png\?v=\d+$/);
+  assert.equal(
+    encodePublicAssetUrl('/assets/images/cars/Kody Miller2.png'),
+    '/assets/images/cars/Kody%20Miller2.png'
+  );
+
+  // Mutable car assets must not be marked immutable in vercel.json
+  const vercel = JSON.parse(fs.readFileSync(path.join(root, 'vercel.json'), 'utf8'));
+  const carHeader = (vercel.headers || []).find((h) =>
+    String(h.source || '').includes('/assets/images/cars')
+  );
+  assert.ok(carHeader, 'vercel.json must define headers for car images');
+  const cacheControl = carHeader.headers.find((h) => h.key === 'Cache-Control')?.value || '';
+  assert.equal(/immutable/i.test(cacheControl), false);
+  assert.match(cacheControl, /max-age=300/);
+
+  const broadAssets = (vercel.headers || []).find((h) => h.source === '/assets/(.*)');
+  const broadCc = broadAssets?.headers?.find((h) => h.key === 'Cache-Control')?.value || '';
+  assert.equal(/immutable/i.test(broadCc), false);
 }
 
 console.log('test-car-image-resolve: ok');

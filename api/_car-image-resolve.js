@@ -62,6 +62,55 @@ export function localCarAssetExists(url) {
   }
 }
 
+/** Encode each path segment so spaces/case-sensitive names work reliably in browsers. */
+export function encodePublicAssetUrl(url) {
+  const raw = String(url || '').trim();
+  if (!raw) return '';
+  if (/^https?:\/\//i.test(raw)) return raw;
+
+  const hashIndex = raw.indexOf('#');
+  const withoutHash = hashIndex >= 0 ? raw.slice(0, hashIndex) : raw;
+  const hash = hashIndex >= 0 ? raw.slice(hashIndex) : '';
+  const qIndex = withoutHash.indexOf('?');
+  const pathPart = qIndex >= 0 ? withoutHash.slice(0, qIndex) : withoutHash;
+  const query = qIndex >= 0 ? withoutHash.slice(qIndex) : '';
+
+  const encodedPath = pathPart
+    .split('/')
+    .map((segment) => {
+      if (!segment) return '';
+      try {
+        return encodeURIComponent(decodeURIComponent(segment));
+      } catch {
+        return encodeURIComponent(segment);
+      }
+    })
+    .join('/');
+
+  return `${encodedPath}${query}${hash}`;
+}
+
+/**
+ * Mutable car PNGs are overwritten in place by Car Image Manager.
+ * Bust browser/CDN caches with the on-disk mtime.
+ */
+export function withCarImageCacheBust(url) {
+  const clean = normalizeCarImageUrl(url);
+  if (!clean) return '';
+  if (!isLocalCarAssetPath(clean)) return clean;
+  if (!localCarAssetExists(clean)) return clean;
+
+  const fileName = decodeAssetBasename(clean);
+  try {
+    const stat = fs.statSync(path.join(CARS_DIR, fileName));
+    const version = Math.floor(Number(stat.mtimeMs) || 0);
+    if (!version) return clean;
+    return `${clean}?v=${version}`;
+  } catch {
+    return clean;
+  }
+}
+
 function normalizeLookupName(value) {
   return String(value || '')
     .toLowerCase()
@@ -173,10 +222,13 @@ export function resolveCarImageForDriver(driver = {}, catalog = loadCarImageCata
 
 export function attachCarImage(driver = {}, catalog = loadCarImageCatalog()) {
   const resolved = resolveCarImageForDriver(driver, catalog);
+  const versioned = resolved.carImageUrl
+    ? withCarImageCacheBust(resolved.carImageUrl)
+    : '';
   return {
     ...driver,
-    car_image_url: resolved.carImageUrl,
-    carImageUrl: resolved.carImageUrl,
+    car_image_url: versioned,
+    carImageUrl: versioned,
     carImageSource: resolved.source,
   };
 }
