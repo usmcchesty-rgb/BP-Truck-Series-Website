@@ -12,6 +12,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { stripPhotoUrlQuery } from './_lib.js';
+import { withContentHashCacheBust } from './_asset-content-hash.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..');
@@ -92,23 +93,11 @@ export function encodePublicAssetUrl(url) {
 
 /**
  * Mutable car PNGs are overwritten in place by Car Image Manager.
- * Bust browser/CDN caches with the on-disk mtime.
+ * Bust caches with a content hash so the URL changes when bytes change
+ * (mtime is unreliable on Vercel serverless deploys).
  */
 export function withCarImageCacheBust(url) {
-  const clean = normalizeCarImageUrl(url);
-  if (!clean) return '';
-  if (!isLocalCarAssetPath(clean)) return clean;
-  if (!localCarAssetExists(clean)) return clean;
-
-  const fileName = decodeAssetBasename(clean);
-  try {
-    const stat = fs.statSync(path.join(CARS_DIR, fileName));
-    const version = Math.floor(Number(stat.mtimeMs) || 0);
-    if (!version) return clean;
-    return `${clean}?v=${version}`;
-  } catch {
-    return clean;
-  }
+  return withContentHashCacheBust(url);
 }
 
 function normalizeLookupName(value) {

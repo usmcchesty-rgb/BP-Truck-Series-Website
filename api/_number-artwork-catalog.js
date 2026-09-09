@@ -3,6 +3,10 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { supabase, stripPhotoUrlQuery, withPhotoCacheBust, photoCacheVersion } from './_lib.js';
 import {
+  isVersionableLocalAssetUrl,
+  withContentHashCacheBust,
+} from './_asset-content-hash.js';
+import {
   indexNumberArtworkCatalog,
   normalizeCustomerId,
   resolveNumberArtworkForDriver,
@@ -93,11 +97,19 @@ export function attachNumberArtwork(driver = {}, catalog = loadNumberArtworkCata
   const resolved = resolveNumberArtworkForDriver(driver, catalog, overrides);
   const stored = stripPhotoUrlQuery(resolved.imagePath);
   const updatedAt = resolved.customerId ? overrides[resolved.customerId]?.updatedAt : null;
-  const imageUrl = stored
-    ? updatedAt
-      ? withPhotoCacheBust(stored, photoCacheVersion(updatedAt))
-      : stored
-    : '';
+
+  let imageUrl = '';
+  if (stored) {
+    if (isVersionableLocalAssetUrl(stored)) {
+      // Local numbers/*.png are overwritten in place — content-hash the URL.
+      imageUrl = withContentHashCacheBust(stored);
+    } else if (updatedAt) {
+      imageUrl = withPhotoCacheBust(stored, photoCacheVersion(updatedAt));
+    } else {
+      imageUrl = stored;
+    }
+  }
+
   return {
     ...resolved,
     imagePath: stored,

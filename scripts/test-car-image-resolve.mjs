@@ -40,7 +40,7 @@ const catalog = loadCarImageCatalog();
 
   const attached = attachCarImage(kody, catalog);
   assert.equal(normalizeCarImageUrl(attached.car_image_url), '/assets/images/cars/Kody Miller2.png');
-  assert.match(attached.car_image_url, /\?v=\d+$/);
+  assert.match(attached.car_image_url, /\?v=[a-f0-9]{8}$/);
   assert.equal(
     encodePublicAssetUrl(attached.car_image_url),
     `/assets/images/cars/Kody%20Miller2.png?v=${attached.car_image_url.split('?v=')[1]}`
@@ -164,25 +164,21 @@ const catalog = loadCarImageCatalog();
 
   // Cache bust + encoding helpers
   const busted = withCarImageCacheBust('/assets/images/cars/Kody Miller2.png');
-  assert.match(busted, /^\/assets\/images\/cars\/Kody Miller2\.png\?v=\d+$/);
+  assert.match(busted, /^\/assets\/images\/cars\/Kody Miller2\.png\?v=[a-f0-9]{8}$/);
   assert.equal(
     encodePublicAssetUrl('/assets/images/cars/Kody Miller2.png'),
     '/assets/images/cars/Kody%20Miller2.png'
   );
 
-  // Mutable car assets must not be marked immutable in vercel.json
+  // Mutable car assets are long-cache/immutable because URLs are content-versioned
   const vercel = JSON.parse(fs.readFileSync(path.join(root, 'vercel.json'), 'utf8'));
   const carHeader = (vercel.headers || []).find((h) =>
     String(h.source || '').includes('/assets/images/cars')
   );
   assert.ok(carHeader, 'vercel.json must define headers for car images');
   const cacheControl = carHeader.headers.find((h) => h.key === 'Cache-Control')?.value || '';
-  assert.equal(/immutable/i.test(cacheControl), false);
-  assert.match(cacheControl, /max-age=300/);
-
-  const broadAssets = (vercel.headers || []).find((h) => h.source === '/assets/(.*)');
-  const broadCc = broadAssets?.headers?.find((h) => h.key === 'Cache-Control')?.value || '';
-  assert.equal(/immutable/i.test(broadCc), false);
+  assert.match(cacheControl, /max-age=31536000/);
+  assert.match(cacheControl, /immutable/i);
 }
 
 console.log('test-car-image-resolve: ok');
