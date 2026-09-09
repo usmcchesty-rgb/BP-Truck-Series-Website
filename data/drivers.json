@@ -283,7 +283,7 @@
       "carImage": "/assets/images/cars/Brian Zimmerman3.png",
       "iracingDesign": {
         "source": "iracing_sdk",
-        "capturedAt": "2026-08-17T07:00:12.703Z",
+        "capturedAt": "2026-09-09T05:46:02.583Z",
         "userId": "327558",
         "carNumber": "28",
         "number": {
@@ -295,13 +295,13 @@
           "color3": "#000000"
         },
         "car": {
-          "raw": "0,000000,a8000f,ffffff;d0d0d0",
+          "raw": "0,000000,a8000f,ffffff;000000",
           "pattern": "0",
           "color1": "#000000",
           "color2": "#a8000f",
           "color3": "#ffffff",
           "wheelType": 1,
-          "wheelColor": "#d0d0d0"
+          "wheelColor": "#000000"
         },
         "suit": {
           "raw": "23,ffffff,6d6e71,a8000f",
@@ -310,14 +310,14 @@
           "color2": "#6d6e71",
           "color3": "#a8000f"
         },
-        "numberStyleAuthoritative": false,
         "numberImage": {
           "sdkPath": "/assets/images/numbers/327558.png",
           "customPath": null,
           "preferredSource": "none",
           "source": "iracing_sdk_number",
           "authoritative": false
-        }
+        },
+        "numberStyleAuthoritative": false
       }
     },
     {
@@ -695,7 +695,7 @@
       "carImage": "/assets/images/cars/Scotty Stevens.png",
       "iracingDesign": {
         "source": "iracing_sdk",
-        "capturedAt": "2026-08-17T08:02:31.093Z",
+        "capturedAt": "2026-09-09T05:46:02.583Z",
         "userId": "497305",
         "carNumber": "22",
         "number": {
@@ -707,11 +707,11 @@
           "color3": "#e5cc29"
         },
         "car": {
-          "raw": "3,ff0000,00ff00,0000ff,fa0000",
+          "raw": "3,000000,e1ce1b,ff0000,fa0000",
           "pattern": "3",
-          "color1": "#ff0000",
-          "color2": "#00ff00",
-          "color3": "#0000ff",
+          "color1": "#000000",
+          "color2": "#e1ce1b",
+          "color3": "#ff0000",
           "wheelType": 0,
           "wheelColor": "#fa0000"
         },
@@ -948,7 +948,7 @@
     },
     {
       "name": "Jacob Bell",
-      "iracingName": "Luca Siciliano",
+      "iracingName": "Jacob Bell",
       "carNumber": "77",
       "iracingCustomerId": 119444,
       "slug": "jacob-bell",
@@ -1269,30 +1269,32 @@
       "carImage": "/assets/images/cars/Miguel Gomez-Gaudet.png",
       "iracingDesign": {
         "source": "iracing_sdk",
-        "capturedAt": "2026-08-17T07:52:25.642Z",
+        "capturedAt": "2026-09-09T05:46:02.583Z",
         "userId": "1478479",
         "carNumber": "89",
         "number": {
-          "raw": "0,0,ffffff,777777,000000",
-          "font": 0,
-          "slant": 0,
-          "color1": "#ffffff",
-          "color2": "#777777",
-          "color3": "#000000"
+          "raw": "37,3,e51d16,141d2c,ffffff",
+          "font": 37,
+          "slant": 3,
+          "color1": "#e51d16",
+          "color2": "#141d2c",
+          "color3": "#ffffff"
         },
         "car": {
-          "raw": "2,ec232d,ffffff,2e358f",
-          "pattern": "2",
+          "raw": "20,ec232d,ffffff,2e358f,152133",
+          "pattern": "20",
           "color1": "#ec232d",
           "color2": "#ffffff",
-          "color3": "#2e358f"
+          "color3": "#2e358f",
+          "wheelType": 0,
+          "wheelColor": "#152133"
         },
         "suit": {
-          "raw": "1,ec232d,ffffff,2e358f",
-          "pattern": "1",
-          "color1": "#ec232d",
-          "color2": "#ffffff",
-          "color3": "#2e358f"
+          "raw": "30,e3cf94,dd221a,152133",
+          "pattern": "30",
+          "color1": "#e3cf94",
+          "color2": "#dd221a",
+          "color3": "#152133"
         },
         "numberImage": {
           "sdkPath": "/assets/images/numbers/1478479.png",
@@ -1353,22 +1355,22 @@
     {
       "name": "John Perkins",
       "iracingName": "John Perkins",
-      "carNumber": "34",
+      "carNumber": "33",
       "iracingCustomerId": 175138,
       "slug": "john-perkins",
       "carImage": "/assets/images/cars/John Perkins.png",
       "iracingDesign": {
         "source": "iracing_sdk",
-        "capturedAt": "2026-08-17T07:00:12.703Z",
+        "capturedAt": "2026-09-09T05:46:02.583Z",
         "userId": "175138",
-        "carNumber": "34",
+        "carNumber": "33",
         "number": {
-          "raw": "0,4,ebf707,000000,f50505",
+          "raw": "0,4,f50505,ebf707,000000",
           "font": 0,
           "slant": 4,
-          "color1": "#ebf707",
-          "color2": "#000000",
-          "color3": "#f50505"
+          "color1": "#f50505",
+          "color2": "#ebf707",
+          "color3": "#000000"
         },
         "car": {
           "raw": "0,f3f006,000000,f70707,ffff00",
@@ -1386,14 +1388,14 @@
           "color2": "#ffffff",
           "color3": "#2a3795"
         },
-        "numberStyleAuthoritative": false,
         "numberImage": {
           "sdkPath": "/assets/images/numbers/175138.png",
           "customPath": null,
           "preferredSource": "none",
           "source": "iracing_sdk_number",
           "authoritative": false
-        }
+        },
+        "numberStyleAuthoritative": false
       }
     },
     {
@@ -1855,29 +1857,29 @@
     {
       "name": "Joseph Causey",
       "iracingName": "Joseph Causey",
-      "carNumber": "8",
+      "carNumber": "18",
       "iracingCustomerId": 368826,
       "slug": "joseph-causey",
       "carImage": "/assets/images/cars/Joseph Causey.png",
       "iracingDesign": {
         "source": "iracing_sdk",
-        "capturedAt": "2026-08-24T15:54:24.440Z",
+        "capturedAt": "2026-09-09T05:46:02.583Z",
         "userId": "368826",
-        "carNumber": "8",
+        "carNumber": "18",
         "number": {
-          "raw": "7,3,ffffff,ed2129,000000",
+          "raw": "7,3,ffffff,777777,000000",
           "font": 7,
           "slant": 3,
           "color1": "#ffffff",
-          "color2": "#ed2129",
+          "color2": "#777777",
           "color3": "#000000"
         },
         "car": {
-          "raw": "0,0000ff,ff0000,00ff00",
-          "pattern": "0",
-          "color1": "#0000ff",
-          "color2": "#ff0000",
-          "color3": "#00ff00"
+          "raw": "1,ff0000,00ff00,0000ff",
+          "pattern": "1",
+          "color1": "#ff0000",
+          "color2": "#00ff00",
+          "color3": "#0000ff"
         },
         "suit": {
           "raw": "27,000000,17dc04,05db00",
@@ -1886,9 +1888,97 @@
           "color2": "#17dc04",
           "color3": "#05db00"
         },
-        "numberStyleAuthoritative": false,
         "numberImage": {
           "sdkPath": "/assets/images/numbers/368826.png",
+          "customPath": null,
+          "preferredSource": "none",
+          "source": "iracing_sdk_number",
+          "authoritative": false
+        },
+        "numberStyleAuthoritative": false
+      }
+    },
+    {
+      "name": "Preston Sparks",
+      "iracingName": "Preston Sparks",
+      "carNumber": "51",
+      "iracingCustomerId": 536776,
+      "slug": "preston-sparks",
+      "carImage": "/assets/images/cars/Preston Sparks.png",
+      "iracingDesign": {
+        "source": "iracing_sdk",
+        "capturedAt": "2026-09-09T05:46:02.583Z",
+        "userId": "536776",
+        "carNumber": "51",
+        "number": {
+          "raw": "0,0,ffffff,777777,000000",
+          "font": 0,
+          "slant": 0,
+          "color1": "#ffffff",
+          "color2": "#777777",
+          "color3": "#000000"
+        },
+        "car": {
+          "raw": "11,ff0000,00ff00,0000ff",
+          "pattern": "11",
+          "color1": "#ff0000",
+          "color2": "#00ff00",
+          "color3": "#0000ff"
+        },
+        "suit": {
+          "raw": "18,f94ddc,e36c00,eeedef",
+          "pattern": "18",
+          "color1": "#f94ddc",
+          "color2": "#e36c00",
+          "color3": "#eeedef"
+        },
+        "numberStyleAuthoritative": false,
+        "numberImage": {
+          "sdkPath": "/assets/images/numbers/536776.png",
+          "customPath": null,
+          "preferredSource": "none",
+          "source": "iracing_sdk_number",
+          "authoritative": false
+        }
+      }
+    },
+    {
+      "name": "Luca Siciliano",
+      "iracingName": "Luca Siciliano",
+      "carNumber": "77",
+      "iracingCustomerId": 1445732,
+      "slug": "luca-siciliano",
+      "carImage": "/assets/images/cars/Luca Siciliano.png",
+      "iracingDesign": {
+        "source": "iracing_sdk",
+        "capturedAt": "2026-09-09T05:46:02.583Z",
+        "userId": "1445732",
+        "carNumber": "77",
+        "number": {
+          "raw": "1,2,ffffff,00c050,008bbb",
+          "font": 1,
+          "slant": 2,
+          "color1": "#ffffff",
+          "color2": "#00c050",
+          "color3": "#008bbb"
+        },
+        "car": {
+          "raw": "0,ffffff,ffffff,ffffff",
+          "pattern": "0",
+          "color1": "#ffffff",
+          "color2": "#ffffff",
+          "color3": "#ffffff"
+        },
+        "suit": {
+          "raw": "35,000000,000000,000000",
+          "pattern": "35",
+          "color1": "#000000",
+          "color2": "#000000",
+          "color3": "#000000"
+        },
+        "numberStyleAuthoritative": false,
+        "numberImage": {
+          "sdkPath": "/assets/images/numbers/1445732.png",
           "customPath": null,
           "preferredSource": "none",
           "source": "iracing_sdk_number",
