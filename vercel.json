@@ -83,5 +83,11 @@
     { "source": "/fantasy/preview", "destination": "/fantasy/preview.html" },
     { "source": "/fantasy/standings", "destination": "/fantasy/standings.html" },
     { "source": "/fantasy/rules", "destination": "/fantasy/rules.html" }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron-fantasy-monday",
+      "schedule": "0 12 * * 1"
+    }
   ]
 }

@@ -399,7 +399,7 @@ function emptyContext() {
   const routable = fs
     .readdirSync(path.join(repoRoot, 'api'))
     .filter((name) => name.endsWith('.js') && !name.startsWith('_'));
-  assert.equal(routable.length, 12);
+  assert.equal(routable.length, 13);
 }
 
 {

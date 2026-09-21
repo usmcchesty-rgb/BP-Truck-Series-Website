@@ -85,7 +85,6 @@ export function isScoreReady(status = {}) {
   return Boolean(
     status.raceComplete &&
       status.resultsReady &&
-      Number(status.lineupCount || 0) > 0 &&
       (status.status === 'ready' || status.status === 'needs_review'),
   );
 }
@@ -93,7 +92,6 @@ export function isScoreReady(status = {}) {
 export function isCleanlyScored(status = {}) {
   return (
     status.status === 'scored' &&
-    Number(status.scoringMeta?.lineupCount || status.lineupCount || 0) > 0 &&
     !(status.unresolvedDrivers || status.scoringMeta?.unresolvedDrivers || []).length
   );
 }

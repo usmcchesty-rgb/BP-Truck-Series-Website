@@ -111,6 +111,18 @@ export function setCachedRaceCautionCount(scheduleId, value) {
   );
 }
 
+export function invalidateOfficialResultsCaches({ seasonId = null, scheduleUrl = null } = {}) {
+  if (seasonId != null) {
+    scheduleRacesCache.delete(String(seasonId || 'default'));
+  } else {
+    scheduleRacesCache.clear();
+  }
+  if (scheduleUrl) {
+    htmlCache.delete(String(scheduleUrl));
+  }
+  standingsCache.clear();
+}
+
 export const SRH_CACHE_TTL = {
   DEFAULT_CACHE_TTL_MS,
   SCHEDULE_HTML_TTL_MS,

@@ -939,6 +939,77 @@ async function handleSettingsRequest(req, res) {
     }
   }
 
+  if (action === 'getFantasyLifecycleStatus') {
+    if (rejectAdminAuth(req, res, body)) return;
+    try {
+      const settings = await getSettings();
+      const seasonId = body.seasonId || settings.seasonId || '27987';
+      const { ensureFantasyLifecycleCurrent } = await import('./_fantasy-lifecycle.js');
+      const result = await ensureFantasyLifecycleCurrent({
+        seasonId,
+        settings,
+        inspectOnly: true,
+        trigger: 'admin_status',
+      });
+      return res.status(200).json(result);
+    } catch (error) {
+      return res.status(500).json({ error: error.message || 'Failed to load fantasy lifecycle status.' });
+    }
+  }
+
+  if (action === 'setFantasyAutomationMode') {
+    if (rejectAdminAuth(req, res, body)) return;
+    try {
+      const { setFantasyAutomationEnabled } = await import('./_fantasy-lifecycle.js');
+      const enabled = body.mode !== 'manual' && body.enabled !== false;
+      const result = await setFantasyAutomationEnabled(enabled);
+      return res.status(200).json(result);
+    } catch (error) {
+      return res.status(500).json({ error: error.message || 'Failed to update fantasy automation mode.' });
+    }
+  }
+
+  if (action === 'processFantasyLifecycle') {
+    if (rejectAdminAuth(req, res, body)) return;
+    try {
+      const settings = await getSettings();
+      const seasonId = body.seasonId || settings.seasonId || '27987';
+      const { runFantasyLifecycleWithLock, LIFECYCLE_TRIGGERS } = await import(
+        './_fantasy-lifecycle.js'
+      );
+      const result = await runFantasyLifecycleWithLock({
+        seasonId,
+        settings,
+        forcedByAdmin: true,
+        trigger: LIFECYCLE_TRIGGERS.MANUAL,
+      });
+      return res.status(200).json(result);
+    } catch (error) {
+      return res.status(500).json({ error: error.message || 'Failed to process the current fantasy week.' });
+    }
+  }
+
+  if (action === 'refreshOfficialRaceResults') {
+    if (rejectAdminAuth(req, res, body)) return;
+    try {
+      const settings = await getSettings();
+      const seasonId = body.seasonId || settings.seasonId || '27987';
+      const { refreshOfficialResultsAndAdvanceFantasy, LIFECYCLE_TRIGGERS } = await import(
+        './_fantasy-lifecycle.js'
+      );
+      const result = await refreshOfficialResultsAndAdvanceFantasy({
+        seasonId,
+        settings,
+        raceNumber: body.raceNumber,
+        scheduleId: body.scheduleId,
+        trigger: LIFECYCLE_TRIGGERS.RESULTS_UPDATE,
+      });
+      return res.status(200).json(result);
+    } catch (error) {
+      return res.status(500).json({ error: error.message || 'Failed to refresh official race results.' });
+    }
+  }
+
   if (action === 'retryFantasySalaryDraft') {
     if (rejectAdminAuth(req, res, body)) return;
     try {
@@ -987,12 +1058,12 @@ async function handleSettingsRequest(req, res) {
       const seasonId = body.seasonId || settings.seasonId || '27987';
       let postRaceAutomation = null;
       try {
-        const { runFantasyPostRaceAutomation } = await import('./_fantasy-post-race-automation.js');
-        postRaceAutomation = await runFantasyPostRaceAutomation(seasonId, { settings });
+        const { getFantasyPostRaceAutomationStatus } = await import('./_fantasy-post-race-automation.js');
+        postRaceAutomation = await getFantasyPostRaceAutomationStatus(seasonId, { settings });
       } catch (error) {
         postRaceAutomation = {
-          error: error.message || 'fantasy_post_race_automation_failed',
-          detector: 'runFantasyPostRaceAutomation',
+          error: error.message || 'fantasy_post_race_automation_status_failed',
+          detector: 'getFantasyPostRaceAutomationStatus',
         };
       }
       const missionControl = await buildAdminMissionControlResponse({ seasonId, settings });

@@ -378,11 +378,6 @@ export async function getFantasyPublicStandings(seasonId, options = {}) {
   const settings = options.settings || (await getSettings());
   const resolvedSeasonId = String(seasonId || settings.seasonId || '27987');
 
-  if (options.autoScore !== false) {
-    const { runFantasyPostRaceAutomation } = await import('./_fantasy-post-race-automation.js');
-    await runFantasyPostRaceAutomation(resolvedSeasonId, { settings });
-  }
-
   const progression = await resolveFantasySlateProgression(resolvedSeasonId, { settings });
   let slateRow = progression.archivedSlateRow || progression.activeSlateRow;
   if (!slateRow?.id) {
@@ -603,8 +598,7 @@ export async function getFantasyLaunchDashboard(user) {
   const settings = await getSettings();
   const seasonId = String(settings.seasonId || '27987');
   const progression = await resolveFantasySlateProgression(seasonId);
-  const { runFantasyPostRaceAutomation } = await import('./_fantasy-post-race-automation.js');
-  await runFantasyPostRaceAutomation(seasonId, { settings });
+  // Public dashboard is read-only. Fantasy advancement is not triggered here.
   const profile = user ? await ensureFantasyProfile(user) : null;
   const lineupState = user
     ? await getUserLineupForCurrentSlate(user.id, seasonId)

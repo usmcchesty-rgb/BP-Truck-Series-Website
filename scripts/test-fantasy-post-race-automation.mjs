@@ -56,7 +56,7 @@ import { evaluateAutomaticTask } from '../api/_mission-control-task-engine.js';
       lineupCount: 0,
       status: 'ready',
     }),
-    false,
+    true,
   );
 }
 

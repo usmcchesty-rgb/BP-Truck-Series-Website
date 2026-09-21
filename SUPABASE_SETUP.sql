@@ -65,6 +65,7 @@ alter table site_settings add column if not exists "facebookShareMode" text defa
 
 -- Admin Mission Control checklist (per season/race week task completion)
 alter table site_settings add column if not exists "adminMissionControl" jsonb default '{}'::jsonb;
+alter table site_settings add column if not exists "fantasyLifecycle" jsonb default '{"automationEnabled": true}'::jsonb;
 
 insert into site_settings (id, "seriesName", "seasonName", "standingsUrl", "scheduleUrl", "playoffCut", "refreshSeconds")
 values (1, 'Blazing Pedals Truck Series', 'Season 11', 'https://www.simracerhub.com/scoring/season_standings.php?season_id=27987', 'https://www.simracerhub.com/scoring/season_schedule.php?season_id=27987', 16, 60)

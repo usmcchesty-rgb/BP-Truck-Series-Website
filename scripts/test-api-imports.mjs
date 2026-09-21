@@ -13,6 +13,19 @@ const REQUIRED_EXPORTS = {
     'matchFantasyDriverToResult',
     'loadOfficialRaceResultsContext',
   ],
+  '../api/_fantasy-lifecycle.js': [
+    'ensureFantasyLifecycleCurrent',
+    'isFantasyAutomationEnabled',
+    'cheapLifecycleDecision',
+    'getNextEligibleChampionshipRace',
+    'resolveCurrentFantasyProgression',
+    'notifyFantasyAfterOfficialResultsUpdate',
+    'runMondayFantasySafetyCheck',
+    'authorizeVercelCron',
+    'readLockClaimResult',
+    'LIFECYCLE_TRIGGERS',
+    'MONDAY_FANTASY_CRON',
+  ],
   '../api/_race-research-chunking.js': ['chunkTextForResearch', 'shouldChunkSource'],
   '../api/_race-research-ingest.js': ['ingestRaceResearchSource'],
   '../api/_race-research-package.js': ['buildRaceIntelligencePackage', 'refreshRacePackageDiagnostics'],
@@ -64,5 +77,8 @@ await assertFantasyRaceScoringImports();
 
 const settings = await import('../api/settings.js');
 assert.equal(typeof settings.default, 'function', 'api/settings.js must default-export a handler');
+
+const mondayCron = await import('../api/cron-fantasy-monday.js');
+assert.equal(typeof mondayCron.default, 'function', 'api/cron-fantasy-monday.js must default-export a handler');
 
 console.log('test-api-imports.mjs: all API import smoke checks passed');

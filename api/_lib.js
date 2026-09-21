@@ -31,7 +31,33 @@ export const DEFAULTS = {
   fantasyHeaderLogoWidthVw: 32,
   fantasyHeaderLogoMaxWidthPx: 560,
   fantasyRaceScoringConfig: {},
+  fantasyLifecycle: {
+    automationEnabled: true,
+  },
 };
+
+export const DEFAULT_FANTASY_LIFECYCLE = {
+  automationEnabled: true,
+};
+
+export function mergeFantasyLifecycle(raw) {
+  let parsed = raw;
+  if (typeof raw === 'string') {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      parsed = null;
+    }
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return { ...DEFAULT_FANTASY_LIFECYCLE };
+  }
+  return {
+    ...DEFAULT_FANTASY_LIFECYCLE,
+    ...parsed,
+    automationEnabled: parsed.automationEnabled !== false,
+  };
+}
 
 export function supabase() {
   const url = process.env.SUPABASE_URL;
@@ -81,6 +107,7 @@ export async function getSettings() {
     ...data,
     ...buildTrackImagesSettings(),
     trackImageVersions: mergedVersions,
+    fantasyLifecycle: mergeFantasyLifecycle(data.fantasyLifecycle),
   };
 }
 

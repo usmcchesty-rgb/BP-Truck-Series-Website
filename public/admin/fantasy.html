@@ -57,6 +57,53 @@
         margin-bottom: 12px;
       }
 
+      .flc-mode {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 18px;
+        margin: 4px 0 8px;
+      }
+      .flc-mode label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: #fff;
+        font-weight: 800;
+        font-size: 14px;
+      }
+      .flc-status-pill {
+        display: inline-block;
+        margin-top: 6px;
+        padding: 3px 8px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 900;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        background: rgba(255,255,255,.08);
+      }
+      .flc-status-pill.is-ok { color: #9fd9b0; }
+      .flc-status-pill.is-wait { color: #ffd54a; }
+      .flc-status-pill.is-alert { color: #ffb0b0; }
+      .flc-next-action {
+        font-size: 16px;
+        font-weight: 900;
+        color: #fff;
+        line-height: 1.4;
+        margin: 0 0 10px;
+      }
+      .flc-process-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+        margin-top: 12px;
+      }
+      #fantasyAdvancedControls > summary {
+        cursor: pointer;
+        list-style: revert;
+      }
+
       .admin-kv {
         display: flex;
         align-items: baseline;
@@ -975,7 +1022,57 @@
 
     <main id="adminView" class="wrap" hidden>
       <h1>Fantasy Admin</h1>
-      <p class="sub">Follow the guided Fantasy Race Cycle below after each official race. Branding and advanced tools remain available further down the page.</p>
+      <p class="sub">Fantasy runs as a week/race lifecycle. Automatic mode finalizes a completed week and opens the next eligible championship race when official results are available.</p>
+
+      <div id="fantasyLifecycleBoard" class="admin-grid" aria-live="polite">
+        <div class="admin-card admin-card--full">
+          <div class="admin-card-title">FANTASY AUTOMATION</div>
+          <div class="flc-mode" role="radiogroup" aria-label="Fantasy automation mode">
+            <label>
+              <input id="fantasyAutomationAutomatic" type="radio" name="fantasyAutomationMode" value="automatic" checked />
+              Automatic
+            </label>
+            <label>
+              <input id="fantasyAutomationManual" type="radio" name="fantasyAutomationMode" value="manual" />
+              Manual
+            </label>
+          </div>
+          <p id="fantasyAutomationModeNote" class="admin-note">Automatically processes Fantasy when official race results are updated. A Monday morning safety check catches missed updates.</p>
+        </div>
+
+        <div class="admin-card admin-card--full">
+          <div class="admin-card-title">CURRENT FANTASY WEEK</div>
+          <div class="admin-kv"><div class="admin-k">Race</div><div class="admin-v" id="flcRaceLabel">—</div></div>
+          <div class="admin-kv"><div class="admin-k">Track</div><div class="admin-v" id="flcTrack">—</div></div>
+          <div class="admin-kv"><div class="admin-k">Date</div><div class="admin-v" id="flcDate">—</div></div>
+          <div class="admin-kv"><div class="admin-k">Status</div><div class="admin-v"><span id="flcStatusPill" class="flc-status-pill">—</span></div></div>
+          <div class="admin-kv"><div class="admin-k">Entries</div><div class="admin-v" id="flcEntries">—</div></div>
+          <div class="admin-kv"><div class="admin-k">Lock</div><div class="admin-v" id="flcLock">—</div></div>
+          <div class="admin-kv"><div class="admin-k">Results</div><div class="admin-v" id="flcResults">—</div></div>
+          <div class="admin-kv"><div class="admin-k">Scoring</div><div class="admin-v" id="flcScoring">—</div></div>
+        </div>
+
+        <div class="admin-card admin-card--full">
+          <div class="admin-card-title">NEXT ACTION</div>
+          <p id="flcNextAction" class="flc-next-action">Loading fantasy status…</p>
+          <div class="flc-process-row">
+            <button id="processFantasyLifecycleBtn" class="btn" type="button">Process Current Week</button>
+            <span id="flcProcessStatus" class="fantasy-generate-status"></span>
+          </div>
+        </div>
+
+        <div class="admin-card admin-card--full">
+          <div class="admin-card-title">LAST AUTOMATION</div>
+          <div class="admin-kv"><div class="admin-k">Result</div><div class="admin-v" id="flcLastResult">—</div></div>
+          <div class="admin-kv"><div class="admin-k">What happened</div><div class="admin-v" id="flcLastAction">—</div></div>
+          <div class="admin-kv"><div class="admin-k">Triggered by</div><div class="admin-v" id="flcLastTrigger">—</div></div>
+          <div class="admin-kv"><div class="admin-k">When</div><div class="admin-v" id="flcLastAt">—</div></div>
+        </div>
+      </div>
+
+      <details class="admin-card admin-card--full" id="fantasyAdvancedControls">
+        <summary class="admin-card-title">ADVANCED / MANUAL CONTROLS</summary>
+        <p id="fantasyAdvancedAutomationNote" class="admin-note">These tools remain available for recovery. When Automatic is on, the lifecycle normally handles scoring, finalization, and next-week setup.</p>
 
       <div id="fantasyRaceCycleRoot" aria-live="polite">
         <div class="admin-card admin-card--full">
@@ -1425,6 +1522,7 @@
           </div>
           </details>
         </section>
+      </details>
 
         <div class="btn-row">
           <button class="btn btn-secondary" type="button" onclick="location.href='/fantasy.html'">
@@ -1530,6 +1628,9 @@
           console.error('[Fantasy Admin] Nav admin state update failed:', err);
         }
         window.AdminMissionControl?.refresh?.({ forceDefaultTab: false });
+        loadFantasyLifecycleBoard().catch((err) => {
+          console.error('[Fantasy Admin] Lifecycle load failed:', err);
+        });
         loadFantasySettings().catch((err) => {
           console.error('[Fantasy Admin] Settings load failed:', err);
         });
@@ -1544,6 +1645,168 @@
           .catch((err) => {
             console.error('[Fantasy Admin] Draft slate load failed:', err);
           });
+      }
+
+      let fantasyLifecycleBusy = false;
+      let fantasyLifecycleApplyingMode = false;
+
+      function confirmAutomaticOverride(actionLabel) {
+        if (!$('#fantasyAutomationAutomatic')?.checked) return true;
+        return window.confirm(
+          `${actionLabel} is normally handled by Automatic fantasy lifecycle. Continue with this manual action?`
+        );
+      }
+
+      function formatLifecycleTime(value) {
+        if (!value) return '—';
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return String(value);
+        return new Intl.DateTimeFormat('en-US', {
+          weekday: 'long',
+          hour: 'numeric',
+          minute: '2-digit',
+          timeZone: 'America/New_York',
+        }).format(date);
+      }
+
+      function formatLifecycleOutcome(last = {}) {
+        if (last.outcome) return last.outcome;
+        if (last.success === false || last.error) return 'NEEDS ATTENTION';
+        if (last.success === true && last.summary && /waiting/i.test(last.summary)) return 'NO ACTION';
+        if (last.success === true) return 'SUCCESS';
+        return '—';
+      }
+
+      function lifecyclePillClass(state) {
+        if (state === 'NEEDS_ADMIN_ATTENTION' || state === 'SCORING_FAILED' || state === 'DRIVER_POOL_ERROR') {
+          return 'is-alert';
+        }
+        if (state === 'WAITING_FOR_RESULTS' || state === 'READY_TO_SCORE' || state === 'NEEDS_REVIEW' || state === 'LOCKED') {
+          return 'is-wait';
+        }
+        return 'is-ok';
+      }
+
+      function renderFantasyLifecycleBoard(data = {}) {
+        const automatic = data.automationEnabled !== false && data.mode !== 'manual';
+        const autoInput = $('#fantasyAutomationAutomatic');
+        const manualInput = $('#fantasyAutomationManual');
+        fantasyLifecycleApplyingMode = true;
+        if (autoInput) autoInput.checked = automatic;
+        if (manualInput) manualInput.checked = !automatic;
+        fantasyLifecycleApplyingMode = false;
+
+        const note = $('#fantasyAutomationModeNote');
+        if (note) {
+          note.textContent = automatic
+            ? 'Automatically processes Fantasy when official race results are updated. A Monday morning safety check catches missed updates.'
+            : 'Automatic advancement is paused. The current fantasy week is unchanged. Use Process Current Week to run the same lifecycle manually.';
+        }
+        const advancedNote = $('#fantasyAdvancedAutomationNote');
+        if (advancedNote) {
+          advancedNote.textContent = automatic
+            ? 'Automatic is on. These tools should normally not be needed. Dangerous actions still require confirmation.'
+            : 'Manual mode. Use Process Current Week first. These tools remain available for recovery.';
+        }
+
+        const week = data.currentWeek || {};
+        const setText = (id, value) => {
+          const el = document.getElementById(id);
+          if (el) el.textContent = value == null || value === '' ? '—' : String(value);
+        };
+        setText('flcRaceLabel', week.raceLabel || (week.raceNumber != null ? `Race ${week.raceNumber}` : '—'));
+        setText('flcTrack', week.track);
+        setText('flcDate', week.date);
+        const pill = $('#flcStatusPill');
+        if (pill) {
+          pill.textContent = week.status || data.state || '—';
+          pill.className = `flc-status-pill ${lifecyclePillClass(week.status || data.state)}`;
+        }
+        setText('flcEntries', week.entries == null ? '—' : String(week.entries));
+        setText(
+          'flcLock',
+          week.lockStatus
+            ? `${week.lockStatus}${week.lockTime ? ` · ${week.lockTime}` : ''}`
+            : week.lockTime || '—',
+        );
+        setText('flcResults', week.resultsStatus);
+        setText('flcScoring', week.scoringStatus);
+        setText('flcNextAction', data.nextAction?.label || 'No action needed — fantasy is current.');
+
+        const last = data.lastAutomation || {};
+        setText('flcLastResult', formatLifecycleOutcome(last));
+        setText('flcLastAction', last.summary || last.action || '—');
+        setText('flcLastTrigger', last.triggerLabel || '—');
+        setText('flcLastAt', formatLifecycleTime(last.at));
+
+        const processBtn = $('#processFantasyLifecycleBtn');
+        if (processBtn) {
+          processBtn.hidden = false;
+          processBtn.textContent = 'Process Current Week';
+        }
+      }
+
+      async function loadFantasyLifecycleBoard() {
+        const password = getSessionPw();
+        if (!password) return null;
+        const res = await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password, action: 'getFantasyLifecycleStatus' }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to load fantasy lifecycle status.');
+        renderFantasyLifecycleBoard(data);
+        return data;
+      }
+
+      async function setFantasyAutomationMode(mode) {
+        const password = getSessionPw();
+        const res = await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password, action: 'setFantasyAutomationMode', mode }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to update automation mode.');
+        return data;
+      }
+
+      async function processFantasyLifecycleNow() {
+        const statusEl = $('#flcProcessStatus');
+        const btn = $('#processFantasyLifecycleBtn');
+        if (fantasyLifecycleBusy) return;
+        fantasyLifecycleBusy = true;
+        if (btn) btn.disabled = true;
+        if (statusEl) {
+          statusEl.textContent = 'Processing current week…';
+          statusEl.classList.remove('error');
+        }
+        try {
+          const res = await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              password: getSessionPw(),
+              action: 'processFantasyLifecycle',
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Lifecycle processing failed.');
+          renderFantasyLifecycleBoard(data);
+          if (statusEl) {
+            statusEl.textContent = data.nextAction?.label || 'Lifecycle complete.';
+          }
+          await refreshFantasyRaceCyclePanel();
+        } catch (error) {
+          if (statusEl) {
+            statusEl.textContent = error.message || 'Lifecycle processing failed.';
+            statusEl.classList.add('error');
+          }
+        } finally {
+          fantasyLifecycleBusy = false;
+          if (btn) btn.disabled = false;
+        }
       }
 
       function escapeAdminHtml(value) {
@@ -2649,6 +2912,7 @@
 
       async function generateFantasySalaries(options = {}) {
         const { rethrow = false, quiet = false, raceNumber = null, preferExistingDraft = false } = options;
+        if (!quiet && !confirmAutomaticOverride('Generating salaries')) return;
         const statusEl = quiet ? null : $('#fantasyGenerateStatus');
         const btn = quiet ? null : $('#generateFantasySalariesBtn');
         if (statusEl) {
@@ -2882,8 +3146,20 @@
         },
         actions: {
           loadOfficialResults: async () => {
+            const res = await fetch('/api/settings', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                password: getSessionPw(),
+                action: 'refreshOfficialRaceResults',
+              }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Official results refresh failed.');
             await loadFantasyRaceScoring();
             await loadPostRaceAutomation();
+            await loadFantasyLifecycleBoard();
+            return data;
           },
           calculateScoring: async () => {
             await runFantasyRaceScoring({ recalculate: false });
@@ -3828,6 +4104,7 @@
       }
 
       async function runFantasyRaceScoring({ recalculate = false } = {}) {
+        if (!confirmAutomaticOverride(recalculate ? 'Recalculating scores' : 'Scoring')) return;
         const statusEl = $('#fantasyScoringActionStatus');
         const btn = recalculate ? $('#recalculateFantasyRaceBtn') : $('#scoreFantasyRaceBtn');
         if (btn) btn.disabled = true;
@@ -3939,6 +4216,7 @@
       }
 
       async function publishFantasySlate() {
+        if (!confirmAutomaticOverride('Publishing a slate')) return;
         const statusEl = $('#fantasyGenerateStatus');
         const btn = $('#publishFantasySlateBtn');
         const lockPayload = buildLockPayload();
@@ -4620,6 +4898,25 @@
         await generateFantasySalaries();
       }
 
+      $('#fantasyAutomationAutomatic')?.addEventListener('change', async () => {
+        if (fantasyLifecycleApplyingMode || !$('#fantasyAutomationAutomatic')?.checked) return;
+        try {
+          await setFantasyAutomationMode('automatic');
+          await loadFantasyLifecycleBoard();
+        } catch (error) {
+          console.error('[Fantasy Admin] Automation mode update failed:', error);
+        }
+      });
+      $('#fantasyAutomationManual')?.addEventListener('change', async () => {
+        if (fantasyLifecycleApplyingMode || !$('#fantasyAutomationManual')?.checked) return;
+        try {
+          await setFantasyAutomationMode('manual');
+          await loadFantasyLifecycleBoard();
+        } catch (error) {
+          console.error('[Fantasy Admin] Automation mode update failed:', error);
+        }
+      });
+      $('#processFantasyLifecycleBtn')?.addEventListener('click', processFantasyLifecycleNow);
       $('#generateNextRaceSlateBtn')?.addEventListener('click', generateNextRaceSlate);
       $('#reloadSubmittedLineupsBtn')?.addEventListener('click', loadSubmittedLineups);
       $('#generateFantasySalariesBtn')?.addEventListener('click', generateFantasySalaries);
