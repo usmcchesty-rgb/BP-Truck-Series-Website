@@ -41,12 +41,17 @@ const MAX_CATCH_UP_STEPS = 32;
 const LIFECYCLE_LOCK_TTL_MS = 90_000;
 
 export const MONDAY_FANTASY_CRON = {
-  path: '/api/cron-fantasy-monday',
+  path: '/api/settings?cron=fantasy-monday',
   schedule: '0 12 * * 1',
   timezone: 'UTC',
+  query: { cron: 'fantasy-monday' },
   easternNote:
     'Monday 12:00 UTC is 8:00 AM America/New_York during EDT and 7:00 AM during EST.',
 };
+
+export function isMondayFantasyCronRequest(req) {
+  return String(req?.query?.cron || '').trim() === MONDAY_FANTASY_CRON.query.cron;
+}
 
 export function isFantasyAutomationEnabled(settings = {}) {
   const lifecycle = mergeFantasyLifecycle(settings.fantasyLifecycle);

@@ -637,14 +637,14 @@ test("long driver-name fitting reduces font size", () => {
   assert.ok(fitted < 18);
 });
 
-test("no new routable API file except the Monday fantasy safety cron; Vercel function count is 13", () => {
+test("no dedicated cron serverless function; Vercel function count remains 12", () => {
   const apiDir = path.join(root, "api");
   const routable = fs
     .readdirSync(apiDir)
     .filter((name) => name.endsWith(".js") && !name.startsWith("_"));
   assert.ok(!routable.includes("standings-graphic.js"));
-  assert.ok(routable.includes("cron-fantasy-monday.js"));
-  assert.equal(routable.length, 13);
+  assert.ok(!routable.includes("cron-fantasy-monday.js"));
+  assert.equal(routable.length, 12);
 });
 
 test("master canvas constants remain 3840×2160 for preview/export", () => {

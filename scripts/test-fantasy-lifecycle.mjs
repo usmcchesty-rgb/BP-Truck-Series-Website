@@ -11,6 +11,7 @@ import {
   getNextEligibleChampionshipRace,
   isChampionshipFantasyRace,
   isFantasyAutomationEnabled,
+  isMondayFantasyCronRequest,
   isOpeningDuelLabel,
   isSlateFinalized,
   notifyFantasyAfterOfficialResultsUpdate,
@@ -887,6 +888,66 @@ function createHarness(initial = {}) {
 }
 
 {
+  const settingsHandler = (await import('../api/settings.js')).default;
+  function mockRes() {
+    return {
+      statusCode: 200,
+      body: null,
+      headers: {},
+      setHeader(key, value) {
+        this.headers[key] = value;
+      },
+      status(code) {
+        this.statusCode = code;
+        return this;
+      },
+      json(payload) {
+        this.body = payload;
+        return this;
+      },
+    };
+  }
+
+  const previous = process.env.CRON_SECRET;
+  delete process.env.CRON_SECRET;
+  const missing = mockRes();
+  await settingsHandler(
+    { method: 'GET', query: { cron: 'fantasy-monday' }, headers: {} },
+    missing,
+  );
+  assert.equal(missing.statusCode, 503);
+  assert.notEqual(missing.body?.trigger, 'monday_safety');
+
+  process.env.CRON_SECRET = 'unit-test-cron-secret';
+  const denied = mockRes();
+  await settingsHandler(
+    {
+      method: 'GET',
+      query: { cron: 'fantasy-monday' },
+      headers: { authorization: 'Bearer wrong' },
+    },
+    denied,
+  );
+  assert.equal(denied.statusCode, 401);
+
+  const allowed = mockRes();
+  await settingsHandler(
+    {
+      method: 'GET',
+      query: { cron: 'fantasy-monday' },
+      headers: { authorization: 'Bearer unit-test-cron-secret' },
+    },
+    allowed,
+  );
+  assert.equal(allowed.statusCode, 200);
+  assert.equal(allowed.body?.trigger, 'monday_safety');
+  assert.equal(allowed.body?.once, true);
+
+  if (previous == null) delete process.env.CRON_SECRET;
+  else process.env.CRON_SECRET = previous;
+}
+
+{
   assert.deepEqual(readLockClaimResult({ acquired: true, lockToken: 'a' }, 'a'), {
     acquired: true,
     token: 'a',
@@ -914,11 +975,22 @@ function createHarness(initial = {}) {
 }
 
 {
-  const cronSrc = fs.readFileSync(path.join(repoRoot, 'api/cron-fantasy-monday.js'), 'utf8');
-  assert.match(cronSrc, /authorizeVercelCron/);
-  assert.match(cronSrc, /runMondayFantasySafetyCheck/);
-  assert.doesNotMatch(cronSrc, /for\s*\(/);
-  assert.doesNotMatch(cronSrc, /setInterval|setTimeout|while\s*\(/);
+  assert.equal(isMondayFantasyCronRequest({ query: { cron: 'fantasy-monday' } }), true);
+  assert.equal(isMondayFantasyCronRequest({ query: {} }), false);
+  assert.equal(isMondayFantasyCronRequest({ query: { action: 'getDashboard' } }), false);
+
+  const settingsSrc = fs.readFileSync(path.join(repoRoot, 'api/settings.js'), 'utf8');
+  assert.match(settingsSrc, /isMondayFantasyCronRequest/);
+  assert.match(settingsSrc, /runMondayFantasySafetyCheck/);
+  assert.match(settingsSrc, /authorizeVercelCron/);
+  assert.doesNotMatch(settingsSrc, /setInterval|while\s*\(/);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'api/cron-fantasy-monday.js')), false);
+
+  const routable = fs
+    .readdirSync(path.join(repoRoot, 'api'))
+    .filter((name) => name.endsWith('.js') && !name.startsWith('_'));
+  assert.equal(routable.length, 12);
+  assert.ok(!routable.includes('cron-fantasy-monday.js'));
 }
 
 function makeSeason11LiveSlates() {

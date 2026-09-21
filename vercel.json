@@ -86,7 +86,7 @@
   ],
   "crons": [
     {
-      "path": "/api/cron-fantasy-monday",
+      "path": "/api/settings?cron=fantasy-monday",
       "schedule": "0 12 * * 1"
     }
   ]

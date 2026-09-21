@@ -22,6 +22,7 @@ const REQUIRED_EXPORTS = {
     'notifyFantasyAfterOfficialResultsUpdate',
     'runMondayFantasySafetyCheck',
     'authorizeVercelCron',
+    'isMondayFantasyCronRequest',
     'readLockClaimResult',
     'LIFECYCLE_TRIGGERS',
     'MONDAY_FANTASY_CRON',
@@ -78,7 +79,11 @@ await assertFantasyRaceScoringImports();
 const settings = await import('../api/settings.js');
 assert.equal(typeof settings.default, 'function', 'api/settings.js must default-export a handler');
 
-const mondayCron = await import('../api/cron-fantasy-monday.js');
-assert.equal(typeof mondayCron.default, 'function', 'api/cron-fantasy-monday.js must default-export a handler');
+const settingsSrc = await import('node:fs/promises').then((fs) =>
+  fs.readFile(new URL('../api/settings.js', import.meta.url), 'utf8'),
+);
+assert.match(settingsSrc, /isMondayFantasyCronRequest/);
+assert.match(settingsSrc, /runMondayFantasySafetyCheck/);
+assert.match(settingsSrc, /authorizeVercelCron/);
 
 console.log('test-api-imports.mjs: all API import smoke checks passed');
