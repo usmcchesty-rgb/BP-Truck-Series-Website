@@ -6,6 +6,7 @@
 
   const Pills = window.BPFantasyPills || {};
   const Insights = window.BPFantasyInsights || {};
+  const LockDisplay = window.BPFantasyLockDisplay || {};
   const renderFantasyGradePill = (grade) =>
     Pills.renderFantasyGradePill ? Pills.renderFantasyGradePill(grade) : escapeHtml(grade || '—');
 
@@ -73,7 +74,7 @@
       <article class="fantasy-preview-article">
         ${section(
           'BP Fantasy Race Slate Summary',
-          `<p>BP Fantasy Race ${escapeHtml(slate.raceNumber ?? '—')} at ${escapeHtml(slate.track || 'TBD')} locks ${escapeHtml(slate.lockTime || 'TBD')}. Salary cap ${formatMoney(slate.salaryCap ?? 50000)} for ${escapeHtml(String(slate.lineupSize ?? 5))}-driver fantasy lineups. Fantasy projections only — not official race predictions.</p>`
+          `<p>BP Fantasy Race ${escapeHtml(slate.raceNumber ?? '—')} at ${escapeHtml(slate.track || 'TBD')} locks ${escapeHtml(LockDisplay.formatLockField ? LockDisplay.formatLockField(slate) : slate.lockDisplay || slate.lockTime || 'TBD')}. Salary cap ${formatMoney(slate.salaryCap ?? 50000)} for ${escapeHtml(String(slate.lineupSize ?? 5))}-driver fantasy lineups. Fantasy projections only — not official race predictions.</p>`
         )}
         ${prophetHtml}
         ${section(

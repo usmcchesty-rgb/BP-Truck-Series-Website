@@ -8,6 +8,19 @@
   const Pills = window.BPFantasyPills || {};
   const Insights = window.BPFantasyInsights || {};
   const Photos = window.BPFantasyDriverPhotos || {};
+  const LockDisplay = window.BPFantasyLockDisplay || {};
+
+  function renderLockMeta(slate) {
+    const label = LockDisplay.lockLabel
+      ? LockDisplay.lockLabel(slate)
+      : slate?.isLocked || slate?.raceComplete
+        ? 'Locked'
+        : 'Lock';
+    const value = LockDisplay.formatLockField
+      ? LockDisplay.formatLockField(slate)
+      : slate?.lockDisplay || slate?.lockTime || 'TBD';
+    return `<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
+  }
   const renderFantasyGradePill = (grade) =>
     Pills.renderFantasyGradePill ? Pills.renderFantasyGradePill(grade) : escapeHtml(grade || '—');
   const renderActivityStatus = (driver, options) =>
@@ -298,7 +311,7 @@
         </div>
         ${raceComplete ? '<p class="fantasy-lineup-warning">Results are posted for this race. This slate is archived — lineup submission is closed.</p>' : ''}
         <div class="fantasy-slate-meta-grid">
-          <div><span>Lock</span><strong>${escapeHtml(slate.lockTime || 'TBD')}</strong></div>
+          ${renderLockMeta(slate)}
           <div><span>Salary Cap</span><strong>${formatMoney(slate.salaryCap ?? 50000)}</strong></div>
           <div><span>Model</span><strong>${escapeHtml(slate.modelVersion || '—')}</strong></div>
           <div><span>Status</span><strong>${escapeHtml(statusLabel)}</strong></div>

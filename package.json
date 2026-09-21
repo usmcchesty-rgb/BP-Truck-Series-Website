@@ -36,6 +36,7 @@
     "test:fantasy-race-cycle": "node scripts/test-fantasy-race-cycle.mjs",
     "test:fantasy-post-race-automation": "node scripts/test-fantasy-post-race-automation.mjs",
     "test:fantasy-lifecycle": "node scripts/test-fantasy-lifecycle.mjs",
+    "test:fantasy-lock-display": "node scripts/test-fantasy-lock-display.mjs",
     "test:fantasy-driver-pool": "node scripts/test-fantasy-driver-pool.mjs",
     "test:api-imports": "node scripts/test-api-imports.mjs",
     "test:race-research-intelligence": "node scripts/test-race-research-intelligence.mjs",

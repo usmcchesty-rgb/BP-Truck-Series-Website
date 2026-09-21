@@ -6,6 +6,19 @@
 
   const Pills = window.BPFantasyPills || {};
   const Auth = window.BPFantasyAuth || {};
+  const LockDisplay = window.BPFantasyLockDisplay || {};
+
+  function renderLockMeta(slate, lock) {
+    const label = LockDisplay.lockLabel
+      ? LockDisplay.lockLabel(slate, lock)
+      : lock?.isLocked || slate?.isLocked || slate?.raceComplete
+        ? 'Locked'
+        : 'Lock';
+    const value = LockDisplay.formatLockField
+      ? LockDisplay.formatLockField(slate, lock)
+      : slate?.lockDisplay || slate?.lockTime || lock?.lockMessage || 'TBD';
+    return `<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
+  }
   const renderFantasyGradePill = (grade) =>
     Pills.renderFantasyGradePill ? Pills.renderFantasyGradePill(grade) : escapeHtml(grade || '—');
 
@@ -171,7 +184,7 @@
         <div class="fantasy-slate-meta-grid">
           <div><span>Email</span><strong>${escapeHtml(profile.email || '—')}</strong></div>
           <div><span>Lineup Status</span><strong class="fantasy-dashboard-status ${statusClass}">${escapeHtml(statusText)}</strong></div>
-          <div><span>Lock</span><strong>${escapeHtml(slate?.lockTime || lock?.lockMessage || 'TBD')}</strong></div>
+          ${renderLockMeta(slate, lock)}
           <div><span>Slate</span><strong>${escapeHtml(raceComplete ? 'Race complete' : playable ? 'Active' : 'Archived / upcoming')}</strong></div>
           <div><span>Salary Cap</span><strong>${formatMoney(slate?.salaryCap ?? 50000)}</strong></div>
         </div>
@@ -270,7 +283,7 @@
           hasActiveSlate
             ? `<div class="fantasy-slate-meta-grid">
                 <div><span>Current Race</span><strong>Race ${escapeHtml(slate.raceNumber)}</strong></div>
-                <div><span>Lock</span><strong>${escapeHtml(slate.lockTime || lock.lockMessage || 'TBD')}</strong></div>
+                ${renderLockMeta(slate, lock)}
                 <div><span>Slate</span><strong>${escapeHtml(raceComplete ? 'Race complete' : 'Active')}</strong></div>
                 <div><span>Salary Cap</span><strong>${formatMoney(slate.salaryCap ?? 50000)}</strong></div>
               </div>
@@ -348,6 +361,11 @@
             raceNumber: launchData.slate.raceNumber,
             track: launchData.slate.track,
             lockTime: launchData.slate.lockTime,
+            lockAt: launchData.slate.lockAt,
+            raceDate: launchData.slate.raceDate,
+            lockDisplay: launchData.slate.lockDisplay,
+            isLocked: launchData.slate.isLocked,
+            raceComplete: launchData.slate.raceComplete,
             salaryCap: launchData.slate.salaryCap,
             status: launchData.slate.status,
           },

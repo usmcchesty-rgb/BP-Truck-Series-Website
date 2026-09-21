@@ -8,8 +8,22 @@
         .replace(/"/g, '&quot;'),
   };
 
+  const LockDisplay = window.BPFantasyLockDisplay || {};
+
   function $(sel) {
     return document.querySelector(sel);
+  }
+
+  function renderLockMeta(slate) {
+    const label = LockDisplay.lockLabel
+      ? LockDisplay.lockLabel(slate)
+      : slate?.isLocked || slate?.raceComplete
+        ? 'Locked'
+        : 'Lock';
+    const value = LockDisplay.formatLockField
+      ? LockDisplay.formatLockField(slate)
+      : slate?.lockDisplay || slate?.lockTime || 'TBD';
+    return `<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
   }
 
   function formatMoney(value) {
@@ -96,7 +110,7 @@
         <p class="fantasy-app-eyebrow">BP Fantasy Standings</p>
         <h1 class="fantasy-app-page-title">Race ${escapeHtml(slate.raceNumber)} — ${escapeHtml(slate.track || 'TBD')}</h1>
         <div class="fantasy-slate-meta-grid">
-          <div><span>Lock</span><strong>${escapeHtml(slate.lockTime || 'TBD')}</strong></div>
+          ${renderLockMeta(slate)}
           <div><span>Entries</span><strong>${entries.length}</strong></div>
           <div><span>Scoring</span><strong>${escapeHtml(scoringLabel)}</strong></div>
           <div><span>Slate</span><strong>${raceComplete ? 'Race complete' : 'Published'}</strong></div>

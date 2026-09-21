@@ -8,6 +8,19 @@
   const Insights = window.BPFantasyInsights || {};
   const Auth = window.BPFantasyAuth || {};
   const Optimizer = window.BPFantasyLineupOptimizer || {};
+  const LockDisplay = window.BPFantasyLockDisplay || {};
+
+  function renderLockMeta(slate, lock) {
+    const label = LockDisplay.lockLabel
+      ? LockDisplay.lockLabel(slate, lock)
+      : lock?.isLocked || slate?.isLocked || slate?.raceComplete
+        ? 'Locked'
+        : 'Lock';
+    const value = LockDisplay.formatLockField
+      ? LockDisplay.formatLockField(slate, lock)
+      : slate?.lockDisplay || slate?.lockTime || lock?.lockMessage || 'TBD';
+    return `<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
+  }
 
   const renderFantasyGradePill = (grade) =>
     Pills.renderFantasyGradePill ? Pills.renderFantasyGradePill(grade) : escapeHtml(grade || '—');
@@ -224,7 +237,7 @@
         <p class="fantasy-app-eyebrow">BP Fantasy Lineup Builder</p>
         <h1 class="fantasy-app-page-title">Race ${escapeHtml(slateMeta.raceNumber ?? '—')} — ${escapeHtml(slateMeta.track || 'TBD')}</h1>
         <div class="fantasy-slate-meta-grid">
-          <div><span>Lock</span><strong>${escapeHtml(slateMeta.lockTime || lockState.lockMessage || 'TBD')}</strong></div>
+          ${renderLockMeta(slateMeta, lockState)}
           <div><span>Salary Cap</span><strong>${formatMoney(salaryCap)}</strong></div>
           <div><span>Lineup Size</span><strong>${LINEUP_SIZE} drivers</strong></div>
           <div><span>Slate Status</span><strong>${escapeHtml(slatePhase === 'race-complete' ? 'Race complete' : slateMeta.status || '—')}</strong></div>
@@ -370,6 +383,8 @@
       lockState = {
         lockTime: slateMeta.lockTime,
         lockAt: slateMeta.lockAt,
+        raceDate: slateMeta.raceDate,
+        lockDisplay: slateMeta.lockDisplay,
         lockMessage: slateMeta.lockMessage || lockState.lockMessage || null,
         hasLockSchedule: Boolean(slateMeta.lockAt),
         isLocked: raceComplete || Boolean(slateMeta.lockAt && Date.now() >= new Date(slateMeta.lockAt).getTime()),

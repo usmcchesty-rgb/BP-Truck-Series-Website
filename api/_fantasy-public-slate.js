@@ -1,6 +1,7 @@
 import { fetchHtml, getSettings, supabase } from './_lib.js';
 import { parseScheduleRacesFromHtml } from './_caution-stats.js';
 import { enrichScheduleRaces } from './_schedule-points-races.js';
+import { formatPublicFantasyLockDisplay, resolvePublicLockRaceDate } from './_fantasy-lock-time.js';
 import { findEffectiveNextPointsRace } from './_race-date-status.js';
 import { enrichFantasyDraftPayload, normalizeSlateDriver } from './_fantasy-slate.js';
 import {
@@ -219,14 +220,20 @@ export async function buildFantasyPublicSlateResponse(seasonId, options = {}) {
       ? 'race-complete'
       : progressionMeta.slatePhase;
 
+  const raceDate = resolvePublicLockRaceDate(progression.scheduleRaces, payload.slate.race_number);
+  const lockTime = payload.slate.lock_time || null;
+  const lockAt = payload.slate.lock_at || null;
+
   return {
     slate: {
       id: payload.slate.id,
       seasonId: payload.slate.season_id,
       raceNumber: payload.slate.race_number,
       track: payload.slate.track || 'TBD',
-      lockTime: payload.slate.lock_time || null,
-      lockAt: payload.slate.lock_at || null,
+      lockTime,
+      lockAt,
+      raceDate,
+      lockDisplay: formatPublicFantasyLockDisplay({ lockTime, lockAt, raceDate }),
       status: payload.slate.status,
       slatePhase,
       playable: progressionMeta.isPlayable,

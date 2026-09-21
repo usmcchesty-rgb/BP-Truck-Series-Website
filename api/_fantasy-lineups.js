@@ -2,6 +2,7 @@ import { getSettings, supabase } from './_lib.js';
 import { loadDisplayFantasySlate, loadLatestFantasySlate } from './_fantasy-public-slate.js';
 import { ensureFantasyProfile } from './_fantasy-auth.js';
 import { deriveDriverActivityStatus } from './_fantasy-public-analysis.js';
+import { formatPublicFantasyLockDisplay, resolvePublicLockRaceDate } from './_fantasy-lock-time.js';
 import {
   buildFantasyProgressionMeta,
   isFantasyRaceComplete,
@@ -24,10 +25,18 @@ export function parseLockState(slateRow = {}, options = {}) {
   const nowMs = (options.now instanceof Date ? options.now : new Date()).getTime();
   const timeLocked = hasLockSchedule ? nowMs >= lockAt.getTime() : false;
   const isLocked = raceComplete || timeLocked;
+  const raceDate = options.raceDate || slateRow.race_date || slateRow.raceDate || null;
+  const resolvedLockAt = hasLockSchedule ? lockAt.toISOString() : null;
 
   return {
     lockTime,
-    lockAt: hasLockSchedule ? lockAt.toISOString() : null,
+    lockAt: resolvedLockAt,
+    raceDate,
+    lockDisplay: formatPublicFantasyLockDisplay({
+      lockTime,
+      lockAt: resolvedLockAt,
+      raceDate,
+    }),
     hasLockSchedule,
     isLocked,
     raceComplete,
@@ -40,6 +49,15 @@ export function parseLockState(slateRow = {}, options = {}) {
           ? 'Lineups are locked for this race'
           : null,
   };
+}
+
+function parseLockStateForProgression(slateRow, progression, extra = {}) {
+  return parseLockState(slateRow, {
+    raceComplete:
+      extra.raceComplete ?? isFantasyRaceComplete(progression?.scheduleRaces, slateRow?.race_number),
+    raceDate: resolvePublicLockRaceDate(progression?.scheduleRaces, slateRow?.race_number),
+    now: extra.now,
+  });
 }
 
 export async function loadSlateById(slateId) {
@@ -82,7 +100,7 @@ export async function getUserLineupForCurrentSlate(userId, seasonId) {
   if (!slateRow?.id) return { slate: null, lineup: null, lock: null, progression: buildFantasyProgressionMeta(progression) };
 
   const raceComplete = isFantasyRaceComplete(progression.scheduleRaces, slateRow.race_number);
-  const lock = parseLockState(slateRow, { raceComplete });
+  const lock = parseLockStateForProgression(slateRow, progression, { raceComplete });
 
   const { data: lineup, error } = await sb
     .from('fantasy_lineups')
@@ -214,7 +232,7 @@ export async function submitFantasyLineup(user, body = {}) {
   const payload = await loadLatestFantasySlate(seasonId);
   if (!payload?.slate?.id) throw new Error('No fantasy slate available.');
 
-  const lock = parseLockState(slateRow, { raceComplete });
+  const lock = parseLockStateForProgression(slateRow, progression, { raceComplete });
   if (lock.isLocked) {
     throw new Error('Lineups are locked for this race.');
   }
@@ -398,7 +416,7 @@ export async function getFantasyPublicStandings(seasonId, options = {}) {
   if (refreshedSlate) slateRow = refreshedSlate;
 
   const raceComplete = isFantasyRaceComplete(progression.scheduleRaces, slateRow.race_number);
-  const lock = parseLockState(slateRow, { raceComplete });
+  const lock = parseLockStateForProgression(slateRow, progression, { raceComplete });
   const lineups = await listSubmittedLineupsForSlate(slateRow.id);
   const { loadFantasyLineupScoresForSlate, loadFantasySeasonPointTotals } =
     await loadFantasyRaceScoringModule();
@@ -571,7 +589,7 @@ export async function getFantasyAdminSubmittedLineups(seasonId, options = {}) {
   }
 
   const raceComplete = isFantasyRaceComplete(progression.scheduleRaces, slateRow.race_number);
-  const lock = parseLockState(slateRow, { raceComplete });
+  const lock = parseLockStateForProgression(slateRow, progression, { raceComplete });
   const lineups = await listSubmittedLineupsForSlate(slateRow.id);
 
   return {
@@ -637,7 +655,7 @@ export async function getFantasyLaunchDashboard(user) {
   if (!lineupState.slate && progression.displaySlateRow) {
     const slateRow = progression.displaySlateRow;
     const raceComplete = isFantasyRaceComplete(progression.scheduleRaces, slateRow.race_number);
-    const lock = parseLockState(slateRow, { raceComplete });
+    const lock = parseLockStateForProgression(slateRow, progression, { raceComplete });
     lineupState.slate = {
       id: slateRow.id,
       seasonId: slateRow.season_id,
