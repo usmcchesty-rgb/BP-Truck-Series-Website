@@ -15,6 +15,7 @@ import {
   isOpeningDuelLabel,
   isSlateFinalized,
   notifyFantasyAfterOfficialResultsUpdate,
+  notifyFantasyAfterScheduleRefresh,
   readLockClaimResult,
   runFantasyLifecycleWithLock,
   runMondayFantasySafetyCheck,
@@ -22,6 +23,7 @@ import {
   selectCurrentPublishedSlate,
   shouldFetchOfficialResults,
   triggerDisplayLabel,
+  isVercelCronRequest,
   __resetFantasyLifecycleInflightForTests,
 } from '../api/_fantasy-lifecycle.js';
 import { isScoreReady, isCleanlyScored } from '../api/_fantasy-post-race-automation.js';
@@ -292,6 +294,21 @@ function createHarness(initial = {}) {
       __resetFantasyLifecycleInflightForTests();
       return runMondayFantasySafetyCheck(
         withLifecycleOptions({ trigger: LIFECYCLE_TRIGGERS.MONDAY_SAFETY, ...opts }),
+        deps,
+      );
+    },
+    async notifySchedule(opts = {}) {
+      __resetFantasyLifecycleInflightForTests();
+      return notifyFantasyAfterScheduleRefresh(
+        state.schedule,
+        withLifecycleOptions({ trigger: LIFECYCLE_TRIGGERS.RESULTS_UPDATE, ...opts }),
+        deps,
+      );
+    },
+    async notifyScheduleRaw(opts = {}) {
+      return notifyFantasyAfterScheduleRefresh(
+        state.schedule,
+        withLifecycleOptions({ trigger: LIFECYCLE_TRIGGERS.RESULTS_UPDATE, ...opts }),
         deps,
       );
     },
@@ -799,7 +816,8 @@ function createHarness(initial = {}) {
   assert.equal(result.lastAutomation?.trigger, LIFECYCLE_TRIGGERS.MANUAL);
 }
 
-// 9–11. Ordinary public GET traffic must not mutate Fantasy
+// 9–11. Ordinary public GET traffic must not mutate Fantasy, except the
+// cheap-gated schedule/results refresh notify (the Sunday results event).
 {
   const lineups = fs.readFileSync(path.join(repoRoot, 'api/_fantasy-lineups.js'), 'utf8');
   const settingsSrc = fs.readFileSync(path.join(repoRoot, 'api/settings.js'), 'utf8');
@@ -816,7 +834,9 @@ function createHarness(initial = {}) {
     ),
     /ensureFantasyLifecycleCurrent/,
   );
-  assert.doesNotMatch(scheduleSrc, /ensureFantasyLifecycleCurrent/);
+  assert.match(scheduleSrc, /notifyFantasyAfterScheduleRefresh/);
+  assert.match(scheduleSrc, /waitUntil/);
+  assert.doesNotMatch(settingsSrc, /notifyFantasyAfterScheduleRefresh/);
 }
 
 // 12. Results-update trigger and Monday trigger repeated/concurrent → score once, next slate once
@@ -978,6 +998,28 @@ function createHarness(initial = {}) {
   assert.equal(isMondayFantasyCronRequest({ query: { cron: 'fantasy-monday' } }), true);
   assert.equal(isMondayFantasyCronRequest({ query: {} }), false);
   assert.equal(isMondayFantasyCronRequest({ query: { action: 'getDashboard' } }), false);
+  assert.equal(isVercelCronRequest({ headers: { 'user-agent': 'vercel-cron/1.0' } }), true);
+  assert.equal(
+    isMondayFantasyCronRequest({
+      query: {},
+      headers: { 'user-agent': 'vercel-cron/1.0' },
+    }),
+    true,
+  );
+  assert.equal(
+    isMondayFantasyCronRequest({
+      query: { action: 'getDashboard' },
+      headers: { 'user-agent': 'vercel-cron/1.0' },
+    }),
+    false,
+  );
+  assert.equal(
+    isMondayFantasyCronRequest({
+      query: {},
+      headers: { 'user-agent': 'Mozilla/5.0' },
+    }),
+    false,
+  );
 
   const settingsSrc = fs.readFileSync(path.join(repoRoot, 'api/settings.js'), 'utf8');
   assert.match(settingsSrc, /isMondayFantasyCronRequest/);
@@ -1151,6 +1193,159 @@ function makeSeason11LiveSlates() {
     harness.state.slates.map((row) => ({ id: row.id, race: row.race_number, status: row.status })),
     before.map((row) => ({ id: row.id, race: row.race_number, status: row.status })),
   );
+}
+
+{
+  const race23Picks = [{ userId: 'milwaukee-player', drivers: ['d1', 'd2', 'd3', 'd4', 'd5'] }];
+  const slates = makeSeason11LiveSlates()
+    .filter((row) => Number(row.race_number) !== 23)
+    .concat([
+      makeSlate({
+        id: 37,
+        raceNumber: 23,
+        lockAt: pastLock(),
+        track: 'The Milwaukee Mile',
+        lineupCount: 1,
+      }),
+    ]);
+  const harness = createHarness({
+    completedThrough: 23,
+    slates,
+    officialReady: [23],
+    entries: {
+      14: [],
+      15: [{ userId: 'a' }],
+      22: [{ userId: 'b' }],
+      23: clone(race23Picks),
+    },
+  });
+  const before14 = clone(harness.state.slates.find((row) => row.race_number === 14));
+  const beforeFinalized = clone(
+    harness.state.slates.filter((row) => row.race_number >= 15 && row.race_number <= 22),
+  );
+  const beforePicks = clone(harness.state.entries[23]);
+
+  const inspect = await harness.ensure({ inspectOnly: true });
+  assert.equal(inspect.state, LIFECYCLE_STATES.READY_TO_SCORE);
+  assert.equal(inspect.mutated, false);
+  assert.equal(harness.state.scoreCalls, 0);
+  assert.equal(isSlateFinalized(harness.state.slates.find((row) => row.race_number === 23)), false);
+
+  const first = await harness.notifySchedule();
+  assert.equal(first.skipped, undefined);
+  assert.equal(harness.state.scoreCalls, 1);
+  assert.equal(isSlateFinalized(harness.state.slates.find((row) => row.race_number === 23)), true);
+  assert.equal(
+    harness.state.slates.filter((row) => Number(row.race_number) === 24 && row.status === 'published').length,
+    1,
+  );
+  assert.deepEqual(harness.state.entries[23], beforePicks);
+  assert.deepEqual(harness.state.slates.find((row) => row.race_number === 14), before14);
+  assert.deepEqual(
+    harness.state.slates.filter((row) => row.race_number >= 15 && row.race_number <= 22),
+    beforeFinalized,
+  );
+
+  for (let i = 0; i < 100; i += 1) {
+    await harness.notifyScheduleRaw();
+  }
+  assert.equal(harness.state.scoreCalls, 1);
+  assert.equal(harness.state.publishCalls, 1);
+  assert.equal(
+    harness.state.slates.filter((row) => Number(row.race_number) === 24 && row.status === 'published').length,
+    1,
+  );
+  assert.deepEqual(harness.state.entries[23], beforePicks);
+  assert.deepEqual(harness.state.entries[14], []);
+}
+
+{
+  const race23Picks = [{ userId: 'milwaukee-player', drivers: ['d1', 'd2', 'd3', 'd4', 'd5'] }];
+  const slates = [
+    makeSlate({ id: 14, raceNumber: 14, lockAt: pastLock() }),
+    ...Array.from({ length: 8 }, (_, index) =>
+      makeSlate({
+        id: 15 + index,
+        raceNumber: 15 + index,
+        finalized: true,
+        lockAt: pastLock(),
+      }),
+    ),
+    makeSlate({
+      id: 37,
+      raceNumber: 23,
+      lockAt: pastLock(),
+      track: 'The Milwaukee Mile',
+      lineupCount: 1,
+    }),
+  ];
+  const harness = createHarness({
+    completedThrough: 23,
+    slates,
+    officialReady: [23],
+    entries: { 14: [], 23: clone(race23Picks) },
+  });
+  __resetFantasyLifecycleInflightForTests();
+  const [fromSchedule, fromMonday] = await Promise.all([
+    notifyFantasyAfterScheduleRefresh(
+      harness.state.schedule,
+      {
+        seasonId: '27987',
+        settings: harness.state.settings,
+        trigger: LIFECYCLE_TRIGGERS.RESULTS_UPDATE,
+      },
+      harness.deps,
+    ),
+    runMondayFantasySafetyCheck(
+      {
+        seasonId: '27987',
+        settings: harness.state.settings,
+        trigger: LIFECYCLE_TRIGGERS.MONDAY_SAFETY,
+      },
+      harness.deps,
+    ),
+  ]);
+  assert.equal(harness.state.scoreCalls, 1);
+  assert.equal(harness.state.publishCalls, 1);
+  assert.equal(
+    harness.state.slates.filter((row) => Number(row.race_number) === 24 && row.status === 'published').length,
+    1,
+  );
+  assert.equal(isSlateFinalized(harness.state.slates.find((row) => row.race_number === 23)), true);
+  assert.deepEqual(harness.state.entries[23], race23Picks);
+  assert.ok(fromSchedule.skipped === true || fromMonday.skipped === true || fromSchedule.mutated || fromMonday.mutated);
+}
+
+{
+  const harness = createHarness({
+    completedThrough: 22,
+    slates: [
+      makeSlate({ id: 22, raceNumber: 22, finalized: true, lockAt: pastLock() }),
+      makeSlate({ id: 23, raceNumber: 23, lockAt: pastLock(), track: 'The Milwaukee Mile' }),
+    ],
+    officialReady: [],
+  });
+  const result = await harness.notifySchedule();
+  assert.equal(result.skipped, true);
+  assert.equal(result.reason, 'results_not_ready');
+  assert.equal(harness.state.scoreCalls, 0);
+  assert.equal(harness.state.publishCalls, 0);
+}
+
+{
+  const harness = createHarness({
+    automationEnabled: false,
+    completedThrough: 23,
+    slates: [
+      makeSlate({ id: 22, raceNumber: 22, finalized: true, lockAt: pastLock() }),
+      makeSlate({ id: 23, raceNumber: 23, lockAt: pastLock(), track: 'The Milwaukee Mile' }),
+    ],
+    officialReady: [23],
+  });
+  const result = await harness.notifySchedule();
+  assert.equal(result.skipped, true);
+  assert.equal(result.reason, 'automation_disabled');
+  assert.equal(harness.state.scoreCalls, 0);
 }
 
 console.log('test-fantasy-lifecycle: all tests passed');

@@ -1,4 +1,5 @@
 import { fetchHtml, getSettings } from "./_lib.js";
+import { waitUntil } from "@vercel/functions";
 import {
   enrichScheduleRaces,
   buildSiteResultsUrl,
@@ -143,6 +144,24 @@ export default async function handler(req, res) {
 
     res.setHeader("Cache-Control", "s-maxage=120, stale-while-revalidate=300");
     res.status(200).json(payload);
+
+    if (races.length) {
+      const notifyWork = import("./_fantasy-lifecycle.js")
+        .then(({ notifyFantasyAfterScheduleRefresh, LIFECYCLE_TRIGGERS }) =>
+          notifyFantasyAfterScheduleRefresh(enrichedRaces, {
+            settings,
+            trigger: LIFECYCLE_TRIGGERS.RESULTS_UPDATE,
+          }),
+        )
+        .catch((error) => {
+          console.error("[schedule] fantasy results notify failed:", error);
+        });
+      try {
+        waitUntil(notifyWork);
+      } catch {
+        await notifyWork;
+      }
+    }
   } catch (e) {
     res.status(500).json({ error: e.message || "Schedule fetch failed" });
   }

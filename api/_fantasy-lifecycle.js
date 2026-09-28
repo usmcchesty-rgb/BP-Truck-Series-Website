@@ -49,8 +49,34 @@ export const MONDAY_FANTASY_CRON = {
     'Monday 12:00 UTC is 8:00 AM America/New_York during EDT and 7:00 AM during EST.',
 };
 
+function headerValue(headers, name) {
+  if (!headers) return '';
+  const direct = headers[name];
+  if (direct != null) return String(direct);
+  const lower = name.toLowerCase();
+  for (const [key, value] of Object.entries(headers)) {
+    if (String(key).toLowerCase() === lower) return String(value ?? '');
+  }
+  return '';
+}
+
+export function isVercelCronRequest(req) {
+  const cronHeader = headerValue(req?.headers, 'x-vercel-cron');
+  if (cronHeader && cronHeader !== '0' && cronHeader.toLowerCase() !== 'false') return true;
+  const userAgent = headerValue(req?.headers, 'user-agent');
+  return /^vercel-cron(?:\/|$)/i.test(userAgent.trim());
+}
+
 export function isMondayFantasyCronRequest(req) {
-  return String(req?.query?.cron || '').trim() === MONDAY_FANTASY_CRON.query.cron;
+  const cronQuery = String(req?.query?.cron || '').trim();
+  if (cronQuery === MONDAY_FANTASY_CRON.query.cron) return true;
+  // Vercel cron invocations always include the cron User-Agent. If the
+  // query string is dropped, a cron GET/POST to /api/settings with no
+  // action still has to run the Monday safety job instead of returning
+  // public settings JSON.
+  const hasAction = String(req?.query?.action || '').trim();
+  if (!hasAction && isVercelCronRequest(req)) return true;
+  return false;
 }
 
 export function isFantasyAutomationEnabled(settings = {}) {
@@ -1609,6 +1635,67 @@ export async function refreshOfficialResultsForCurrentFantasyWeek(options = {}, 
     results,
     refreshed: true,
   };
+}
+
+export async function notifyFantasyAfterScheduleRefresh(scheduleRaces, options = {}, depOverrides = {}) {
+  const trigger = options.trigger || LIFECYCLE_TRIGGERS.RESULTS_UPDATE;
+  const deps = await resolveDeps(depOverrides);
+  const settings = options.settings || (await deps.getSettings());
+  if (!isFantasyAutomationEnabled(settings) && !options.forcedByAdmin) {
+    return {
+      skipped: true,
+      reason: 'automation_disabled',
+      trigger,
+      mutated: false,
+    };
+  }
+
+  const now = options.now || deps.now();
+  const seasonId = String(options.seasonId || settings.seasonId || '27987');
+  const publishedSlates = await deps.listPublishedSlates(seasonId);
+  const cheap = cheapLifecycleDecision({
+    automationEnabled: true,
+    forcedByAdmin: Boolean(options.forcedByAdmin),
+    publishedSlates,
+    now,
+    persistedLifecycle: mergeFantasyLifecycle(settings.fantasyLifecycle),
+  });
+
+  if (!cheap.mayNeedWork) {
+    return {
+      skipped: true,
+      reason: cheap.reason || 'no_work',
+      trigger,
+      mutated: false,
+    };
+  }
+
+  const currentSlate = cheap.currentSlate;
+  const raceNumber = currentSlate?.race_number ?? null;
+  const race = findChampionshipRaceByNumber(scheduleRaces || [], raceNumber);
+  if (!race || !hasRaceResults(race)) {
+    return {
+      skipped: true,
+      reason: 'results_not_ready',
+      trigger,
+      mutated: false,
+      state: LIFECYCLE_STATES.WAITING_FOR_RESULTS,
+      raceNumber,
+    };
+  }
+
+  return refreshOfficialResultsAndAdvanceFantasy(
+    {
+      ...options,
+      settings,
+      seasonId,
+      now,
+      trigger,
+      raceNumber,
+      scheduleId: extractScheduleId(currentSlate) || extractScheduleId(race),
+    },
+    depOverrides,
+  );
 }
 
 export async function notifyFantasyAfterOfficialResultsUpdate(options = {}, depOverrides = {}) {
