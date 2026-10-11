@@ -22,6 +22,12 @@ import {
   parseRequestBody,
   validateAdminPassword,
 } from './_admin-auth.js';
+import { fetchStandingsRows } from './_standings-rows.js';
+import {
+  buildPowerRankingsIdentityContext,
+  canonicalizePowerRankingsDriverId,
+  resolvePowerRankingsDriver,
+} from './_power-rankings-driver-identity.js';
 
 async function loadDriverProfiles() {
   const sb = supabase();
@@ -45,11 +51,17 @@ async function loadDriverProfiles() {
   return profiles;
 }
 
-function profileMap(profiles) {
-  const rows = Array.isArray(profiles) ? profiles : [];
-  return Object.fromEntries(
-    rows.map((p) => [String(p.driver_id), p])
-  );
+async function loadIdentityContext(profiles) {
+  const profileList = Array.isArray(profiles) ? profiles : [];
+  let standingsRows = [];
+  try {
+    const settings = await getSettings();
+    const standings = await fetchStandingsRows(settings);
+    standingsRows = standings.rows || [];
+  } catch (error) {
+    console.error('power-rankings identity standings fetch failed:', error);
+  }
+  return buildPowerRankingsIdentityContext(profileList, standingsRows);
 }
 
 function driverPhoto(profile, name) {
@@ -92,9 +104,14 @@ function formatMovement(movement, movementType = null) {
   return formatMovementDisplay(movement, movementType);
 }
 
-function normalizeEntry(row, profiles, artworkCtx = null) {
-  const profile = profiles[String(row.driver_id)] || null;
-  const driver = enrichDriver(profile, row.driver_id, '', artworkCtx);
+function normalizeEntry(row, identityContext, artworkCtx = null) {
+  const resolved = resolvePowerRankingsDriver(row.driver_id, identityContext);
+  const driver = enrichDriver(
+    resolved.profile,
+    resolved.canonicalDriverId || row.driver_id,
+    resolved.driverName,
+    artworkCtx,
+  );
   const movementType = movementTypeFromStored(row.movement);
   const movement = formatMovement(row.movement, movementType);
   const storedMovement = Number(row.movement);
@@ -121,9 +138,14 @@ function normalizeEntry(row, profiles, artworkCtx = null) {
   };
 }
 
-function normalizeHonorable(row, profiles, artworkCtx = null) {
-  const profile = profiles[String(row.driver_id)] || null;
-  const driver = enrichDriver(profile, row.driver_id, '', artworkCtx);
+function normalizeHonorable(row, identityContext, artworkCtx = null) {
+  const resolved = resolvePowerRankingsDriver(row.driver_id, identityContext);
+  const driver = enrichDriver(
+    resolved.profile,
+    resolved.canonicalDriverId || row.driver_id,
+    resolved.driverName,
+    artworkCtx,
+  );
   return {
     sortOrder: row.sort_order,
     driverId: driver.driverId,
@@ -150,8 +172,7 @@ function parseEntryMovement(entry, rank) {
   return { parsed };
 }
 
-function normalizeWeek(week, entries, honorable, profiles, artworkCtx = null) {
-  const byId = profileMap(profiles);
+function normalizeWeek(week, entries, honorable, identityContext, artworkCtx = null) {
   return {
     id: week.id,
     raceNumber: week.race_number,
@@ -163,11 +184,11 @@ function normalizeWeek(week, entries, honorable, profiles, artworkCtx = null) {
     entries: (entries || [])
       .filter((e) => e.week_id === week.id)
       .sort((a, b) => a.rank - b.rank)
-      .map((e) => normalizeEntry(e, byId, artworkCtx)),
+      .map((e) => normalizeEntry(e, identityContext, artworkCtx)),
     honorableMentions: (honorable || [])
       .filter((h) => h.week_id === week.id)
       .sort((a, b) => a.sort_order - b.sort_order)
-      .map((h) => normalizeHonorable(h, byId, artworkCtx)),
+      .map((h) => normalizeHonorable(h, identityContext, artworkCtx)),
   };
 }
 
@@ -189,11 +210,12 @@ async function loadWeekBundle(weekId) {
   ]);
 
   const profiles = await loadDriverProfiles();
+  const identityContext = await loadIdentityContext(profiles);
   const artworkCtx = {
     catalog: loadNumberArtworkCatalog(),
     overrides: await loadNumberArtworkOverrides(),
   };
-  return normalizeWeek(week, entries || [], honorable || [], profiles, artworkCtx);
+  return normalizeWeek(week, entries || [], honorable || [], identityContext, artworkCtx);
 }
 
 async function loadPublishedWeeks(includeUnpublished = false) {
@@ -317,12 +339,18 @@ async function saveWeekBundle(body, publish = false) {
   await sb.from('power_rankings_entries').delete().eq('week_id', weekId);
   await sb.from('power_rankings_honorable_mentions').delete().eq('week_id', weekId);
 
+  const profiles = await loadDriverProfiles();
+  const identityContext = await loadIdentityContext(profiles);
+
   const entryRows = body.entries.map((entry) => {
     const { parsed } = parseEntryMovement(entry, Number(entry.rank));
     return {
       week_id: weekId,
       rank: Number(entry.rank),
-      driver_id: String(entry.driverId || entry.driver_id),
+      driver_id: canonicalizePowerRankingsDriverId(
+        entry.driverId || entry.driver_id,
+        identityContext,
+      ),
       movement: parsed.movement,
       subtitle: String(entry.subtitle || ''),
       writeup: String(entry.writeup || ''),
@@ -337,7 +365,10 @@ async function saveWeekBundle(body, publish = false) {
     const mentionRows = mentions.map((mention, index) => ({
       week_id: weekId,
       sort_order: index + 1,
-      driver_id: String(mention.driverId || mention.driver_id),
+      driver_id: canonicalizePowerRankingsDriverId(
+        mention.driverId || mention.driver_id,
+        identityContext,
+      ),
       writeup: String(mention.writeup || ''),
     }));
     const { error: mentionInsertError } = await sb
@@ -376,6 +407,7 @@ export default async function handler(req, res) {
     const weekId = req.query?.weekId ? Number(req.query.weekId) : null;
     const includeUnpublished = req.query?.admin === '1';
     const profiles = await loadDriverProfiles();
+    const identityContext = await loadIdentityContext(profiles);
     const artworkCtx = {
       catalog: loadNumberArtworkCatalog(),
       overrides: await loadNumberArtworkOverrides(),
@@ -404,7 +436,9 @@ export default async function handler(req, res) {
       return res.status(200).json({ configured: true, current: null, archive: [], ...formulaMeta });
     }
 
-    const normalizedWeeks = weeks.map((week) => normalizeWeek(week, entries, honorable, profiles, artworkCtx));
+    const normalizedWeeks = weeks.map((week) =>
+      normalizeWeek(week, entries, honorable, identityContext, artworkCtx),
+    );
     const publishedWeeks = normalizedWeeks.filter((w) => w.published);
     const current = publishedWeeks[0] || null;
     const archive = publishedWeeks.map((w) => ({

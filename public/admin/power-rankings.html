@@ -1365,12 +1365,18 @@
     }
 
     function driverSelectHtml(selectedId = '') {
+      const stored = String(selectedId || '');
       const options = ['<option value="">Select driver</option>']
         .concat(driverOptions.map((d) => {
           const label = d.car_number
             ? `${d.display_name || d.iracing_name} #${d.car_number}`
             : (d.display_name || d.iracing_name);
-          const selected = String(d.driver_id) === String(selectedId) ? ' selected' : '';
+          const matchesStored =
+            stored &&
+            (String(d.driver_id) === stored ||
+              String(d.srh_driver_id || '') === stored ||
+              String(d.profileDriverId || '') === stored);
+          const selected = matchesStored ? ' selected' : '';
           return `<option value="${escapeHtml(d.driver_id)}"${selected}>${escapeHtml(label)}</option>`;
         }));
       return options.join('');
@@ -1645,9 +1651,15 @@
       driverProfilesById = profileById;
 
       driverOptions = (standingsData.rows || []).map((row) => {
-        const profile = profileById[String(row.driverId)] || null;
+        const profile =
+          profileById[String(row.profileDriverId)] ||
+          profileById[String(row.driverId)] ||
+          null;
+        const canonicalId = String(row.profileDriverId || row.driverId);
         return {
-          driver_id: String(row.driverId),
+          driver_id: canonicalId,
+          srh_driver_id: String(row.driverId),
+          profileDriverId: row.profileDriverId ? String(row.profileDriverId) : canonicalId,
           iracing_name: row.driver,
           display_name: profile?.display_name || row.driver,
           car_number: profile?.car_number || row.carNumber || '',

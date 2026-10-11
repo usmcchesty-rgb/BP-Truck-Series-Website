@@ -2011,15 +2011,45 @@
     return downloadWeekPng(week);
   }
 
+  function resolveDriverOption(storedId, driverOptions, profileById) {
+    const stored = String(storedId || "").trim();
+    if (!stored) return { driver: {}, profile: null };
+
+    const options = Array.isArray(driverOptions) ? driverOptions : [];
+    const driver =
+      options.find(
+        (d) =>
+          String(d.driver_id) === stored ||
+          String(d.srh_driver_id || d.srhDriverId || "") === stored ||
+          String(d.profileDriverId || "") === stored,
+      ) || null;
+
+    const profiles = profileById || {};
+    const profile =
+      profiles[stored] ||
+      (driver ? profiles[String(driver.driver_id)] : null) ||
+      null;
+
+    return { driver: driver || {}, profile };
+  }
+
   function buildWeekFromAdminForm(formData, driverOptions = [], profileById = {}) {
     const byDriverId = Object.fromEntries(
       (driverOptions || []).map((d) => [String(d.driver_id), d]),
     );
 
     const mapDriverEntry = (entry, rank) => {
+      const resolved = resolveDriverOption(entry.driverId, driverOptions, profileById);
       const driver =
-        byDriverId[String(entry.driverId)] || profileById[String(entry.driverId)] || {};
-      const profile = profileById[String(entry.driverId)] || driver;
+        byDriverId[String(entry.driverId)] ||
+        resolved.driver ||
+        profileById[String(entry.driverId)] ||
+        {};
+      const profile =
+        resolved.profile ||
+        profileById[String(entry.driverId)] ||
+        profileById[String(driver.driver_id)] ||
+        driver;
       const name = cleanDriverDisplayName(
         driver.display_name ||
           driver.displayName ||

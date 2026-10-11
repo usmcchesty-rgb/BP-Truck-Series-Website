@@ -29,6 +29,7 @@
     "test:fantasy-dashboard-cards": "node scripts/test-fantasy-dashboard-cards.mjs",
     "test:driver-profile-sync-identity": "node scripts/test-driver-profile-sync-identity.mjs",
     "test:driver-profile-resolve": "node scripts/test-driver-profile-resolve.mjs",
+    "test:power-rankings-driver-identity": "node scripts/test-power-rankings-driver-identity.mjs",
     "test:car-image-resolve": "node scripts/test-car-image-resolve.mjs",
     "test:asset-content-hash": "node scripts/test-asset-content-hash.mjs",
     "test:drivers-write-identity": "node scripts/test-drivers-write-identity.mjs",

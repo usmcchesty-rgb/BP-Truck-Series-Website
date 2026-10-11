@@ -40,6 +40,11 @@ import {
   resolveProfileForStandingsRow,
 } from './_driver-profile-resolve.js';
 import {
+  buildPowerRankingsIdentityContext,
+  buildPreviousRankByDriver,
+  resolvePowerRankingsDriver,
+} from './_power-rankings-driver-identity.js';
+import {
   computeMovement,
   formatMovementForRepair,
 } from './_power-rankings-movement.js';
@@ -249,19 +254,29 @@ async function loadPreviousPowerRankings(beforeRaceNumber) {
     .order('rank');
 
   const profiles = await getDriverProfiles();
-  const byId = Object.fromEntries(profiles.map((p) => [String(p.driver_id), p]));
+  let identityContext = buildPowerRankingsIdentityContext(profiles, []);
+  try {
+    const settings = await getSettings();
+    const standingsResult = await fetchStandingsRows(settings);
+    identityContext = buildPowerRankingsIdentityContext(
+      profiles,
+      standingsResult.rows || [],
+    );
+  } catch (error) {
+    console.error('[power-rankings-generate] previous week identity standings fetch failed:', error);
+  }
 
   return {
     raceNumber: week.race_number,
-    entries: (entries || []).map((entry) => ({
-      rank: entry.rank,
-      driverId: String(entry.driver_id),
-      driverName:
-        byId[String(entry.driver_id)]?.display_name ||
-        byId[String(entry.driver_id)]?.iracing_name ||
-        entry.driver_id,
-      subtitle: entry.subtitle || '',
-    })),
+    entries: (entries || []).map((entry) => {
+      const resolved = resolvePowerRankingsDriver(entry.driver_id, identityContext);
+      return {
+        rank: entry.rank,
+        driverId: String(entry.driver_id),
+        driverName: resolved.driverName || String(entry.driver_id),
+        subtitle: entry.subtitle || '',
+      };
+    }),
   };
 }
 
@@ -1942,11 +1957,9 @@ export async function loadPowerRankingsGenerationContext(
     driverLookup
   );
 
-  const previousRankByDriver = Object.fromEntries(
-    (previousRankings?.entries || []).map((entry) => [
-      String(entry.driverId),
-      Number(entry.rank),
-    ])
+  const previousRankByDriver = buildPreviousRankByDriver(
+    previousRankings?.entries || [],
+    driverLookup,
   );
 
   return {
@@ -2251,11 +2264,9 @@ function buildGenerationSources({
 }
 
 async function normalizeDraft(aiDraft, driverLookup, previousRankings, generationContext = {}) {
-  const previousRankByDriver = Object.fromEntries(
-    (previousRankings?.entries || []).map((entry) => [
-      String(entry.driverId),
-      Number(entry.rank),
-    ])
+  const previousRankByDriver = buildPreviousRankByDriver(
+    previousRankings?.entries || [],
+    driverLookup,
   );
 
   const entries = Array.isArray(aiDraft?.entries) ? aiDraft.entries : [];
