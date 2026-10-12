@@ -571,35 +571,68 @@ export function resolveLeaderPoints(rows = []) {
   return leader;
 }
 
-/**
- * Playoff-cut points = current P16 (or configured cut) from the same ordered rows.
- * Returns null when that cut position is not present (no fabricated cut).
- */
-export function resolveCutPoints(rows = [], playoffCut = DEFAULT_PLAYOFF_CUT) {
-  const cut = Number(playoffCut) || DEFAULT_PLAYOFF_CUT;
+function rowPointsAtPosition(rows, position) {
+  const pos = Number(position);
+  if (!Number.isFinite(pos) || pos < 1) return null;
   const list = Array.isArray(rows) ? rows : [];
-  const cutRow =
-    list.find((row) => Number(row?.position) === cut) ||
-    (list.length >= cut ? list[cut - 1] : null);
-  if (!cutRow) return null;
-  return parseStandingsPoints(cutRow.points);
+  const row =
+    list.find((entry) => Number(entry?.position) === pos) ||
+    (list.length >= pos ? list[pos - 1] : null);
+  if (!row) return null;
+  return parseStandingsPoints(row.points);
+}
+
+/**
+ * Last included playoff position (e.g. P8 when cut is 8) — deficit reference for drivers outside.
+ */
+export function resolveLastIncludedPoints(rows = [], playoffCut = DEFAULT_PLAYOFF_CUT) {
+  const cut = Number(playoffCut) || DEFAULT_PLAYOFF_CUT;
+  return rowPointsAtPosition(rows, cut);
+}
+
+/**
+ * First excluded position (e.g. P9 when cut is 8) — cushion reference for drivers inside.
+ */
+export function resolveFirstExcludedPoints(rows = [], playoffCut = DEFAULT_PLAYOFF_CUT) {
+  const cut = Number(playoffCut) || DEFAULT_PLAYOFF_CUT;
+  return rowPointsAtPosition(rows, cut + 1);
+}
+
+/** @deprecated Prefer resolveLastIncludedPoints — kept for existing imports/tests. */
+export function resolveCutPoints(rows = [], playoffCut = DEFAULT_PLAYOFF_CUT) {
+  return resolveLastIncludedPoints(rows, playoffCut);
 }
 
 /**
  * Presentation-only championship gaps for one driver.
  * gapToLeader = driverPoints - leaderPoints (negative below leader)
- * gapToCut = driverPoints - cutPoints (+ above cut, − below)
+ * Inside playoffs (P1..cut): gapToCut = driverPoints - firstExcludedPoints (+ cushion)
+ * Outside playoffs (Pcut+1..): gapToCut = driverPoints - lastIncludedPoints (− deficit)
  */
 export function buildDriverChampionshipStat(row, {
   leaderPoints = null,
   cutPoints = null,
+  lastIncludedPoints = null,
+  firstExcludedPoints = null,
   playoffCut = DEFAULT_PLAYOFF_CUT,
 } = {}) {
   const points = parseStandingsPoints(row?.points);
   const position = Number(row?.position);
   const cutPos = playoffCut == null ? null : Number(playoffCut) || DEFAULT_PLAYOFF_CUT;
-  const cutAvailable =
-    cutPos != null && cutPoints != null && Number.isFinite(Number(cutPoints));
+  const lastIncluded =
+    lastIncludedPoints != null
+      ? lastIncludedPoints
+      : cutPoints;
+  const lastIncludedNum =
+    lastIncluded != null && Number.isFinite(Number(lastIncluded)) ? Number(lastIncluded) : null;
+  const firstExcludedNum =
+    firstExcludedPoints != null && Number.isFinite(Number(firstExcludedPoints))
+      ? Number(firstExcludedPoints)
+      : null;
+
+  const hasLastIncluded = lastIncludedNum != null;
+  const hasFirstExcluded = firstExcludedNum != null;
+  const cutAvailable = cutPos != null && (hasLastIncluded || hasFirstExcluded);
 
   let gapToLeader = null;
   let isLeader = false;
@@ -609,24 +642,31 @@ export function buildDriverChampionshipStat(row, {
   }
 
   let gapToCut = null;
-  let isCut = false;
-  if (points != null && cutAvailable) {
-    gapToCut = points - Number(cutPoints);
-    isCut = Number.isFinite(position) && position === cutPos;
-    if (gapToCut === 0) isCut = true;
+  let cutMarginSide = null;
+  if (points != null && cutAvailable && Number.isFinite(position)) {
+    if (position <= cutPos && hasFirstExcluded) {
+      gapToCut = points - firstExcludedNum;
+      cutMarginSide = "inside";
+    } else if (position > cutPos && hasLastIncluded) {
+      gapToCut = points - lastIncludedNum;
+      cutMarginSide = "outside";
+    }
   }
 
   return {
     points,
     gapToLeader,
     gapToCut,
+    cutMarginSide,
     isLeader,
-    isCut,
-    cutAvailable,
+    isCut: false,
+    cutAvailable: cutAvailable && gapToCut != null,
     leaderPoints: leaderPoints != null && Number.isFinite(Number(leaderPoints))
       ? Number(leaderPoints)
       : null,
-    cutPoints: cutAvailable ? Number(cutPoints) : null,
+    lastIncludedPoints: hasLastIncluded ? lastIncludedNum : null,
+    firstExcludedPoints: hasFirstExcluded ? firstExcludedNum : null,
+    cutPoints: hasLastIncluded ? lastIncludedNum : null,
   };
 }
 
@@ -634,12 +674,15 @@ export function buildDriverChampionshipStat(row, {
 export function attachChampionshipStats(rows = [], playoffCut = DEFAULT_PLAYOFF_CUT) {
   const list = Array.isArray(rows) ? rows : [];
   const leaderPoints = resolveLeaderPoints(list);
-  const cutPoints = resolveCutPoints(list, playoffCut);
+  const lastIncludedPoints = resolveLastIncludedPoints(list, playoffCut);
+  const firstExcludedPoints = resolveFirstExcludedPoints(list, playoffCut);
   return list.map((row) => ({
     ...row,
     championshipStat: buildDriverChampionshipStat(row, {
       leaderPoints,
-      cutPoints,
+      cutPoints: lastIncludedPoints,
+      lastIncludedPoints,
+      firstExcludedPoints,
       playoffCut,
     }),
   }));
@@ -677,19 +720,21 @@ export function formatChampionshipStatDisplays(stat = {}) {
   }
 
   let cut;
-  if (!stat.cutAvailable) {
+  if (!stat.cutAvailable || stat.gapToCut == null) {
     cut = { ...unavailable };
-  } else if (stat.gapToCut == null && !stat.isCut) {
-    cut = { ...unavailable };
-  } else if (stat.isCut || stat.gapToCut === 0) {
-    cut = { valueText: "CUT", labelText: "", special: true, tone: "cut" };
   } else {
     const n = Number(stat.gapToCut);
+    const valueText =
+      Number.isFinite(n) && n > 0
+        ? `+${n}`
+        : Number.isFinite(n)
+          ? String(n)
+          : "—";
     cut = {
-      valueText: n > 0 ? `+${n}` : String(n),
+      valueText,
       labelText: "",
       special: false,
-      tone: n > 0 ? "positive" : "negative",
+      tone: n > 0 ? "positive" : n < 0 ? "negative" : "neutral",
     };
   }
 
@@ -1685,6 +1730,8 @@ export function buildStandingsGraphicModel(standingsData, scheduleData, options 
           championshipStat: buildDriverChampionshipStat(row, {
             leaderPoints: resolveLeaderPoints(standingsData?.rows || []),
             cutPoints: null,
+            lastIncludedPoints: null,
+            firstExcludedPoints: null,
             playoffCut: null,
           }),
         }))

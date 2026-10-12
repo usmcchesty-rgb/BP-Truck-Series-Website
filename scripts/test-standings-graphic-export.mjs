@@ -34,6 +34,8 @@ import {
   parseStandingsPoints,
   resolveLeaderPoints,
   resolveCutPoints,
+  resolveLastIncludedPoints,
+  resolveFirstExcludedPoints,
   buildDriverChampionshipStat,
   attachChampionshipStats,
   computeStandingsStatGeometry,
@@ -406,40 +408,50 @@ test("championship gap calculations use live points: leader 890 / cut 450", () =
     { position: 19, points: 385 },
   ];
   const leaderPoints = resolveLeaderPoints(rows);
-  const cutPoints = resolveCutPoints(rows, 16);
+  const lastIncluded = resolveLastIncludedPoints(rows, 16);
+  const firstExcluded = resolveFirstExcludedPoints(rows, 16);
   assert.equal(leaderPoints, 890);
-  assert.equal(cutPoints, 450);
+  assert.equal(lastIncluded, 450);
+  assert.equal(firstExcluded, 414);
+  assert.equal(resolveCutPoints(rows, 16), 450);
 
   const byPos = Object.fromEntries(
     rows.map((row) => [
       row.position,
-      buildDriverChampionshipStat(row, { leaderPoints, cutPoints, playoffCut: 16 }),
+      buildDriverChampionshipStat(row, {
+        leaderPoints,
+        lastIncludedPoints: lastIncluded,
+        firstExcludedPoints: firstExcluded,
+        playoffCut: 16,
+      }),
     ]),
   );
 
   assert.equal(byPos[1].gapToLeader, 0);
   assert.equal(byPos[1].isLeader, true);
-  assert.equal(byPos[1].gapToCut, 440);
+  assert.equal(byPos[1].gapToCut, 476);
+  assert.equal(byPos[1].cutMarginSide, "inside");
   assert.equal(byPos[2].gapToLeader, -2);
-  assert.equal(byPos[2].gapToCut, 438);
+  assert.equal(byPos[2].gapToCut, 474);
   assert.equal(byPos[7].gapToLeader, -236);
-  assert.equal(byPos[7].gapToCut, 204);
+  assert.equal(byPos[7].gapToCut, 240);
   assert.equal(byPos[15].gapToLeader, -389);
-  assert.equal(byPos[15].gapToCut, 51);
+  assert.equal(byPos[15].gapToCut, 87);
   assert.equal(byPos[16].gapToLeader, -440);
-  assert.equal(byPos[16].gapToCut, 0);
-  assert.equal(byPos[16].isCut, true);
+  assert.equal(byPos[16].gapToCut, 36);
+  assert.equal(byPos[16].isCut, false);
   assert.equal(byPos[17].gapToLeader, -476);
   assert.equal(byPos[17].gapToCut, -36);
+  assert.equal(byPos[17].cutMarginSide, "outside");
   assert.equal(byPos[19].gapToLeader, -505);
   assert.equal(byPos[19].gapToCut, -65);
 });
 
-test("championship gap formatting: leader dash / CUT / signed gaps / unavailable", () => {
+test("championship gap formatting: leader dash / signed cut margins / unavailable", () => {
   const leader = formatChampionshipStatDisplays({
     points: 890,
     gapToLeader: 0,
-    gapToCut: 440,
+    gapToCut: 476,
     isLeader: true,
     isCut: false,
     cutAvailable: true,
@@ -448,20 +460,21 @@ test("championship gap formatting: leader dash / CUT / signed gaps / unavailable
   assert.equal(leader.points.labelText, "");
   assert.equal(leader.lead.valueText, "--");
   assert.equal(leader.lead.labelText, "");
-  assert.equal(leader.cut.valueText, "+440");
+  assert.equal(leader.cut.valueText, "+476");
   assert.equal(leader.cut.labelText, "");
+  assert.equal(leader.cut.special, false);
 
   const mid = formatChampionshipStatDisplays({
     points: 501,
     gapToLeader: -389,
-    gapToCut: 51,
+    gapToCut: 87,
     isLeader: false,
     isCut: false,
     cutAvailable: true,
   });
   assert.equal(mid.lead.valueText, "-389");
   assert.equal(mid.lead.labelText, "");
-  assert.equal(mid.cut.valueText, "+51");
+  assert.equal(mid.cut.valueText, "+87");
   assert.equal(mid.cut.labelText, "");
 
   const below = formatChampionshipStatDisplays({
@@ -479,19 +492,20 @@ test("championship gap formatting: leader dash / CUT / signed gaps / unavailable
   const cutRow = formatChampionshipStatDisplays({
     points: 450,
     gapToLeader: -440,
-    gapToCut: 0,
+    gapToCut: 36,
     isLeader: false,
-    isCut: true,
+    isCut: false,
     cutAvailable: true,
   });
-  assert.equal(cutRow.cut.valueText, "CUT");
+  assert.equal(cutRow.cut.valueText, "+36");
+  assert.equal(cutRow.cut.tone, "positive");
   assert.equal(cutRow.cut.labelText, "");
   assert.equal(cutRow.lead.valueText, "-440");
 
   const tiny = formatChampionshipStatDisplays({
     points: 888,
     gapToLeader: -2,
-    gapToCut: 438,
+    gapToCut: 474,
     isLeader: false,
     isCut: false,
     cutAvailable: true,
@@ -608,13 +622,15 @@ test("stat value X does not depend on digit count or driver-name length", () => 
     { position: 1, driver: "LEE", points: 890, wins: 9 },
     { position: 2, driver: "TAYLOR BUTCHER-BENJAMIN", points: 888, wins: 0 },
     { position: 16, driver: "X", points: 450, wins: 1 },
+    { position: 17, driver: "Y", points: 414, wins: 0 },
   ], 16);
   assert.equal(rows[0].wins, 9);
   assert.equal(rows[0].championshipStat.gapToLeader, 0);
   const d2 = formatChampionshipStatDisplays(rows[1].championshipStat);
   const d16 = formatChampionshipStatDisplays(rows[2].championshipStat);
   assert.equal(d2.lead.valueText, "-2");
-  assert.equal(d16.cut.valueText, "CUT");
+  assert.equal(d16.cut.valueText, "+36");
+  assert.equal(d16.cut.special, false);
 });
 
 test("model attaches championshipStat; wins remain on data but unused by graphic", () => {
@@ -623,7 +639,8 @@ test("model attaches championshipStat; wins remain on data but unused by graphic
     { races: homesteadScheduleFixture() },
   );
   assert.equal(model.drivers[0].championshipStat.isLeader, true);
-  assert.equal(model.drivers[15].championshipStat.isCut, true);
+  assert.equal(model.drivers[15].championshipStat.isCut, false);
+  assert.ok(model.drivers[15].championshipStat.gapToCut > 0);
   assert.ok(Object.prototype.hasOwnProperty.call(model.drivers[0], "wins"));
   assert.equal(typeof model.drivers[3].wins, "number");
   assert.equal(model.drivers[1].championshipStat.gapToLeader, model.drivers[1].points - model.drivers[0].points);
@@ -1416,6 +1433,86 @@ test("luminance still picks readable number colors", () => {
   assert.equal(pickReadableNumberColor("#ffffff"), "#0a0a0a");
   assert.equal(pickReadableNumberColor("#101010"), "#ffffff");
   assert.equal(pickReadableNumberColor("#c81010"), "#ffffff");
+});
+
+test("Season 11 cut 8: inside vs first excluded, outside vs last included", () => {
+  const rows = [
+    { position: 1, driver: "Dalton Kilroe", points: 4122 },
+    { position: 2, driver: "Chris Carroll3", points: 4115 },
+    { position: 3, driver: "Mark Arthur", points: 4096 },
+    { position: 4, driver: "Taylor Butcher-Benjamin", points: 4094 },
+    { position: 5, driver: "Kyle Wellman", points: 4091 },
+    { position: 6, driver: "Brian Zimmerman3", points: 4074 },
+    { position: 7, driver: "Ty Marasco", points: 4056 },
+    { position: 8, driver: "Larry Bell", points: 4055 },
+    { position: 9, driver: "Matthew Kleinschmidt2", points: 4049 },
+    { position: 10, driver: "Chris Berg", points: 4033 },
+  ];
+  const attached = attachChampionshipStats(rows, 8);
+  const byPos = Object.fromEntries(attached.map((r) => [r.position, r.championshipStat]));
+  const fmt = (pos) => formatChampionshipStatDisplays(byPos[pos]);
+
+  assert.equal(fmt(1).cut.valueText, "+73");
+  assert.equal(fmt(2).cut.valueText, "+66");
+  assert.equal(fmt(3).cut.valueText, "+47");
+  assert.equal(fmt(4).cut.valueText, "+45");
+  assert.equal(fmt(5).cut.valueText, "+42");
+  assert.equal(fmt(6).cut.valueText, "+25");
+  assert.equal(fmt(7).cut.valueText, "+7");
+  assert.equal(fmt(8).cut.valueText, "+6");
+  assert.equal(fmt(9).cut.valueText, "-6");
+  assert.equal(fmt(10).cut.valueText, "-22");
+  assert.notEqual(fmt(8).cut.valueText, "CUT");
+  assert.equal(byPos[8].isCut, false);
+});
+
+test("tied points on bubble line: zero margin inside and outside", () => {
+  const rows = [
+    { position: 7, points: 5000 },
+    { position: 8, points: 4055 },
+    { position: 9, points: 4055 },
+    { position: 10, points: 4000 },
+  ];
+  const attached = attachChampionshipStats(rows, 8);
+  const p8 = attached.find((r) => r.position === 8).championshipStat;
+  const p9 = attached.find((r) => r.position === 9).championshipStat;
+  assert.equal(p8.gapToCut, 0);
+  assert.equal(p9.gapToCut, 0);
+  assert.equal(formatChampionshipStatDisplays(p8).cut.valueText, "0");
+  assert.equal(formatChampionshipStatDisplays(p9).cut.valueText, "0");
+});
+
+test("configured playoff cut 16 still uses P17 cushion and P16 deficit reference", () => {
+  const rows = makeDrivers(20);
+  const attached = attachChampionshipStats(rows, 16);
+  const p16 = attached.find((r) => r.position === 16).championshipStat;
+  const p17 = attached.find((r) => r.position === 17).championshipStat;
+  const lastIncluded = resolveLastIncludedPoints(rows, 16);
+  const firstExcluded = resolveFirstExcludedPoints(rows, 16);
+  assert.equal(p16.gapToCut, p16.points - firstExcluded);
+  assert.equal(p17.gapToCut, p17.points - lastIncluded);
+  assert.ok(p16.gapToCut >= 0);
+  assert.ok(p17.gapToCut <= 0);
+});
+
+test("CUT column never renders the word CUT as a driver cell value", () => {
+  const model = buildStandingsGraphicModel(
+    { settings: { seasonName: "Season 11", playoffCut: 8 }, rows: makeDrivers(42) },
+    { races: homesteadScheduleFixture() },
+  );
+  for (const driver of model.drivers) {
+    const display = formatChampionshipStatDisplays(driver.championshipStat);
+    assert.notEqual(display.cut.valueText, "CUT");
+  }
+});
+
+test("attachChampionshipStats does not change points or positions", () => {
+  const source = makeDrivers(42);
+  const attached = attachChampionshipStats(source, 8);
+  for (let i = 0; i < source.length; i += 1) {
+    assert.equal(attached[i].position, source[i].position);
+    assert.equal(attached[i].points, source[i].points);
+  }
 });
 
 console.log(`\n${passed} standings-graphic tests passed.`);
