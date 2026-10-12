@@ -1269,32 +1269,32 @@
       "carImage": "/assets/images/cars/Miguel Gomez-Gaudet.png",
       "iracingDesign": {
         "source": "iracing_sdk",
-        "capturedAt": "2026-09-09T05:46:02.583Z",
+        "capturedAt": "2026-10-12T01:44:10.344Z",
         "userId": "1478479",
         "carNumber": "89",
         "number": {
-          "raw": "37,3,e51d16,141d2c,ffffff",
-          "font": 37,
-          "slant": 3,
-          "color1": "#e51d16",
-          "color2": "#141d2c",
+          "raw": "0,0,ffffff,f625ae,ffffff",
+          "font": 0,
+          "slant": 0,
+          "color1": "#ffffff",
+          "color2": "#f625ae",
           "color3": "#ffffff"
         },
         "car": {
-          "raw": "20,ec232d,ffffff,2e358f,152133",
+          "raw": "20,ec232d,ffffff,2e358f,ffffff",
           "pattern": "20",
           "color1": "#ec232d",
           "color2": "#ffffff",
           "color3": "#2e358f",
           "wheelType": 0,
-          "wheelColor": "#152133"
+          "wheelColor": "#ffffff"
         },
         "suit": {
-          "raw": "30,e3cf94,dd221a,152133",
+          "raw": "30,f625ae,ffffff,ffffff",
           "pattern": "30",
-          "color1": "#e3cf94",
-          "color2": "#dd221a",
-          "color3": "#152133"
+          "color1": "#f625ae",
+          "color2": "#ffffff",
+          "color3": "#ffffff"
         },
         "numberImage": {
           "sdkPath": "/assets/images/numbers/1478479.png",
@@ -1451,7 +1451,7 @@
       "carImage": "/assets/images/cars/Noah S. VanHoute.png",
       "iracingDesign": {
         "source": "iracing_sdk",
-        "capturedAt": "2026-08-17T07:00:12.703Z",
+        "capturedAt": "2026-10-12T01:44:10.344Z",
         "userId": "202913",
         "carNumber": "00",
         "number": {
@@ -1463,13 +1463,13 @@
           "color3": "#000000"
         },
         "car": {
-          "raw": "1,111111,000000,000000;05f53c",
+          "raw": "1,111111,000000,000000;ff00a6",
           "pattern": "1",
           "color1": "#111111",
           "color2": "#000000",
           "color3": "#000000",
           "wheelType": 1,
-          "wheelColor": "#05f53c"
+          "wheelColor": "#ff00a6"
         },
         "suit": {
           "raw": "2,111111,ffee47,0300c2",
@@ -1478,14 +1478,14 @@
           "color2": "#ffee47",
           "color3": "#0300c2"
         },
-        "numberStyleAuthoritative": false,
         "numberImage": {
           "sdkPath": "/assets/images/numbers/202913.png",
           "customPath": null,
           "preferredSource": "none",
           "source": "iracing_sdk_number",
           "authoritative": false
-        }
+        },
+        "numberStyleAuthoritative": false
       }
     },
     {
@@ -1673,7 +1673,7 @@
       "carImage": "/assets/images/cars/Kody Miller2.png",
       "iracingDesign": {
         "source": "iracing_sdk",
-        "capturedAt": "2026-08-17T07:00:12.703Z",
+        "capturedAt": "2026-10-12T01:44:10.344Z",
         "userId": "1207664",
         "carNumber": "11",
         "number": {
@@ -1692,20 +1692,20 @@
           "color3": "#f6f6f6"
         },
         "suit": {
-          "raw": "35,000000,d5861d,ffffff",
-          "pattern": "35",
+          "raw": "29,000000,f4dd0c,ffffff",
+          "pattern": "29",
           "color1": "#000000",
-          "color2": "#d5861d",
+          "color2": "#f4dd0c",
           "color3": "#ffffff"
         },
-        "numberStyleAuthoritative": false,
         "numberImage": {
           "sdkPath": "/assets/images/numbers/1207664.png",
           "customPath": null,
           "preferredSource": "none",
           "source": "iracing_sdk_number",
           "authoritative": false
-        }
+        },
+        "numberStyleAuthoritative": false
       }
     },
     {
@@ -1951,23 +1951,25 @@
       "carImage": "/assets/images/cars/Luca Siciliano.png",
       "iracingDesign": {
         "source": "iracing_sdk",
-        "capturedAt": "2026-09-09T05:46:02.583Z",
+        "capturedAt": "2026-10-12T01:44:10.344Z",
         "userId": "1445732",
         "carNumber": "77",
         "number": {
-          "raw": "1,2,ffffff,00c050,008bbb",
+          "raw": "1,2,ffffff,fab512,003267",
           "font": 1,
           "slant": 2,
           "color1": "#ffffff",
-          "color2": "#00c050",
-          "color3": "#008bbb"
+          "color2": "#fab512",
+          "color3": "#003267"
         },
         "car": {
-          "raw": "0,ffffff,ffffff,ffffff",
+          "raw": "0,ffffff,ffffff,ffffff;ffffff",
           "pattern": "0",
           "color1": "#ffffff",
           "color2": "#ffffff",
-          "color3": "#ffffff"
+          "color3": "#ffffff",
+          "wheelType": 1,
+          "wheelColor": "#ffffff"
         },
         "suit": {
           "raw": "35,000000,000000,000000",
@@ -1976,9 +1978,99 @@
           "color2": "#000000",
           "color3": "#000000"
         },
-        "numberStyleAuthoritative": false,
         "numberImage": {
           "sdkPath": "/assets/images/numbers/1445732.png",
+          "customPath": null,
+          "preferredSource": "none",
+          "source": "iracing_sdk_number",
+          "authoritative": false
+        },
+        "numberStyleAuthoritative": false
+      }
+    },
+    {
+      "name": "Brody Gunter",
+      "iracingName": "Brody Gunter",
+      "carNumber": "01",
+      "iracingCustomerId": 422988,
+      "slug": "brody-gunter",
+      "carImage": "/assets/images/cars/Brody Gunter.png",
+      "iracingDesign": {
+        "source": "iracing_sdk",
+        "capturedAt": "2026-10-12T01:44:10.344Z",
+        "userId": "422988",
+        "carNumber": "01",
+        "number": {
+          "raw": "3,4,000000,ffff00,ff4f08",
+          "font": 3,
+          "slant": 4,
+          "color1": "#000000",
+          "color2": "#ffff00",
+          "color3": "#ff4f08"
+        },
+        "car": {
+          "raw": "22,000000,ffff00,ff4f08,000000",
+          "pattern": "22",
+          "color1": "#000000",
+          "color2": "#ffff00",
+          "color3": "#ff4f08",
+          "wheelType": 0,
+          "wheelColor": "#000000"
+        },
+        "suit": {
+          "raw": "21,000000,ff4f08,b3b3b3",
+          "pattern": "21",
+          "color1": "#000000",
+          "color2": "#ff4f08",
+          "color3": "#b3b3b3"
+        },
+        "numberStyleAuthoritative": false,
+        "numberImage": {
+          "sdkPath": "/assets/images/numbers/422988.png",
+          "customPath": null,
+          "preferredSource": "none",
+          "source": "iracing_sdk_number",
+          "authoritative": false
+        }
+      }
+    },
+    {
+      "name": "Cori Cooke",
+      "iracingName": "Cori Cooke",
+      "carNumber": "61",
+      "iracingCustomerId": 301276,
+      "slug": "cori-cooke",
+      "carImage": "/assets/images/cars/Cori Cooke.png",
+      "iracingDesign": {
+        "source": "iracing_sdk",
+        "capturedAt": "2026-10-12T01:44:10.344Z",
+        "userId": "301276",
+        "carNumber": "61",
+        "number": {
+          "raw": "11,3,ffffff,000000,000000",
+          "font": 11,
+          "slant": 3,
+          "color1": "#ffffff",
+          "color2": "#000000",
+          "color3": "#000000"
+        },
+        "car": {
+          "raw": "0,ffffff,ed2129,000000",
+          "pattern": "0",
+          "color1": "#ffffff",
+          "color2": "#ed2129",
+          "color3": "#000000"
+        },
+        "suit": {
+          "raw": "1,000000,ffffff,b7050b",
+          "pattern": "1",
+          "color1": "#000000",
+          "color2": "#ffffff",
+          "color3": "#b7050b"
+        },
+        "numberStyleAuthoritative": false,
+        "numberImage": {
+          "sdkPath": "/assets/images/numbers/301276.png",
           "customPath": null,
           "preferredSource": "none",
           "source": "iracing_sdk_number",
